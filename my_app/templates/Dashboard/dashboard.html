@@ -28,14 +28,14 @@
 
             <nav class="portal-nav" aria-label="Primary">
                 <p class="nav-group">Main</p>
-                <a href="#" class="nav-item nav-item-active">
+                <a href="{% url 'user_dashboard' %}" class="nav-item {% if current_section != 'admin' %}nav-item-active{% endif %}">
                     <span class="material-symbols-outlined">dashboard_customize</span>
                     <span>Workflow Management</span>
                 </a>
                 <a
-                    href="{% url 'admin:login' %}"
-                    class="nav-item js-admin-login-button"
-                    data-admin-login-url="{% url 'admin:login' %}"
+                    href="{% url 'admin_division_dashboard' %}"
+                    class="nav-item js-admin-division-button {% if current_section == 'admin' %}nav-item-active{% endif %}"
+                    data-admin-division-url="{% url 'admin_division_dashboard' %}"
                 >
                     <span class="material-symbols-outlined">admin_panel_settings</span>
                     <span>Admin Division</span>
@@ -83,7 +83,7 @@
                     <button type="button" class="sidebar-toggle" aria-label="Toggle sidebar">
                         <span class="material-symbols-outlined">menu</span>
                     </button>
-                    <h2>Workflow Management</h2>
+                    <h2>{{ page_heading|default:"Workflow Management" }}</h2>
                 </div>
 
                 <div class="topbar-right">
@@ -101,6 +101,9 @@
             </header>
 
             <section class="portal-content">
+                {% if current_section == 'admin' %}
+                    {% include 'admin/admin_division.html' %}
+                {% else %}
                 <section class="overview">
                     <h3>Dashboard Overview</h3>
                     <p>Real-time division progress and workflow status monitoring</p>
@@ -281,6 +284,7 @@
                         <span class="material-symbols-outlined trend-icon">trending_up</span>
                     </article>
                 </section>
+                {% endif %}
             </section>
         </main>
     </div>

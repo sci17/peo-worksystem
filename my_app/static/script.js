@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const sidebarToggle = document.querySelector(".sidebar-toggle");
     const sidebarOverlay = document.querySelector(".sidebar-overlay");
     const navItems = document.querySelectorAll(".portal-nav .nav-item");
-    const adminLoginButton = document.querySelector(".js-admin-login-button");
+    const adminDivisionButton = document.querySelector(".js-admin-division-button");
 
     const closeSidebar = () => {
         body.classList.remove("sidebar-open");
@@ -34,10 +34,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    if (adminLoginButton) {
-        adminLoginButton.addEventListener("click", (event) => {
+    if (adminDivisionButton) {
+        adminDivisionButton.addEventListener("click", (event) => {
             event.preventDefault();
-            const targetUrl = adminLoginButton.dataset.adminLoginUrl;
+            const targetUrl = adminDivisionButton.dataset.adminDivisionUrl;
             if (targetUrl) {
                 window.location.href = targetUrl;
             }

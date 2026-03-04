@@ -7,12 +7,27 @@ from django.shortcuts import render
 
 @login_required
 def user_dashboard(request):
-    return render(request, 'admin/admin.html')
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'workflow',
+            'page_heading': 'Workflow Management',
+        },
+    )
 
 
 @login_required
 def admin_division_dashboard(request):
-    return render(request, 'admin/admin.html')
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'admin',
+            'page_heading': 'Admin Division',
+        },
+    )
+
 
 
 def signup(request):
