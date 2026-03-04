@@ -1,0 +1,120 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEO Portal Dashboard</title>
+    <link rel="stylesheet" href="{% static 'styles.css' %}">
+</head>
+<body class="pa-body">
+    <div class="pa-shell">
+        <aside class="pa-sidebar">
+            <div class="pa-brand">
+                <div class="pa-brand-logo">PEO</div>
+                <div>
+                    <h1>PEO Portal</h1>
+                    <p>Workflow Management</p>
+                </div>
+            </div>
+
+            <nav class="pa-nav">
+                <a href="#" class="pa-nav-item">Dashboard</a>
+                <a href="admin.html" class="pa-nav-item active">Admin Division</a>
+                <a href="#" class="pa-nav-item">Planning Division</a>
+                <a href="#" class="pa-nav-item">Projects</a>
+                <a href="#" class="pa-nav-item">Construction Division</a>
+                <a href="#" class="pa-nav-item">Quality Division</a>
+                <a href="#" class="pa-nav-item">Maintenance Division</a>
+                <a href="#" class="pa-nav-item">My Assignments</a>
+                <a href="#" class="pa-nav-item">History</a>
+            </nav>
+        </aside>
+
+        <main class="pa-main">
+            <header class="pa-topbar">
+                <div class="pa-search-wrap">
+                    <input type="text" class="pa-search" placeholder="Search projects, documents, tasks...">
+                    <button type="button" class="pa-filter">Filter</button>
+                </div>
+                <div class="pa-account">
+                    <div class="pa-avatar">A</div>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="pa-logout">Logout</button>
+                    </form>
+                </div>
+            </header>
+
+            <section class="pa-panel">
+                <h2>Admin Division</h2>
+                <p>People, finance, procurement support, and records management.</p>
+
+                <div class="pa-tabs">
+                    <button type="button" class="pa-tab active">Documents</button>
+                    <button type="button" class="pa-tab">Billing</button>
+                </div>
+
+                <div class="pa-metrics">
+                    <article class="pa-metric-card">
+                        <span>Total Documents</span>
+                        <strong>0</strong>
+                    </article>
+                    <article class="pa-metric-card">
+                        <span>For Review</span>
+                        <strong>0</strong>
+                    </article>
+                    <article class="pa-metric-card">
+                        <span>Processing</span>
+                        <strong>0</strong>
+                    </article>
+                    <article class="pa-metric-card">
+                        <span>Open Issues</span>
+                        <strong>0</strong>
+                    </article>
+                </div>
+
+                <div class="pa-table-head">
+                    <input type="text" class="pa-doc-search" placeholder="Search documents...">
+                    <select class="pa-select">
+                        <option>All Divisions</option>
+                    </select>
+                    <select class="pa-select">
+                        <option>All Statuses</option>
+                    </select>
+                    <button type="button" class="pa-new-doc">+ New Document</button>
+                </div>
+
+                <div class="pa-table-wrap">
+                    <div class="pa-table-title">
+                        <h3>Document Register</h3>
+                        <span>0 documents found</span>
+                    </div>
+                    <table class="pa-table">
+                        <thead>
+                            <tr>
+                                <th>Slip No</th>
+                                <th>Document</th>
+                                <th>Location</th>
+                                <th>Type</th>
+                                <th>Contractor</th>
+                                <th>Division</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="9">No documents found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{% static 'script.js' %}"></script>
+</body>
+</html>

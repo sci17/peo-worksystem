@@ -7,7 +7,12 @@ from django.shortcuts import render
 
 @login_required
 def user_dashboard(request):
-    return render(request, 'home.html')
+    return render(request, 'admin/admin.html')
+
+
+@login_required
+def admin_division_dashboard(request):
+    return render(request, 'admin/admin.html')
 
 
 def signup(request):
