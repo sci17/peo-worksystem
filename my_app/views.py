@@ -7,7 +7,7 @@ from django.shortcuts import render
 
 @login_required
 def user_dashboard(request):
-    return render(request, 'home.html')
+    return render(request, 'Dashboard/dashboard.html')
 
 
 def signup(request):
