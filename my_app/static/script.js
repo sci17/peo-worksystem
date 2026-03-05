@@ -463,6 +463,7 @@ document.addEventListener("DOMContentLoaded", () => {
         adminPanels.forEach((panel) => {
             const shouldShow = panel.dataset.adminPanel === targetTab;
             panel.classList.toggle("pa-hidden", !shouldShow);
+            panel.hidden = !shouldShow;
         });
     };
 
