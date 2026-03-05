@@ -1189,7 +1189,7 @@ body {
     border: 1px solid #afc0d4;
     border-radius: 9px;
     background: #dfe8f1;
-    color: lightblue;
+    color: blue;
     padding: 0 16px;
     height: 34px;
     font-weight: 600;
@@ -1316,7 +1316,7 @@ body {
     border: 1px solid #aabed3;
     border-radius: 8px;
     background: #eff4f9;
-    color: lightblue;
+    color: black;
     font-weight: 600;
     font-size: 12px;
     padding: 0 12px;
@@ -1659,7 +1659,7 @@ body {
     border: 1px solid #afc0d4;
     border-radius: 9px;
     background: #dfe8f1;
-    color: lightblue;
+    color: blue;
     padding: 0 16px;
     height: 34px;
     font-weight: 600;
@@ -1786,7 +1786,7 @@ body {
     border: 1px solid #aabed3;
     border-radius: 8px;
     background: #eff4f9;
-    color: lightblue;
+    color: blue;
     font-weight: 600;
     font-size: 12px;
     padding: 0 12px;
@@ -1874,6 +1874,7 @@ body {
 }
 }
 
+<<<<<<< HEAD
 /* ROAD_MAINTENANCE_STYLES_START */
 :root {
     --page-bg: #f2f5f9;
@@ -3177,3 +3178,132 @@ body {
 
 /* ROAD_MAINTENANCE_STYLES_END */
 
+=======
+/* Admin dashboard search-row fixes */
+.pa-body .pa-topbar.pa-topbar-compact {
+    justify-content: flex-end;
+}
+
+.pa-body .pa-table-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-start;
+    border: 1px solid #cfd9e4;
+    border-radius: 10px;
+    background: #edf2f8;
+    padding: 10px;
+}
+
+.pa-body .pa-doc-search {
+    flex: 1;
+    width: auto;
+    min-width: 320px;
+    height: 32px;
+    border: 1px solid #c3cfdd;
+    border-radius: 6px;
+    padding: 0 10px 0 28px;
+    font-size: 12px;
+    color: #314c6b;
+    background-color: #f8fbff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237f93ab' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 8px center;
+}
+
+.pa-body .pa-select {
+    height: 32px;
+    min-width: 102px;
+    border: 1px solid #c3cfdd;
+    border-radius: 6px;
+    background: #f8fbff;
+    color: #314c6b;
+    font-size: 11px;
+    padding: 0 8px;
+}
+
+.pa-body .pa-new-doc {
+    height: 32px;
+    border: 1px solid #123f73;
+    border-radius: 6px;
+    background: #123f73;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 12px;
+    white-space: nowrap;
+}
+
+.pa-body .pa-new-doc:hover {
+    background: #0f355f;
+    border-color: #0f355f;
+}
+
+@media (max-width: 980px) {
+    .pa-body .pa-table-head {
+        flex-wrap: wrap;
+    }
+
+    .pa-body .pa-doc-search {
+        min-width: 100%;
+        width: 100%;
+    }
+}
+
+/* Admin tab layouts */
+.pa-hidden {
+    display: none;
+}
+
+.pa-tab-panel {
+    display: block;
+}
+
+.pa-tab-panel.pa-hidden {
+    display: none;
+}
+
+.pa-billing-metrics .pa-metric-card strong {
+    color: #132f52;
+}
+
+.pa-billing-metrics .pa-metric-card .pa-bill-blue {
+    color: #2563eb;
+}
+
+.pa-billing-metrics .pa-metric-card .pa-bill-amber {
+    color: #d97706;
+}
+
+.pa-billing-metrics .pa-metric-card .pa-bill-green {
+    color: #059669;
+}
+
+.pa-billing-head {
+    margin-top: 4px;
+}
+
+.pa-billing-head .pa-doc-search {
+    flex: 1;
+}
+
+.pa-billing-head .pa-select {
+    min-width: 120px;
+}
+
+.pa-billing-title {
+    justify-content: flex-start;
+}
+
+.pa-billing-title h3 {
+    margin: 0;
+}
+
+.pa-billing-title small {
+    display: block;
+    margin-top: 2px;
+    color: #6e839d;
+    font-size: 11px;
+    font-weight: 600;
+}
+>>>>>>> 06ee76ae03fb5ea18539bd82dbc951c8d67dd655
