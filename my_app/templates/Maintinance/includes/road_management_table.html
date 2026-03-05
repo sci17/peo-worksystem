@@ -14,7 +14,7 @@
             </svg>
         </div>
         <div class="stat-copy">
-            <p class="stat-value">0</p>
+            <p class="stat-value js-top-road-count">0</p>
             <p class="stat-label">Provincial Roads</p>
         </div>
     </article>
@@ -26,7 +26,7 @@
             </svg>
         </div>
         <div class="stat-copy">
-            <p class="stat-value">0.0 km</p>
+            <p class="stat-value js-top-road-length">0.0 km</p>
             <p class="stat-label">Total Length</p>
         </div>
     </article>
@@ -68,7 +68,7 @@
             <article class="condition-card">
                 <div class="condition-head">
                     <h2>Good Condition</h2>
-                    <span class="condition-badge badge-good">0</span>
+                    <span class="condition-badge badge-good js-road-condition-good">0</span>
                 </div>
                 <div class="condition-track">
                     <span class="condition-fill fill-empty"></span>
@@ -78,7 +78,7 @@
             <article class="condition-card">
                 <div class="condition-head">
                     <h2>Fair Condition</h2>
-                    <span class="condition-badge badge-fair">0</span>
+                    <span class="condition-badge badge-fair js-road-condition-fair">0</span>
                 </div>
                 <div class="condition-track">
                     <span class="condition-fill fill-empty"></span>
@@ -88,7 +88,7 @@
             <article class="condition-card">
                 <div class="condition-head">
                     <h2>Poor Condition</h2>
-                    <span class="condition-badge badge-poor">0</span>
+                    <span class="condition-badge badge-poor js-road-condition-poor">0</span>
                 </div>
                 <div class="condition-track">
                     <span class="condition-fill fill-empty"></span>
@@ -98,7 +98,7 @@
             <article class="condition-card">
                 <div class="condition-head">
                     <h2>Bad Condition</h2>
-                    <span class="condition-badge badge-bad">0</span>
+                    <span class="condition-badge badge-bad js-road-condition-bad">0</span>
                 </div>
                 <div class="condition-track">
                     <span class="condition-fill fill-empty"></span>
@@ -112,11 +112,11 @@
                     <circle cx="11" cy="11" r="7"></circle>
                     <path d="m20 20-3.5-3.5"></path>
                 </svg>
-                <input type="search" placeholder="Search roads...">
+                <input type="search" class="js-road-search-input" placeholder="Search roads...">
             </label>
 
             <div class="road-select-row">
-                <div class="road-dropdown js-road-dropdown">
+                <div class="road-dropdown js-road-dropdown" data-road-filter="municipality">
                     <button type="button" class="dropdown-trigger" aria-expanded="false">
                         <span class="dropdown-label">All Municipalities</span>
                         <span class="dropdown-caret">&#9662;</span>
@@ -126,7 +126,7 @@
                     </ul>
                 </div>
 
-                <div class="road-dropdown js-road-dropdown">
+                <div class="road-dropdown js-road-dropdown" data-road-filter="location">
                     <button type="button" class="dropdown-trigger" aria-expanded="false">
                         <span class="dropdown-label">Select Location</span>
                         <span class="dropdown-caret">&#9662;</span>
@@ -138,7 +138,7 @@
                     </ul>
                 </div>
 
-                <div class="road-dropdown js-road-dropdown">
+                <div class="road-dropdown js-road-dropdown" data-road-filter="condition">
                     <button type="button" class="dropdown-trigger" aria-expanded="false">
                         <span class="dropdown-label">All Conditions</span>
                         <span class="dropdown-caret">&#9662;</span>
@@ -152,7 +152,7 @@
                     </ul>
                 </div>
 
-                <div class="road-dropdown js-road-dropdown">
+                <div class="road-dropdown js-road-dropdown" data-road-filter="sort_by">
                     <button type="button" class="dropdown-trigger" aria-expanded="false">
                         <span class="dropdown-label">Road ID</span>
                         <span class="dropdown-caret">&#9662;</span>
@@ -166,7 +166,7 @@
                     </ul>
                 </div>
 
-                <div class="road-dropdown js-road-dropdown">
+                <div class="road-dropdown js-road-dropdown" data-road-filter="sort_order">
                     <button type="button" class="dropdown-trigger" aria-expanded="false">
                         <span class="dropdown-label">Ascending</span>
                         <span class="dropdown-caret">&#9662;</span>
@@ -183,26 +183,12 @@
 
             <div class="road-table-wrap">
                 <div class="road-table-head">
-                    <h3>Road Register</h3>
-                    <span>No records found</span>
+                    <h3>Provincial Roads</h3>
+                    <span class="js-road-record-meta">0 roads found</span>
                 </div>
-                <table class="road-table">
-                    <thead>
-                        <tr>
-                            <th>Road ID</th>
-                            <th>Road Name</th>
-                            <th>Municipality</th>
-                            <th>Length (km)</th>
-                            <th>Condition</th>
-                            <th class="align-right">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="6">No road records available yet.</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="road-municipality-list js-road-municipality-list">
+                    <p class="road-municipality-empty">No road records available yet. Upload files to start.</p>
+                </div>
             </div>
         </section>
     </section>

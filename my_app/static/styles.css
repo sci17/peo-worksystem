@@ -2991,6 +2991,119 @@ body {
     background: #f7fbff;
 }
 
+.road-municipality-list {
+    display: grid;
+    gap: 14px;
+    padding: 10px 12px 14px;
+}
+
+.road-municipality-empty {
+    margin: 0;
+    padding: 22px 12px;
+    text-align: center;
+    color: #5b7188;
+    font-size: 0.92rem;
+}
+
+.road-municipality-card {
+    border: 1px solid #d6e0ec;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.road-municipality-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f4f8fc;
+    border-bottom: 1px solid #dbe4ef;
+}
+
+.road-municipality-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #133a66;
+    font-size: 1.03rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+}
+
+.road-municipality-name svg {
+    width: 17px;
+    height: 17px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+}
+
+.road-municipality-count {
+    border: 1px solid #c8d5e4;
+    border-radius: 999px;
+    padding: 3px 10px;
+    background: #eef4fa;
+    color: #2e4d6e;
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.road-municipality-table {
+    min-width: 640px;
+}
+
+.road-municipality-table th {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.82rem;
+    color: #15385f;
+    background: #f9fbfe;
+}
+
+.road-municipality-table td {
+    font-size: 0.9rem;
+}
+
+.road-condition-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: capitalize;
+}
+
+.road-condition-pill.is-good {
+    color: #0e8a4a;
+    background: #d8f2e5;
+}
+
+.road-condition-pill.is-fair {
+    color: #2f64cd;
+    background: #dce8ff;
+}
+
+.road-condition-pill.is-poor {
+    color: #a86e02;
+    background: #f9ebca;
+}
+
+.road-condition-pill.is-bad {
+    color: #ffffff;
+    background: #e93f47;
+}
+
+.road-condition-pill.is-unknown {
+    color: #4f637a;
+    background: #e7edf5;
+}
+
 .equipment-table-wrap .road-table,
 .schedule-table-wrap .road-table {
     min-width: 920px;
@@ -3101,6 +3214,10 @@ body {
     .road-select-group {
         display: grid;
         gap: 8px;
+    }
+
+    .road-municipality-head {
+        flex-wrap: wrap;
     }
 
     .equipment-add-btn {
