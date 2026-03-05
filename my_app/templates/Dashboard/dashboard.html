@@ -48,7 +48,10 @@
                     <span class="material-symbols-outlined">folder_open</span>
                     <span>Projects</span>
                 </a>
-                <a href="#" class="nav-item">
+                <a
+                    href="{% url 'construction_division_dashboard' %}"
+                    class="nav-item {% if current_section == 'construction' %}nav-item-active{% endif %}"
+                >
                     <span class="material-symbols-outlined">construction</span>
                     <span>Construction Division</span>
                 </a>
@@ -118,6 +121,8 @@
             <section class="portal-content">
                 {% if current_section == 'admin' %}
                     {% include 'admin/admin_division.html' %}
+                {% elif current_section == 'construction' %}
+                    {% include construction_template|default:'construction/construction.html' %}
                 {% elif current_section == 'maintenance' %}
                     {% include maintenance_template %}
                 {% else %}
