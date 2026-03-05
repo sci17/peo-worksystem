@@ -121,6 +121,212 @@ document.addEventListener("DOMContentLoaded", () => {
     const ADMIN_DIVISION_RECORD_ID_PREFIX = "admin_record_";
     let editingRecordId = null;
     let editingTableType = null;
+    let adminStatusToastElement = null;
+    let adminStatusToastTimer = null;
+    let adminConfirmToastElement = null;
+
+    const closeAdminStatusToast = () => {
+        if (!adminStatusToastElement) return;
+        adminStatusToastElement.classList.remove("is-visible");
+        const toastToRemove = adminStatusToastElement;
+        adminStatusToastElement = null;
+        window.setTimeout(() => {
+            toastToRemove.remove();
+        }, 180);
+        if (adminStatusToastTimer) {
+            window.clearTimeout(adminStatusToastTimer);
+            adminStatusToastTimer = null;
+        }
+    };
+
+    const showAdminStatusToast = (message, variant = "success") => {
+        closeAdminStatusToast();
+        const toast = document.createElement("div");
+        toast.className = `admin-status-toast admin-status-toast--${variant === "success" ? "success" : "info"}`;
+        toast.setAttribute("role", "status");
+        toast.setAttribute("aria-live", "polite");
+        toast.innerHTML = `
+            <div class="admin-status-toast__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M9.2 16.8 4.9 12.5l1.6-1.6 2.7 2.7 8-8L18.8 7l-9.6 9.8z"></path>
+                </svg>
+            </div>
+            <div class="admin-status-toast__body">${String(message || "").trim() || "Action completed successfully."}</div>
+        `;
+        document.body.appendChild(toast);
+        adminStatusToastElement = toast;
+        window.requestAnimationFrame(() => {
+            toast.classList.add("is-visible");
+        });
+        adminStatusToastTimer = window.setTimeout(() => {
+            closeAdminStatusToast();
+        }, 3200);
+    };
+
+    const closeAdminConfirmToast = () => {
+        if (!adminConfirmToastElement) return;
+        adminConfirmToastElement.remove();
+        adminConfirmToastElement = null;
+    };
+
+    const showAdminConfirmToast = (options = {}) => {
+        closeAdminConfirmToast();
+        const titleText = String(options.title || "Confirm Delete").trim() || "Confirm Delete";
+        const messageText = String(options.message || "Are you sure to delete this data?").trim() || "Are you sure to delete this data?";
+        const confirmLabel = String(options.confirmLabel || "Yes, Delete").trim() || "Yes, Delete";
+        const cancelLabel = String(options.cancelLabel || "Cancel").trim() || "Cancel";
+
+        const prompt = document.createElement("div");
+        prompt.className = "admin-confirm-toast";
+        prompt.setAttribute("role", "alertdialog");
+        prompt.setAttribute("aria-live", "assertive");
+        prompt.innerHTML = `
+            <div class="admin-confirm-toast__header">${titleText}</div>
+            <p class="admin-confirm-toast__message">${messageText}</p>
+            <div class="admin-confirm-toast__actions">
+                <button type="button" class="admin-confirm-toast__btn admin-confirm-toast__btn--danger" data-action="yes">${confirmLabel}</button>
+                <button type="button" class="admin-confirm-toast__btn admin-confirm-toast__btn--cancel" data-action="cancel">${cancelLabel}</button>
+            </div>
+        `;
+
+        document.body.appendChild(prompt);
+        adminConfirmToastElement = prompt;
+        window.requestAnimationFrame(() => {
+            prompt.classList.add("is-visible");
+        });
+
+        return new Promise((resolve) => {
+            let settled = false;
+            const settle = (approved) => {
+                if (settled) return;
+                settled = true;
+                closeAdminConfirmToast();
+                resolve(Boolean(approved));
+            };
+
+            prompt.querySelectorAll("[data-action]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const action = String(button.getAttribute("data-action") || "");
+                    settle(action === "yes");
+                });
+            });
+        });
+    };
+
+    const closeAdminSelectDropdowns = () => {
+        document.querySelectorAll(".pa-select-custom.is-open").forEach((dropdown) => {
+            dropdown.classList.remove("is-open");
+        });
+    };
+
+    const enhanceAdminSelect = (select) => {
+        if (!(select instanceof HTMLSelectElement)) return;
+        if (select.dataset.enhanced === "true") return;
+        select.dataset.enhanced = "true";
+        select.classList.add("pa-select-native-hidden");
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "pa-select-custom";
+
+        const trigger = document.createElement("button");
+        trigger.type = "button";
+        trigger.className = "pa-select-custom__trigger";
+        trigger.setAttribute("aria-haspopup", "listbox");
+        trigger.setAttribute("aria-expanded", "false");
+
+        const label = document.createElement("span");
+        label.className = "pa-select-custom__label";
+        const caret = document.createElement("span");
+        caret.className = "pa-select-custom__caret";
+        caret.textContent = "▾";
+        trigger.appendChild(label);
+        trigger.appendChild(caret);
+
+        const menu = document.createElement("ul");
+        menu.className = "pa-select-custom__menu";
+        menu.setAttribute("role", "listbox");
+
+        const renderOptions = () => {
+            menu.innerHTML = "";
+            Array.from(select.options).forEach((option) => {
+                const item = document.createElement("li");
+                const optionButton = document.createElement("button");
+                optionButton.type = "button";
+                optionButton.className = "pa-select-custom__option";
+                optionButton.dataset.value = option.value;
+                optionButton.textContent = option.textContent || option.value;
+                optionButton.setAttribute("role", "option");
+                if (option.disabled) {
+                    optionButton.disabled = true;
+                }
+                if (option.selected) {
+                    optionButton.classList.add("is-selected");
+                    optionButton.setAttribute("aria-selected", "true");
+                } else {
+                    optionButton.setAttribute("aria-selected", "false");
+                }
+                item.appendChild(optionButton);
+                menu.appendChild(item);
+            });
+        };
+
+        const syncFromSelect = () => {
+            const selectedOption = select.options[select.selectedIndex];
+            label.textContent = selectedOption?.textContent || "Select";
+            menu.querySelectorAll(".pa-select-custom__option").forEach((button) => {
+                const isSelected = button.dataset.value === select.value;
+                button.classList.toggle("is-selected", isSelected);
+                button.setAttribute("aria-selected", isSelected ? "true" : "false");
+            });
+        };
+
+        renderOptions();
+        syncFromSelect();
+
+        trigger.addEventListener("click", (event) => {
+            event.stopPropagation();
+            const willOpen = !wrapper.classList.contains("is-open");
+            closeAdminSelectDropdowns();
+            wrapper.classList.toggle("is-open", willOpen);
+            trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        });
+
+        menu.addEventListener("click", (event) => {
+            const optionButton = event.target.closest(".pa-select-custom__option");
+            if (!optionButton || optionButton.disabled) return;
+            const nextValue = String(optionButton.dataset.value || "");
+            if (select.value !== nextValue) {
+                select.value = nextValue;
+                select.dispatchEvent(new Event("change", { bubbles: true }));
+            } else {
+                syncFromSelect();
+            }
+            wrapper.classList.remove("is-open");
+            trigger.setAttribute("aria-expanded", "false");
+        });
+
+        select.addEventListener("change", syncFromSelect);
+
+        wrapper.appendChild(trigger);
+        wrapper.appendChild(menu);
+        select.insertAdjacentElement("afterend", wrapper);
+    };
+
+    [documentDivisionFilter, documentStatusFilter, billingStatusFilter].forEach((select) => {
+        enhanceAdminSelect(select);
+    });
+
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest(".pa-select-custom")) {
+            closeAdminSelectDropdowns();
+        }
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            closeAdminSelectDropdowns();
+        }
+    });
 
     const normalizeStatus = (value) => {
         return String(value || "")
@@ -327,8 +533,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const setRowActionsCell = (cell, recordId) => {
         cell.className = "pa-row-actions";
         cell.innerHTML = `
-            <button type="button" class="pa-action-btn pa-action-edit" data-admin-action="edit" data-record-id="${recordId}">Edit</button>
-            <button type="button" class="pa-action-btn pa-action-delete" data-admin-action="delete" data-record-id="${recordId}">Delete</button>
+            <button type="button" class="pa-action-icon pa-action-edit" data-admin-action="edit" data-record-id="${recordId}" aria-label="Edit row" title="Edit">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m3 17.25 9.06-9.06 3.75 3.75L6.75 21H3v-3.75zm13.71-10.04a1 1 0 0 0 0-1.41l-1.5-1.5a1 1 0 0 0-1.41 0l-1.09 1.09 3.75 3.75 1.25-1.93z"></path>
+                </svg>
+            </button>
+            <button type="button" class="pa-action-icon pa-action-delete" data-admin-action="delete" data-record-id="${recordId}" aria-label="Delete row" title="Delete">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 7h2v8h-2v-8zm4 0h2v8h-2v-8zM7 10h2v8H7v-8z"></path>
+                </svg>
+            </button>
         `;
     };
 
@@ -1109,12 +1323,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
+            const isEditing = Boolean(editingRecordId);
             const created = await createRecordsFromForm(form, {
                 recordId: editingRecordId,
                 tableType: editingTableType,
             });
             if (created) {
                 closeModal();
+                showAdminStatusToast(
+                    isEditing
+                        ? "Data was updated successfully."
+                        : "New data was created successfully.",
+                    "success"
+                );
             }
         });
 
@@ -1220,19 +1441,37 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
     if (documentBulkDeleteButton) {
-        documentBulkDeleteButton.addEventListener("click", () => {
+        documentBulkDeleteButton.addEventListener("click", async () => {
             const selected = getSelectedRecordIds(documentsTableBody, "pa-empty-documents");
             if (!selected.length) return;
-            if (!window.confirm(`Delete ${selected.length} selected document record(s)?`)) return;
+            const shouldDelete = await showAdminConfirmToast({
+                title: "Delete Selected Data",
+                message: selected.length === 1
+                    ? "Are you sure to delete this data?"
+                    : `Are you sure to delete ${selected.length} selected records?`,
+                confirmLabel: "Yes, Delete",
+                cancelLabel: "Cancel",
+            });
+            if (!shouldDelete) return;
             deleteRecordsByIds(selected);
+            showAdminStatusToast("This data was deleted permanently.", "success");
         });
     }
     if (billingBulkDeleteButton) {
-        billingBulkDeleteButton.addEventListener("click", () => {
+        billingBulkDeleteButton.addEventListener("click", async () => {
             const selected = getSelectedRecordIds(billingTableBody, "pa-empty-billing");
             if (!selected.length) return;
-            if (!window.confirm(`Delete ${selected.length} selected billing record(s)?`)) return;
+            const shouldDelete = await showAdminConfirmToast({
+                title: "Delete Selected Data",
+                message: selected.length === 1
+                    ? "Are you sure to delete this data?"
+                    : `Are you sure to delete ${selected.length} selected records?`,
+                confirmLabel: "Yes, Delete",
+                cancelLabel: "Cancel",
+            });
+            if (!shouldDelete) return;
             deleteRecordsByIds(selected);
+            showAdminStatusToast("This data was deleted permanently.", "success");
         });
     }
     if (documentsTableBody) {
@@ -1242,7 +1481,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 syncSelectionControls();
             }
         });
-        documentsTableBody.addEventListener("click", (event) => {
+        documentsTableBody.addEventListener("click", async (event) => {
             const actionButton = event.target.closest("[data-admin-action]");
             if (!actionButton) return;
             const action = actionButton.dataset.adminAction;
@@ -1266,8 +1505,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
             if (action === "delete") {
-                if (!window.confirm("Delete this record?")) return;
+                const shouldDelete = await showAdminConfirmToast({
+                    title: "Delete Data",
+                    message: "Are you sure to delete this data?",
+                    confirmLabel: "Yes, Delete",
+                    cancelLabel: "Cancel",
+                });
+                if (!shouldDelete) return;
                 deleteRecordsByIds([recordId]);
+                showAdminStatusToast("This data was deleted permanently.", "success");
             }
         });
     }
@@ -1278,7 +1524,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 syncSelectionControls();
             }
         });
-        billingTableBody.addEventListener("click", (event) => {
+        billingTableBody.addEventListener("click", async (event) => {
             const actionButton = event.target.closest("[data-admin-action]");
             if (!actionButton) return;
             const action = actionButton.dataset.adminAction;
@@ -1290,8 +1536,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
             if (action === "delete") {
-                if (!window.confirm("Delete this record?")) return;
+                const shouldDelete = await showAdminConfirmToast({
+                    title: "Delete Data",
+                    message: "Are you sure to delete this data?",
+                    confirmLabel: "Yes, Delete",
+                    cancelLabel: "Cancel",
+                });
+                if (!shouldDelete) return;
                 deleteRecordsByIds([recordId]);
+                showAdminStatusToast("This data was deleted permanently.", "success");
             }
         });
     }
@@ -1307,9 +1560,11 @@ document.addEventListener("DOMContentLoaded", () => {
 /* ROAD_MAINTENANCE_SCRIPT_START */
 document.addEventListener("DOMContentLoaded", () => {
     const equipmentModal = document.querySelector(".js-equipment-modal");
+    const equipmentModalTitle = document.getElementById("equipment-modal-title");
     const openEquipmentModalButtons = document.querySelectorAll(".js-open-equipment-modal");
     const closeEquipmentModalButtons = document.querySelectorAll(".js-close-equipment-modal");
     const equipmentForm = document.querySelector(".js-equipment-form");
+    const equipmentSubmitButton = equipmentForm?.querySelector('button[type="submit"]');
     const equipmentTableBody = document.querySelector(".js-equipment-table-body");
     const equipmentRecordMeta = document.querySelector(".js-equipment-record-meta");
     const equipmentStatAvailable = document.querySelector(".js-equipment-stat-available");
@@ -1318,9 +1573,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const equipmentStatOutService = document.querySelector(".js-equipment-stat-out-service");
     const topEquipmentCount = document.querySelector(".js-top-equipment-count");
     const scheduleModal = document.querySelector(".js-schedule-modal");
+    const scheduleModalTitle = document.getElementById("schedule-modal-title");
     const openScheduleModalButtons = document.querySelectorAll(".js-open-schedule-modal");
     const closeScheduleModalButtons = document.querySelectorAll(".js-close-schedule-modal");
     const scheduleForm = document.querySelector(".js-schedule-form");
+    const scheduleSubmitButton = scheduleForm?.querySelector('button[type="submit"]');
     const scheduleTableBody = document.querySelector(".js-schedule-table-body");
     const scheduleCountText = document.querySelector(".js-schedule-count-text");
     const scheduleStatScheduled = document.querySelector(".js-schedule-stat-scheduled");
@@ -1350,6 +1607,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const roadEditForm = document.querySelector(".js-road-edit-form");
     const roadEditSubtitle = document.querySelector(".js-road-edit-subtitle");
     const roadEditRecordSelect = document.querySelector(".js-road-edit-record-select");
+    const roadEditRecordsBody = document.querySelector(".js-road-edit-records-body");
     const roadEditRoadIdInput = document.querySelector(".js-road-edit-road-id");
     const roadEditRoadNameInput = document.querySelector(".js-road-edit-road-name");
     const roadEditLengthInput = document.querySelector(".js-road-edit-length");
@@ -1438,13 +1696,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const roadAcceptedUploadTypes = ".xlsx,.xls,.csv,.txt,.json";
     let editingMunicipalityKey = "";
     let editingMunicipalityName = "";
+    let editingMunicipalityRecordIndexes = [];
     let deletingMunicipalityKey = "";
     let deletingMunicipalityName = "";
+    let editingEquipmentRow = null;
+    let editingScheduleRow = null;
     let editingContractorRow = null;
     let deletingContractorRow = null;
     let contractorSuccessToastTimer = null;
     let xlsxLibraryPromise = null;
     let refreshRoadRegister = null;
+    let roadUploadStatusToastTimer = null;
+    let roadUploadStatusToastElement = null;
+    let roadUploadDuplicatePromptElement = null;
+    let roadUploadAddConfirmPromptElement = null;
+    let roadDeleteConfirmToastElement = null;
 
     const setBodyScrollLock = () => {
         const isAnyModalOpen = [equipmentModal, scheduleModal, roadEditModal, roadAddModal, roadDeleteModal, contractorAddModal, contractorFloatCard, contractorEditModal, contractorEvalModal].some((modal) => modal && !modal.hidden);
@@ -2088,6 +2354,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 const regularRows = municipalityRows.filter((record) => !isSubtotalRoadRecord(record));
                 const subtotalRows = municipalityRows.filter((record) => isSubtotalRoadRecord(record));
                 const orderedMunicipalityRows = [...regularRows, ...subtotalRows];
+                const editableMunicipalityRows = regularRows.length ? regularRows : municipalityRows;
+                const municipalityRecordIndexes = editableMunicipalityRows
+                    .map((record) => roadRecords.indexOf(record))
+                    .filter((recordIndex) => recordIndex >= 0);
                 const totalPages = Math.max(1, Math.ceil(orderedMunicipalityRows.length / roadRowsPerMunicipalityPage));
                 const savedPage = roadMunicipalityPageState.get(pageKey) || 1;
                 const currentPage = Math.min(Math.max(savedPage, 1), totalPages);
@@ -2179,6 +2449,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                     class="road-municipality-update-btn js-road-municipality-update"
                                     data-municipality-key="${escapeHtml(pageKey)}"
                                     data-municipality-name="${escapeHtml(municipalityName)}"
+                                    data-record-indexes="${escapeHtml(municipalityRecordIndexes.join(","))}"
                                 >
                                     Update Data
                                 </button>
@@ -2409,6 +2680,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (roadAddRoadNameInput) {
                     roadAddRoadNameInput.focus();
                 }
+                showRoadUploadStatusToast("Please enter Road Name before adding.", "warning");
                 return;
             }
 
@@ -2416,6 +2688,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (roadAddLocationSelect) {
                     roadAddLocationSelect.focus();
                 }
+                showRoadUploadStatusToast("Please select Location before adding.", "warning");
                 return;
             }
 
@@ -2423,6 +2696,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (roadAddMunicipalitySelect) {
                     roadAddMunicipalitySelect.focus();
                 }
+                showRoadUploadStatusToast("Please select Municipality before adding.", "warning");
                 return;
             }
 
@@ -2453,6 +2727,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             persistMaintenanceState();
             closeRoadAddModal();
+            showRoadUploadStatusToast("Provincial road added successfully.", "success");
         });
     }
 
@@ -2482,6 +2757,360 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         return { parsedRows, skippedFiles };
+    };
+
+    const ensureRoadUploadStatusToast = () => {
+        if (roadUploadStatusToastElement) {
+            return roadUploadStatusToastElement;
+        }
+
+        const toast = document.createElement("aside");
+        toast.className = "road-upload-status-toast";
+        toast.hidden = true;
+        document.body.appendChild(toast);
+        roadUploadStatusToastElement = toast;
+        return toast;
+    };
+
+    const showRoadUploadStatusToast = (message, variant = "info") => {
+        const toastMessage = String(message || "").trim();
+        if (!toastMessage) {
+            return;
+        }
+
+        const toast = ensureRoadUploadStatusToast();
+        toast.classList.remove("is-success", "is-warning", "is-danger", "is-info");
+        toast.classList.add(`is-${variant}`);
+        toast.textContent = toastMessage;
+        toast.hidden = false;
+
+        if (roadUploadStatusToastTimer) {
+            window.clearTimeout(roadUploadStatusToastTimer);
+        }
+
+        roadUploadStatusToastTimer = window.setTimeout(() => {
+            toast.hidden = true;
+            roadUploadStatusToastTimer = null;
+        }, 3600);
+    };
+
+    const closeRoadDeleteConfirmToast = () => {
+        if (!roadDeleteConfirmToastElement) {
+            return;
+        }
+        roadDeleteConfirmToastElement.remove();
+        roadDeleteConfirmToastElement = null;
+    };
+
+    const showRoadDeleteConfirmToast = (roadLabel, options = {}) => {
+        closeRoadDeleteConfirmToast();
+
+        const titleText = String(options.title || "Delete Road Data").trim() || "Delete Data";
+        const copyText = String(options.copy || "Are you sure to delete this data?").trim() || "Are you sure to delete this data?";
+        const confirmLabel = String(options.confirmLabel || "Yes, Delete").trim() || "Yes";
+        const cancelLabel = String(options.cancelLabel || "Cancel").trim() || "Cancel";
+        const variant = String(options.variant || "danger").trim().toLowerCase();
+        const normalizedRoadLabel = String(roadLabel || "").trim() || "Selected road data";
+        const prompt = document.createElement("aside");
+        prompt.className = `road-delete-confirm-toast${variant === "info" ? " is-info" : ""}`;
+        prompt.setAttribute("role", "alertdialog");
+        prompt.setAttribute("aria-modal", "true");
+        prompt.innerHTML = `
+            <div class="road-delete-confirm-head">
+                <h4>${escapeHtml(titleText)}</h4>
+                <button type="button" class="road-delete-confirm-close" aria-label="Close delete confirmation">&times;</button>
+            </div>
+            <p class="road-delete-confirm-copy">${escapeHtml(copyText)}</p>
+            <p class="road-delete-confirm-target">${escapeHtml(normalizedRoadLabel)}</p>
+            <div class="road-delete-confirm-actions">
+                <button type="button" class="road-delete-confirm-btn ${variant === "info" ? "road-delete-confirm-btn-info" : "road-delete-confirm-btn-danger"}" data-action="yes">${escapeHtml(confirmLabel)}</button>
+                <button type="button" class="road-delete-confirm-btn road-delete-confirm-btn-cancel" data-action="cancel">${escapeHtml(cancelLabel)}</button>
+            </div>
+        `;
+
+        document.body.appendChild(prompt);
+        roadDeleteConfirmToastElement = prompt;
+
+        return new Promise((resolve) => {
+            const settle = (approved) => {
+                closeRoadDeleteConfirmToast();
+                resolve(Boolean(approved));
+            };
+
+            const closeButton = prompt.querySelector(".road-delete-confirm-close");
+            if (closeButton) {
+                closeButton.addEventListener("click", () => settle(false));
+            }
+
+            prompt.querySelectorAll("[data-action]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const action = String(button.getAttribute("data-action") || "");
+                    settle(action === "yes");
+                });
+            });
+        });
+    };
+
+    const createRoadIdentityKey = (record) => {
+        const municipalityKey = normalizeMunicipalityName(record?.municipality || "");
+        const roadIdKey = normalizeKey(record?.roadId || "");
+        const roadNameKey = normalizeKey(record?.roadName || "");
+        return `${municipalityKey}|${roadIdKey}|${roadNameKey}`;
+    };
+
+    const createRoadSignatureKey = (record) => {
+        const identityKey = createRoadIdentityKey(record);
+        const normalizedLength = typeof record?.lengthKm === "number" && Number.isFinite(record.lengthKm)
+            ? record.lengthKm.toFixed(4)
+            : "";
+        const conditionKey = normalizeStatus(record?.condition || "unknown");
+        const surfaceTypeKey = normalizeKey(record?.surfaceType || "");
+        const locationKey = normalizeKey(record?.location || "");
+        return `${identityKey}|${normalizedLength}|${conditionKey}|${surfaceTypeKey}|${locationKey}`;
+    };
+
+    const buildRoadUploadMergePlan = (uploadedRows) => {
+        const dedupedUploadedByIdentity = new Map();
+        let uploadDuplicateCount = 0;
+
+        uploadedRows.forEach((row) => {
+            const normalizedRow = row && row.__roadNormalized ? row : normalizeRoadRecord(row);
+            if (!normalizedRow) {
+                return;
+            }
+
+            const identityKey = createRoadIdentityKey(normalizedRow);
+            if (!identityKey.replace(/\|/g, "")) {
+                return;
+            }
+
+            if (dedupedUploadedByIdentity.has(identityKey)) {
+                uploadDuplicateCount += 1;
+            }
+            dedupedUploadedByIdentity.set(identityKey, normalizedRow);
+        });
+
+        const dedupedUploadedRows = [...dedupedUploadedByIdentity.values()];
+        const existingByIdentity = new Map();
+        const existingMunicipalityKeys = new Set();
+        roadRecords.forEach((record, index) => {
+            const identityKey = createRoadIdentityKey(record);
+            if (!identityKey.replace(/\|/g, "")) {
+                return;
+            }
+            if (!existingByIdentity.has(identityKey)) {
+                existingByIdentity.set(identityKey, { index, record });
+            }
+            const municipalityKey = normalizeMunicipalityName(record?.municipality || "");
+            if (municipalityKey) {
+                existingMunicipalityKeys.add(municipalityKey);
+            }
+        });
+
+        const newRows = [];
+        const newRowsSameMunicipality = [];
+        const newRowsNewMunicipality = [];
+        const duplicateExact = [];
+        const duplicateChanged = [];
+
+        dedupedUploadedRows.forEach((row) => {
+            const identityKey = createRoadIdentityKey(row);
+            const existingEntry = existingByIdentity.get(identityKey);
+            if (!existingEntry) {
+                newRows.push(row);
+                const municipalityKey = normalizeMunicipalityName(row?.municipality || "");
+                if (municipalityKey && existingMunicipalityKeys.has(municipalityKey)) {
+                    newRowsSameMunicipality.push(row);
+                } else {
+                    newRowsNewMunicipality.push(row);
+                }
+                return;
+            }
+
+            const sameSignature = createRoadSignatureKey(existingEntry.record) === createRoadSignatureKey(row);
+            if (sameSignature) {
+                duplicateExact.push({ index: existingEntry.index, row });
+            } else {
+                duplicateChanged.push({ index: existingEntry.index, row });
+            }
+        });
+
+        return {
+            newRows,
+            newRowsSameMunicipality,
+            newRowsNewMunicipality,
+            duplicateExact,
+            duplicateChanged,
+            uploadDuplicateCount,
+            dedupedUploadedCount: dedupedUploadedRows.length,
+        };
+    };
+
+    const closeRoadUploadDuplicatePrompt = () => {
+        if (!roadUploadDuplicatePromptElement) {
+            return;
+        }
+        roadUploadDuplicatePromptElement.remove();
+        roadUploadDuplicatePromptElement = null;
+    };
+
+    const closeRoadUploadAddConfirmPrompt = () => {
+        if (!roadUploadAddConfirmPromptElement) {
+            return;
+        }
+        roadUploadAddConfirmPromptElement.remove();
+        roadUploadAddConfirmPromptElement = null;
+    };
+
+    const showRoadUploadAddConfirmPrompt = ({
+        rowCount = 0,
+        municipalityNames = [],
+    }) => {
+        closeRoadUploadAddConfirmPrompt();
+
+        const uniqueMunicipalityNames = [...new Set(
+            (Array.isArray(municipalityNames) ? municipalityNames : [])
+                .map((name) => String(name || "").trim())
+                .filter(Boolean)
+        )];
+        const municipalityPreview = uniqueMunicipalityNames.slice(0, 3).join(", ");
+        const hasMoreMunicipalities = uniqueMunicipalityNames.length > 3;
+
+        const prompt = document.createElement("aside");
+        prompt.className = "road-upload-duplicate-toast";
+        prompt.innerHTML = `
+            <div class="road-upload-duplicate-head">
+                <h4>Add Municipality Data</h4>
+                <button type="button" class="road-upload-duplicate-close" aria-label="Close add data confirmation">&times;</button>
+            </div>
+            <p class="road-upload-duplicate-copy">
+                The upload includes ${rowCount} road row${rowCount === 1 ? "" : "s"} in existing municipality records
+                with different details (Road ID, Road Name, Length, Condition, Surface).
+                Are you sure to add this data?
+            </p>
+            ${uniqueMunicipalityNames.length ? `
+                <div class="road-upload-duplicate-meta">
+                    <span>Municipality${uniqueMunicipalityNames.length === 1 ? "" : "ies"}:
+                        <strong>${escapeHtml(municipalityPreview)}${hasMoreMunicipalities ? ", ..." : ""}</strong>
+                    </span>
+                    <span>Rows to add: <strong>${rowCount}</strong></span>
+                </div>
+            ` : ""}
+            <div class="road-upload-duplicate-actions">
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-primary" data-action="yes">Yes, Add</button>
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-secondary" data-action="no">No, Skip</button>
+            </div>
+        `;
+
+        document.body.appendChild(prompt);
+        roadUploadAddConfirmPromptElement = prompt;
+
+        return new Promise((resolve) => {
+            const settle = (approved) => {
+                closeRoadUploadAddConfirmPrompt();
+                resolve(Boolean(approved));
+            };
+
+            const closeButton = prompt.querySelector(".road-upload-duplicate-close");
+            if (closeButton) {
+                closeButton.addEventListener("click", () => settle(false));
+            }
+
+            prompt.querySelectorAll("[data-action]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const action = String(button.getAttribute("data-action") || "");
+                    settle(action === "yes");
+                });
+            });
+        });
+    };
+
+    const showRoadUploadDuplicatePrompt = ({
+        duplicateTotal = 0,
+        exactCount = 0,
+        changedCount = 0,
+        newCount = 0,
+        uploadDuplicateCount = 0,
+    }) => {
+        closeRoadUploadDuplicatePrompt();
+
+        const prompt = document.createElement("aside");
+        prompt.className = "road-upload-duplicate-toast";
+        prompt.innerHTML = `
+            <div class="road-upload-duplicate-head">
+                <h4>Duplicate Road Data Detected</h4>
+                <button type="button" class="road-upload-duplicate-close" aria-label="Close duplicate upload prompt">&times;</button>
+            </div>
+            <p class="road-upload-duplicate-copy">
+                ${duplicateTotal} uploaded road row${duplicateTotal === 1 ? "" : "s"} match existing records.
+                Do you want to replace existing data with uploaded values?
+            </p>
+            <div class="road-upload-duplicate-meta">
+                <span>New rows: <strong>${newCount}</strong></span>
+                <span>Exact duplicates: <strong>${exactCount}</strong></span>
+                <span>Rows with changes: <strong>${changedCount}</strong></span>
+                ${uploadDuplicateCount > 0 ? `<span>Repeated in upload: <strong>${uploadDuplicateCount}</strong></span>` : ""}
+            </div>
+            <div class="road-upload-duplicate-actions">
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-primary" data-action="replace">Replace Data</button>
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-secondary" data-action="keep">Keep Existing</button>
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-ghost" data-action="cancel">Cancel</button>
+            </div>
+        `;
+
+        document.body.appendChild(prompt);
+        roadUploadDuplicatePromptElement = prompt;
+
+        return new Promise((resolve) => {
+            const settle = (action) => {
+                closeRoadUploadDuplicatePrompt();
+                resolve(action);
+            };
+
+            const closeButton = prompt.querySelector(".road-upload-duplicate-close");
+            if (closeButton) {
+                closeButton.addEventListener("click", () => settle("cancel"));
+            }
+
+            prompt.querySelectorAll("[data-action]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const action = String(button.getAttribute("data-action") || "cancel");
+                    settle(action);
+                });
+            });
+        });
+    };
+
+    const applyRoadUploadMergePlan = (plan, strategy = "keep") => {
+        const normalizedStrategy = strategy === "replace" ? "replace" : "keep";
+        const affectedRows = [];
+
+        if (normalizedStrategy === "replace") {
+            [...plan.duplicateExact, ...plan.duplicateChanged].forEach((entry) => {
+                const targetIndex = entry.index;
+                if (!Number.isInteger(targetIndex) || !roadRecords[targetIndex]) {
+                    return;
+                }
+                roadRecords[targetIndex] = { ...entry.row, __roadNormalized: true };
+                affectedRows.push(roadRecords[targetIndex]);
+            });
+        }
+
+        const appendedRows = plan.newRows.map((row) => ({ ...row, __roadNormalized: true }));
+        if (appendedRows.length) {
+            roadRecords.push(...appendedRows);
+            affectedRows.push(...appendedRows);
+        }
+
+        affectedRows.forEach((record) => {
+            roadMunicipalityPageState.set(normalizeMunicipalityName(record.municipality || "Unknown"), 1);
+        });
+
+        refreshRoadMunicipalityOptions();
+        if (typeof refreshRoadRegister === "function") {
+            refreshRoadRegister();
+        }
+        persistMaintenanceState();
     };
 
     const getConditionFormValue = (conditionValue) => {
@@ -2521,6 +3150,53 @@ document.addEventListener("DOMContentLoaded", () => {
         if (roadEditSurfaceTypeInput) roadEditSurfaceTypeInput.value = String(record.surfaceType || "");
     };
 
+    const renderRoadEditRecordRows = (recordIndexes, selectedIndex) => {
+        if (!roadEditRecordsBody) {
+            return;
+        }
+
+        const validIndexes = Array.isArray(recordIndexes)
+            ? recordIndexes.filter((recordIndex) => Number.isInteger(recordIndex) && roadRecords[recordIndex])
+            : [];
+
+        if (!validIndexes.length) {
+            roadEditRecordsBody.innerHTML = `
+                <tr>
+                    <td colspan="5">No road records available.</td>
+                </tr>
+            `;
+            return;
+        }
+
+        roadEditRecordsBody.innerHTML = validIndexes
+            .map((recordIndex) => {
+                const record = roadRecords[recordIndex] || {};
+                const conditionText = toTitleCase(record.condition || "Unknown");
+                const conditionClass = getRoadConditionClass(record.condition || "unknown");
+                const isSelected = recordIndex === selectedIndex;
+
+                return `
+                    <tr class="${isSelected ? "is-selected" : ""}">
+                        <td>${escapeHtml(record.roadId || "-")}</td>
+                        <td>
+                            <button
+                                type="button"
+                                class="road-edit-record-select-btn js-road-edit-record-row"
+                                data-record-index="${recordIndex}"
+                                ${isSelected ? 'aria-current="true"' : ""}
+                            >
+                                ${escapeHtml(record.roadName || "-")}
+                            </button>
+                        </td>
+                        <td>${escapeHtml(formatLengthValue(record.lengthKm))}</td>
+                        <td><span class="road-condition-pill ${conditionClass}">${escapeHtml(conditionText)}</span></td>
+                        <td>${escapeHtml(record.surfaceType || "-")}</td>
+                    </tr>
+                `;
+            })
+            .join("");
+    };
+
     const closeRoadEditModal = () => {
         if (!roadEditModal) {
             return;
@@ -2528,11 +3204,19 @@ document.addEventListener("DOMContentLoaded", () => {
         roadEditModal.hidden = true;
         editingMunicipalityKey = "";
         editingMunicipalityName = "";
+        editingMunicipalityRecordIndexes = [];
         if (roadEditForm) {
             roadEditForm.reset();
         }
         if (roadEditRecordSelect) {
             roadEditRecordSelect.innerHTML = "";
+        }
+        if (roadEditRecordsBody) {
+            roadEditRecordsBody.innerHTML = `
+                <tr>
+                    <td colspan="5">No road records available.</td>
+                </tr>
+            `;
         }
         setBodyScrollLock();
     };
@@ -2561,13 +3245,37 @@ document.addEventListener("DOMContentLoaded", () => {
         roadMunicipalityToastTimers.set(normalizedKey, timeoutId);
     };
 
-    const openRoadEditModal = (municipalityKey, municipalityName) => {
+    const parseRecordIndexes = (value) => {
+        const uniqueIndexes = new Set();
+        String(value || "")
+            .split(",")
+            .forEach((rawValue) => {
+                const parsedIndex = Number.parseInt(rawValue, 10);
+                if (Number.isInteger(parsedIndex) && roadRecords[parsedIndex]) {
+                    uniqueIndexes.add(parsedIndex);
+                }
+            });
+        return [...uniqueIndexes];
+    };
+
+    const openRoadEditModal = (municipalityKey, municipalityName, providedRecordIndexes = []) => {
         if (!roadEditModal || !roadEditRecordSelect) {
             return;
         }
 
         const normalizedKey = normalizeMunicipalityName(municipalityKey || municipalityName);
-        const recordIndexes = getMunicipalityRecordIndexes(normalizedKey);
+        let recordIndexes = Array.isArray(providedRecordIndexes)
+            ? providedRecordIndexes
+                .filter((recordIndex) => Number.isInteger(recordIndex) && roadRecords[recordIndex])
+            : [];
+
+        if (!recordIndexes.length) {
+            recordIndexes = getMunicipalityRecordIndexes(normalizedKey);
+        }
+        if (!recordIndexes.length && municipalityName) {
+            recordIndexes = getMunicipalityRecordIndexes(municipalityName);
+        }
+        recordIndexes = [...new Set(recordIndexes)];
         if (!recordIndexes.length) {
             window.alert("No road records found for this municipality.");
             return;
@@ -2575,6 +3283,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         editingMunicipalityKey = normalizedKey;
         editingMunicipalityName = municipalityName || roadRecords[recordIndexes[0]]?.municipality || "Unknown";
+        editingMunicipalityRecordIndexes = [...recordIndexes];
 
         roadEditRecordSelect.innerHTML = recordIndexes
             .map((recordIndex, optionIndex) => {
@@ -2586,12 +3295,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         roadEditRecordSelect.value = String(recordIndexes[0]);
         populateRoadEditForm(recordIndexes[0]);
+        renderRoadEditRecordRows(editingMunicipalityRecordIndexes, recordIndexes[0]);
         if (roadEditSubtitle) {
-            roadEditSubtitle.textContent = `Edit road data for ${editingMunicipalityName}`;
+            roadEditSubtitle.textContent = `Edit road data for ${editingMunicipalityName} (${recordIndexes.length} road${recordIndexes.length === 1 ? "" : "s"})`;
         }
 
         roadEditModal.hidden = false;
         setBodyScrollLock();
+        const focusTarget = roadEditRoadNameInput || roadEditRecordSelect;
+        if (focusTarget) {
+            focusTarget.focus();
+        }
     };
 
     closeRoadEditModalButtons.forEach((button) => {
@@ -2603,7 +3317,31 @@ document.addEventListener("DOMContentLoaded", () => {
             const selectedIndex = Number.parseInt(roadEditRecordSelect.value, 10);
             if (Number.isInteger(selectedIndex)) {
                 populateRoadEditForm(selectedIndex);
+                renderRoadEditRecordRows(editingMunicipalityRecordIndexes, selectedIndex);
             }
+        });
+    }
+
+    if (roadEditRecordsBody && roadEditRecordSelect) {
+        roadEditRecordsBody.addEventListener("click", (event) => {
+            const clickTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
+            if (!clickTarget) {
+                return;
+            }
+
+            const rowButton = clickTarget.closest(".js-road-edit-record-row");
+            if (!rowButton) {
+                return;
+            }
+
+            const recordIndex = Number.parseInt(String(rowButton.dataset.recordIndex || ""), 10);
+            if (!Number.isInteger(recordIndex) || !roadRecords[recordIndex]) {
+                return;
+            }
+
+            roadEditRecordSelect.value = String(recordIndex);
+            populateRoadEditForm(recordIndex);
+            renderRoadEditRecordRows(editingMunicipalityRecordIndexes, recordIndex);
         });
     }
 
@@ -2795,7 +3533,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (roadDeleteForm && roadDeleteRecordSelect) {
-        roadDeleteForm.addEventListener("submit", (event) => {
+        roadDeleteForm.addEventListener("submit", async (event) => {
             event.preventDefault();
 
             const selectedIndex = Number.parseInt(roadDeleteRecordSelect.value, 10);
@@ -2805,7 +3543,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const targetRecord = roadRecords[selectedIndex];
             const roadLabel = `${targetRecord.roadId || "-"}-${targetRecord.roadName || "-"}`;
-            const shouldDelete = window.confirm(`Are you sure to delete this data?\n${roadLabel}`);
+            const shouldDelete = await showRoadDeleteConfirmToast(roadLabel);
             if (!shouldDelete) {
                 return;
             }
@@ -2819,74 +3557,83 @@ document.addEventListener("DOMContentLoaded", () => {
                 refreshRoadRegister();
             }
             showMunicipalityToast(municipalityName, `Deleted Road: ${targetRecord.roadName || targetRecord.roadId || "-"}`);
+            showRoadUploadStatusToast("The data was deleted permanently.", "success");
             persistMaintenanceState();
             closeRoadDeleteModal();
         });
     }
 
-    if (roadMunicipalityList) {
-        roadMunicipalityList.addEventListener("click", (event) => {
-            const updateButton = event.target.closest(".js-road-municipality-update");
-            if (updateButton) {
-                const municipalityKey = String(updateButton.dataset.municipalityKey || "").trim();
-                const municipalityName = String(updateButton.dataset.municipalityName || "").trim();
-                openRoadEditModal(municipalityKey, municipalityName);
+    document.addEventListener("click", async (event) => {
+        const clickTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
+        if (!clickTarget) {
+            return;
+        }
+        if (!clickTarget.closest(".js-road-municipality-list")) {
+            return;
+        }
+
+        const updateButton = clickTarget.closest(".js-road-municipality-update");
+        if (updateButton) {
+            const municipalityKey = String(updateButton.dataset.municipalityKey || "").trim();
+            const municipalityName = String(updateButton.dataset.municipalityName || "").trim();
+            const recordIndexes = parseRecordIndexes(updateButton.dataset.recordIndexes);
+            openRoadEditModal(municipalityKey, municipalityName, recordIndexes);
+            return;
+        }
+
+        const rowDeleteButton = clickTarget.closest(".js-road-row-delete");
+        if (rowDeleteButton) {
+            const recordIndex = Number.parseInt(String(rowDeleteButton.dataset.recordIndex || ""), 10);
+            if (!Number.isInteger(recordIndex) || !roadRecords[recordIndex]) {
                 return;
             }
 
-            const rowDeleteButton = event.target.closest(".js-road-row-delete");
-            if (rowDeleteButton) {
-                const recordIndex = Number.parseInt(String(rowDeleteButton.dataset.recordIndex || ""), 10);
-                if (!Number.isInteger(recordIndex) || !roadRecords[recordIndex]) {
-                    return;
-                }
-
-                const targetRecord = roadRecords[recordIndex];
-                const roadLabel = `${targetRecord.roadId || "-"}-${targetRecord.roadName || "-"}`;
-                const shouldDelete = window.confirm(`Are you sure to delete this data?\n${roadLabel}`);
-                if (!shouldDelete) {
-                    return;
-                }
-
-                roadRecords.splice(recordIndex, 1);
-
-                const municipalityName = String(
-                    rowDeleteButton.dataset.municipalityName || targetRecord.municipality || "Unknown"
-                ).trim() || "Unknown";
-
-                roadMunicipalityPageState.set(normalizeMunicipalityName(municipalityName), 1);
-                refreshRoadMunicipalityOptions();
-                if (typeof refreshRoadRegister === "function") {
-                    refreshRoadRegister();
-                }
-                showMunicipalityToast(
-                    municipalityName,
-                    `Deleted Road: ${targetRecord.roadName || targetRecord.roadId || "-"}`
-                );
-                persistMaintenanceState();
+            const targetRecord = roadRecords[recordIndex];
+            const roadLabel = `${targetRecord.roadId || "-"}-${targetRecord.roadName || "-"}`;
+            const shouldDelete = await showRoadDeleteConfirmToast(roadLabel);
+            if (!shouldDelete) {
                 return;
             }
 
-            const button = event.target.closest(".js-road-page-btn");
-            if (!button) {
-                return;
-            }
+            roadRecords.splice(recordIndex, 1);
 
-            const pageKey = String(button.dataset.pageKey || "").trim();
-            const direction = String(button.dataset.pageDirection || "").trim();
-            if (!pageKey) {
-                return;
-            }
+            const municipalityName = String(
+                rowDeleteButton.dataset.municipalityName || targetRecord.municipality || "Unknown"
+            ).trim() || "Unknown";
 
-            const currentPage = roadMunicipalityPageState.get(pageKey) || 1;
-            const nextPage = direction === "next" ? currentPage + 1 : currentPage - 1;
-            roadMunicipalityPageState.set(pageKey, Math.max(1, nextPage));
-
+            roadMunicipalityPageState.set(normalizeMunicipalityName(municipalityName), 1);
+            refreshRoadMunicipalityOptions();
             if (typeof refreshRoadRegister === "function") {
                 refreshRoadRegister();
             }
-        });
-    }
+            showMunicipalityToast(
+                municipalityName,
+                `Deleted Road: ${targetRecord.roadName || targetRecord.roadId || "-"}`
+            );
+            showRoadUploadStatusToast("The data was deleted permanently.", "success");
+            persistMaintenanceState();
+            return;
+        }
+
+        const button = clickTarget.closest(".js-road-page-btn");
+        if (!button) {
+            return;
+        }
+
+        const pageKey = String(button.dataset.pageKey || "").trim();
+        const direction = String(button.dataset.pageDirection || "").trim();
+        if (!pageKey) {
+            return;
+        }
+
+        const currentPage = roadMunicipalityPageState.get(pageKey) || 1;
+        const nextPage = direction === "next" ? currentPage + 1 : currentPage - 1;
+        roadMunicipalityPageState.set(pageKey, Math.max(1, nextPage));
+
+        if (typeof refreshRoadRegister === "function") {
+            refreshRoadRegister();
+        }
+    });
 
     const setRoadSearchExpanded = (expand) => {
         if (!roadSearchShell) {
@@ -2953,18 +3700,112 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const { parsedRows, skippedFiles } = await parseSelectedRoadFiles(selectedFiles);
+            const uploadPlan = buildRoadUploadMergePlan(parsedRows);
+            const duplicateTotal = uploadPlan.duplicateExact.length + uploadPlan.duplicateChanged.length;
+            const hasAnyValidRows = uploadPlan.dedupedUploadedCount > 0;
 
-            if (parsedRows.length) {
-                roadRecords.push(...parsedRows);
-                refreshRoadMunicipalityOptions();
-                if (typeof refreshRoadRegister === "function") {
-                    refreshRoadRegister();
+            if (!hasAnyValidRows && skippedFiles.length) {
+                showRoadUploadStatusToast(
+                    `No valid rows were imported. Unreadable file(s): ${skippedFiles.join(", ")}`,
+                    "warning",
+                );
+                roadUploadInput.value = "";
+                return;
+            }
+
+            if (!hasAnyValidRows) {
+                showRoadUploadStatusToast("No valid road rows were found in the selected file(s).", "warning");
+                roadUploadInput.value = "";
+                return;
+            }
+
+            const sameMunicipalityDifferentRows = Array.isArray(uploadPlan.newRowsSameMunicipality)
+                ? uploadPlan.newRowsSameMunicipality
+                : [];
+            const newMunicipalityRows = Array.isArray(uploadPlan.newRowsNewMunicipality)
+                ? uploadPlan.newRowsNewMunicipality
+                : [];
+            let includeSameMunicipalityRows = true;
+            let addedDifferentDataInExistingMunicipality = false;
+
+            if (sameMunicipalityDifferentRows.length) {
+                const municipalityNames = sameMunicipalityDifferentRows
+                    .map((row) => normalizeMunicipalityDisplayName(row?.municipality, "Unknown"))
+                    .filter(Boolean);
+
+                includeSameMunicipalityRows = await showRoadUploadAddConfirmPrompt({
+                    rowCount: sameMunicipalityDifferentRows.length,
+                    municipalityNames,
+                });
+
+                if (includeSameMunicipalityRows) {
+                    addedDifferentDataInExistingMunicipality = true;
                 }
-                persistMaintenanceState();
+            }
+
+            const effectivePlan = {
+                ...uploadPlan,
+                newRows: [
+                    ...newMunicipalityRows,
+                    ...(includeSameMunicipalityRows ? sameMunicipalityDifferentRows : []),
+                ],
+            };
+
+            let finalToastMessage = "";
+            let finalToastVariant = "info";
+
+            if (duplicateTotal > 0) {
+                const action = await showRoadUploadDuplicatePrompt({
+                    duplicateTotal,
+                    exactCount: uploadPlan.duplicateExact.length,
+                    changedCount: uploadPlan.duplicateChanged.length,
+                    newCount: effectivePlan.newRows.length,
+                    uploadDuplicateCount: uploadPlan.uploadDuplicateCount,
+                });
+
+                if (action === "cancel") {
+                    showRoadUploadStatusToast("Upload cancelled. Existing road data was not changed.", "info");
+                    roadUploadInput.value = "";
+                    return;
+                }
+
+                applyRoadUploadMergePlan(effectivePlan, action === "replace" ? "replace" : "keep");
+                if (addedDifferentDataInExistingMunicipality) {
+                    finalToastMessage = "The Data Added.";
+                    finalToastVariant = "success";
+                } else if (action === "replace") {
+                    finalToastMessage = `Upload complete: ${effectivePlan.newRows.length} new row(s) added, ${duplicateTotal} duplicate row(s) replaced.`;
+                    finalToastVariant = "success";
+                } else {
+                    finalToastMessage = `Upload complete: ${effectivePlan.newRows.length} new row(s) added. ${duplicateTotal} duplicate row(s) kept unchanged.`;
+                    finalToastVariant = "info";
+                }
+            } else if (effectivePlan.newRows.length) {
+                applyRoadUploadMergePlan(effectivePlan, "keep");
+                if (addedDifferentDataInExistingMunicipality) {
+                    finalToastMessage = "The Data Added.";
+                    finalToastVariant = "success";
+                } else {
+                    finalToastMessage = `Upload complete: ${effectivePlan.newRows.length} road row(s) added.`;
+                    finalToastVariant = "success";
+                }
+            } else {
+                finalToastMessage = "No new data was added.";
+                finalToastVariant = "info";
             }
 
             if (skippedFiles.length) {
-                window.alert(`Some files could not be read: ${skippedFiles.join(", ")}`);
+                const skippedNote = `Some files were skipped: ${skippedFiles.join(", ")}`;
+                if (finalToastMessage) {
+                    finalToastMessage = `${finalToastMessage} ${skippedNote}`;
+                } else {
+                    finalToastMessage = skippedNote;
+                    finalToastVariant = "warning";
+                }
+            }
+
+            if (finalToastMessage) {
+                showRoadUploadStatusToast(finalToastMessage, finalToastVariant);
             }
 
             roadUploadInput.value = "";
@@ -4158,13 +4999,53 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         equipmentModal.hidden = true;
+        editingEquipmentRow = null;
+        if (equipmentForm) {
+            equipmentForm.reset();
+        }
+        if (equipmentModalTitle) {
+            equipmentModalTitle.textContent = "Add Equipment";
+        }
+        if (equipmentSubmitButton) {
+            equipmentSubmitButton.textContent = "Add Equipment";
+        }
         setBodyScrollLock();
     };
 
-    const openEquipmentModal = () => {
+    const openEquipmentModal = (rowToEdit = null) => {
         if (!equipmentModal) {
             return;
         }
+        editingEquipmentRow = rowToEdit instanceof HTMLTableRowElement ? rowToEdit : null;
+
+        if (equipmentModalTitle) {
+            equipmentModalTitle.textContent = editingEquipmentRow ? "Edit Equipment" : "Add Equipment";
+        }
+        if (equipmentSubmitButton) {
+            equipmentSubmitButton.textContent = editingEquipmentRow ? "Save Changes" : "Add Equipment";
+        }
+        if (equipmentForm) {
+            equipmentForm.reset();
+        }
+
+        if (editingEquipmentRow && equipmentForm) {
+            const [codeCell, nameCell, typeCell, modelCell, plateCell, statusCell, locationCell, operatorCell] = editingEquipmentRow.cells;
+            const setField = (fieldName, value) => {
+                const field = equipmentForm.elements.namedItem(fieldName);
+                if (field) {
+                    field.value = String(value || "").trim();
+                }
+            };
+            setField("code", codeCell?.textContent);
+            setField("name", nameCell?.textContent);
+            setField("type", typeCell?.textContent);
+            setField("model", modelCell?.textContent);
+            setField("plate_number", plateCell?.textContent);
+            setField("status", statusCell?.textContent);
+            setField("location", locationCell?.textContent);
+            setField("operator", operatorCell?.textContent);
+        }
+
         equipmentModal.hidden = false;
         setBodyScrollLock();
         const firstInput = equipmentModal.querySelector("input[name='name']");
@@ -4186,13 +5067,51 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         scheduleModal.hidden = true;
+        editingScheduleRow = null;
+        if (scheduleForm) {
+            scheduleForm.reset();
+        }
+        if (scheduleModalTitle) {
+            scheduleModalTitle.textContent = "New Maintenance Schedule";
+        }
+        if (scheduleSubmitButton) {
+            scheduleSubmitButton.textContent = "Create Schedule";
+        }
         setBodyScrollLock();
     };
 
-    const openScheduleModal = () => {
+    const openScheduleModal = (rowToEdit = null) => {
         if (!scheduleModal) {
             return;
         }
+        editingScheduleRow = rowToEdit instanceof HTMLTableRowElement ? rowToEdit : null;
+
+        if (scheduleModalTitle) {
+            scheduleModalTitle.textContent = editingScheduleRow ? "Edit Maintenance Schedule" : "New Maintenance Schedule";
+        }
+        if (scheduleSubmitButton) {
+            scheduleSubmitButton.textContent = editingScheduleRow ? "Save Changes" : "Create Schedule";
+        }
+        if (scheduleForm) {
+            scheduleForm.reset();
+        }
+
+        if (editingScheduleRow && scheduleForm) {
+            const [titleCell, roadCell, typeCell, priorityCell, , startDateCell, teamCell] = editingScheduleRow.cells;
+            const setField = (fieldName, value) => {
+                const field = scheduleForm.elements.namedItem(fieldName);
+                if (field) {
+                    field.value = String(value || "").trim();
+                }
+            };
+            setField("title", titleCell?.textContent);
+            setField("road", roadCell?.textContent);
+            setField("type", typeCell?.textContent);
+            setField("priority", priorityCell?.textContent);
+            setField("team", teamCell?.textContent);
+            setField("start_date", parseDisplayDateValue(startDateCell?.textContent));
+        }
+
         scheduleModal.hidden = false;
         setBodyScrollLock();
         const firstInput = scheduleModal.querySelector("input[name='title']");
@@ -4210,8 +5129,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (equipmentForm && equipmentTableBody) {
-        equipmentForm.addEventListener("submit", (event) => {
+        equipmentForm.addEventListener("submit", async (event) => {
             event.preventDefault();
+            const isEditingEquipment = Boolean(editingEquipmentRow);
 
             const formData = new FormData(equipmentForm);
             const code = (formData.get("code") || "").toString().trim();
@@ -4227,12 +5147,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const emptyRow = equipmentTableBody.querySelector(".equipment-empty-row");
-            if (emptyRow) {
-                emptyRow.remove();
-            }
-
-            const newRow = createEquipmentRowElement({
+            const equipmentPayload = {
                 code: code || "-",
                 name,
                 type: type || "-",
@@ -4241,13 +5156,42 @@ document.addEventListener("DOMContentLoaded", () => {
                 status: status || "-",
                 location: location || "-",
                 operator: operator || "-",
-            });
+            };
 
-            equipmentTableBody.prepend(newRow);
-            equipmentForm.reset();
+            if (editingEquipmentRow) {
+                const currentRowLabel = `${editingEquipmentRow.cells[0]?.textContent || "-"}-${editingEquipmentRow.cells[1]?.textContent || "-"}`;
+                const shouldSave = await showRoadDeleteConfirmToast(currentRowLabel, {
+                    title: "Edit Equipment",
+                    copy: "Are you sure to save this equipment update?",
+                    confirmLabel: "Yes, Save",
+                    cancelLabel: "Cancel",
+                    variant: "info",
+                });
+                if (!shouldSave) {
+                    return;
+                }
+
+                editingEquipmentRow.cells[0].textContent = equipmentPayload.code;
+                editingEquipmentRow.cells[1].textContent = equipmentPayload.name;
+                editingEquipmentRow.cells[2].textContent = equipmentPayload.type;
+                editingEquipmentRow.cells[3].textContent = equipmentPayload.model;
+                editingEquipmentRow.cells[4].textContent = equipmentPayload.plateNumber;
+                editingEquipmentRow.cells[5].textContent = equipmentPayload.status;
+                editingEquipmentRow.cells[6].textContent = equipmentPayload.location;
+                editingEquipmentRow.cells[7].textContent = equipmentPayload.operator;
+            } else {
+                const emptyRow = equipmentTableBody.querySelector(".equipment-empty-row");
+                if (emptyRow) {
+                    emptyRow.remove();
+                }
+                const newRow = createEquipmentRowElement(equipmentPayload);
+                equipmentTableBody.prepend(newRow);
+            }
+
             updateEquipmentSummary();
             persistMaintenanceState();
             closeEquipmentModal();
+            showRoadUploadStatusToast(isEditingEquipment ? "Equipment updated successfully." : "Equipment added successfully.", "success");
         });
     }
 
@@ -4318,6 +5262,36 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
     };
 
+    const parseDisplayDateValue = (value) => {
+        const raw = String(value || "").trim();
+        if (!raw || raw === "-") {
+            return "";
+        }
+
+        const matched = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (matched) {
+            return `${matched[3]}-${matched[2]}-${matched[1]}`;
+        }
+        return "";
+    };
+
+    const buildTableActionButtonsHtml = (recordType) => {
+        return `
+            <td class="table-action-cell">
+                <button type="button" class="table-icon-btn table-icon-btn--edit js-table-action-edit" data-record-type="${recordType}" aria-label="Edit row" title="Edit">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m3 17.25 9.06-9.06 3.75 3.75L6.75 21H3v-3.75zm13.71-10.04a1 1 0 0 0 0-1.41l-1.5-1.5a1 1 0 0 0-1.41 0l-1.09 1.09 3.75 3.75 1.25-1.93z"></path>
+                    </svg>
+                </button>
+                <button type="button" class="table-icon-btn table-icon-btn--delete js-table-action-delete" data-record-type="${recordType}" aria-label="Delete row" title="Delete">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 7h2v8h-2v-8zm4 0h2v8h-2v-8zM7 10h2v8H7v-8z"></path>
+                    </svg>
+                </button>
+            </td>
+        `;
+    };
+
     function createEquipmentRowElement(record) {
         const row = document.createElement("tr");
         row.innerHTML = `
@@ -4329,6 +5303,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>${escapeHtml(record.status || "-")}</td>
             <td>${escapeHtml(record.location || "-")}</td>
             <td>${escapeHtml(record.operator || "-")}</td>
+            ${buildTableActionButtonsHtml("equipment")}
         `;
         return row;
     }
@@ -4343,6 +5318,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>${escapeHtml(record.status || "Scheduled")}</td>
             <td>${escapeHtml(record.startDate || "-")}</td>
             <td>${escapeHtml(record.team || "-")}</td>
+            ${buildTableActionButtonsHtml("schedule")}
         `;
         return row;
     }
@@ -4353,7 +5329,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         scheduleTableBody.innerHTML = `
             <tr class="schedule-empty-row">
-                <td colspan="7">No maintenance schedules available yet.</td>
+                <td colspan="8">No maintenance schedules available yet.</td>
             </tr>
         `;
     }
@@ -4498,8 +5474,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (scheduleForm && scheduleTableBody) {
-        scheduleForm.addEventListener("submit", (event) => {
+        scheduleForm.addEventListener("submit", async (event) => {
             event.preventDefault();
+            const isEditingSchedule = Boolean(editingScheduleRow);
 
             const formData = new FormData(scheduleForm);
             const title = (formData.get("title") || "").toString().trim();
@@ -4513,26 +5490,136 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const emptyRow = scheduleTableBody.querySelector(".schedule-empty-row");
-            if (emptyRow) {
-                emptyRow.remove();
-            }
-
-            const newRow = createScheduleRowElement({
+            const schedulePayload = {
                 title,
                 road: road || "-",
                 type: type || "-",
                 priority: priority || "-",
-                status: "Scheduled",
+                status: editingScheduleRow ? ((editingScheduleRow.cells[4]?.textContent || "").trim() || "Scheduled") : "Scheduled",
                 startDate: formatDateValue(startDate),
                 team: team || "-",
-            });
+            };
 
-            scheduleTableBody.prepend(newRow);
-            scheduleForm.reset();
+            if (editingScheduleRow) {
+                const currentRowLabel = `${editingScheduleRow.cells[0]?.textContent || "-"}`;
+                const shouldSave = await showRoadDeleteConfirmToast(currentRowLabel, {
+                    title: "Edit Schedule",
+                    copy: "Are you sure to save this schedule update?",
+                    confirmLabel: "Yes, Save",
+                    cancelLabel: "Cancel",
+                    variant: "info",
+                });
+                if (!shouldSave) {
+                    return;
+                }
+
+                editingScheduleRow.cells[0].textContent = schedulePayload.title;
+                editingScheduleRow.cells[1].textContent = schedulePayload.road;
+                editingScheduleRow.cells[2].textContent = schedulePayload.type;
+                editingScheduleRow.cells[3].textContent = schedulePayload.priority;
+                editingScheduleRow.cells[4].textContent = schedulePayload.status;
+                editingScheduleRow.cells[5].textContent = schedulePayload.startDate;
+                editingScheduleRow.cells[6].textContent = schedulePayload.team;
+            } else {
+                const emptyRow = scheduleTableBody.querySelector(".schedule-empty-row");
+                if (emptyRow) {
+                    emptyRow.remove();
+                }
+                const newRow = createScheduleRowElement(schedulePayload);
+                scheduleTableBody.prepend(newRow);
+            }
+
             updateScheduleSummary();
             persistMaintenanceState();
             closeScheduleModal();
+            showRoadUploadStatusToast(isEditingSchedule ? "Schedule updated successfully." : "Schedule added successfully.", "success");
+        });
+    }
+
+    if (equipmentTableBody) {
+        equipmentTableBody.addEventListener("click", async (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+
+            const row = target.closest("tr");
+            if (!row || row.classList.contains("equipment-empty-row")) {
+                return;
+            }
+
+            const editButton = target.closest('.js-table-action-edit[data-record-type="equipment"]');
+            if (editButton) {
+                openEquipmentModal(row);
+                return;
+            }
+
+            const deleteButton = target.closest('.js-table-action-delete[data-record-type="equipment"]');
+            if (!deleteButton) {
+                return;
+            }
+
+            const equipmentLabel = `${row.cells[0]?.textContent || "-"}-${row.cells[1]?.textContent || "-"}`;
+            const shouldDelete = await showRoadDeleteConfirmToast(equipmentLabel, {
+                title: "Delete Equipment",
+                copy: "Are you sure to delete this data?",
+                confirmLabel: "Yes, Delete",
+                cancelLabel: "Cancel",
+                variant: "danger",
+            });
+            if (!shouldDelete) {
+                return;
+            }
+
+            row.remove();
+            updateEquipmentSummary();
+            persistMaintenanceState();
+            showRoadUploadStatusToast("Equipment data deleted successfully.", "success");
+        });
+    }
+
+    if (scheduleTableBody) {
+        scheduleTableBody.addEventListener("click", async (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+
+            const row = target.closest("tr");
+            if (!row || row.classList.contains("schedule-empty-row")) {
+                return;
+            }
+
+            const editButton = target.closest('.js-table-action-edit[data-record-type="schedule"]');
+            if (editButton) {
+                openScheduleModal(row);
+                return;
+            }
+
+            const deleteButton = target.closest('.js-table-action-delete[data-record-type="schedule"]');
+            if (!deleteButton) {
+                return;
+            }
+
+            const scheduleLabel = `${row.cells[0]?.textContent || "-"}`;
+            const shouldDelete = await showRoadDeleteConfirmToast(scheduleLabel, {
+                title: "Delete Schedule",
+                copy: "Are you sure to delete this data?",
+                confirmLabel: "Yes, Delete",
+                cancelLabel: "Cancel",
+                variant: "danger",
+            });
+            if (!shouldDelete) {
+                return;
+            }
+
+            row.remove();
+            if (!getScheduleRows().length) {
+                restoreScheduleEmptyRow();
+            }
+            updateScheduleSummary();
+            persistMaintenanceState();
+            showRoadUploadStatusToast("Schedule data deleted successfully.", "success");
         });
     }
 
@@ -4648,6 +5735,9 @@ document.addEventListener("DOMContentLoaded", () => {
             closeRoadEditModal();
             closeRoadDeleteModal();
             closeRoadAddModal();
+            closeRoadDeleteConfirmToast();
+            closeRoadUploadDuplicatePrompt();
+            closeRoadUploadAddConfirmPrompt();
             closeContractorFloatCard();
             closeContractorDeleteToast();
             closeContractorAddModal();
@@ -5025,8 +6115,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td>${escapeHtml(toDisplay(record.remarks))}</td>
                     <td>
                         <div class="construction-actions">
-                            <button type="button" class="construction-action-btn construction-action-btn--edit js-construction-edit-row" data-record-id="${escapeHtml(record.__id)}">Edit</button>
-                            <button type="button" class="construction-action-btn js-construction-delete-row" data-record-id="${escapeHtml(record.__id)}">Delete</button>
+                            <button type="button" class="construction-action-btn construction-action-btn--edit js-construction-edit-row" data-record-id="${escapeHtml(record.__id)}" aria-label="Edit record" title="Edit">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="m3 17.25 9.06-9.06 3.75 3.75L6.75 21H3v-3.75zm13.71-10.04a1 1 0 0 0 0-1.41l-1.5-1.5a1 1 0 0 0-1.41 0l-1.09 1.09 3.75 3.75 1.25-1.93z"></path>
+                                </svg>
+                            </button>
+                            <button type="button" class="construction-action-btn construction-action-btn--delete js-construction-delete-row" data-record-id="${escapeHtml(record.__id)}" aria-label="Delete record" title="Delete">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 7h2v8h-2v-8zm4 0h2v8h-2v-8zM7 10h2v8H7v-8z"></path>
+                                </svg>
+                            </button>
                         </div>
                     </td>
                 `;
