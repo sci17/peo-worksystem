@@ -472,6 +472,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 setActiveAdminTab(tab.dataset.adminTab);
             });
         });
+
+        const initialTab =
+            document.querySelector("[data-admin-tab].active")?.dataset.adminTab
+            || adminTabs[0].dataset.adminTab;
+        setActiveAdminTab(initialTab);
     }
 
     refreshDocumentCounters();

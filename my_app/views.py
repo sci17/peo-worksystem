@@ -19,7 +19,14 @@ def user_dashboard(request):
 
 @login_required
 def admin_division_dashboard(request):
-    return render(request, 'admin/admin.html')
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'admin',
+            'page_heading': 'Admin Division',
+        },
+    )
 
 
 

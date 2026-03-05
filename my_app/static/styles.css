@@ -3177,3 +3177,7 @@ body {
 
 /* ROAD_MAINTENANCE_STYLES_END */
 
+.pa-hidden {
+    display: none !important;
+}
+
