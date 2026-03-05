@@ -2863,453 +2863,6 @@ body {
     color: #ffffff;
 }
 
-.road-add-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 91;
-    display: grid;
-    place-items: center;
-    padding: 18px;
-}
-
-.road-add-modal[hidden] {
-    display: none !important;
-}
-
-.road-add-modal-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(12, 23, 38, 0.45);
-}
-
-.road-add-modal-dialog {
-    position: relative;
-    width: min(760px, 100%);
-    max-height: calc(100vh - 36px);
-    overflow-y: auto;
-    border: 1px solid #d1dbe8;
-    border-radius: 16px;
-    background: #ffffff;
-    box-shadow: 0 24px 56px rgba(9, 25, 44, 0.22);
-    padding: 22px 24px 24px;
-}
-
-.road-add-modal-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 14px;
-}
-
-.road-add-modal-header h3 {
-    margin: 0;
-    font-size: 1.7rem;
-    font-weight: 700;
-    color: #1f2a36;
-}
-
-.road-add-modal-header p {
-    margin: 4px 0 0;
-    color: #5f6f82;
-    font-size: 0.96rem;
-}
-
-.road-add-modal-close {
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    color: #5e6a78;
-    font-size: 1.45rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.road-add-form {
-    margin-top: 16px;
-}
-
-.road-add-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px 16px;
-    align-items: start;
-}
-
-.road-add-field {
-    display: grid;
-    gap: 8px;
-}
-
-.road-add-field span {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #304050;
-    letter-spacing: 0.01em;
-}
-
-.road-add-field input,
-.road-add-field select {
-    width: 100%;
-    min-height: 44px;
-    border: 1px solid #c4d0df;
-    border-radius: 12px;
-    padding: 10px 12px;
-    background: #f7f9fc;
-    color: #2f3d4b;
-    font-size: 0.92rem;
-    font-family: inherit;
-    outline: none;
-    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.road-add-field input::placeholder {
-    color: #7f90a4;
-}
-
-.road-add-field input:focus,
-.road-add-field select:focus {
-    border-color: #7f9fc5;
-    background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(80, 127, 183, 0.16);
-}
-
-.road-add-field .js-road-add-surface-type-details {
-    margin-top: 2px;
-}
-
-.road-add-field .js-road-add-municipality {
-    min-height: 44px;
-    padding: 10px 12px;
-    font-size: 0.92rem;
-}
-
-.road-add-field .js-road-add-municipality:disabled {
-    background: #eef2f7;
-    color: #7f90a4;
-    cursor: not-allowed;
-}
-
-.road-add-form-actions {
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid #e6edf6;
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-}
-
-.road-add-btn-secondary,
-.road-add-btn-primary {
-    min-width: 140px;
-    height: 44px;
-    border-radius: 12px;
-    padding: 0 16px;
-    font-size: 0.92rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-}
-
-.road-add-btn-secondary {
-    border: 1px solid #c6d2e1;
-    background: #f5f7fa;
-    color: #2c3a4c;
-}
-
-.road-add-btn-primary {
-    border: 1px solid #1e3f65;
-    background: linear-gradient(180deg, #24558a 0%, #1b446f 100%);
-    color: #ffffff;
-    box-shadow: 0 10px 20px rgba(23, 60, 97, 0.2);
-}
-
-.road-add-btn-primary:hover,
-.road-add-btn-secondary:hover {
-    transform: translateY(-1px);
-}
-
-.road-add-btn-primary:hover {
-    filter: brightness(1.05);
-}
-
-.road-add-btn-primary:active,
-.road-add-btn-secondary:active {
-    transform: translateY(0);
-}
-
-.road-edit-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 90;
-    display: grid;
-    place-items: center;
-    padding: 14px;
-}
-
-.road-edit-modal[hidden] {
-    display: none !important;
-}
-
-.road-edit-modal-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(12, 23, 38, 0.45);
-}
-
-.road-edit-modal-dialog {
-    position: relative;
-    width: min(620px, 100%);
-    border: 1px solid #d4dce8;
-    border-radius: 12px;
-    background: #ffffff;
-    box-shadow: 0 22px 42px rgba(9, 25, 44, 0.24);
-    padding: 18px 22px 22px;
-}
-
-.road-edit-modal-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 14px;
-}
-
-.road-edit-modal-header h3 {
-    margin: 0;
-    font-size: 1.55rem;
-    font-weight: 700;
-    color: #1f2a36;
-}
-
-.road-edit-modal-header p {
-    margin: 3px 0 0;
-    color: #5f6f82;
-    font-size: 0.9rem;
-}
-
-.road-edit-modal-close {
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    color: #5e6a78;
-    font-size: 1.45rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.road-edit-form {
-    margin-top: 12px;
-}
-
-.road-edit-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 14px;
-}
-
-.road-edit-field {
-    display: grid;
-    gap: 6px;
-}
-
-.road-edit-field--full {
-    margin-bottom: 10px;
-}
-
-.road-edit-field span {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #2f3a47;
-}
-
-.road-edit-field input,
-.road-edit-field select {
-    width: 100%;
-    min-height: 40px;
-    border: 1px solid #c6cfdb;
-    border-radius: 10px;
-    padding: 8px 11px;
-    background: #f4f6f9;
-    color: #2f3d4b;
-    font-size: 0.9rem;
-    font-family: inherit;
-    outline: none;
-}
-
-.road-edit-field input:focus,
-.road-edit-field select:focus {
-    border-color: #8ca9cc;
-    background: #ffffff;
-}
-
-.road-edit-form-actions {
-    margin-top: 6px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-
-.road-edit-btn {
-    min-width: 126px;
-    height: 40px;
-    border-radius: 12px;
-    padding: 0 14px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.road-edit-btn-secondary {
-    border: 1px solid #c8d1de;
-    background: #f3f5f8;
-    color: #2c3a4c;
-}
-
-.road-edit-btn-primary {
-    border: 1px solid #1e3f65;
-    background: #1f426a;
-    color: #ffffff;
-}
-
-.road-delete-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 92;
-    display: grid;
-    place-items: center;
-    padding: 14px;
-}
-
-.road-delete-modal[hidden] {
-    display: none !important;
-}
-
-.road-delete-modal-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(12, 23, 38, 0.45);
-}
-
-.road-delete-modal-dialog {
-    position: relative;
-    width: min(560px, 100%);
-    border: 1px solid #d4dce8;
-    border-radius: 12px;
-    background: #ffffff;
-    box-shadow: 0 22px 42px rgba(9, 25, 44, 0.24);
-    padding: 18px 22px 22px;
-}
-
-.road-delete-modal-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 14px;
-}
-
-.road-delete-modal-header h3 {
-    margin: 0;
-    font-size: 1.55rem;
-    font-weight: 700;
-    color: #1f2a36;
-}
-
-.road-delete-modal-header p {
-    margin: 3px 0 0;
-    color: #5f6f82;
-    font-size: 0.9rem;
-}
-
-.road-delete-modal-close {
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    color: #5e6a78;
-    font-size: 1.45rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.road-delete-form {
-    margin-top: 12px;
-    display: grid;
-    gap: 10px;
-}
-
-.road-delete-field {
-    display: grid;
-    gap: 6px;
-}
-
-.road-delete-field span {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #2f3a47;
-}
-
-.road-delete-field select {
-    width: 100%;
-    min-height: 40px;
-    border: 1px solid #c6cfdb;
-    border-radius: 10px;
-    padding: 8px 11px;
-    background: #f4f6f9;
-    color: #2f3d4b;
-    font-size: 0.9rem;
-    font-family: inherit;
-    outline: none;
-}
-
-.road-delete-field select:focus {
-    border-color: #d07a84;
-    background: #ffffff;
-}
-
-.road-delete-note {
-    margin: 0;
-    border: 1px solid #edd7da;
-    border-radius: 10px;
-    padding: 10px 12px;
-    background: #fff4f5;
-    color: #7e3541;
-    font-size: 0.82rem;
-    font-weight: 600;
-}
-
-.road-delete-form-actions {
-    margin-top: 4px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-
-.road-delete-btn {
-    min-width: 126px;
-    height: 40px;
-    border-radius: 12px;
-    padding: 0 14px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.road-delete-btn-secondary {
-    border: 1px solid #c8d1de;
-    background: #f3f5f8;
-    color: #2c3a4c;
-}
-
-.road-delete-btn-primary {
-    border: 1px solid #8a2534;
-    background: linear-gradient(180deg, #c44859 0%, #9a2f3f 100%);
-    color: #ffffff;
-}
-
 /* Professional polish overrides */
 .road-page {
     background:
@@ -3593,6 +3146,184 @@ body {
 
 .road-table tbody tr:hover td {
     background: #f7fbff;
+}
+
+/* Construction division sizing */
+.js-construction-dashboard {
+    padding: 14px;
+    border-radius: 14px;
+    overflow-x: hidden;
+}
+
+.js-construction-dashboard .schedule-toolbar-row {
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.js-construction-dashboard .schedule-toolbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.js-construction-dashboard .construction-table-wrap {
+    margin-top: 12px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.js-construction-dashboard .construction-table {
+    min-width: 2160px;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #c8d4e4;
+    background: #ffffff;
+}
+
+.js-construction-dashboard .construction-table thead th {
+    font-size: 0.71rem;
+    line-height: 1.25;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    text-align: center;
+    font-weight: 700;
+    color: #1f3550;
+    background: #e8eef6;
+}
+
+.js-construction-dashboard .construction-table th,
+.js-construction-dashboard .construction-table td {
+    padding: 7px 8px;
+    font-size: 0.72rem;
+    vertical-align: middle;
+    white-space: nowrap;
+    border-right: 1px solid #cfd9e6;
+    border-bottom: 1px solid #cfd9e6;
+    line-height: 1.3;
+}
+
+.js-construction-dashboard .construction-table th:last-child,
+.js-construction-dashboard .construction-table td:last-child {
+    border-right: 0;
+}
+
+.js-construction-dashboard .construction-table td {
+    text-align: left;
+    color: #2f4258;
+    background: #ffffff;
+}
+
+.js-construction-dashboard .construction-table tbody tr:nth-child(even) td {
+    background: #f8fbff;
+}
+
+.js-construction-dashboard .construction-table tbody tr:hover td {
+    background: #edf4fc;
+}
+
+.js-construction-dashboard .construction-table td:nth-child(2),
+.js-construction-dashboard .construction-table td:nth-child(5),
+.js-construction-dashboard .construction-table td:nth-child(9),
+.js-construction-dashboard .construction-table td:nth-child(15),
+.js-construction-dashboard .construction-table td:nth-child(16),
+.js-construction-dashboard .construction-table td:nth-child(17),
+.js-construction-dashboard .construction-table td:nth-child(18) {
+    text-align: center;
+}
+
+.js-construction-dashboard .construction-table td:nth-child(7),
+.js-construction-dashboard .construction-table td:nth-child(14) {
+    text-align: right;
+}
+
+.js-construction-dashboard .construction-table td:nth-child(3),
+.js-construction-dashboard .construction-table td:nth-child(19) {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.22;
+}
+
+.js-construction-dashboard .construction-table th:nth-child(3),
+.js-construction-dashboard .construction-table td:nth-child(3) {
+    min-width: 280px;
+}
+
+.js-construction-dashboard .construction-table th:nth-child(19),
+.js-construction-dashboard .construction-table td:nth-child(19) {
+    min-width: 260px;
+}
+
+.js-construction-dashboard .construction-table th[rowspan="2"] {
+    vertical-align: middle;
+}
+
+.construction-actions {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.construction-action-btn {
+    border: 1px solid #e0c1c7;
+    border-radius: 8px;
+    background: #fdf0f2;
+    color: #8d1d2d;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.construction-action-btn:hover {
+    background: #f9dde1;
+}
+
+.construction-action-btn--edit {
+    border-color: #c2d4ea;
+    background: #edf4fd;
+    color: #1b4f82;
+}
+
+.construction-action-btn--edit:hover {
+    background: #e3eefb;
+}
+
+.construction-pagination {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.construction-page-meta {
+    font-size: 0.82rem;
+    color: #2f4864;
+    font-weight: 700;
+}
+
+.construction-page-btn {
+    height: 34px;
+    min-width: 92px;
+    border-radius: 8px;
+    border: 1px solid #c6d3e2;
+    background: #f3f7fc;
+    color: #153b63;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.construction-page-btn:hover:not(:disabled) {
+    background: #e6eff8;
+}
+
+.construction-page-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .road-municipality-list {
@@ -5706,57 +5437,6 @@ body {
         width: 100%;
     }
 
-    .road-edit-modal-dialog {
-        padding: 16px;
-    }
-
-    .road-edit-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .road-edit-form-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .road-edit-btn {
-        width: 100%;
-    }
-
-    .road-add-modal-dialog {
-        max-height: calc(100vh - 20px);
-        border-radius: 14px;
-        padding: 16px;
-    }
-
-    .road-add-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .road-add-form-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-    }
-
-    .road-add-btn-secondary,
-    .road-add-btn-primary {
-        width: 100%;
-    }
-
-    .road-delete-modal-dialog {
-        padding: 16px;
-    }
-
-    .road-delete-form-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .road-delete-btn {
-        width: 100%;
-    }
-
     .equipment-form-actions {
         justify-content: stretch;
         display: grid;
@@ -5776,12 +5456,5 @@ body {
 
 .pa-hidden {
     display: none !important;
-}
-
-/* Keep long dropdown option lists scrollable (e.g., municipalities). */
-.dropdown-menu {
-    max-height: min(320px, calc(100vh - 140px));
-    overflow-y: auto;
-    overscroll-behavior: contain;
 }
 

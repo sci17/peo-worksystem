@@ -29,6 +29,18 @@ def admin_division_dashboard(request):
     )
 
 
+@login_required
+def construction_division_dashboard(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'construction',
+            'page_heading': 'Construction Division',
+            'construction_template': 'construction/construction.html',
+        },
+    )
+
 
 @login_required
 def road_management(request):
