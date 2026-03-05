@@ -28,7 +28,7 @@
 
             <nav class="portal-nav" aria-label="Primary">
                 <p class="nav-group">Main</p>
-                <a href="{% url 'user_dashboard' %}" class="nav-item {% if current_section != 'admin' %}nav-item-active{% endif %}">
+                <a href="{% url 'user_dashboard' %}" class="nav-item {% if current_section == 'workflow' %}nav-item-active{% endif %}">
                     <span class="material-symbols-outlined">dashboard_customize</span>
                     <span>Workflow Management</span>
                 </a>
@@ -56,10 +56,25 @@
                     <span class="material-symbols-outlined">verified</span>
                     <span>Quality Division</span>
                 </a>
-                <a href="#" class="nav-item">
-                    <span class="material-symbols-outlined">build</span>
-                    <span>Maintenance Division</span>
-                </a>
+                <div class="nav-maintenance {% if current_section == 'maintenance' %}is-open{% endif %}">
+                    <button
+                        type="button"
+                        class="nav-item nav-item-button js-maintenance-toggle {% if current_section == 'maintenance' %}nav-item-active{% endif %}"
+                        aria-expanded="{% if current_section == 'maintenance' %}true{% else %}false{% endif %}"
+                        data-maintenance-open="{% if current_section == 'maintenance' %}true{% else %}false{% endif %}"
+                    >
+                        <span class="nav-item-label">
+                            <span class="material-symbols-outlined">build</span>
+                            <span>Maintenance Division</span>
+                        </span>
+                        <span class="material-symbols-outlined nav-caret">expand_more</span>
+                    </button>
+                    <div class="nav-submenu js-maintenance-menu" {% if current_section != 'maintenance' %}hidden{% endif %}>
+                        <a href="{% url 'road_management' %}" class="nav-subitem {% if current_maintenance == 'road' %}nav-subitem-active{% endif %}">Road Management</a>
+                        <a href="{% url 'contractor_management' %}" class="nav-subitem {% if current_maintenance == 'contractor' %}nav-subitem-active{% endif %}">Contractor Management</a>
+                        <a href="{% url 'task_management' %}" class="nav-subitem {% if current_maintenance == 'task' %}nav-subitem-active{% endif %}">Task Management</a>
+                    </div>
+                </div>
 
                 <p class="nav-group nav-group-secondary">System</p>
                 <a href="#" class="nav-item">
@@ -103,6 +118,8 @@
             <section class="portal-content">
                 {% if current_section == 'admin' %}
                     {% include 'admin/admin_division.html' %}
+                {% elif current_section == 'maintenance' %}
+                    {% include maintenance_template %}
                 {% else %}
                 <section class="overview">
                     <h3>Dashboard Overview</h3>

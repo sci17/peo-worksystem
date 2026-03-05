@@ -30,6 +30,48 @@ def admin_division_dashboard(request):
 
 
 
+@login_required
+def road_management(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'maintenance',
+            'current_maintenance': 'road',
+            'page_heading': 'Road Management',
+            'maintenance_template': 'Maintinance/includes/road_management_table.html',
+        },
+    )
+
+
+@login_required
+def contractor_management(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'maintenance',
+            'current_maintenance': 'contractor',
+            'page_heading': 'Contractor Management',
+            'maintenance_template': 'Maintinance/includes/contractor_management_table.html',
+        },
+    )
+
+
+@login_required
+def task_management(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'maintenance',
+            'current_maintenance': 'task',
+            'page_heading': 'Task Management',
+            'maintenance_template': 'Maintinance/includes/task_management_table.html',
+        },
+    )
+
+
 def signup(request):
     if request.user.is_authenticated:
         return redirect('user_dashboard')

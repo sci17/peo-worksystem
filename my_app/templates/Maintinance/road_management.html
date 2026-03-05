@@ -1,0 +1,17 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Road Management</title>
+    <link rel="stylesheet" href="{% static 'styles.css' %}">
+</head>
+<body class="road-page">
+    <main class="road-shell">
+        {% include 'Maintinance/includes/road_management_table.html' %}
+    </main>
+
+    <script src="{% static 'script.js' %}"></script>
+</body>
+</html>
