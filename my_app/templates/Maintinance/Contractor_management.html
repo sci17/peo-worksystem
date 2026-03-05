@@ -5,16 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Contractor Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'styles.css' %}">
 </head>
 <body class="road-page">
     <main class="road-shell">
-        <section class="road-filter-panel">
-            <h1 style="margin: 0; font-size: 32px;">Contractor Management</h1>
-            <p style="margin: 10px 0 0; color: #5e6f83; font-size: 18px;">
-                Contractor management page is ready for your data and table content.
-            </p>
-        </section>
+        {% include 'Maintinance/includes/contractor_management_table.html' %}
     </main>
+    <script src="{% static 'script.js' %}"></script>
 </body>
 </html>

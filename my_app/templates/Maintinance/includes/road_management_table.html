@@ -71,7 +71,7 @@
                     <span class="condition-badge badge-good js-road-condition-good">0</span>
                 </div>
                 <div class="condition-track">
-                    <span class="condition-fill fill-empty"></span>
+                    <span class="condition-fill fill-good js-road-condition-fill-good"></span>
                 </div>
             </article>
 
@@ -81,7 +81,7 @@
                     <span class="condition-badge badge-fair js-road-condition-fair">0</span>
                 </div>
                 <div class="condition-track">
-                    <span class="condition-fill fill-empty"></span>
+                    <span class="condition-fill fill-fair js-road-condition-fill-fair"></span>
                 </div>
             </article>
 
@@ -91,7 +91,7 @@
                     <span class="condition-badge badge-poor js-road-condition-poor">0</span>
                 </div>
                 <div class="condition-track">
-                    <span class="condition-fill fill-empty"></span>
+                    <span class="condition-fill fill-poor js-road-condition-fill-poor"></span>
                 </div>
             </article>
 
@@ -101,21 +101,28 @@
                     <span class="condition-badge badge-bad js-road-condition-bad">0</span>
                 </div>
                 <div class="condition-track">
-                    <span class="condition-fill fill-empty"></span>
+                    <span class="condition-fill fill-bad js-road-condition-fill-bad"></span>
                 </div>
             </article>
         </section>
 
         <section class="road-filter-panel" aria-label="Road filters">
-            <label class="road-search">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="11" cy="11" r="7"></circle>
-                    <path d="m20 20-3.5-3.5"></path>
-                </svg>
-                <input type="search" class="js-road-search-input" placeholder="Search roads...">
-            </label>
+            <div class="road-select-row road-select-row--road">
+                <div class="road-search road-search--inline road-search--compact js-road-search-shell">
+                    <button
+                        type="button"
+                        class="road-search-toggle js-road-search-toggle"
+                        aria-label="Open road search"
+                        aria-expanded="false"
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7"></circle>
+                            <path d="m20 20-3.5-3.5"></path>
+                        </svg>
+                    </button>
+                    <input type="search" class="js-road-search-input" placeholder="Search roads..." aria-label="Search roads" autocomplete="off">
+                </div>
 
-            <div class="road-select-row">
                 <div class="road-dropdown js-road-dropdown" data-road-filter="municipality">
                     <button type="button" class="dropdown-trigger" aria-expanded="false">
                         <span class="dropdown-label">All Municipalities</span>
@@ -176,6 +183,8 @@
                         <li><button type="button" class="dropdown-option">Descending</button></li>
                     </ul>
                 </div>
+
+                <button type="button" class="road-add-btn js-open-road-add-modal">Add Provincial Road</button>
 
                 <input id="road-upload-input" class="road-upload-input" type="file" multiple>
                 <label for="road-upload-input" class="road-upload-btn">Upload Files</label>
@@ -609,6 +618,169 @@
             <div class="schedule-form-actions">
                 <button type="button" class="schedule-btn schedule-btn-secondary js-close-schedule-modal">Cancel</button>
                 <button type="submit" class="schedule-btn schedule-btn-primary">Create Schedule</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="road-add-modal js-road-add-modal" hidden>
+    <div class="road-add-modal-backdrop js-close-road-add-modal"></div>
+    <div class="road-add-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="road-add-modal-title">
+        <div class="road-add-modal-header">
+            <div>
+                <h3 id="road-add-modal-title">Add Provincial Road</h3>
+                <p>Create a new road record</p>
+            </div>
+            <button type="button" class="road-add-modal-close js-close-road-add-modal" aria-label="Close add provincial road form">&times;</button>
+        </div>
+
+        <form class="road-add-form js-road-add-form">
+            <div class="road-add-grid">
+                <label class="road-add-field">
+                    <span>Road ID</span>
+                    <input type="text" class="js-road-add-road-id" placeholder="Road ID">
+                </label>
+
+                <label class="road-add-field">
+                    <span>Road Name *</span>
+                    <input type="text" class="js-road-add-road-name" placeholder="Road name" required>
+                </label>
+
+                <label class="road-add-field">
+                    <span>Length (km)</span>
+                    <input type="number" class="js-road-add-length" min="0" step="0.01" placeholder="0.00">
+                </label>
+
+                <label class="road-add-field">
+                    <span>Select Location</span>
+                    <select class="js-road-add-location">
+                        <option value="" selected>Select location</option>
+                        <option value="South">South</option>
+                        <option value="North">North</option>
+                    </select>
+                </label>
+
+                <label class="road-add-field">
+                    <span>Select Municipality</span>
+                    <select class="js-road-add-municipality" disabled>
+                        <option value="" selected>Select location first</option>
+                    </select>
+                </label>
+
+                <label class="road-add-field">
+                    <span>Surface Type (km)</span>
+                    <select class="js-road-add-surface-type">
+                        <option value="Concrete" selected>Concrete</option>
+                        <option value="Asphalt">Asphalt</option>
+                        <option value="Earth">Earth</option>
+                        <option value="Gravel">Gravel</option>
+                    </select>
+                    <input
+                        type="text"
+                        class="js-road-add-surface-type-details"
+                        placeholder="4.880km Gravel: 0.620km"
+                    >
+                </label>
+
+                <label class="road-add-field">
+                    <span>Road Condition</span>
+                    <select class="js-road-add-condition">
+                        <option value="good">Good</option>
+                        <option value="fair">Fair</option>
+                        <option value="poor">Poor</option>
+                        <option value="bad">Bad</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="road-add-form-actions">
+                <button type="button" class="road-add-btn-secondary js-close-road-add-modal">Cancel</button>
+                <button type="submit" class="road-add-btn-primary">Add Road</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="road-edit-modal js-road-edit-modal" hidden>
+    <div class="road-edit-modal-backdrop js-close-road-edit-modal"></div>
+    <div class="road-edit-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="road-edit-modal-title">
+        <div class="road-edit-modal-header">
+            <div>
+                <h3 id="road-edit-modal-title">Update Municipality Data</h3>
+                <p class="js-road-edit-subtitle">Edit road data</p>
+            </div>
+            <button type="button" class="road-edit-modal-close js-close-road-edit-modal" aria-label="Close road edit form">&times;</button>
+        </div>
+
+        <form class="road-edit-form js-road-edit-form">
+            <label class="road-edit-field road-edit-field--full">
+                <span>Select Road</span>
+                <select class="js-road-edit-record-select" required></select>
+            </label>
+
+            <div class="road-edit-grid">
+                <label class="road-edit-field">
+                    <span>Road ID</span>
+                    <input type="text" class="js-road-edit-road-id" placeholder="Road ID">
+                </label>
+
+                <label class="road-edit-field">
+                    <span>Road Name *</span>
+                    <input type="text" class="js-road-edit-road-name" placeholder="Road name" required>
+                </label>
+
+                <label class="road-edit-field">
+                    <span>Length (km)</span>
+                    <input type="number" class="js-road-edit-length" min="0" step="0.01" placeholder="0.00">
+                </label>
+
+                <label class="road-edit-field">
+                    <span>Condition</span>
+                    <select class="js-road-edit-condition">
+                        <option value="unknown">Unknown</option>
+                        <option value="good">Good</option>
+                        <option value="fair">Fair</option>
+                        <option value="poor">Poor</option>
+                        <option value="bad">Bad</option>
+                    </select>
+                </label>
+            </div>
+
+            <label class="road-edit-field road-edit-field--full">
+                <span>Surface Type</span>
+                <input type="text" class="js-road-edit-surface-type" placeholder="Surface details">
+            </label>
+
+            <div class="road-edit-form-actions">
+                <button type="button" class="road-edit-btn road-edit-btn-secondary js-close-road-edit-modal">Cancel</button>
+                <button type="submit" class="road-edit-btn road-edit-btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="road-delete-modal js-road-delete-modal" hidden>
+    <div class="road-delete-modal-backdrop js-close-road-delete-modal"></div>
+    <div class="road-delete-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="road-delete-modal-title">
+        <div class="road-delete-modal-header">
+            <div>
+                <h3 id="road-delete-modal-title">Delete Road Data</h3>
+                <p class="js-road-delete-subtitle">Choose a road row to delete</p>
+            </div>
+            <button type="button" class="road-delete-modal-close js-close-road-delete-modal" aria-label="Close delete road form">&times;</button>
+        </div>
+
+        <form class="road-delete-form js-road-delete-form">
+            <label class="road-delete-field">
+                <span>Select Road Row</span>
+                <select class="js-road-delete-record-select" required></select>
+            </label>
+
+            <p class="road-delete-note">This action cannot be undone.</p>
+
+            <div class="road-delete-form-actions">
+                <button type="button" class="road-delete-btn road-delete-btn-secondary js-close-road-delete-modal">Cancel</button>
+                <button type="submit" class="road-delete-btn road-delete-btn-primary">Delete Selected</button>
             </div>
         </form>
     </div>

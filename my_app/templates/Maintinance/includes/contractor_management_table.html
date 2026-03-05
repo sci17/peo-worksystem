@@ -1,23 +1,868 @@
-<section class="road-filter-panel">
-    <h2 style="margin: 0; font-size: 28px; color: #16233a;">Contractor Management</h2>
-    <p style="margin: 8px 0 14px; color: #5e6f83;">Track contractor records, compliance, and assignments.</p>
+<section class="contractor-mgmt js-contractor-management" aria-label="Contractor management">
+    <header class="contractor-head">
+        <h2>Contractor Management</h2>
+        <p>Track bidders, performance ratings, and contract history.</p>
+    </header>
 
-    <div class="table-wrap">
-        <table class="division-table">
-            <thead>
-                <tr>
-                    <th>Contractor ID</th>
-                    <th>Name</th>
-                    <th>Project</th>
-                    <th>Status</th>
-                    <th class="align-right">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="5">No contractor records available yet.</td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="contractor-stats" aria-label="Contractor summary">
+        <article class="contractor-stat-card">
+            <div class="contractor-stat-head">
+                <p>Total Contractors</p>
+                <span class="material-symbols-outlined contractor-stat-icon is-blue">business</span>
+            </div>
+            <p class="contractor-stat-value js-contractor-stat-total">0</p>
+            <p class="contractor-stat-sub">Live registry count</p>
+        </article>
+
+        <article class="contractor-stat-card">
+            <div class="contractor-stat-head">
+                <p>Active</p>
+                <span class="material-symbols-outlined contractor-stat-icon is-green">check_circle</span>
+            </div>
+            <p class="contractor-stat-value js-contractor-stat-active">0</p>
+            <p class="contractor-stat-sub">Currently eligible</p>
+        </article>
+
+        <article class="contractor-stat-card">
+            <div class="contractor-stat-head">
+                <p>Avg Rating</p>
+                <span class="material-symbols-outlined contractor-stat-icon is-amber">star</span>
+            </div>
+            <p class="contractor-stat-value js-contractor-stat-rating">0.0</p>
+            <p class="contractor-stat-sub">Across all contractors</p>
+        </article>
+
+        <article class="contractor-stat-card">
+            <div class="contractor-stat-head">
+                <p>Blacklisted</p>
+                <span class="material-symbols-outlined contractor-stat-icon is-red">warning</span>
+            </div>
+            <p class="contractor-stat-value js-contractor-stat-blacklisted">0</p>
+            <p class="contractor-stat-sub">Restricted contractors</p>
+        </article>
+    </section>
+
+    <section class="contractor-toolbar" aria-label="Contractor filters">
+        <label class="contractor-search">
+            <span class="material-symbols-outlined" aria-hidden="true">search</span>
+            <input
+                type="search"
+                class="js-contractor-search"
+                placeholder="Search by contractor name, TIN, PhilGEPS, or PCAB..."
+                autocomplete="off"
+            >
+        </label>
+
+        <div class="contractor-toolbar-actions">
+            <div class="road-dropdown contractor-dropdown js-road-dropdown js-contractor-status-filter" data-contractor-filter="status">
+                <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Filter contractors by status">
+                    <span class="dropdown-label">All Status</span>
+                    <span class="dropdown-caret">&#9662;</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><button type="button" class="dropdown-option is-selected" data-value="all">All Status</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="active">Active</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="pending">Pending</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="blacklisted">Blacklisted</button></li>
+                </ul>
+            </div>
+
+            <div class="road-dropdown contractor-dropdown js-road-dropdown js-contractor-pcab-filter" data-contractor-filter="pcab">
+                <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Filter contractors by PCAB category">
+                    <span class="dropdown-label">All PCAB</span>
+                    <span class="dropdown-caret">&#9662;</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><button type="button" class="dropdown-option is-selected" data-value="all">All PCAB</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="aaaa">PCAB AAAA</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="aaa">PCAB AAA</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="aa">PCAB AA</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="a">PCAB A</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="b">PCAB B</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="c">PCAB C</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="d">PCAB D</button></li>
+                </ul>
+            </div>
+
+            <button type="button" class="contractor-add-btn js-open-contractor-add">
+                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                <span>Add Contractor</span>
+            </button>
+        </div>
+    </section>
+
+    <section class="contractor-table-wrap">
+        <div class="contractor-table-head">
+            <h3>Contractors</h3>
+            <p><span class="js-contractor-found-count">0</span> contractors found</p>
+        </div>
+
+        <div class="contractor-card-list">
+            <article
+                class="contractor-list-card js-contractor-row"
+                data-name="Northshore Civil Works"
+                data-tin="125-330-918-000"
+                data-philgeps="0042-9911"
+                data-pcab="aaaa"
+                data-status="active"
+                data-contracts="7"
+                data-value="P 45,200,000"
+                data-rating="4.8"
+                data-classification="General Engineering"
+                data-license-expiry="December 31, 2027"
+                data-contact-person="Engr. Rafael Dela Cruz"
+                data-contact-email="bids@northshorecivilworks.ph"
+                data-contact-phone="+63 915 442 1108"
+                data-contact-address="Puerto Princesa City"
+                data-search="Northshore Civil Works TIN 125-330-918-000 PhilGEPS 0042-9911 PCAB AAAA"
+            >
+                <div class="contractor-list-main">
+                    <div class="contractor-list-title-row">
+                        <button type="button" class="contractor-name contractor-name-btn js-contractor-open-card">Northshore Civil Works</button>
+                        <span class="contractor-status-badge is-active">Active</span>
+                    </div>
+                    <p class="contractor-list-line contractor-list-line--muted">TIN: 125-330-918-000 | PhilGEPS: 0042-9911 | PCAB AAAA</p>
+                    <p class="contractor-list-line">
+                        <span><span class="material-symbols-outlined" aria-hidden="true">description</span> 7 contracts</span>
+                        <span>Value: <strong>P 45,200,000</strong></span>
+                    </p>
+                </div>
+
+                <div class="contractor-actions">
+                    <button type="button" class="contractor-icon-btn js-contractor-open-card" aria-label="View contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn contractor-icon-btn-star js-contractor-open-eval" aria-label="Evaluate contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn js-contractor-open-edit" aria-label="Edit contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">edit_square</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn js-contractor-delete" aria-label="Delete contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                </div>
+            </article>
+
+            <article
+                class="contractor-list-card js-contractor-row"
+                data-name="Harborline Builders"
+                data-tin="740-117-562-000"
+                data-philgeps="0042-9162"
+                data-pcab="aaa"
+                data-status="active"
+                data-contracts="4"
+                data-value="P 21,400,000"
+                data-rating="4.3"
+                data-classification="Building Works"
+                data-license-expiry="September 30, 2026"
+                data-contact-person="Alonzo Reyes"
+                data-contact-email="info@harborlinebuilders.ph"
+                data-contact-phone="+63 920 811 3224"
+                data-contact-address="Roxas, Palawan"
+                data-search="Harborline Builders TIN 740-117-562-000 PhilGEPS 0042-9162 PCAB AAA"
+            >
+                <div class="contractor-list-main">
+                    <div class="contractor-list-title-row">
+                        <button type="button" class="contractor-name contractor-name-btn js-contractor-open-card">Harborline Builders</button>
+                        <span class="contractor-status-badge is-active">Active</span>
+                    </div>
+                    <p class="contractor-list-line contractor-list-line--muted">TIN: 740-117-562-000 | PhilGEPS: 0042-9162 | PCAB AAA</p>
+                    <p class="contractor-list-line">
+                        <span><span class="material-symbols-outlined" aria-hidden="true">description</span> 4 contracts</span>
+                        <span>Value: <strong>P 21,400,000</strong></span>
+                    </p>
+                </div>
+
+                <div class="contractor-actions">
+                    <button type="button" class="contractor-icon-btn js-contractor-open-card" aria-label="View contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn contractor-icon-btn-star js-contractor-open-eval" aria-label="Evaluate contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn js-contractor-open-edit" aria-label="Edit contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">edit_square</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn js-contractor-delete" aria-label="Delete contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                </div>
+            </article>
+
+            <article
+                class="contractor-list-card js-contractor-row"
+                data-name="Summit Ridge Infra"
+                data-tin="493-880-271-000"
+                data-philgeps="0031-4508"
+                data-pcab="aa"
+                data-status="pending"
+                data-contracts="2"
+                data-value="P 8,900,000"
+                data-rating="3.9"
+                data-classification="Road Maintenance"
+                data-license-expiry="June 30, 2026"
+                data-contact-person="Mikael Santos"
+                data-contact-email="procurement@summitridgeinfra.ph"
+                data-contact-phone="+63 917 510 4490"
+                data-contact-address="Narra, Palawan"
+                data-search="Summit Ridge Infra TIN 493-880-271-000 PhilGEPS 0031-4508 PCAB AA"
+            >
+                <div class="contractor-list-main">
+                    <div class="contractor-list-title-row">
+                        <button type="button" class="contractor-name contractor-name-btn js-contractor-open-card">Summit Ridge Infra</button>
+                        <span class="contractor-status-badge is-pending">Pending</span>
+                    </div>
+                    <p class="contractor-list-line contractor-list-line--muted">TIN: 493-880-271-000 | PhilGEPS: 0031-4508 | PCAB AA</p>
+                    <p class="contractor-list-line">
+                        <span><span class="material-symbols-outlined" aria-hidden="true">description</span> 2 contracts</span>
+                        <span>Value: <strong>P 8,900,000</strong></span>
+                    </p>
+                </div>
+
+                <div class="contractor-actions">
+                    <button type="button" class="contractor-icon-btn js-contractor-open-card" aria-label="View contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn contractor-icon-btn-star js-contractor-open-eval" aria-label="Evaluate contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn js-contractor-open-edit" aria-label="Edit contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">edit_square</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn js-contractor-delete" aria-label="Delete contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                </div>
+            </article>
+
+            <article
+                class="contractor-list-card js-contractor-row"
+                data-name="Redcliff Engineering"
+                data-tin="992-201-784-000"
+                data-philgeps="0093-1185"
+                data-pcab="b"
+                data-status="blacklisted"
+                data-contracts="1"
+                data-value="P 1,950,000"
+                data-rating="2.4"
+                data-classification="Specialty Civil Works"
+                data-license-expiry="Expired"
+                data-contact-person="N/A"
+                data-contact-email="N/A"
+                data-contact-phone="N/A"
+                data-contact-address="Bataraza, Palawan"
+                data-search="Redcliff Engineering TIN 992-201-784-000 PhilGEPS 0093-1185 PCAB B"
+            >
+                <div class="contractor-list-main">
+                    <div class="contractor-list-title-row">
+                        <button type="button" class="contractor-name contractor-name-btn js-contractor-open-card">Redcliff Engineering</button>
+                        <span class="contractor-status-badge is-blacklisted">Blacklisted</span>
+                    </div>
+                    <p class="contractor-list-line contractor-list-line--muted">TIN: 992-201-784-000 | PhilGEPS: 0093-1185 | PCAB B</p>
+                    <p class="contractor-list-line">
+                        <span><span class="material-symbols-outlined" aria-hidden="true">description</span> 1 contract</span>
+                        <span>Value: <strong>P 1,950,000</strong></span>
+                    </p>
+                </div>
+
+                <div class="contractor-actions">
+                    <button type="button" class="contractor-icon-btn js-contractor-open-card" aria-label="View contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn contractor-icon-btn-star js-contractor-open-eval" aria-label="Evaluate contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn js-contractor-open-edit" aria-label="Edit contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">edit_square</span>
+                    </button>
+                    <button type="button" class="contractor-icon-btn js-contractor-delete" aria-label="Delete contractor">
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                </div>
+            </article>
+
+            <div class="contractor-empty-row js-contractor-empty-row" hidden>
+                No contractor records match your filters.
+            </div>
+        </div>
+    </section>
+
+    <div class="contractor-delete-toast js-contractor-delete-toast" role="alertdialog" aria-live="polite" aria-atomic="true" hidden>
+        <p class="contractor-delete-toast-message js-contractor-delete-message">Are you sure to delete data?</p>
+        <div class="contractor-delete-toast-actions">
+            <button type="button" class="contractor-delete-toast-btn contractor-delete-toast-btn-secondary js-contractor-delete-cancel">Cancel</button>
+            <button type="button" class="contractor-delete-toast-btn contractor-delete-toast-btn-danger js-contractor-delete-confirm">Delete</button>
+        </div>
+    </div>
+
+    <div class="contractor-success-toast js-contractor-success-toast" role="status" aria-live="polite" hidden></div>
+
+    <div class="contractor-edit-modal contractor-add-modal js-contractor-add-modal" hidden>
+        <div class="contractor-edit-backdrop js-close-contractor-add"></div>
+        <div class="contractor-edit-dialog contractor-add-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-add-title">
+            <form class="contractor-edit-form js-contractor-add-form">
+                <header class="contractor-edit-head">
+                    <div>
+                        <h4 id="contractor-add-title">Add New Contractor</h4>
+                        <p class="contractor-add-subtitle">Register a new contractor in the system</p>
+                    </div>
+                    <button type="button" class="contractor-edit-close js-close-contractor-add" aria-label="Close add contractor form">&times;</button>
+                </header>
+
+                <section class="contractor-edit-section contractor-edit-grid contractor-edit-grid--two">
+                    <label class="contractor-edit-field">
+                        <span>Company Name *</span>
+                        <input type="text" name="company_name" placeholder="Full company name" required>
+                    </label>
+                    <label class="contractor-edit-field">
+                        <span>Trade Name</span>
+                        <input type="text" name="trade_name" placeholder="DBA / Trade name">
+                    </label>
+                </section>
+
+                <section class="contractor-edit-section">
+                    <h5>Registration Details</h5>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--two">
+                        <label class="contractor-edit-field">
+                            <span>TIN</span>
+                            <input type="text" name="tin" placeholder="Tax ID Number">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>PhilGEPS Number</span>
+                            <input type="text" name="philgeps" placeholder="PhilGEPS registration">
+                        </label>
+                    </div>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--three">
+                        <label class="contractor-edit-field">
+                            <span>PCAB License</span>
+                            <input type="text" name="pcab_license" placeholder="License number">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>PCAB Category</span>
+                            <select name="pcab_category">
+                                <option value="">Select</option>
+                                <option value="aaaa">PCAB AAAA</option>
+                                <option value="aaa">PCAB AAA</option>
+                                <option value="aa">PCAB AA</option>
+                                <option value="a">PCAB A</option>
+                                <option value="b">PCAB B</option>
+                                <option value="c">PCAB C</option>
+                                <option value="d">PCAB D</option>
+                            </select>
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>License Expiry</span>
+                            <input type="date" name="license_expiry">
+                        </label>
+                    </div>
+
+                    <label class="contractor-edit-field contractor-edit-field--full">
+                        <span>PCAB Classification</span>
+                        <input type="text" name="pcab_classification" placeholder="e.g., General Engineering, General Building">
+                    </label>
+                </section>
+
+                <section class="contractor-edit-section">
+                    <h5>Contact Information</h5>
+
+                    <label class="contractor-edit-field contractor-edit-field--full">
+                        <span>Address</span>
+                        <input type="text" name="address" placeholder="Street address">
+                    </label>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--two">
+                        <label class="contractor-edit-field">
+                            <span>City/Municipality</span>
+                            <input type="text" name="city">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>Province</span>
+                            <input type="text" name="province">
+                        </label>
+                    </div>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--two">
+                        <label class="contractor-edit-field">
+                            <span>Contact Person</span>
+                            <input type="text" name="contact_person">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>Email</span>
+                            <input type="email" name="email">
+                        </label>
+                    </div>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--two">
+                        <label class="contractor-edit-field">
+                            <span>Phone</span>
+                            <input type="text" name="phone">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>Mobile</span>
+                            <input type="text" name="mobile">
+                        </label>
+                    </div>
+
+                    <label class="contractor-edit-field contractor-edit-field--full">
+                        <span>Remarks</span>
+                        <textarea name="remarks" rows="3"></textarea>
+                    </label>
+                </section>
+
+                <div class="contractor-edit-actions">
+                    <button type="button" class="contractor-edit-btn contractor-edit-btn-secondary js-close-contractor-add">Cancel</button>
+                    <button type="submit" class="contractor-edit-btn contractor-edit-btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="contractor-float-card js-contractor-float-card" hidden>
+        <div class="contractor-float-backdrop js-close-contractor-float"></div>
+        <div class="contractor-float-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-float-title">
+            <div class="contractor-float-head">
+                <div>
+                    <h4 id="contractor-float-title" class="js-contractor-float-name">Contractor</h4>
+                    <p class="js-contractor-float-status">Status</p>
+                </div>
+                <button type="button" class="contractor-float-close js-close-contractor-float" aria-label="Close contractor card">&times;</button>
+            </div>
+
+            <div class="contractor-float-tabs" role="tablist" aria-label="Contractor details tabs">
+                <button type="button" class="contractor-float-tab is-active js-contractor-float-tab" data-contractor-panel="info" role="tab" aria-selected="true">Information</button>
+                <button type="button" class="contractor-float-tab js-contractor-float-tab" data-contractor-panel="contracts" role="tab" aria-selected="false">
+                    Contracts (<span class="js-contractor-float-contract-count">0</span>)
+                </button>
+            </div>
+
+            <section class="contractor-float-panel is-active js-contractor-float-panel" data-contractor-panel="info" role="tabpanel">
+                <span class="contractor-status-badge contractor-float-status-pill js-contractor-float-status-pill">Active</span>
+
+                <div class="contractor-float-grid">
+                    <div class="contractor-float-block">
+                        <h5>Registration</h5>
+                        <p><span>TIN:</span> <strong class="js-contractor-float-tin">-</strong></p>
+                        <p><span>PhilGEPS:</span> <strong class="js-contractor-float-philgeps">-</strong></p>
+                        <p><span>PCAB License:</span> <strong class="js-contractor-float-pcab">-</strong></p>
+                        <p><span>Classification:</span> <strong class="js-contractor-float-classification">-</strong></p>
+                        <p><span>License Expiry:</span> <strong class="js-contractor-float-license-expiry">-</strong></p>
+                    </div>
+
+                    <div class="contractor-float-block">
+                        <h5>Contact</h5>
+                        <p><span>Contact Person:</span> <strong class="js-contractor-float-contact-person">-</strong></p>
+                        <p><span>Email:</span> <strong class="js-contractor-float-contact-email">-</strong></p>
+                        <p><span>Phone:</span> <strong class="js-contractor-float-contact-phone">-</strong></p>
+                        <p><span>Address:</span> <strong class="js-contractor-float-contact-address">-</strong></p>
+                    </div>
+                </div>
+
+                <div class="contractor-float-summary">
+                    <h5>Contract Summary</h5>
+                    <div class="contractor-float-summary-grid">
+                        <div>
+                            <p class="js-contractor-float-total-contracts">0</p>
+                            <span>Total Contracts</span>
+                        </div>
+                        <div>
+                            <p class="js-contractor-float-completed-contracts">0</p>
+                            <span>Completed</span>
+                        </div>
+                        <div>
+                            <p class="js-contractor-float-ongoing-contracts">0</p>
+                            <span>Ongoing</span>
+                        </div>
+                        <div>
+                            <p class="js-contractor-float-total-value">P 0</p>
+                            <span>Total Value</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="contractor-float-panel js-contractor-float-panel" data-contractor-panel="contracts" role="tabpanel" hidden>
+                <div class="contractor-float-contract-head">
+                    <h5>Contract History</h5>
+                    <p>Total Cost: <strong class="js-contractor-float-total-cost">P 0</strong></p>
+                </div>
+                <div class="contractor-float-contract-list js-contractor-float-contract-list"></div>
+            </section>
+        </div>
+    </div>
+
+    <div class="contractor-edit-modal js-contractor-edit-modal" hidden>
+        <div class="contractor-edit-backdrop js-close-contractor-edit"></div>
+        <div class="contractor-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-edit-title">
+            <form class="contractor-edit-form js-contractor-edit-form">
+                <header class="contractor-edit-head">
+                    <div>
+                        <h4 id="contractor-edit-title">Update contractor information</h4>
+                    </div>
+                    <button type="button" class="contractor-edit-close js-close-contractor-edit" aria-label="Close contractor edit form">&times;</button>
+                </header>
+
+                <section class="contractor-edit-section contractor-edit-grid contractor-edit-grid--two">
+                    <label class="contractor-edit-field">
+                        <span>Company Name *</span>
+                        <input type="text" name="company_name" placeholder="Company name" required>
+                    </label>
+                    <label class="contractor-edit-field">
+                        <span>Trade Name</span>
+                        <input type="text" name="trade_name" placeholder="DBA / Trade name">
+                    </label>
+                </section>
+
+                <section class="contractor-edit-section">
+                    <h5>Registration Details</h5>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--two">
+                        <label class="contractor-edit-field">
+                            <span>TIN</span>
+                            <input type="text" name="tin" placeholder="Tax ID Number">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>PhilGEPS Number</span>
+                            <input type="text" name="philgeps" placeholder="PhilGEPS registration">
+                        </label>
+                    </div>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--three">
+                        <label class="contractor-edit-field">
+                            <span>PCAB License</span>
+                            <input type="text" name="pcab_license" placeholder="License number">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>PCAB Category</span>
+                            <select name="pcab_category">
+                                <option value="">Select</option>
+                                <option value="aaaa">PCAB AAAA</option>
+                                <option value="aaa">PCAB AAA</option>
+                                <option value="aa">PCAB AA</option>
+                                <option value="a">PCAB A</option>
+                                <option value="b">PCAB B</option>
+                                <option value="c">PCAB C</option>
+                                <option value="d">PCAB D</option>
+                            </select>
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>License Expiry</span>
+                            <input type="date" name="license_expiry">
+                        </label>
+                    </div>
+
+                    <label class="contractor-edit-field contractor-edit-field--full">
+                        <span>PCAB Classification</span>
+                        <input type="text" name="pcab_classification" placeholder="e.g., General Engineering, General Building">
+                    </label>
+                </section>
+
+                <section class="contractor-edit-section">
+                    <h5>Contact Information</h5>
+
+                    <label class="contractor-edit-field contractor-edit-field--full">
+                        <span>Address</span>
+                        <input type="text" name="address" placeholder="Street address">
+                    </label>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--two">
+                        <label class="contractor-edit-field">
+                            <span>City/Municipality</span>
+                            <input type="text" name="city">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>Province</span>
+                            <input type="text" name="province">
+                        </label>
+                    </div>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--two">
+                        <label class="contractor-edit-field">
+                            <span>Contact Person</span>
+                            <input type="text" name="contact_person">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>Email</span>
+                            <input type="email" name="email">
+                        </label>
+                    </div>
+
+                    <div class="contractor-edit-grid contractor-edit-grid--two">
+                        <label class="contractor-edit-field">
+                            <span>Phone</span>
+                            <input type="text" name="phone">
+                        </label>
+                        <label class="contractor-edit-field">
+                            <span>Mobile</span>
+                            <input type="text" name="mobile">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="contractor-edit-section contractor-edit-section--footer">
+                    <label class="contractor-edit-field contractor-edit-field--status">
+                        <span>Status</span>
+                        <select name="status">
+                            <option value="active">Active</option>
+                            <option value="blacklisted">Blacklisted</option>
+                            <option value="suspended">Suspended</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                    </label>
+
+                    <label class="contractor-edit-field contractor-edit-field--full">
+                        <span>Remarks</span>
+                        <textarea name="remarks" rows="3"></textarea>
+                    </label>
+                </section>
+
+                <div class="contractor-edit-actions">
+                    <button type="button" class="contractor-edit-btn contractor-edit-btn-secondary js-close-contractor-edit">Cancel</button>
+                    <button type="submit" class="contractor-edit-btn contractor-edit-btn-primary">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="contractor-eval-modal js-contractor-eval-modal" hidden>
+        <div class="contractor-eval-backdrop js-close-contractor-eval"></div>
+        <div class="contractor-eval-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-eval-title">
+            <form class="contractor-eval-form js-contractor-eval-form">
+                <header class="contractor-eval-head">
+                    <div>
+                        <h4 id="contractor-eval-title">Contractor Performance Evaluation</h4>
+                        <p>Comprehensive assessment based on weighted project delivery criteria.</p>
+                    </div>
+                    <button type="button" class="contractor-eval-close js-close-contractor-eval" aria-label="Close contractor evaluation form">&times;</button>
+                </header>
+
+                <section class="contractor-eval-block contractor-eval-block--top">
+                    <div class="contractor-eval-grid">
+                        <label class="contractor-eval-field">
+                            <span>Company Name</span>
+                            <input type="text" class="js-contractor-eval-company" name="company_name" readonly>
+                        </label>
+                        <label class="contractor-eval-field">
+                            <span>Project Name</span>
+                            <input type="text" name="project_name" placeholder="Enter project title" required>
+                        </label>
+                        <label class="contractor-eval-field">
+                            <span>Project Location</span>
+                            <input type="text" name="project_location" placeholder="Municipality / Area">
+                        </label>
+                        <label class="contractor-eval-field">
+                            <span>Evaluation Date</span>
+                            <input type="date" class="js-contractor-eval-date" name="evaluation_date" required>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="contractor-eval-block">
+                    <div class="contractor-eval-criteria-head">
+                        <h5>Evaluation Criteria</h5>
+                        <p>Rating scale: 0 to 5 stars (half-star allowed)</p>
+                    </div>
+
+                    <div class="contractor-eval-criteria-list">
+                        <article class="contractor-eval-criteria-item js-contractor-eval-rating" data-weight="20" data-criterion="Technical Capability">
+                            <div class="contractor-eval-criteria-copy">
+                                <h6>Technical Capability</h6>
+                                <p>Engineers, equipment, technology</p>
+                            </div>
+                            <div class="contractor-eval-rating-box">
+                                <span class="contractor-eval-weight">20%</span>
+                                <div
+                                    class="contractor-eval-stars js-contractor-eval-stars"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="Technical Capability rating"
+                                    aria-valuemin="0"
+                                    aria-valuemax="5"
+                                    aria-valuenow="0"
+                                    aria-valuetext="0 stars"
+                                >
+                                    <span class="contractor-eval-stars-base" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                    <span class="contractor-eval-stars-fill js-contractor-eval-stars-fill" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                </div>
+                                <input type="hidden" name="technical_capability" value="0" class="js-contractor-eval-rating-input">
+                                <p class="contractor-eval-rating-value js-contractor-eval-rating-value">0.0 / 5</p>
+                            </div>
+                        </article>
+
+                        <article class="contractor-eval-criteria-item js-contractor-eval-rating" data-weight="25" data-criterion="Quality of Work">
+                            <div class="contractor-eval-criteria-copy">
+                                <h6>Quality of Work</h6>
+                                <p>Standard of completed projects</p>
+                            </div>
+                            <div class="contractor-eval-rating-box">
+                                <span class="contractor-eval-weight">25%</span>
+                                <div
+                                    class="contractor-eval-stars js-contractor-eval-stars"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="Quality of Work rating"
+                                    aria-valuemin="0"
+                                    aria-valuemax="5"
+                                    aria-valuenow="0"
+                                    aria-valuetext="0 stars"
+                                >
+                                    <span class="contractor-eval-stars-base" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                    <span class="contractor-eval-stars-fill js-contractor-eval-stars-fill" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                </div>
+                                <input type="hidden" name="quality_of_work" value="0" class="js-contractor-eval-rating-input">
+                                <p class="contractor-eval-rating-value js-contractor-eval-rating-value">0.0 / 5</p>
+                            </div>
+                        </article>
+
+                        <article class="contractor-eval-criteria-item js-contractor-eval-rating" data-weight="15" data-criterion="Project Completion">
+                            <div class="contractor-eval-criteria-copy">
+                                <h6>Project Completion</h6>
+                                <p>On-time delivery</p>
+                            </div>
+                            <div class="contractor-eval-rating-box">
+                                <span class="contractor-eval-weight">15%</span>
+                                <div
+                                    class="contractor-eval-stars js-contractor-eval-stars"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="Project Completion rating"
+                                    aria-valuemin="0"
+                                    aria-valuemax="5"
+                                    aria-valuenow="0"
+                                    aria-valuetext="0 stars"
+                                >
+                                    <span class="contractor-eval-stars-base" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                    <span class="contractor-eval-stars-fill js-contractor-eval-stars-fill" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                </div>
+                                <input type="hidden" name="project_completion" value="0" class="js-contractor-eval-rating-input">
+                                <p class="contractor-eval-rating-value js-contractor-eval-rating-value">0.0 / 5</p>
+                            </div>
+                        </article>
+
+                        <article class="contractor-eval-criteria-item js-contractor-eval-rating" data-weight="10" data-criterion="Safety Compliance">
+                            <div class="contractor-eval-criteria-copy">
+                                <h6>Safety Compliance</h6>
+                                <p>Safety record and standards</p>
+                            </div>
+                            <div class="contractor-eval-rating-box">
+                                <span class="contractor-eval-weight">10%</span>
+                                <div
+                                    class="contractor-eval-stars js-contractor-eval-stars"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="Safety Compliance rating"
+                                    aria-valuemin="0"
+                                    aria-valuemax="5"
+                                    aria-valuenow="0"
+                                    aria-valuetext="0 stars"
+                                >
+                                    <span class="contractor-eval-stars-base" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                    <span class="contractor-eval-stars-fill js-contractor-eval-stars-fill" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                </div>
+                                <input type="hidden" name="safety_compliance" value="0" class="js-contractor-eval-rating-input">
+                                <p class="contractor-eval-rating-value js-contractor-eval-rating-value">0.0 / 5</p>
+                            </div>
+                        </article>
+
+                        <article class="contractor-eval-criteria-item js-contractor-eval-rating" data-weight="15" data-criterion="Financial Capacity">
+                            <div class="contractor-eval-criteria-copy">
+                                <h6>Financial Capacity</h6>
+                                <p>Financial ability to handle project</p>
+                            </div>
+                            <div class="contractor-eval-rating-box">
+                                <span class="contractor-eval-weight">15%</span>
+                                <div
+                                    class="contractor-eval-stars js-contractor-eval-stars"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="Financial Capacity rating"
+                                    aria-valuemin="0"
+                                    aria-valuemax="5"
+                                    aria-valuenow="0"
+                                    aria-valuetext="0 stars"
+                                >
+                                    <span class="contractor-eval-stars-base" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                    <span class="contractor-eval-stars-fill js-contractor-eval-stars-fill" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                </div>
+                                <input type="hidden" name="financial_capacity" value="0" class="js-contractor-eval-rating-input">
+                                <p class="contractor-eval-rating-value js-contractor-eval-rating-value">0.0 / 5</p>
+                            </div>
+                        </article>
+
+                        <article class="contractor-eval-criteria-item js-contractor-eval-rating" data-weight="15" data-criterion="Experience">
+                            <div class="contractor-eval-criteria-copy">
+                                <h6>Experience</h6>
+                                <p>Number and scale of projects completed</p>
+                            </div>
+                            <div class="contractor-eval-rating-box">
+                                <span class="contractor-eval-weight">15%</span>
+                                <div
+                                    class="contractor-eval-stars js-contractor-eval-stars"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="Experience rating"
+                                    aria-valuemin="0"
+                                    aria-valuemax="5"
+                                    aria-valuenow="0"
+                                    aria-valuetext="0 stars"
+                                >
+                                    <span class="contractor-eval-stars-base" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                    <span class="contractor-eval-stars-fill js-contractor-eval-stars-fill" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                </div>
+                                <input type="hidden" name="experience" value="0" class="js-contractor-eval-rating-input">
+                                <p class="contractor-eval-rating-value js-contractor-eval-rating-value">0.0 / 5</p>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+                <section class="contractor-eval-block contractor-eval-block--summary">
+                    <div class="contractor-eval-summary">
+                        <div>
+                            <p class="contractor-eval-summary-label">Total Score</p>
+                            <p class="contractor-eval-summary-value js-contractor-eval-total">0.0%</p>
+                        </div>
+                        <div>
+                            <p class="contractor-eval-summary-label">Overall Rating</p>
+                            <p class="contractor-eval-summary-value contractor-eval-summary-value--accent js-contractor-eval-overall">Not Rated</p>
+                        </div>
+                    </div>
+                    <div class="contractor-eval-actions">
+                        <button type="button" class="contractor-eval-btn contractor-eval-btn-secondary js-contractor-eval-reset">Reset</button>
+                        <button type="submit" class="contractor-eval-btn contractor-eval-btn-primary">Submit Evaluation</button>
+                    </div>
+                </section>
+
+                <section class="contractor-eval-block">
+                    <div class="contractor-eval-grid">
+                        <label class="contractor-eval-field">
+                            <span>Evaluator Name</span>
+                            <input type="text" name="evaluator_name" placeholder="Name" required>
+                        </label>
+                        <label class="contractor-eval-field">
+                            <span>Evaluator Position</span>
+                            <input type="text" name="evaluator_position" placeholder="Position/Role" required>
+                        </label>
+                        <label class="contractor-eval-field contractor-eval-field--full">
+                            <span>Strengths</span>
+                            <textarea name="strengths" rows="2" placeholder="Highlight key strengths..."></textarea>
+                        </label>
+                        <label class="contractor-eval-field contractor-eval-field--full">
+                            <span>Areas for Improvement</span>
+                            <textarea name="improvements" rows="2" placeholder="Identify improvement areas..."></textarea>
+                        </label>
+                        <label class="contractor-eval-field contractor-eval-field--full">
+                            <span>Evaluator Remarks</span>
+                            <textarea name="remarks" rows="3" placeholder="Additional notes and recommendations..."></textarea>
+                        </label>
+                    </div>
+                </section>
+            </form>
+        </div>
     </div>
 </section>
+
+

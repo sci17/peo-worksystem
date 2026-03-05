@@ -510,6 +510,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const topScheduledCount = document.querySelector(".js-top-scheduled-count");
     const roadUploadInput = document.getElementById("road-upload-input");
     const roadSearchInput = document.querySelector(".js-road-search-input");
+    const roadSearchShell = document.querySelector(".js-road-search-shell");
+    const roadSearchToggle = document.querySelector(".js-road-search-toggle");
     const roadMunicipalityList = document.querySelector(".js-road-municipality-list");
     const roadRecordMeta = document.querySelector(".js-road-record-meta");
     const topRoadCount = document.querySelector(".js-top-road-count");
@@ -518,13 +520,114 @@ document.addEventListener("DOMContentLoaded", () => {
     const roadConditionFair = document.querySelector(".js-road-condition-fair");
     const roadConditionPoor = document.querySelector(".js-road-condition-poor");
     const roadConditionBad = document.querySelector(".js-road-condition-bad");
+    const roadConditionFillGood = document.querySelector(".js-road-condition-fill-good");
+    const roadConditionFillFair = document.querySelector(".js-road-condition-fill-fair");
+    const roadConditionFillPoor = document.querySelector(".js-road-condition-fill-poor");
+    const roadConditionFillBad = document.querySelector(".js-road-condition-fill-bad");
+    const municipalityDropdown = document.querySelector('[data-road-filter="municipality"]');
+    const roadEditModal = document.querySelector(".js-road-edit-modal");
+    const closeRoadEditModalButtons = document.querySelectorAll(".js-close-road-edit-modal");
+    const roadEditForm = document.querySelector(".js-road-edit-form");
+    const roadEditSubtitle = document.querySelector(".js-road-edit-subtitle");
+    const roadEditRecordSelect = document.querySelector(".js-road-edit-record-select");
+    const roadEditRoadIdInput = document.querySelector(".js-road-edit-road-id");
+    const roadEditRoadNameInput = document.querySelector(".js-road-edit-road-name");
+    const roadEditLengthInput = document.querySelector(".js-road-edit-length");
+    const roadEditConditionInput = document.querySelector(".js-road-edit-condition");
+    const roadEditSurfaceTypeInput = document.querySelector(".js-road-edit-surface-type");
+    const roadDeleteModal = document.querySelector(".js-road-delete-modal");
+    const closeRoadDeleteModalButtons = document.querySelectorAll(".js-close-road-delete-modal");
+    const roadDeleteForm = document.querySelector(".js-road-delete-form");
+    const roadDeleteSubtitle = document.querySelector(".js-road-delete-subtitle");
+    const roadDeleteRecordSelect = document.querySelector(".js-road-delete-record-select");
+    const roadAddModal = document.querySelector(".js-road-add-modal");
+    const openRoadAddModalButtons = document.querySelectorAll(".js-open-road-add-modal");
+    const closeRoadAddModalButtons = document.querySelectorAll(".js-close-road-add-modal");
+    const roadAddForm = document.querySelector(".js-road-add-form");
+    const roadAddRoadIdInput = document.querySelector(".js-road-add-road-id");
+    const roadAddRoadNameInput = document.querySelector(".js-road-add-road-name");
+    const roadAddLengthInput = document.querySelector(".js-road-add-length");
+    const roadAddLocationSelect = document.querySelector(".js-road-add-location");
+    const roadAddMunicipalitySelect = document.querySelector(".js-road-add-municipality");
+    const roadAddSurfaceTypeSelect = document.querySelector(".js-road-add-surface-type");
+    const roadAddSurfaceTypeDetailsInput = document.querySelector(".js-road-add-surface-type-details");
+    const roadAddConditionSelect = document.querySelector(".js-road-add-condition");
+    const contractorManagement = document.querySelector(".js-contractor-management");
+    const contractorSearchInput = document.querySelector(".js-contractor-search");
+    const contractorStatusFilter = document.querySelector(".js-contractor-status-filter");
+    const contractorPcabFilter = document.querySelector(".js-contractor-pcab-filter");
+    const contractorAddOpenButton = document.querySelector(".js-open-contractor-add");
+    const contractorAddModal = document.querySelector(".js-contractor-add-modal");
+    const closeContractorAddButtons = document.querySelectorAll(".js-close-contractor-add");
+    const contractorAddForm = document.querySelector(".js-contractor-add-form");
+    const contractorCardList = document.querySelector(".contractor-card-list");
+    const contractorFoundCount = document.querySelector(".js-contractor-found-count");
+    const contractorRows = Array.from(document.querySelectorAll(".js-contractor-row"));
+    const contractorEmptyRow = document.querySelector(".js-contractor-empty-row");
+    const contractorStatTotal = document.querySelector(".js-contractor-stat-total");
+    const contractorStatActive = document.querySelector(".js-contractor-stat-active");
+    const contractorStatRating = document.querySelector(".js-contractor-stat-rating");
+    const contractorStatBlacklisted = document.querySelector(".js-contractor-stat-blacklisted");
+    const contractorFloatCard = document.querySelector(".js-contractor-float-card");
+    const closeContractorFloatButtons = document.querySelectorAll(".js-close-contractor-float");
+    const contractorFloatName = document.querySelector(".js-contractor-float-name");
+    const contractorFloatStatus = document.querySelector(".js-contractor-float-status");
+    const contractorFloatStatusPill = document.querySelector(".js-contractor-float-status-pill");
+    const contractorFloatTabs = Array.from(document.querySelectorAll(".js-contractor-float-tab"));
+    const contractorFloatPanels = Array.from(document.querySelectorAll(".js-contractor-float-panel"));
+    const contractorFloatContractCount = document.querySelector(".js-contractor-float-contract-count");
+    const contractorFloatTin = document.querySelector(".js-contractor-float-tin");
+    const contractorFloatPhilgeps = document.querySelector(".js-contractor-float-philgeps");
+    const contractorFloatPcab = document.querySelector(".js-contractor-float-pcab");
+    const contractorFloatClassification = document.querySelector(".js-contractor-float-classification");
+    const contractorFloatLicenseExpiry = document.querySelector(".js-contractor-float-license-expiry");
+    const contractorFloatContactPerson = document.querySelector(".js-contractor-float-contact-person");
+    const contractorFloatContactEmail = document.querySelector(".js-contractor-float-contact-email");
+    const contractorFloatContactPhone = document.querySelector(".js-contractor-float-contact-phone");
+    const contractorFloatContactAddress = document.querySelector(".js-contractor-float-contact-address");
+    const contractorFloatContracts = document.querySelector(".js-contractor-float-contracts");
+    const contractorFloatCompletedContracts = document.querySelector(".js-contractor-float-completed-contracts");
+    const contractorFloatOngoingContracts = document.querySelector(".js-contractor-float-ongoing-contracts");
+    const contractorFloatTotalValue = document.querySelector(".js-contractor-float-total-value");
+    const contractorFloatTotalCost = document.querySelector(".js-contractor-float-total-cost");
+    const contractorFloatContractList = document.querySelector(".js-contractor-float-contract-list");
+    const contractorDeleteToast = document.querySelector(".js-contractor-delete-toast");
+    const contractorDeleteMessage = document.querySelector(".js-contractor-delete-message");
+    const contractorDeleteConfirmButton = document.querySelector(".js-contractor-delete-confirm");
+    const contractorDeleteCancelButtons = document.querySelectorAll(".js-contractor-delete-cancel");
+    const contractorSuccessToast = document.querySelector(".js-contractor-success-toast");
+    const contractorEditModal = document.querySelector(".js-contractor-edit-modal");
+    const closeContractorEditButtons = document.querySelectorAll(".js-close-contractor-edit");
+    const contractorEditForm = document.querySelector(".js-contractor-edit-form");
+    const contractorEvalModal = document.querySelector(".js-contractor-eval-modal");
+    const closeContractorEvalButtons = document.querySelectorAll(".js-close-contractor-eval");
+    const contractorEvalForm = document.querySelector(".js-contractor-eval-form");
+    const contractorEvalCompanyInput = document.querySelector(".js-contractor-eval-company");
+    const contractorEvalDateInput = document.querySelector(".js-contractor-eval-date");
+    const contractorEvalRatings = Array.from(document.querySelectorAll(".js-contractor-eval-rating"));
+    const contractorEvalTotal = document.querySelector(".js-contractor-eval-total");
+    const contractorEvalOverall = document.querySelector(".js-contractor-eval-overall");
+    const contractorEvalResetButton = document.querySelector(".js-contractor-eval-reset");
 
     const roadRecords = [];
+    const roadMunicipalityPageState = new Map();
+    const roadMunicipalityToastState = new Map();
+    const roadMunicipalityToastTimers = new Map();
+    const roadRowsPerMunicipalityPage = 15;
+    const maintenanceStorageKey = "peo_maintenance_state_v1";
+    const roadAcceptedUploadTypes = ".xlsx,.xls,.csv,.txt,.json";
+    let editingMunicipalityKey = "";
+    let editingMunicipalityName = "";
+    let deletingMunicipalityKey = "";
+    let deletingMunicipalityName = "";
+    let editingContractorRow = null;
+    let deletingContractorRow = null;
+    let contractorSuccessToastTimer = null;
     let xlsxLibraryPromise = null;
     let refreshRoadRegister = null;
 
     const setBodyScrollLock = () => {
-        const isAnyModalOpen = [equipmentModal, scheduleModal].some((modal) => modal && !modal.hidden);
+        const isAnyModalOpen = [equipmentModal, scheduleModal, roadEditModal, roadAddModal, roadDeleteModal, contractorAddModal, contractorFloatCard, contractorEditModal, contractorEvalModal].some((modal) => modal && !modal.hidden);
         document.body.style.overflow = isAnyModalOpen ? "hidden" : "";
     };
 
@@ -539,10 +642,111 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const normalizeKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const normalizeStatus = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
+    const normalizeMunicipalityName = (value) =>
+        String(value || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "");
     const toTitleCase = (value) =>
         String(value || "")
-            .toLowerCase()
-            .replace(/\b\w/g, (letter) => letter.toUpperCase());
+            .toLocaleLowerCase("en-US")
+            .replace(/(^|[\s/-])(\p{L})/gu, (match, prefix, letter) => `${prefix}${letter.toLocaleUpperCase("en-US")}`);
+
+    const municipalityAreas = {
+        south: [
+            "Puerto Princesa City",
+            "Aborlan",
+            "Narra",
+            "Quezon",
+            "Rizal",
+            "Bataraza",
+            "Brooke's Point",
+            "Sofronio Espa\u00f1ola",
+            "Balabac",
+        ],
+        north: [
+            "Roxas",
+            "San Vicente",
+            "Taytay",
+            "El Nido",
+            "Coron",
+            "Busuanga",
+            "Culion",
+            "Linapacan",
+            "Cuyo",
+            "Agutaya",
+            "Magsaysay",
+        ],
+    };
+
+    const municipalityAreaByKey = new Map();
+    const municipalityDisplayNameByKey = new Map();
+    Object.entries(municipalityAreas).forEach(([areaKey, names]) => {
+        names.forEach((name) => {
+            const normalizedNameKey = normalizeMunicipalityName(name);
+            municipalityAreaByKey.set(normalizedNameKey, areaKey);
+            municipalityDisplayNameByKey.set(normalizedNameKey, name);
+        });
+    });
+
+    const normalizeMunicipalityDisplayName = (value, fallback = "Unknown") => {
+        const rawValue = String(value || "").trim();
+        if (!rawValue) {
+            return fallback;
+        }
+
+        const normalizedNameKey = normalizeMunicipalityName(rawValue);
+        if (normalizedNameKey && municipalityDisplayNameByKey.has(normalizedNameKey)) {
+            return municipalityDisplayNameByKey.get(normalizedNameKey);
+        }
+
+        return toTitleCase(rawValue);
+    };
+
+    const getMunicipalityNamesByArea = (locationValue = "") => {
+        const normalized = String(locationValue || "").trim().toLowerCase();
+        let sourceNames = [];
+        if (normalized === "south") {
+            sourceNames = municipalityAreas.south;
+        } else if (normalized === "north") {
+            sourceNames = municipalityAreas.north;
+        } else {
+            sourceNames = [...municipalityAreas.south, ...municipalityAreas.north];
+        }
+
+        return [...new Set(sourceNames)]
+            .map((name) => String(name || "").trim())
+            .filter(Boolean)
+            .sort((nameA, nameB) => nameA.localeCompare(nameB));
+    };
+
+    const getAreaFromLocationFilter = (value) => {
+        const normalized = String(value || "").trim().toLowerCase();
+        if (normalized === "north") {
+            return "north";
+        }
+        if (normalized === "south") {
+            return "south";
+        }
+        return "";
+    };
+
+    const resolveMunicipalityArea = (municipalityName, locationName = "") => {
+        const municipalityKey = normalizeMunicipalityName(municipalityName);
+        if (municipalityKey && municipalityAreaByKey.has(municipalityKey)) {
+            return municipalityAreaByKey.get(municipalityKey);
+        }
+
+        const locationValue = String(locationName || "").toLowerCase();
+        if (locationValue.includes("north")) {
+            return "north";
+        }
+        if (locationValue.includes("south")) {
+            return "south";
+        }
+        return "";
+    };
 
     const parseNumber = (value) => {
         if (typeof value === "number" && Number.isFinite(value)) {
@@ -562,6 +766,47 @@ document.addEventListener("DOMContentLoaded", () => {
     const getFilterValue = (filterKey) => {
         const filterLabel = document.querySelector(`[data-road-filter="${filterKey}"] .dropdown-label`);
         return filterLabel ? filterLabel.textContent.trim() : "";
+    };
+
+    const refreshRoadMunicipalityOptions = () => {
+        if (!municipalityDropdown) {
+            return;
+        }
+
+        const dropdownLabel = municipalityDropdown.querySelector(".dropdown-label");
+        const dropdownMenu = municipalityDropdown.querySelector(".dropdown-menu");
+        if (!dropdownLabel || !dropdownMenu) {
+            return;
+        }
+
+        const selectedMunicipality = dropdownLabel.textContent.trim() || "All Municipalities";
+        const selectedArea = getAreaFromLocationFilter(getFilterValue("location"));
+        const municipalityNames = [...new Set(
+            roadRecords
+                .filter((record) => {
+                    if (!selectedArea) {
+                        return true;
+                    }
+                    return resolveMunicipalityArea(record.municipality, record.location) === selectedArea;
+                })
+                .map((record) => normalizeMunicipalityDisplayName(record.municipality, "Unknown"))
+                .filter(Boolean)
+        )].sort((nameA, nameB) => nameA.localeCompare(nameB));
+
+        const options = ["All Municipalities", ...municipalityNames];
+        const activeSelection = options.includes(selectedMunicipality) ? selectedMunicipality : "All Municipalities";
+
+        dropdownMenu.innerHTML = options
+            .map((optionLabel) => `
+                <li>
+                    <button type="button" class="dropdown-option${optionLabel === activeSelection ? " is-selected" : ""}">
+                        ${escapeHtml(optionLabel)}
+                    </button>
+                </li>
+            `)
+            .join("");
+
+        dropdownLabel.textContent = activeSelection;
     };
 
     const getRowValue = (row, aliases) => {
@@ -607,7 +852,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return {
             roadId: roadId || "-",
             roadName: roadName || "-",
-            municipality,
+            municipality: normalizeMunicipalityDisplayName(municipality, "Unknown"),
             location,
             surfaceType: surfaceType || "-",
             lengthKm,
@@ -886,7 +1131,7 @@ document.addEventListener("DOMContentLoaded", () => {
             records.push({
                 roadId: roadId || "-",
                 roadName,
-                municipality: toTitleCase(municipality),
+                municipality: normalizeMunicipalityDisplayName(municipality, "Unknown"),
                 location: sheetLocation,
                 surfaceType,
                 lengthKm,
@@ -977,6 +1222,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return "is-unknown";
     };
 
+    const isSubtotalRoadRecord = (record) => {
+        const roadNameKey = normalizeKey(record?.roadName || "");
+        return roadNameKey.includes("subtotal");
+    };
+
     const formatLengthValue = (lengthKm) => {
         if (typeof lengthKm !== "number" || Number.isNaN(lengthKm)) {
             return "-";
@@ -999,7 +1249,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const groupedByMunicipality = new Map();
         records.forEach((record) => {
-            const municipalityKey = record.municipality || "Unknown";
+            const municipalityKey = normalizeMunicipalityDisplayName(record.municipality, "Unknown");
             if (!groupedByMunicipality.has(municipalityKey)) {
                 groupedByMunicipality.set(municipalityKey, []);
             }
@@ -1009,10 +1259,48 @@ document.addEventListener("DOMContentLoaded", () => {
         const municipalityBlocks = [...groupedByMunicipality.entries()]
             .sort(([municipalityA], [municipalityB]) => municipalityA.localeCompare(municipalityB))
             .map(([municipalityName, municipalityRows]) => {
-                const rowsHtml = municipalityRows
+                const normalizedMunicipalityKey = normalizeMunicipalityName(municipalityName);
+                const pageKey = normalizedMunicipalityKey || "unknown";
+                const municipalityToastMessage = roadMunicipalityToastState.get(pageKey) || "";
+                const municipalityToastHtml = municipalityToastMessage
+                    ? `<span class="road-municipality-toast" role="status" aria-live="polite">${escapeHtml(municipalityToastMessage)}</span>`
+                    : "";
+                const regularRows = municipalityRows.filter((record) => !isSubtotalRoadRecord(record));
+                const subtotalRows = municipalityRows.filter((record) => isSubtotalRoadRecord(record));
+                const orderedMunicipalityRows = [...regularRows, ...subtotalRows];
+                const totalPages = Math.max(1, Math.ceil(orderedMunicipalityRows.length / roadRowsPerMunicipalityPage));
+                const savedPage = roadMunicipalityPageState.get(pageKey) || 1;
+                const currentPage = Math.min(Math.max(savedPage, 1), totalPages);
+                const startIndex = (currentPage - 1) * roadRowsPerMunicipalityPage;
+                const pageRows = orderedMunicipalityRows.slice(startIndex, startIndex + roadRowsPerMunicipalityPage);
+                const isPrevDisabled = currentPage <= 1;
+                const isNextDisabled = currentPage >= totalPages;
+
+                roadMunicipalityPageState.set(pageKey, currentPage);
+
+                const rowsHtml = pageRows
                     .map((record) => {
                         const conditionText = toTitleCase(record.condition || "Unknown");
                         const conditionClass = getRoadConditionClass(record.condition || "unknown");
+                        const roadRecordIndex = roadRecords.indexOf(record);
+                        const hasDeleteTarget = roadRecordIndex >= 0;
+                        const roadNameLabel = record.roadName || "road record";
+                        const deleteActionHtml = hasDeleteTarget
+                            ? `
+                                <button
+                                    type="button"
+                                    class="road-row-delete-btn js-road-row-delete"
+                                    data-record-index="${roadRecordIndex}"
+                                    data-municipality-name="${escapeHtml(municipalityName)}"
+                                    aria-label="Delete ${escapeHtml(roadNameLabel)}"
+                                    title="Delete row"
+                                >
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 7h2v8h-2v-8zm4 0h2v8h-2v-8zM7 10h2v8H7v-8z"></path>
+                                    </svg>
+                                </button>
+                            `
+                            : `<span class="road-row-delete-placeholder">-</span>`;
 
                         return `
                             <tr>
@@ -1021,13 +1309,40 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <td>${escapeHtml(formatLengthValue(record.lengthKm))}</td>
                                 <td><span class="road-condition-pill ${conditionClass}">${escapeHtml(conditionText)}</span></td>
                                 <td>${escapeHtml(record.surfaceType || "-")}</td>
+                                <td class="road-row-actions">${deleteActionHtml}</td>
                             </tr>
                         `;
                     })
                     .join("");
 
+                const paginationHtml = totalPages > 1
+                    ? `
+                        <div class="road-municipality-pagination">
+                            <button
+                                type="button"
+                                class="road-page-btn js-road-page-btn"
+                                data-page-direction="prev"
+                                data-page-key="${escapeHtml(pageKey)}"
+                                ${isPrevDisabled ? "disabled" : ""}
+                            >
+                                Previous
+                            </button>
+                            <span class="road-page-info">Page ${currentPage} of ${totalPages}</span>
+                            <button
+                                type="button"
+                                class="road-page-btn js-road-page-btn"
+                                data-page-direction="next"
+                                data-page-key="${escapeHtml(pageKey)}"
+                                ${isNextDisabled ? "disabled" : ""}
+                            >
+                                Next
+                            </button>
+                        </div>
+                    `
+                    : "";
+
                 return `
-                    <article class="road-municipality-card">
+                    <article class="road-municipality-card" data-municipality-page-key="${escapeHtml(pageKey)}">
                         <div class="road-municipality-head">
                             <div class="road-municipality-name">
                                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1036,7 +1351,18 @@ document.addEventListener("DOMContentLoaded", () => {
                                 </svg>
                                 <span>${escapeHtml(municipalityName)}</span>
                             </div>
-                            <span class="road-municipality-count">${municipalityRows.length} road${municipalityRows.length === 1 ? "" : "s"}</span>
+                            <div class="road-municipality-actions">
+                                ${municipalityToastHtml}
+                                <span class="road-municipality-count">${municipalityRows.length} road${municipalityRows.length === 1 ? "" : "s"}</span>
+                                <button
+                                    type="button"
+                                    class="road-municipality-update-btn js-road-municipality-update"
+                                    data-municipality-key="${escapeHtml(pageKey)}"
+                                    data-municipality-name="${escapeHtml(municipalityName)}"
+                                >
+                                    Update Data
+                                </button>
+                            </div>
                         </div>
                         <table class="road-table road-municipality-table">
                             <thead>
@@ -1046,12 +1372,14 @@ document.addEventListener("DOMContentLoaded", () => {
                                     <th>Length (km)</th>
                                     <th>Condition</th>
                                     <th>Surface Type</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${rowsHtml}
                             </tbody>
                         </table>
+                        ${paginationHtml}
                     </article>
                 `;
             })
@@ -1074,7 +1402,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (locationFilter && locationFilter !== "Select Location") {
-                const locationMatched = (record.location || "").toLowerCase() === locationFilter.toLowerCase();
+                const selectedArea = getAreaFromLocationFilter(locationFilter);
+                const locationMatched = resolveMunicipalityArea(record.municipality, record.location) === selectedArea;
                 if (!locationMatched) {
                     return false;
                 }
@@ -1163,44 +1492,655 @@ document.addEventListener("DOMContentLoaded", () => {
         if (roadConditionFair) roadConditionFair.textContent = String(roadConditionCounts.fair);
         if (roadConditionPoor) roadConditionPoor.textContent = String(roadConditionCounts.poor);
         if (roadConditionBad) roadConditionBad.textContent = String(roadConditionCounts.bad);
+
+        const totalRoadCount = roadRecords.length;
+        const getFillPercent = (count) => {
+            if (!totalRoadCount) {
+                return "0%";
+            }
+            const percent = (count / totalRoadCount) * 100;
+            return `${Math.min(100, Math.max(0, percent)).toFixed(1)}%`;
+        };
+
+        if (roadConditionFillGood) roadConditionFillGood.style.width = getFillPercent(roadConditionCounts.good);
+        if (roadConditionFillFair) roadConditionFillFair.style.width = getFillPercent(roadConditionCounts.fair);
+        if (roadConditionFillPoor) roadConditionFillPoor.style.width = getFillPercent(roadConditionCounts.poor);
+        if (roadConditionFillBad) roadConditionFillBad.style.width = getFillPercent(roadConditionCounts.bad);
     };
 
+    const refreshRoadAddMunicipalityOptions = () => {
+        if (!roadAddMunicipalitySelect) {
+            return;
+        }
+
+        const locationValue = roadAddLocationSelect ? roadAddLocationSelect.value : "";
+        const normalizedLocation = String(locationValue || "").trim().toLowerCase();
+        const hasSelectedLocation = normalizedLocation === "south" || normalizedLocation === "north";
+        const municipalities = hasSelectedLocation ? getMunicipalityNamesByArea(locationValue) : [];
+        const selectedMunicipality = String(roadAddMunicipalitySelect.value || "").trim();
+        const isSelectedValid = municipalities.includes(selectedMunicipality);
+
+        roadAddMunicipalitySelect.innerHTML = [
+            `<option value="">${hasSelectedLocation ? "Select municipality" : "Select location first"}</option>`,
+            ...municipalities.map((municipalityName) => `<option value="${escapeHtml(municipalityName)}">${escapeHtml(municipalityName)}</option>`),
+        ].join("");
+        roadAddMunicipalitySelect.disabled = !hasSelectedLocation;
+
+        if (hasSelectedLocation && isSelectedValid) {
+            roadAddMunicipalitySelect.value = selectedMunicipality;
+        }
+    };
+
+    const closeRoadAddModal = () => {
+        if (!roadAddModal) {
+            return;
+        }
+        roadAddModal.hidden = true;
+        if (roadAddForm) {
+            roadAddForm.reset();
+        }
+        refreshRoadAddMunicipalityOptions();
+        setBodyScrollLock();
+    };
+
+    const openRoadAddModal = () => {
+        if (!roadAddModal) {
+            return;
+        }
+        roadAddModal.hidden = false;
+        refreshRoadAddMunicipalityOptions();
+        setBodyScrollLock();
+        const firstInput = roadAddRoadNameInput || roadAddRoadIdInput;
+        if (firstInput) {
+            firstInput.focus();
+        }
+    };
+
+    openRoadAddModalButtons.forEach((button) => {
+        button.addEventListener("click", openRoadAddModal);
+    });
+
+    closeRoadAddModalButtons.forEach((button) => {
+        button.addEventListener("click", closeRoadAddModal);
+    });
+
+    if (roadAddLocationSelect) {
+        roadAddLocationSelect.addEventListener("change", () => {
+            refreshRoadAddMunicipalityOptions();
+        });
+    }
+
+    if (roadAddForm) {
+        roadAddForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+
+            const roadId = String(roadAddRoadIdInput?.value || "").trim() || "-";
+            const roadName = String(roadAddRoadNameInput?.value || "").trim();
+            const selectedLocation = String(roadAddLocationSelect?.value || "").trim();
+            const selectedMunicipality = String(roadAddMunicipalitySelect?.value || "").trim();
+            const selectedSurfaceType = String(roadAddSurfaceTypeSelect?.value || "").trim();
+            const selectedSurfaceTypeDetails = String(roadAddSurfaceTypeDetailsInput?.value || "")
+                .replace(/\s+/g, " ")
+                .trim();
+            const selectedCondition = String(roadAddConditionSelect?.value || "unknown").trim().toLowerCase();
+            const lengthKm = parseNumber(String(roadAddLengthInput?.value || "").trim());
+
+            if (!roadName) {
+                if (roadAddRoadNameInput) {
+                    roadAddRoadNameInput.focus();
+                }
+                return;
+            }
+
+            if (!selectedLocation) {
+                if (roadAddLocationSelect) {
+                    roadAddLocationSelect.focus();
+                }
+                return;
+            }
+
+            if (!selectedMunicipality) {
+                if (roadAddMunicipalitySelect) {
+                    roadAddMunicipalitySelect.focus();
+                }
+                return;
+            }
+
+            const areaFromMunicipality = resolveMunicipalityArea(selectedMunicipality);
+            const resolvedLocation = selectedLocation
+                || (areaFromMunicipality ? toTitleCase(areaFromMunicipality) : "");
+            const formattedSurfaceType = selectedSurfaceTypeDetails
+                ? (selectedSurfaceTypeDetails.includes(":")
+                    ? selectedSurfaceTypeDetails
+                    : `${selectedSurfaceType}: ${selectedSurfaceTypeDetails}`)
+                : (selectedSurfaceType || "-");
+
+            roadRecords.push({
+                roadId,
+                roadName,
+                municipality: normalizeMunicipalityDisplayName(selectedMunicipality, "Unknown"),
+                location: resolvedLocation,
+                surfaceType: formattedSurfaceType,
+                lengthKm,
+                condition: ["good", "fair", "poor", "bad"].includes(selectedCondition) ? selectedCondition : "unknown",
+                __roadNormalized: true,
+            });
+
+            roadMunicipalityPageState.set(normalizeMunicipalityName(selectedMunicipality), 1);
+            refreshRoadMunicipalityOptions();
+            if (typeof refreshRoadRegister === "function") {
+                refreshRoadRegister();
+            }
+            persistMaintenanceState();
+            closeRoadAddModal();
+        });
+    }
+
+    const parseSelectedRoadFiles = async (selectedFiles) => {
+        const parsedRows = [];
+        const skippedFiles = [];
+
+        for (const file of selectedFiles) {
+            try {
+                const rawRows = await parseRoadFile(file);
+                if (!rawRows.length) {
+                    skippedFiles.push(file.name);
+                    continue;
+                }
+
+                rawRows.forEach((rawRow) => {
+                    const normalizedRecord = rawRow && rawRow.__roadNormalized
+                        ? rawRow
+                        : normalizeRoadRecord(rawRow);
+                    if (normalizedRecord) {
+                        parsedRows.push(normalizedRecord);
+                    }
+                });
+            } catch (error) {
+                skippedFiles.push(file.name);
+            }
+        }
+
+        return { parsedRows, skippedFiles };
+    };
+
+    const getConditionFormValue = (conditionValue) => {
+        const normalized = normalizeStatus(conditionValue).replaceAll("_", " ");
+        if (normalized.includes("good")) return "good";
+        if (normalized.includes("fair")) return "fair";
+        if (normalized.includes("poor")) return "poor";
+        if (normalized.includes("bad")) return "bad";
+        return "unknown";
+    };
+
+    const getMunicipalityRecordIndexes = (municipalityKey) => {
+        const normalizedKey = normalizeMunicipalityName(municipalityKey);
+        const recordIndexes = [];
+        roadRecords.forEach((record, recordIndex) => {
+            if (normalizeMunicipalityName(record.municipality || "") === normalizedKey) {
+                recordIndexes.push(recordIndex);
+            }
+        });
+        return recordIndexes;
+    };
+
+    const populateRoadEditForm = (recordIndex) => {
+        const record = roadRecords[recordIndex];
+        if (!record) {
+            return;
+        }
+
+        if (roadEditRoadIdInput) roadEditRoadIdInput.value = String(record.roadId || "");
+        if (roadEditRoadNameInput) roadEditRoadNameInput.value = String(record.roadName || "");
+        if (roadEditLengthInput) {
+            roadEditLengthInput.value = typeof record.lengthKm === "number" && Number.isFinite(record.lengthKm)
+                ? String(record.lengthKm)
+                : "";
+        }
+        if (roadEditConditionInput) roadEditConditionInput.value = getConditionFormValue(record.condition);
+        if (roadEditSurfaceTypeInput) roadEditSurfaceTypeInput.value = String(record.surfaceType || "");
+    };
+
+    const closeRoadEditModal = () => {
+        if (!roadEditModal) {
+            return;
+        }
+        roadEditModal.hidden = true;
+        editingMunicipalityKey = "";
+        editingMunicipalityName = "";
+        if (roadEditForm) {
+            roadEditForm.reset();
+        }
+        if (roadEditRecordSelect) {
+            roadEditRecordSelect.innerHTML = "";
+        }
+        setBodyScrollLock();
+    };
+
+    const showMunicipalityToast = (municipalityKey, message) => {
+        const normalizedKey = normalizeMunicipalityName(municipalityKey);
+        const toastMessage = String(message || "").trim();
+        if (!normalizedKey || !toastMessage) {
+            return;
+        }
+
+        roadMunicipalityToastState.set(normalizedKey, toastMessage);
+        const existingTimer = roadMunicipalityToastTimers.get(normalizedKey);
+        if (existingTimer) {
+            window.clearTimeout(existingTimer);
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            roadMunicipalityToastState.delete(normalizedKey);
+            roadMunicipalityToastTimers.delete(normalizedKey);
+            if (typeof refreshRoadRegister === "function") {
+                refreshRoadRegister();
+            }
+        }, 3200);
+
+        roadMunicipalityToastTimers.set(normalizedKey, timeoutId);
+    };
+
+    const openRoadEditModal = (municipalityKey, municipalityName) => {
+        if (!roadEditModal || !roadEditRecordSelect) {
+            return;
+        }
+
+        const normalizedKey = normalizeMunicipalityName(municipalityKey || municipalityName);
+        const recordIndexes = getMunicipalityRecordIndexes(normalizedKey);
+        if (!recordIndexes.length) {
+            window.alert("No road records found for this municipality.");
+            return;
+        }
+
+        editingMunicipalityKey = normalizedKey;
+        editingMunicipalityName = municipalityName || roadRecords[recordIndexes[0]]?.municipality || "Unknown";
+
+        roadEditRecordSelect.innerHTML = recordIndexes
+            .map((recordIndex, optionIndex) => {
+                const record = roadRecords[recordIndex] || {};
+                const optionLabel = `${record.roadId || "-"}-${record.roadName || `Road ${optionIndex + 1}`}`;
+                return `<option value="${recordIndex}">${escapeHtml(optionLabel)}</option>`;
+            })
+            .join("");
+
+        roadEditRecordSelect.value = String(recordIndexes[0]);
+        populateRoadEditForm(recordIndexes[0]);
+        if (roadEditSubtitle) {
+            roadEditSubtitle.textContent = `Edit road data for ${editingMunicipalityName}`;
+        }
+
+        roadEditModal.hidden = false;
+        setBodyScrollLock();
+    };
+
+    closeRoadEditModalButtons.forEach((button) => {
+        button.addEventListener("click", closeRoadEditModal);
+    });
+
+    if (roadEditRecordSelect) {
+        roadEditRecordSelect.addEventListener("change", () => {
+            const selectedIndex = Number.parseInt(roadEditRecordSelect.value, 10);
+            if (Number.isInteger(selectedIndex)) {
+                populateRoadEditForm(selectedIndex);
+            }
+        });
+    }
+
+    if (roadEditForm && roadEditRecordSelect) {
+        roadEditForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+
+            const selectedIndex = Number.parseInt(roadEditRecordSelect.value, 10);
+            if (!Number.isInteger(selectedIndex) || !roadRecords[selectedIndex]) {
+                return;
+            }
+
+            const targetRecord = roadRecords[selectedIndex];
+            const updatedRoadId = (roadEditRoadIdInput?.value || "").trim() || "-";
+            const updatedRoadName = (roadEditRoadNameInput?.value || "").trim();
+            const updatedLengthKm = parseNumber((roadEditLengthInput?.value || "").trim());
+            const selectedCondition = String(roadEditConditionInput?.value || "unknown")
+                .trim()
+                .toLowerCase();
+            const updatedCondition = ["good", "fair", "poor", "bad"].includes(selectedCondition)
+                ? selectedCondition
+                : "unknown";
+            const updatedSurfaceType = (roadEditSurfaceTypeInput?.value || "").trim() || "-";
+            const originalSnapshot = {
+                roadId: String(targetRecord.roadId || "-"),
+                roadName: String(targetRecord.roadName || "-"),
+                lengthKm: typeof targetRecord.lengthKm === "number" && Number.isFinite(targetRecord.lengthKm)
+                    ? targetRecord.lengthKm
+                    : null,
+                condition: getConditionFormValue(targetRecord.condition),
+                surfaceType: String(targetRecord.surfaceType || "-"),
+            };
+
+            if (!updatedRoadName) {
+                if (roadEditRoadNameInput) {
+                    roadEditRoadNameInput.focus();
+                }
+                return;
+            }
+
+            const municipalityKey = normalizeMunicipalityName(editingMunicipalityName || targetRecord.municipality || "");
+            const originalRoadIdKey = normalizeKey(targetRecord.roadId || "");
+            const originalRoadNameKey = normalizeKey(targetRecord.roadName || "");
+
+            let updatedCount = 0;
+            roadRecords.forEach((record) => {
+                const sameMunicipality = normalizeMunicipalityName(record.municipality || "") === municipalityKey;
+                const sameRoadId = normalizeKey(record.roadId || "") === originalRoadIdKey;
+                const sameRoadName = normalizeKey(record.roadName || "") === originalRoadNameKey;
+
+                if (!sameMunicipality || !sameRoadId || !sameRoadName) {
+                    return;
+                }
+
+                record.roadId = updatedRoadId;
+                record.roadName = updatedRoadName;
+                record.lengthKm = updatedLengthKm;
+                record.condition = updatedCondition;
+                record.surfaceType = updatedSurfaceType;
+                record.municipality = editingMunicipalityName || record.municipality || "Unknown";
+                record.__roadNormalized = true;
+                updatedCount += 1;
+            });
+
+            if (!updatedCount) {
+                roadRecords.forEach((record) => {
+                    const sameMunicipality = normalizeMunicipalityName(record.municipality || "") === municipalityKey;
+                    const sameRoadName = normalizeKey(record.roadName || "") === originalRoadNameKey;
+                    if (!sameMunicipality || !sameRoadName) {
+                        return;
+                    }
+
+                    record.roadId = updatedRoadId;
+                    record.roadName = updatedRoadName;
+                    record.lengthKm = updatedLengthKm;
+                    record.condition = updatedCondition;
+                    record.surfaceType = updatedSurfaceType;
+                    record.municipality = editingMunicipalityName || record.municipality || "Unknown";
+                    record.__roadNormalized = true;
+                    updatedCount += 1;
+                });
+            }
+
+            if (!updatedCount) {
+                targetRecord.roadId = updatedRoadId;
+                targetRecord.roadName = updatedRoadName;
+                targetRecord.lengthKm = updatedLengthKm;
+                targetRecord.condition = updatedCondition;
+                targetRecord.surfaceType = updatedSurfaceType;
+                targetRecord.municipality = editingMunicipalityName || targetRecord.municipality || "Unknown";
+                targetRecord.__roadNormalized = true;
+            }
+
+            const selectedOption = roadEditRecordSelect.selectedOptions[0];
+            if (selectedOption) {
+                selectedOption.textContent = `${updatedRoadId}-${updatedRoadName}`;
+            }
+
+            roadMunicipalityPageState.set(normalizeMunicipalityName(editingMunicipalityName || targetRecord.municipality), 1);
+            refreshRoadMunicipalityOptions();
+            const changeMessages = [];
+            if (normalizeKey(originalSnapshot.roadId) !== normalizeKey(updatedRoadId)) {
+                changeMessages.push(`Road ID -> ${updatedRoadId}`);
+            }
+            if (normalizeKey(originalSnapshot.roadName) !== normalizeKey(updatedRoadName)) {
+                changeMessages.push(`Road Name -> ${updatedRoadName}`);
+            }
+            const updatedLengthValue = typeof updatedLengthKm === "number" && Number.isFinite(updatedLengthKm) ? updatedLengthKm : null;
+            const isLengthChanged = (originalSnapshot.lengthKm === null && updatedLengthValue !== null)
+                || (originalSnapshot.lengthKm !== null && updatedLengthValue === null)
+                || (originalSnapshot.lengthKm !== null && updatedLengthValue !== null
+                    && Math.abs(originalSnapshot.lengthKm - updatedLengthValue) > 0.0001);
+            if (isLengthChanged) {
+                const formattedLength = updatedLengthValue === null ? "-" : updatedLengthValue.toFixed(2);
+                changeMessages.push(`Length -> ${formattedLength} km`);
+            }
+            if (originalSnapshot.condition !== updatedCondition) {
+                changeMessages.push(`Condition -> ${toTitleCase(updatedCondition)}`);
+            }
+            if (normalizeKey(originalSnapshot.surfaceType) !== normalizeKey(updatedSurfaceType)) {
+                changeMessages.push(`Surface -> ${updatedSurfaceType}`);
+            }
+
+            const roadDetail = normalizeKey(originalSnapshot.roadName) !== normalizeKey(updatedRoadName)
+                ? `Road: ${originalSnapshot.roadName} -> ${updatedRoadName}`
+                : `Road: ${updatedRoadName}`;
+
+            const toastSummary = changeMessages.length
+                ? `${roadDetail}; Updated ${changeMessages.join(", ")}`
+                : `${roadDetail}; No field changes detected`;
+            showMunicipalityToast(editingMunicipalityName || targetRecord.municipality, toastSummary);
+            if (typeof refreshRoadRegister === "function") {
+                refreshRoadRegister();
+            }
+            persistMaintenanceState();
+            closeRoadEditModal();
+        });
+    }
+
+    const closeRoadDeleteModal = () => {
+        if (!roadDeleteModal) {
+            return;
+        }
+        roadDeleteModal.hidden = true;
+        deletingMunicipalityKey = "";
+        deletingMunicipalityName = "";
+        if (roadDeleteForm) {
+            roadDeleteForm.reset();
+        }
+        if (roadDeleteRecordSelect) {
+            roadDeleteRecordSelect.innerHTML = "";
+        }
+        setBodyScrollLock();
+    };
+
+    const openRoadDeleteModal = (municipalityKey, municipalityName) => {
+        if (!roadDeleteModal || !roadDeleteRecordSelect) {
+            return;
+        }
+
+        const normalizedKey = normalizeMunicipalityName(municipalityKey || municipalityName);
+        const recordIndexes = getMunicipalityRecordIndexes(normalizedKey);
+        if (!recordIndexes.length) {
+            window.alert("No road records found for this municipality.");
+            return;
+        }
+
+        deletingMunicipalityKey = normalizedKey;
+        deletingMunicipalityName = municipalityName || roadRecords[recordIndexes[0]]?.municipality || "Unknown";
+
+        roadDeleteRecordSelect.innerHTML = recordIndexes
+            .map((recordIndex, optionIndex) => {
+                const record = roadRecords[recordIndex] || {};
+                const optionLabel = `${record.roadId || "-"}-${record.roadName || `Road ${optionIndex + 1}`}`;
+                return `<option value="${recordIndex}">${escapeHtml(optionLabel)}</option>`;
+            })
+            .join("");
+
+        if (roadDeleteSubtitle) {
+            roadDeleteSubtitle.textContent = `Delete a road record from ${deletingMunicipalityName}`;
+        }
+
+        roadDeleteModal.hidden = false;
+        setBodyScrollLock();
+    };
+
+    closeRoadDeleteModalButtons.forEach((button) => {
+        button.addEventListener("click", closeRoadDeleteModal);
+    });
+
+    if (roadDeleteForm && roadDeleteRecordSelect) {
+        roadDeleteForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+
+            const selectedIndex = Number.parseInt(roadDeleteRecordSelect.value, 10);
+            if (!Number.isInteger(selectedIndex) || !roadRecords[selectedIndex]) {
+                return;
+            }
+
+            const targetRecord = roadRecords[selectedIndex];
+            const roadLabel = `${targetRecord.roadId || "-"}-${targetRecord.roadName || "-"}`;
+            const shouldDelete = window.confirm(`Are you sure to delete this data?\n${roadLabel}`);
+            if (!shouldDelete) {
+                return;
+            }
+
+            roadRecords.splice(selectedIndex, 1);
+
+            const municipalityName = deletingMunicipalityName || targetRecord.municipality || "Unknown";
+            roadMunicipalityPageState.set(normalizeMunicipalityName(municipalityName), 1);
+            refreshRoadMunicipalityOptions();
+            if (typeof refreshRoadRegister === "function") {
+                refreshRoadRegister();
+            }
+            showMunicipalityToast(municipalityName, `Deleted Road: ${targetRecord.roadName || targetRecord.roadId || "-"}`);
+            persistMaintenanceState();
+            closeRoadDeleteModal();
+        });
+    }
+
+    if (roadMunicipalityList) {
+        roadMunicipalityList.addEventListener("click", (event) => {
+            const updateButton = event.target.closest(".js-road-municipality-update");
+            if (updateButton) {
+                const municipalityKey = String(updateButton.dataset.municipalityKey || "").trim();
+                const municipalityName = String(updateButton.dataset.municipalityName || "").trim();
+                openRoadEditModal(municipalityKey, municipalityName);
+                return;
+            }
+
+            const rowDeleteButton = event.target.closest(".js-road-row-delete");
+            if (rowDeleteButton) {
+                const recordIndex = Number.parseInt(String(rowDeleteButton.dataset.recordIndex || ""), 10);
+                if (!Number.isInteger(recordIndex) || !roadRecords[recordIndex]) {
+                    return;
+                }
+
+                const targetRecord = roadRecords[recordIndex];
+                const roadLabel = `${targetRecord.roadId || "-"}-${targetRecord.roadName || "-"}`;
+                const shouldDelete = window.confirm(`Are you sure to delete this data?\n${roadLabel}`);
+                if (!shouldDelete) {
+                    return;
+                }
+
+                roadRecords.splice(recordIndex, 1);
+
+                const municipalityName = String(
+                    rowDeleteButton.dataset.municipalityName || targetRecord.municipality || "Unknown"
+                ).trim() || "Unknown";
+
+                roadMunicipalityPageState.set(normalizeMunicipalityName(municipalityName), 1);
+                refreshRoadMunicipalityOptions();
+                if (typeof refreshRoadRegister === "function") {
+                    refreshRoadRegister();
+                }
+                showMunicipalityToast(
+                    municipalityName,
+                    `Deleted Road: ${targetRecord.roadName || targetRecord.roadId || "-"}`
+                );
+                persistMaintenanceState();
+                return;
+            }
+
+            const button = event.target.closest(".js-road-page-btn");
+            if (!button) {
+                return;
+            }
+
+            const pageKey = String(button.dataset.pageKey || "").trim();
+            const direction = String(button.dataset.pageDirection || "").trim();
+            if (!pageKey) {
+                return;
+            }
+
+            const currentPage = roadMunicipalityPageState.get(pageKey) || 1;
+            const nextPage = direction === "next" ? currentPage + 1 : currentPage - 1;
+            roadMunicipalityPageState.set(pageKey, Math.max(1, nextPage));
+
+            if (typeof refreshRoadRegister === "function") {
+                refreshRoadRegister();
+            }
+        });
+    }
+
+    const setRoadSearchExpanded = (expand) => {
+        if (!roadSearchShell) {
+            return;
+        }
+        const hasSearchText = Boolean((roadSearchInput?.value || "").trim());
+        const shouldExpand = Boolean(expand || hasSearchText);
+        roadSearchShell.classList.toggle("is-expanded", shouldExpand);
+        if (roadSearchToggle) {
+            roadSearchToggle.setAttribute("aria-expanded", shouldExpand ? "true" : "false");
+        }
+    };
+
+    if (roadSearchShell && roadSearchInput) {
+        setRoadSearchExpanded(Boolean((roadSearchInput.value || "").trim()));
+
+        if (roadSearchToggle) {
+            roadSearchToggle.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const isExpanded = roadSearchShell.classList.contains("is-expanded");
+                const hasSearchText = Boolean((roadSearchInput.value || "").trim());
+                if (isExpanded && !hasSearchText) {
+                    setRoadSearchExpanded(false);
+                    return;
+                }
+                setRoadSearchExpanded(true);
+                roadSearchInput.focus();
+            });
+        }
+
+        roadSearchInput.addEventListener("focus", () => {
+            setRoadSearchExpanded(true);
+        });
+
+        roadSearchInput.addEventListener("keydown", (event) => {
+            if (event.key !== "Escape") {
+                return;
+            }
+            event.stopPropagation();
+            if ((roadSearchInput.value || "").trim()) {
+                roadSearchInput.value = "";
+                if (typeof refreshRoadRegister === "function") {
+                    refreshRoadRegister();
+                }
+            }
+            setRoadSearchExpanded(false);
+            roadSearchInput.blur();
+        });
+
+        document.addEventListener("click", (event) => {
+            if (!roadSearchShell.contains(event.target)) {
+                setRoadSearchExpanded(false);
+            }
+        });
+    }
+
     if (roadUploadInput) {
+        roadUploadInput.accept = roadAcceptedUploadTypes;
         roadUploadInput.addEventListener("change", async (event) => {
             const selectedFiles = Array.from(event.target.files || []);
             if (!selectedFiles.length) {
                 return;
             }
 
-            const parsedRows = [];
-            const skippedFiles = [];
-
-            for (const file of selectedFiles) {
-                try {
-                    const rawRows = await parseRoadFile(file);
-                    if (!rawRows.length) {
-                        skippedFiles.push(file.name);
-                        continue;
-                    }
-
-                    rawRows.forEach((rawRow) => {
-                        const normalizedRecord = rawRow && rawRow.__roadNormalized
-                            ? rawRow
-                            : normalizeRoadRecord(rawRow);
-                        if (normalizedRecord) {
-                            parsedRows.push(normalizedRecord);
-                        }
-                    });
-                } catch (error) {
-                    skippedFiles.push(file.name);
-                }
-            }
+            const { parsedRows, skippedFiles } = await parseSelectedRoadFiles(selectedFiles);
 
             if (parsedRows.length) {
                 roadRecords.push(...parsedRows);
+                refreshRoadMunicipalityOptions();
                 if (typeof refreshRoadRegister === "function") {
                     refreshRoadRegister();
                 }
+                persistMaintenanceState();
             }
 
             if (skippedFiles.length) {
@@ -1213,9 +2153,1129 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (roadSearchInput) {
         roadSearchInput.addEventListener("input", () => {
+            setRoadSearchExpanded(true);
             if (typeof refreshRoadRegister === "function") {
                 refreshRoadRegister();
             }
+        });
+    }
+
+    const refreshContractorSummary = () => {
+        if (!contractorManagement) {
+            return;
+        }
+
+        const total = contractorRows.length;
+        const active = contractorRows.filter((row) => String(row.dataset.status || "").toLowerCase() === "active").length;
+        const blacklisted = contractorRows.filter((row) => String(row.dataset.status || "").toLowerCase() === "blacklisted").length;
+
+        const ratings = contractorRows
+            .map((row) => Number.parseFloat(row.dataset.rating || "0"))
+            .filter((value) => Number.isFinite(value));
+        const averageRating = ratings.length
+            ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length
+            : 0;
+
+        if (contractorStatTotal) contractorStatTotal.textContent = String(total);
+        if (contractorStatActive) contractorStatActive.textContent = String(active);
+        if (contractorStatRating) contractorStatRating.textContent = averageRating.toFixed(1);
+        if (contractorStatBlacklisted) contractorStatBlacklisted.textContent = String(blacklisted);
+    };
+
+    const getContractorDropdownFilterValue = (filterElement, fallbackValue = "all") => {
+        if (!filterElement) {
+            return fallbackValue;
+        }
+
+        if (typeof filterElement.value !== "undefined") {
+            return String(filterElement.value || fallbackValue).trim().toLowerCase();
+        }
+
+        const selectedOption = filterElement.querySelector(".dropdown-option.is-selected");
+        if (!selectedOption) {
+            return fallbackValue;
+        }
+
+        const explicitValue = String(selectedOption.dataset.value || "").trim();
+        if (explicitValue) {
+            return explicitValue.toLowerCase();
+        }
+
+        const labelValue = String(selectedOption.textContent || "").trim().toLowerCase();
+        if (!labelValue) {
+            return fallbackValue;
+        }
+        if (labelValue === "all status" || labelValue === "all pcab") {
+            return "all";
+        }
+
+        return labelValue.replace(/^pcab\s+/, "").trim();
+    };
+
+    const updateContractorDropdownFilterState = (filterElement) => {
+        if (!filterElement || !filterElement.classList.contains("contractor-dropdown")) {
+            return;
+        }
+        const selectedValue = getContractorDropdownFilterValue(filterElement, "all");
+        filterElement.classList.toggle("is-filtered", selectedValue !== "all");
+    };
+
+    const showContractorSuccessToast = (message, variant = "success") => {
+        if (!contractorSuccessToast) {
+            return;
+        }
+
+        contractorSuccessToast.classList.toggle("is-delete", variant === "delete");
+        contractorSuccessToast.textContent = String(message || "Contractor added successfully.");
+        contractorSuccessToast.hidden = false;
+
+        if (contractorSuccessToastTimer) {
+            clearTimeout(contractorSuccessToastTimer);
+        }
+        contractorSuccessToastTimer = window.setTimeout(() => {
+            contractorSuccessToast.hidden = true;
+            contractorSuccessToastTimer = null;
+        }, 2800);
+    };
+
+    const refreshContractorTable = () => {
+        if (!contractorManagement) {
+            return;
+        }
+
+        const searchValue = String(contractorSearchInput?.value || "").trim().toLowerCase();
+        const statusValue = getContractorDropdownFilterValue(contractorStatusFilter, "all");
+        const pcabValue = getContractorDropdownFilterValue(contractorPcabFilter, "all");
+
+        let visibleCount = 0;
+        contractorRows.forEach((row) => {
+            const rowStatus = String(row.dataset.status || "").toLowerCase();
+            const rowPcab = String(row.dataset.pcab || "").toLowerCase();
+            const searchableText = String(row.dataset.search || row.textContent || "").toLowerCase();
+
+            const matchesSearch = !searchValue || searchableText.includes(searchValue);
+            const matchesStatus = statusValue === "all" || rowStatus === statusValue;
+            const matchesPcab = pcabValue === "all" || rowPcab === pcabValue;
+            const shouldShow = matchesSearch && matchesStatus && matchesPcab;
+
+            row.style.display = shouldShow ? "" : "none";
+            if (shouldShow) {
+                visibleCount += 1;
+            }
+        });
+
+        if (contractorFoundCount) {
+            contractorFoundCount.textContent = String(visibleCount);
+        }
+        if (contractorEmptyRow) {
+            contractorEmptyRow.hidden = visibleCount !== 0;
+        }
+    };
+
+    const closeContractorFloatCard = () => {
+        if (!contractorFloatCard) {
+            return;
+        }
+        contractorFloatCard.hidden = true;
+        setBodyScrollLock();
+    };
+
+    const closeContractorAddModal = () => {
+        if (!contractorAddModal) {
+            return;
+        }
+        contractorAddModal.hidden = true;
+        if (contractorAddForm) {
+            contractorAddForm.reset();
+        }
+        setBodyScrollLock();
+    };
+
+    const openContractorAddModal = () => {
+        if (!contractorAddModal) {
+            return;
+        }
+
+        closeContractorDeleteToast();
+        contractorAddModal.hidden = false;
+        setBodyScrollLock();
+
+        const firstField = contractorAddForm?.querySelector('[name="company_name"]');
+        if (firstField) {
+            firstField.focus();
+            firstField.select();
+        }
+    };
+
+    const createContractorRowElement = (record) => {
+        const name = String(record.name || "").trim() || "Contractor";
+        const tradeName = String(record.tradeName || "").trim();
+        const tin = String(record.tin || "").trim();
+        const philgeps = String(record.philgeps || "").trim();
+        const pcab = String(record.pcab || "").trim().toLowerCase();
+        const status = String(record.status || "active").trim().toLowerCase();
+        const contracts = String(record.contracts || "0").trim() || "0";
+        const value = String(record.value || "P 0").trim() || "P 0";
+        const rating = String(record.rating || "").trim();
+        const classification = String(record.classification || "").trim();
+        const licenseExpiry = String(record.licenseExpiry || "").trim();
+        const contactPerson = String(record.contactPerson || "").trim();
+        const contactEmail = String(record.contactEmail || "").trim();
+        const contactPhone = String(record.contactPhone || "").trim();
+        const contactAddress = String(record.contactAddress || "").trim();
+        const pcabLicense = String(record.pcabLicense || "").trim();
+        const address = String(record.address || "").trim();
+        const contactCity = String(record.contactCity || "").trim();
+        const contactProvince = String(record.contactProvince || "").trim();
+        const contactMobile = String(record.contactMobile || "").trim();
+        const remarks = String(record.remarks || "").trim();
+
+        const statusLabel = getContractorStatusLabel(status);
+        const statusClassName = getContractorStatusClassName(status);
+        const pcabSummary = pcab ? pcab.toUpperCase() : "-";
+        const searchText = [
+            name,
+            tradeName,
+            tin,
+            philgeps,
+            pcabLicense,
+            pcab ? `PCAB ${pcab.toUpperCase()}` : "",
+            classification,
+            address,
+            contactCity,
+            contactProvince,
+            contactPerson,
+            contactEmail,
+            contactPhone,
+            contactMobile,
+            statusLabel,
+        ].join(" ");
+
+        const rowElement = document.createElement("article");
+        rowElement.className = "contractor-list-card js-contractor-row";
+        rowElement.dataset.name = name;
+        rowElement.dataset.tradeName = tradeName;
+        rowElement.dataset.tin = tin;
+        rowElement.dataset.philgeps = philgeps;
+        rowElement.dataset.pcab = pcab;
+        rowElement.dataset.status = status;
+        rowElement.dataset.contracts = contracts;
+        rowElement.dataset.value = value;
+        rowElement.dataset.rating = rating;
+        rowElement.dataset.classification = classification;
+        rowElement.dataset.licenseExpiry = licenseExpiry;
+        rowElement.dataset.contactPerson = contactPerson;
+        rowElement.dataset.contactEmail = contactEmail;
+        rowElement.dataset.contactPhone = contactPhone;
+        rowElement.dataset.contactAddress = contactAddress;
+        rowElement.dataset.pcabLicense = pcabLicense;
+        rowElement.dataset.address = address;
+        rowElement.dataset.contactCity = contactCity;
+        rowElement.dataset.contactProvince = contactProvince;
+        rowElement.dataset.contactMobile = contactMobile;
+        rowElement.dataset.remarks = remarks;
+        rowElement.dataset.search = searchText;
+
+        rowElement.innerHTML = `
+            <div class="contractor-list-main">
+                <div class="contractor-list-title-row">
+                    <button type="button" class="contractor-name contractor-name-btn js-contractor-open-card">${escapeHtml(name)}</button>
+                    <span class="contractor-status-badge ${escapeHtml(statusClassName)}">${escapeHtml(statusLabel)}</span>
+                </div>
+                <p class="contractor-list-line contractor-list-line--muted">TIN: ${escapeHtml(tin || "-")} | PhilGEPS: ${escapeHtml(philgeps || "-")} | PCAB ${escapeHtml(pcabSummary)}</p>
+                <p class="contractor-list-line">
+                    <span><span class="material-symbols-outlined" aria-hidden="true">description</span> ${escapeHtml(contracts)} contracts</span>
+                    <span>Value: <strong>${escapeHtml(value)}</strong></span>
+                </p>
+            </div>
+
+            <div class="contractor-actions">
+                <button type="button" class="contractor-icon-btn js-contractor-open-card" aria-label="View contractor">
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                </button>
+                <button type="button" class="contractor-icon-btn contractor-icon-btn-star js-contractor-open-eval" aria-label="Evaluate contractor">
+                    <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                </button>
+                <button type="button" class="contractor-icon-btn js-contractor-open-edit" aria-label="Edit contractor">
+                    <span class="material-symbols-outlined" aria-hidden="true">edit_square</span>
+                </button>
+                <button type="button" class="contractor-icon-btn js-contractor-delete" aria-label="Delete contractor">
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                </button>
+            </div>
+        `;
+
+        return rowElement;
+    };
+
+    const closeContractorDeleteToast = () => {
+        if (!contractorDeleteToast) {
+            return;
+        }
+        contractorDeleteToast.hidden = true;
+        deletingContractorRow = null;
+    };
+
+    const openContractorDeleteToast = (row) => {
+        if (!contractorDeleteToast || !row) {
+            return;
+        }
+
+        deletingContractorRow = row;
+        const contractorName = String(row.dataset.name || row.querySelector(".contractor-name")?.textContent || "this contractor").trim();
+        if (contractorDeleteMessage) {
+            contractorDeleteMessage.textContent = `Are you sure to delete data? ${contractorName}`;
+        }
+
+        contractorDeleteToast.hidden = false;
+    };
+
+    const confirmContractorDelete = () => {
+        if (!deletingContractorRow) {
+            closeContractorDeleteToast();
+            return;
+        }
+
+        const row = deletingContractorRow;
+        const deletedContractorName = String(row.dataset.name || row.querySelector(".contractor-name")?.textContent || "Contractor").trim() || "Contractor";
+        deletingContractorRow = null;
+
+        if (editingContractorRow === row) {
+            closeContractorEditModal();
+        }
+
+        const rowIndex = contractorRows.indexOf(row);
+        if (rowIndex >= 0) {
+            contractorRows.splice(rowIndex, 1);
+        }
+
+        row.remove();
+        closeContractorFloatCard();
+        closeContractorDeleteToast();
+        refreshContractorSummary();
+        refreshContractorTable();
+        persistMaintenanceState();
+        showContractorSuccessToast(`Contractor "${deletedContractorName}" deleted.`, "delete");
+    };
+
+    contractorDeleteCancelButtons.forEach((button) => {
+        button.addEventListener("click", closeContractorDeleteToast);
+    });
+
+    if (contractorDeleteConfirmButton) {
+        contractorDeleteConfirmButton.addEventListener("click", confirmContractorDelete);
+    }
+
+    if (contractorAddOpenButton) {
+        contractorAddOpenButton.addEventListener("click", openContractorAddModal);
+    }
+
+    closeContractorAddButtons.forEach((button) => {
+        button.addEventListener("click", closeContractorAddModal);
+    });
+
+    if (contractorAddForm) {
+        contractorAddForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+
+            const companyNameField = contractorAddForm.querySelector('[name="company_name"]');
+            const formData = new FormData(contractorAddForm);
+            const companyName = getFormDataText(formData, "company_name");
+            if (!companyName) {
+                if (companyNameField) {
+                    companyNameField.focus();
+                }
+                return;
+            }
+
+            const tradeName = getFormDataText(formData, "trade_name");
+            const tin = getFormDataText(formData, "tin");
+            const philgeps = getFormDataText(formData, "philgeps");
+            const pcabLicense = getFormDataText(formData, "pcab_license");
+            const pcabCategory = getFormDataText(formData, "pcab_category").toLowerCase();
+            const licenseExpiryInput = getFormDataText(formData, "license_expiry");
+            const licenseExpiryLabel = toContractorLicenseExpiryLabel(licenseExpiryInput) || "-";
+            const classification = getFormDataText(formData, "pcab_classification");
+            const address = getFormDataText(formData, "address");
+            const city = getFormDataText(formData, "city");
+            const province = getFormDataText(formData, "province");
+            const contactPerson = getFormDataText(formData, "contact_person");
+            const email = getFormDataText(formData, "email");
+            const phone = getFormDataText(formData, "phone");
+            const mobile = getFormDataText(formData, "mobile");
+            const remarks = getFormDataText(formData, "remarks");
+            const contactAddress = [address, city, province].filter(Boolean).join(", ");
+
+            const newRow = createContractorRowElement({
+                name: companyName,
+                tradeName,
+                tin,
+                philgeps,
+                pcab: pcabCategory,
+                status: "active",
+                contracts: "0",
+                value: "P 0",
+                rating: "",
+                classification,
+                licenseExpiry: licenseExpiryLabel,
+                contactPerson,
+                contactEmail: email,
+                contactPhone: phone || mobile,
+                contactAddress,
+                pcabLicense,
+                address,
+                contactCity: city,
+                contactProvince: province,
+                contactMobile: mobile,
+                remarks,
+            });
+
+            if (contractorCardList) {
+                if (contractorEmptyRow && contractorEmptyRow.parentElement === contractorCardList) {
+                    contractorCardList.insertBefore(newRow, contractorEmptyRow);
+                } else {
+                    contractorCardList.prepend(newRow);
+                }
+            }
+            contractorRows.unshift(newRow);
+
+            refreshContractorSummary();
+            refreshContractorTable();
+            persistMaintenanceState();
+            closeContractorAddModal();
+            showContractorSuccessToast(`Contractor "${companyName}" created.`);
+        });
+    }
+
+    const contractorStatusClassNames = ["is-active", "is-pending", "is-blacklisted", "is-suspended", "is-inactive"];
+
+    const getContractorStatusLabel = (statusValue) => {
+        const normalized = normalizeStatus(statusValue);
+        if (normalized === "active") return "Active";
+        if (normalized === "pending") return "Pending";
+        if (normalized === "blacklisted") return "Blacklisted";
+        if (normalized === "suspended") return "Suspended";
+        if (normalized === "inactive") return "Inactive";
+        return toTitleCase(String(statusValue || "Unknown").replaceAll("_", " "));
+    };
+
+    const getContractorStatusClassName = (statusValue) => {
+        const normalized = normalizeStatus(statusValue);
+        if (normalized === "active") return "is-active";
+        if (normalized === "pending") return "is-pending";
+        if (normalized === "blacklisted") return "is-blacklisted";
+        if (normalized === "suspended") return "is-suspended";
+        if (normalized === "inactive") return "is-inactive";
+        return "";
+    };
+
+    const applyContractorStatusBadge = (badgeElement, statusValue) => {
+        if (!badgeElement) {
+            return;
+        }
+
+        const nextLabel = getContractorStatusLabel(statusValue);
+        const nextClassName = getContractorStatusClassName(statusValue);
+
+        badgeElement.textContent = nextLabel;
+        badgeElement.classList.remove(...contractorStatusClassNames);
+        if (nextClassName) {
+            badgeElement.classList.add(nextClassName);
+        }
+    };
+
+    const toContractorInputDate = (value) => {
+        const rawValue = String(value || "").trim();
+        if (!rawValue) {
+            return "";
+        }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
+            return rawValue;
+        }
+        const parsedDate = new Date(rawValue);
+        if (Number.isNaN(parsedDate.getTime())) {
+            return "";
+        }
+        const year = parsedDate.getFullYear();
+        const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+        const day = String(parsedDate.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
+    const toContractorLicenseExpiryLabel = (value) => {
+        const rawValue = String(value || "").trim();
+        if (!rawValue) {
+            return "";
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
+            return rawValue;
+        }
+
+        const [yearText, monthText, dayText] = rawValue.split("-");
+        const year = Number.parseInt(yearText, 10);
+        const month = Number.parseInt(monthText, 10);
+        const day = Number.parseInt(dayText, 10);
+        const parsedDate = new Date(year, month - 1, day);
+
+        if (Number.isNaN(parsedDate.getTime())) {
+            return rawValue;
+        }
+
+        return parsedDate.toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+        });
+    };
+
+    const getContractorFormField = (name) => contractorEditForm?.querySelector(`[name="${name}"]`) || null;
+
+    const setContractorFormValue = (name, value) => {
+        const field = getContractorFormField(name);
+        if (!field) {
+            return;
+        }
+        field.value = String(value || "");
+    };
+
+    const getFormDataText = (formData, key) => String(formData.get(key) || "").trim();
+
+    const inferContractorCityProvince = (addressValue) => {
+        const segments = String(addressValue || "")
+            .split(",")
+            .map((segment) => segment.trim())
+            .filter(Boolean);
+
+        if (segments.length >= 2) {
+            return {
+                city: segments[segments.length - 2],
+                province: segments[segments.length - 1],
+            };
+        }
+        return {
+            city: "",
+            province: "",
+        };
+    };
+
+    const closeContractorEditModal = () => {
+        if (!contractorEditModal) {
+            return;
+        }
+        contractorEditModal.hidden = true;
+        editingContractorRow = null;
+        setBodyScrollLock();
+    };
+
+    const openContractorEditModal = (row) => {
+        if (!contractorEditModal || !contractorEditForm || !row) {
+            return;
+        }
+
+        closeContractorDeleteToast();
+
+        editingContractorRow = row;
+        contractorEditForm.reset();
+
+        const rawAddress = String(row.dataset.address || row.dataset.contactAddress || "").trim();
+        const inferredLocation = inferContractorCityProvince(rawAddress);
+        const currentStatus = normalizeStatus(
+            row.dataset.status
+            || row.querySelector(".contractor-status-badge")?.textContent
+            || "active"
+        );
+        const allowedStatuses = new Set(["active", "pending", "blacklisted", "suspended", "inactive"]);
+        const safeStatus = allowedStatuses.has(currentStatus) ? currentStatus : "active";
+
+        setContractorFormValue("company_name", row.dataset.name || row.querySelector(".contractor-name")?.textContent.trim() || "");
+        setContractorFormValue("trade_name", row.dataset.tradeName || "");
+        setContractorFormValue("tin", row.dataset.tin || "");
+        setContractorFormValue("philgeps", row.dataset.philgeps || "");
+        setContractorFormValue("pcab_license", row.dataset.pcabLicense || "");
+        setContractorFormValue("pcab_category", String(row.dataset.pcab || "").trim().toLowerCase());
+        setContractorFormValue("license_expiry", toContractorInputDate(row.dataset.licenseExpiry || ""));
+        setContractorFormValue("pcab_classification", row.dataset.classification || "");
+        setContractorFormValue("address", row.dataset.address || rawAddress);
+        setContractorFormValue("city", row.dataset.contactCity || inferredLocation.city);
+        setContractorFormValue("province", row.dataset.contactProvince || inferredLocation.province);
+        setContractorFormValue("contact_person", row.dataset.contactPerson || "");
+        setContractorFormValue("email", row.dataset.contactEmail || "");
+        setContractorFormValue("phone", row.dataset.contactPhone || "");
+        setContractorFormValue("mobile", row.dataset.contactMobile || "");
+        setContractorFormValue("status", safeStatus);
+        setContractorFormValue("remarks", row.dataset.remarks || "");
+
+        contractorEditModal.hidden = false;
+        setBodyScrollLock();
+
+        const firstField = getContractorFormField("company_name");
+        if (firstField) {
+            firstField.focus();
+            firstField.select();
+        }
+    };
+
+    closeContractorEditButtons.forEach((button) => {
+        button.addEventListener("click", closeContractorEditModal);
+    });
+
+    if (contractorEditForm) {
+        contractorEditForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            if (!editingContractorRow) {
+                closeContractorEditModal();
+                return;
+            }
+
+            const formData = new FormData(contractorEditForm);
+            const companyName = getFormDataText(formData, "company_name");
+            if (!companyName) {
+                const nameField = getContractorFormField("company_name");
+                if (nameField) {
+                    nameField.focus();
+                }
+                return;
+            }
+
+            const tradeName = getFormDataText(formData, "trade_name");
+            const tin = getFormDataText(formData, "tin");
+            const philgeps = getFormDataText(formData, "philgeps");
+            const pcabLicense = getFormDataText(formData, "pcab_license");
+            const pcabCategory = getFormDataText(formData, "pcab_category").toLowerCase();
+            const licenseExpiryInput = getFormDataText(formData, "license_expiry");
+            const licenseExpiryLabel = toContractorLicenseExpiryLabel(licenseExpiryInput);
+            const classification = getFormDataText(formData, "pcab_classification");
+            const address = getFormDataText(formData, "address");
+            const city = getFormDataText(formData, "city");
+            const province = getFormDataText(formData, "province");
+            const contactPerson = getFormDataText(formData, "contact_person");
+            const email = getFormDataText(formData, "email");
+            const phone = getFormDataText(formData, "phone");
+            const mobile = getFormDataText(formData, "mobile");
+            const statusValue = normalizeStatus(getFormDataText(formData, "status") || "active");
+            const remarks = getFormDataText(formData, "remarks");
+            const contactAddress = [address, city, province].filter(Boolean).join(", ");
+
+            const row = editingContractorRow;
+            row.dataset.name = companyName;
+            row.dataset.tradeName = tradeName;
+            row.dataset.tin = tin;
+            row.dataset.philgeps = philgeps;
+            row.dataset.pcab = pcabCategory;
+            row.dataset.pcabLicense = pcabLicense;
+            row.dataset.licenseExpiry = licenseExpiryLabel;
+            row.dataset.classification = classification;
+            row.dataset.address = address;
+            row.dataset.contactCity = city;
+            row.dataset.contactProvince = province;
+            row.dataset.contactAddress = contactAddress;
+            row.dataset.contactPerson = contactPerson;
+            row.dataset.contactEmail = email;
+            row.dataset.contactPhone = phone;
+            row.dataset.contactMobile = mobile;
+            row.dataset.status = statusValue;
+            row.dataset.remarks = remarks;
+            row.dataset.search = [
+                companyName,
+                tradeName,
+                tin,
+                philgeps,
+                pcabLicense,
+                pcabCategory ? `PCAB ${pcabCategory.toUpperCase()}` : "",
+                classification,
+                address,
+                city,
+                province,
+                contactPerson,
+                email,
+                phone,
+                mobile,
+                getContractorStatusLabel(statusValue),
+            ].join(" ");
+
+            const rowName = row.querySelector(".contractor-name");
+            if (rowName) {
+                rowName.textContent = companyName;
+            }
+
+            const rowStatusBadge = row.querySelector(".contractor-status-badge");
+            applyContractorStatusBadge(rowStatusBadge, statusValue);
+
+            const rowMeta = row.querySelector(".contractor-list-line--muted");
+            if (rowMeta) {
+                const pcabSummary = pcabCategory ? pcabCategory.toUpperCase() : "-";
+                rowMeta.textContent = `TIN: ${tin || "-"} | PhilGEPS: ${philgeps || "-"} | PCAB ${pcabSummary}`;
+            }
+
+            refreshContractorSummary();
+            refreshContractorTable();
+            persistMaintenanceState();
+            closeContractorEditModal();
+            showContractorSuccessToast("The data has been updated.");
+        });
+    }
+
+    const parseContractorEvalScore = (value) => {
+        const parsedValue = Number.parseFloat(String(value || "").trim());
+        if (!Number.isFinite(parsedValue)) {
+            return 0;
+        }
+        return Math.max(0, Math.min(5, parsedValue));
+    };
+
+    const formatContractorEvalScore = (value) => parseContractorEvalScore(value).toFixed(1);
+    const getContractorEvalToday = () => new Date().toISOString().slice(0, 10);
+
+    const getContractorEvaluationLabel = (overallScore) => {
+        if (overallScore >= 4.5) return "Excellent";
+        if (overallScore >= 4.0) return "Very Good";
+        if (overallScore >= 3.0) return "Good";
+        if (overallScore >= 2.0) return "Needs Improvement";
+        if (overallScore > 0) return "Poor";
+        return "Not Rated";
+    };
+
+    const refreshContractorEvaluationSummary = () => {
+        if (!contractorEvalRatings.length) {
+            return;
+        }
+
+        let weightedScore = 0;
+        let totalWeight = 0;
+
+        contractorEvalRatings.forEach((ratingRow) => {
+            const input = ratingRow.querySelector(".js-contractor-eval-rating-input");
+            const score = parseContractorEvalScore(input?.value);
+            const weight = Number.parseFloat(String(ratingRow.dataset.weight || "0"));
+            if (!Number.isFinite(weight) || weight <= 0) {
+                return;
+            }
+            weightedScore += (score / 5) * weight;
+            totalWeight += weight;
+        });
+
+        const totalPercent = totalWeight ? (weightedScore / totalWeight) * 100 : 0;
+        const overallScore = totalPercent / 20;
+        const overallLabel = getContractorEvaluationLabel(overallScore);
+
+        if (contractorEvalTotal) {
+            contractorEvalTotal.textContent = `${totalPercent.toFixed(1)}%`;
+        }
+        if (contractorEvalOverall) {
+            contractorEvalOverall.textContent = overallLabel === "Not Rated"
+                ? overallLabel
+                : `${overallScore.toFixed(1)} / 5 - ${overallLabel}`;
+            contractorEvalOverall.classList.toggle("is-neutral", overallLabel === "Not Rated");
+        }
+    };
+
+    const setContractorEvalRating = (ratingRow, score, shouldRefreshSummary = true) => {
+        if (!ratingRow) {
+            return;
+        }
+
+        const quantizedScore = Math.round(Math.max(0, Math.min(5, score)) * 2) / 2;
+        const stars = ratingRow.querySelector(".js-contractor-eval-stars");
+        const input = ratingRow.querySelector(".js-contractor-eval-rating-input");
+        const valueLabel = ratingRow.querySelector(".js-contractor-eval-rating-value");
+        const scoreText = formatContractorEvalScore(quantizedScore);
+
+        if (stars) {
+            stars.style.setProperty("--rating-fill", `${(quantizedScore / 5) * 100}%`);
+            stars.dataset.score = scoreText;
+            stars.setAttribute("aria-valuenow", scoreText);
+            stars.setAttribute("aria-valuetext", `${scoreText} stars`);
+        }
+        if (input) {
+            input.value = scoreText;
+        }
+        if (valueLabel) {
+            valueLabel.textContent = `${scoreText} / 5`;
+        }
+
+        if (shouldRefreshSummary) {
+            refreshContractorEvaluationSummary();
+        }
+    };
+
+    const getContractorEvalScoreFromPointer = (event, starsElement) => {
+        if (!starsElement) {
+            return 0;
+        }
+
+        const rect = starsElement.getBoundingClientRect();
+        if (!rect.width) {
+            return 0;
+        }
+
+        const pointerX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+        const rawScore = (pointerX / rect.width) * 5;
+        return Math.round(rawScore * 2) / 2;
+    };
+
+    const closeContractorEvalModal = () => {
+        if (!contractorEvalModal) {
+            return;
+        }
+        contractorEvalModal.hidden = true;
+        setBodyScrollLock();
+    };
+
+    const resetContractorEvaluationForm = (companyName = "") => {
+        if (contractorEvalForm) {
+            contractorEvalForm.reset();
+        }
+        if (contractorEvalCompanyInput) {
+            contractorEvalCompanyInput.value = companyName;
+        }
+        if (contractorEvalDateInput) {
+            contractorEvalDateInput.value = getContractorEvalToday();
+        }
+
+        contractorEvalRatings.forEach((ratingRow) => {
+            setContractorEvalRating(ratingRow, 0, false);
+        });
+        refreshContractorEvaluationSummary();
+    };
+
+    const openContractorEvalModal = (row) => {
+        if (!contractorEvalModal || !row) {
+            return;
+        }
+
+        closeContractorDeleteToast();
+
+        const companyName = String(row.dataset.name || "").trim()
+            || row.querySelector(".contractor-name")?.textContent.trim()
+            || "Contractor";
+
+        resetContractorEvaluationForm(companyName);
+        contractorEvalModal.hidden = false;
+        setBodyScrollLock();
+
+        const firstInput = contractorEvalForm?.querySelector('input[name="project_name"]');
+        if (firstInput) {
+            firstInput.focus();
+        }
+    };
+
+    contractorEvalRatings.forEach((ratingRow) => {
+        const stars = ratingRow.querySelector(".js-contractor-eval-stars");
+        if (!stars) {
+            return;
+        }
+
+        stars.addEventListener("click", (event) => {
+            const score = getContractorEvalScoreFromPointer(event, stars);
+            setContractorEvalRating(ratingRow, score);
+        });
+
+        stars.addEventListener("keydown", (event) => {
+            const input = ratingRow.querySelector(".js-contractor-eval-rating-input");
+            const currentScore = parseContractorEvalScore(input?.value);
+            let nextScore = currentScore;
+
+            if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+                nextScore = currentScore + 0.5;
+            } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+                nextScore = currentScore - 0.5;
+            } else if (event.key === "Home") {
+                nextScore = 0;
+            } else if (event.key === "End") {
+                nextScore = 5;
+            } else {
+                return;
+            }
+
+            event.preventDefault();
+            setContractorEvalRating(ratingRow, nextScore);
+        });
+
+        setContractorEvalRating(ratingRow, parseContractorEvalScore(stars.dataset.score || "0"), false);
+    });
+
+    closeContractorEvalButtons.forEach((button) => {
+        button.addEventListener("click", closeContractorEvalModal);
+    });
+
+    if (contractorEvalResetButton) {
+        contractorEvalResetButton.addEventListener("click", () => {
+            const currentCompanyName = String(contractorEvalCompanyInput?.value || "").trim();
+            resetContractorEvaluationForm(currentCompanyName);
+        });
+    }
+
+    if (contractorEvalForm) {
+        contractorEvalForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            refreshContractorEvaluationSummary();
+            closeContractorEvalModal();
+            showContractorSuccessToast("Evaluation rating is submitted.");
+        });
+    }
+
+    const setContractorFloatPanel = (panelKey) => {
+        contractorFloatTabs.forEach((tab) => {
+            const isActive = tab.dataset.contractorPanel === panelKey;
+            tab.classList.toggle("is-active", isActive);
+            tab.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+
+        contractorFloatPanels.forEach((panel) => {
+            const isActive = panel.dataset.contractorPanel === panelKey;
+            panel.classList.toggle("is-active", isActive);
+            panel.hidden = !isActive;
+        });
+    };
+
+    const parseCurrencyValue = (value) => {
+        const numericValue = Number.parseFloat(String(value || "").replace(/[^\d.]/g, ""));
+        return Number.isFinite(numericValue) ? numericValue : 0;
+    };
+
+    const formatCurrency = (amount) => `P ${Math.round(amount).toLocaleString("en-US")}`;
+
+    const contractorContractHistory = {
+        northshorecivilworks: [
+            {
+                title: "Provincial Road Drainage Rehabilitation",
+                code: "PEO-PR-26-011",
+                location: "Quezon, Palawan",
+                cost: 15200000,
+                fy: "FY 2026",
+                progress: "100%",
+                status: "Completed",
+            },
+            {
+                title: "Bridge Shoulder Widening Package",
+                code: "PEO-BR-25-104",
+                location: "Narra, Palawan",
+                cost: 9800000,
+                fy: "FY 2025",
+                progress: "100%",
+                status: "Completed",
+            },
+            {
+                title: "Slope Protection and Guardrail Works",
+                code: "PEO-SP-26-032",
+                location: "Aborlan, Palawan",
+                cost: 7200000,
+                fy: "FY 2026",
+                progress: "42%",
+                status: "Ongoing",
+            },
+        ],
+        harborlinebuilders: [
+            {
+                title: "Coastal Access Road Patching Program",
+                code: "PEO-CA-25-077",
+                location: "Roxas, Palawan",
+                cost: 6400000,
+                fy: "FY 2025",
+                progress: "100%",
+                status: "Completed",
+            },
+            {
+                title: "Asphalt Overlay - Section B",
+                code: "PEO-AO-26-003",
+                location: "Taytay, Palawan",
+                cost: 8300000,
+                fy: "FY 2026",
+                progress: "68%",
+                status: "Ongoing",
+            },
+        ],
+        summitridgeinfra: [
+            {
+                title: "Roadside Drainage Cleaning",
+                code: "PEO-DC-26-018",
+                location: "Narra, Palawan",
+                cost: 2500000,
+                fy: "FY 2026",
+                progress: "55%",
+                status: "Ongoing",
+            },
+        ],
+        redcliffengineering: [
+            {
+                title: "Culvert Repair Assistance",
+                code: "PEO-CR-24-009",
+                location: "Bataraza, Palawan",
+                cost: 1950000,
+                fy: "FY 2024",
+                progress: "100%",
+                status: "Completed",
+            },
+        ],
+    };
+
+    const openContractorFloatCard = (row) => {
+        if (!contractorFloatCard || !row) {
+            return;
+        }
+
+        closeContractorDeleteToast();
+
+        const detailLines = Array.from(row.querySelectorAll(".contractor-meta, .contractor-list-line--muted"))
+            .map((item) => item.textContent.trim())
+            .filter(Boolean);
+
+        const name = String(row.dataset.name || "").trim()
+            || row.querySelector(".contractor-name")?.textContent.trim()
+            || "Contractor";
+        const tin = String(row.dataset.tin || "").trim()
+            || detailLines.find((value) => normalizeKey(value).includes("tin"))
+            || "-";
+        const philgepsRaw = String(row.dataset.philgeps || "").trim();
+        const philgeps = philgepsRaw
+            ? `PhilGEPS: ${philgepsRaw}`
+            : (detailLines.find((value) => normalizeKey(value).includes("philgeps")) || "-");
+        const pcabRaw = String(row.dataset.pcab || "").trim();
+        const pcab = pcabRaw
+            ? `PCAB ${pcabRaw.toUpperCase()}`
+            : (detailLines.find((value) => normalizeKey(value).includes("pcab")) || "-");
+        const status = row.querySelector(".contractor-status-badge")?.textContent.trim()
+            || toTitleCase(row.dataset.status || "Unknown");
+        const contracts = String(row.dataset.contracts || "").trim() || "0";
+        const value = String(row.dataset.value || "").trim() || "P 0";
+        const classification = String(row.dataset.classification || "").trim() || "-";
+        const licenseExpiry = String(row.dataset.licenseExpiry || "").trim() || "-";
+        const contactPerson = String(row.dataset.contactPerson || "").trim() || "-";
+        const contactEmail = String(row.dataset.contactEmail || "").trim() || "-";
+        const contactPhone = String(row.dataset.contactPhone || "").trim() || "-";
+        const contactAddress = String(row.dataset.contactAddress || "").trim() || "-";
+        const contractorKey = normalizeKey(name);
+        const contractHistory = contractorContractHistory[contractorKey] || [];
+        const totalContracts = Number.parseInt(contracts, 10) || contractHistory.length || 0;
+        const computedCompleted = contractHistory.filter((item) => normalizeStatus(item.status) === "completed").length;
+        const computedOngoing = contractHistory.filter((item) => normalizeStatus(item.status) === "ongoing").length;
+        const completedContracts = contractHistory.length ? computedCompleted : 0;
+        const ongoingContracts = contractHistory.length ? computedOngoing : Math.max(0, totalContracts - completedContracts);
+        const totalCostValue = contractHistory.reduce((sum, item) => sum + parseCurrencyValue(item.cost), 0);
+
+        if (contractorFloatName) contractorFloatName.textContent = name;
+        if (contractorFloatStatus) contractorFloatStatus.textContent = status;
+        if (contractorFloatStatusPill) {
+            applyContractorStatusBadge(contractorFloatStatusPill, status);
+        }
+        if (contractorFloatTin) contractorFloatTin.textContent = tin;
+        if (contractorFloatPhilgeps) contractorFloatPhilgeps.textContent = philgeps;
+        if (contractorFloatPcab) contractorFloatPcab.textContent = pcab;
+        if (contractorFloatClassification) contractorFloatClassification.textContent = classification;
+        if (contractorFloatLicenseExpiry) contractorFloatLicenseExpiry.textContent = licenseExpiry;
+        if (contractorFloatContactPerson) contractorFloatContactPerson.textContent = contactPerson;
+        if (contractorFloatContactEmail) contractorFloatContactEmail.textContent = contactEmail;
+        if (contractorFloatContactPhone) contractorFloatContactPhone.textContent = contactPhone;
+        if (contractorFloatContactAddress) contractorFloatContactAddress.textContent = contactAddress;
+
+        if (contractorFloatContracts) contractorFloatContracts.textContent = String(totalContracts);
+        if (contractorFloatCompletedContracts) contractorFloatCompletedContracts.textContent = String(completedContracts);
+        if (contractorFloatOngoingContracts) contractorFloatOngoingContracts.textContent = String(ongoingContracts);
+        if (contractorFloatTotalValue) contractorFloatTotalValue.textContent = totalCostValue ? formatCurrency(totalCostValue) : value;
+        if (contractorFloatTotalCost) contractorFloatTotalCost.textContent = totalCostValue ? formatCurrency(totalCostValue) : value;
+        if (contractorFloatContractCount) contractorFloatContractCount.textContent = String(totalContracts);
+
+        if (contractorFloatContractList) {
+            if (!contractHistory.length) {
+                contractorFloatContractList.innerHTML = `<div class="contractor-float-contract-card"><p class="contractor-float-contract-meta">No contract history available.</p></div>`;
+            } else {
+                contractorFloatContractList.innerHTML = contractHistory
+                    .map((contract) => `
+                        <article class="contractor-float-contract-card">
+                            <div class="contractor-float-contract-top">
+                                <p class="contractor-float-contract-title">${escapeHtml(contract.title || "-")}</p>
+                                <span class="contractor-float-contract-status">${escapeHtml(contract.status || "-")}</span>
+                            </div>
+                            <p class="contractor-float-contract-meta">${escapeHtml(contract.code || "-")}</p>
+                            <p class="contractor-float-contract-meta">${escapeHtml(contract.location || "-")}</p>
+                            <div class="contractor-float-contract-tags">
+                                <span>Cost: <strong>${escapeHtml(formatCurrency(parseCurrencyValue(contract.cost)))}</strong></span>
+                                <span>${escapeHtml(contract.fy || "-")}</span>
+                                <span>Progress: ${escapeHtml(contract.progress || "-")}</span>
+                            </div>
+                        </article>
+                    `)
+                    .join("");
+            }
+        }
+
+        setContractorFloatPanel("info");
+
+        contractorFloatCard.hidden = false;
+        setBodyScrollLock();
+    };
+
+    closeContractorFloatButtons.forEach((button) => {
+        button.addEventListener("click", closeContractorFloatCard);
+    });
+
+    contractorFloatTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+            const panelKey = String(tab.dataset.contractorPanel || "info");
+            setContractorFloatPanel(panelKey);
+        });
+    });
+
+    if (contractorManagement) {
+        refreshContractorSummary();
+        refreshContractorTable();
+
+        if (contractorSearchInput) {
+            contractorSearchInput.addEventListener("input", refreshContractorTable);
+        }
+        if (contractorStatusFilter) {
+            if (typeof contractorStatusFilter.value !== "undefined") {
+                contractorStatusFilter.addEventListener("change", refreshContractorTable);
+            }
+            updateContractorDropdownFilterState(contractorStatusFilter);
+        }
+        if (contractorPcabFilter) {
+            if (typeof contractorPcabFilter.value !== "undefined") {
+                contractorPcabFilter.addEventListener("change", refreshContractorTable);
+            }
+            updateContractorDropdownFilterState(contractorPcabFilter);
+        }
+
+        contractorManagement.addEventListener("click", (event) => {
+            const evaluationOpener = event.target.closest(".js-contractor-open-eval");
+            if (evaluationOpener) {
+                const row = evaluationOpener.closest(".js-contractor-row");
+                if (!row) {
+                    return;
+                }
+                openContractorEvalModal(row);
+                return;
+            }
+
+            const editOpener = event.target.closest(".js-contractor-open-edit");
+            if (editOpener) {
+                const row = editOpener.closest(".js-contractor-row");
+                if (!row) {
+                    return;
+                }
+                openContractorEditModal(row);
+                return;
+            }
+
+            const deleteOpener = event.target.closest(".js-contractor-delete");
+            if (deleteOpener) {
+                const row = deleteOpener.closest(".js-contractor-row");
+                if (!row) {
+                    return;
+                }
+                openContractorDeleteToast(row);
+                return;
+            }
+
+            const opener = event.target.closest(".js-contractor-open-card");
+            if (!opener) {
+                return;
+            }
+            const row = opener.closest(".js-contractor-row");
+            if (!row) {
+                return;
+            }
+            openContractorFloatCard(row);
         });
     }
 
@@ -1352,21 +3412,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 emptyRow.remove();
             }
 
-            const newRow = document.createElement("tr");
-            newRow.innerHTML = `
-                <td>${escapeHtml(code || "-")}</td>
-                <td>${escapeHtml(name)}</td>
-                <td>${escapeHtml(type || "-")}</td>
-                <td>${escapeHtml(model || "-")}</td>
-                <td>${escapeHtml(plateNumber || "-")}</td>
-                <td>${escapeHtml(status || "-")}</td>
-                <td>${escapeHtml(location || "-")}</td>
-                <td>${escapeHtml(operator || "-")}</td>
-            `;
+            const newRow = createEquipmentRowElement({
+                code: code || "-",
+                name,
+                type: type || "-",
+                model: model || "-",
+                plateNumber: plateNumber || "-",
+                status: status || "-",
+                location: location || "-",
+                operator: operator || "-",
+            });
 
             equipmentTableBody.prepend(newRow);
             equipmentForm.reset();
             updateEquipmentSummary();
+            persistMaintenanceState();
             closeEquipmentModal();
         });
     }
@@ -1438,6 +3498,185 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
     };
 
+    function createEquipmentRowElement(record) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${escapeHtml(record.code || "-")}</td>
+            <td>${escapeHtml(record.name || "-")}</td>
+            <td>${escapeHtml(record.type || "-")}</td>
+            <td>${escapeHtml(record.model || "-")}</td>
+            <td>${escapeHtml(record.plateNumber || "-")}</td>
+            <td>${escapeHtml(record.status || "-")}</td>
+            <td>${escapeHtml(record.location || "-")}</td>
+            <td>${escapeHtml(record.operator || "-")}</td>
+        `;
+        return row;
+    }
+
+    function createScheduleRowElement(record) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${escapeHtml(record.title || "-")}</td>
+            <td>${escapeHtml(record.road || "-")}</td>
+            <td>${escapeHtml(record.type || "-")}</td>
+            <td>${escapeHtml(record.priority || "-")}</td>
+            <td>${escapeHtml(record.status || "Scheduled")}</td>
+            <td>${escapeHtml(record.startDate || "-")}</td>
+            <td>${escapeHtml(record.team || "-")}</td>
+        `;
+        return row;
+    }
+
+    function restoreScheduleEmptyRow() {
+        if (!scheduleTableBody) {
+            return;
+        }
+        scheduleTableBody.innerHTML = `
+            <tr class="schedule-empty-row">
+                <td colspan="7">No maintenance schedules available yet.</td>
+            </tr>
+        `;
+    }
+
+    function serializeEquipmentRows() {
+        return getEquipmentRows().map((row) => ({
+            code: (row.cells[0]?.textContent || "").trim(),
+            name: (row.cells[1]?.textContent || "").trim(),
+            type: (row.cells[2]?.textContent || "").trim(),
+            model: (row.cells[3]?.textContent || "").trim(),
+            plateNumber: (row.cells[4]?.textContent || "").trim(),
+            status: (row.cells[5]?.textContent || "").trim(),
+            location: (row.cells[6]?.textContent || "").trim(),
+            operator: (row.cells[7]?.textContent || "").trim(),
+        }));
+    }
+
+    function serializeScheduleRows() {
+        return getScheduleRows().map((row) => ({
+            title: (row.cells[0]?.textContent || "").trim(),
+            road: (row.cells[1]?.textContent || "").trim(),
+            type: (row.cells[2]?.textContent || "").trim(),
+            priority: (row.cells[3]?.textContent || "").trim(),
+            status: (row.cells[4]?.textContent || "").trim(),
+            startDate: (row.cells[5]?.textContent || "").trim(),
+            team: (row.cells[6]?.textContent || "").trim(),
+        }));
+    }
+
+    function persistMaintenanceState() {
+        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody);
+        if (!hasMaintenanceTargets) {
+            return;
+        }
+
+        const payload = {
+            version: 1,
+            roadRecords,
+            equipmentRows: serializeEquipmentRows(),
+            scheduleRows: serializeScheduleRows(),
+        };
+
+        try {
+            window.localStorage.setItem(maintenanceStorageKey, JSON.stringify(payload));
+        } catch (error) {
+            // Ignore storage errors (quota/private mode).
+        }
+    }
+
+    function restoreMaintenanceState() {
+        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody);
+        if (!hasMaintenanceTargets) {
+            return;
+        }
+
+        let savedState = null;
+        try {
+            savedState = JSON.parse(window.localStorage.getItem(maintenanceStorageKey) || "null");
+        } catch (error) {
+            savedState = null;
+        }
+
+        if (!savedState || typeof savedState !== "object") {
+            return;
+        }
+
+        if (Array.isArray(savedState.roadRecords) && savedState.roadRecords.length) {
+            const restoredRoads = savedState.roadRecords
+                .map((rawRecord) => {
+                    if (!rawRecord || typeof rawRecord !== "object") {
+                        return null;
+                    }
+
+                    const normalized = rawRecord.__roadNormalized
+                        ? rawRecord
+                        : normalizeRoadRecord(rawRecord);
+
+                    if (!normalized) {
+                        return null;
+                    }
+
+                    return {
+                        roadId: String(normalized.roadId || "-"),
+                        roadName: String(normalized.roadName || "-"),
+                        municipality: normalizeMunicipalityDisplayName(normalized.municipality, "Unknown"),
+                        location: String(normalized.location || ""),
+                        surfaceType: String(normalized.surfaceType || "-"),
+                        lengthKm: parseNumber(normalized.lengthKm),
+                        condition: String(normalized.condition || "unknown"),
+                        __roadNormalized: true,
+                    };
+                })
+                .filter(Boolean);
+
+            if (restoredRoads.length) {
+                roadRecords.push(...dedupeRoadRecords(restoredRoads));
+            }
+        }
+
+        if (equipmentTableBody && Array.isArray(savedState.equipmentRows)) {
+            equipmentTableBody.innerHTML = "";
+            savedState.equipmentRows.forEach((record) => {
+                if (!record || typeof record !== "object") {
+                    return;
+                }
+
+                const hasValues = [
+                    record.code,
+                    record.name,
+                    record.type,
+                    record.model,
+                    record.plateNumber,
+                    record.status,
+                    record.location,
+                    record.operator,
+                ].some((value) => String(value || "").trim());
+
+                if (!hasValues) {
+                    return;
+                }
+
+                equipmentTableBody.append(createEquipmentRowElement(record));
+            });
+        }
+
+        if (scheduleTableBody && Array.isArray(savedState.scheduleRows)) {
+            scheduleTableBody.innerHTML = "";
+            savedState.scheduleRows.forEach((record) => {
+                if (!record || typeof record !== "object") {
+                    return;
+                }
+                if (!String(record.title || "").trim()) {
+                    return;
+                }
+                scheduleTableBody.append(createScheduleRowElement(record));
+            });
+
+            if (!scheduleTableBody.children.length) {
+                restoreScheduleEmptyRow();
+            }
+        }
+    }
+
     if (scheduleForm && scheduleTableBody) {
         scheduleForm.addEventListener("submit", (event) => {
             event.preventDefault();
@@ -1459,26 +3698,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 emptyRow.remove();
             }
 
-            const newRow = document.createElement("tr");
-            newRow.innerHTML = `
-                <td>${escapeHtml(title)}</td>
-                <td>${escapeHtml(road || "-")}</td>
-                <td>${escapeHtml(type || "-")}</td>
-                <td>${escapeHtml(priority || "-")}</td>
-                <td>Scheduled</td>
-                <td>${escapeHtml(formatDateValue(startDate))}</td>
-                <td>${escapeHtml(team || "-")}</td>
-            `;
+            const newRow = createScheduleRowElement({
+                title,
+                road: road || "-",
+                type: type || "-",
+                priority: priority || "-",
+                status: "Scheduled",
+                startDate: formatDateValue(startDate),
+                team: team || "-",
+            });
 
             scheduleTableBody.prepend(newRow);
             scheduleForm.reset();
             updateScheduleSummary();
+            persistMaintenanceState();
             closeScheduleModal();
         });
     }
 
+    restoreMaintenanceState();
     updateEquipmentSummary();
     updateScheduleSummary();
+    refreshRoadMunicipalityOptions();
     if (typeof refreshRoadRegister === "function") {
         refreshRoadRegister();
     }
@@ -1528,7 +3769,7 @@ document.addEventListener("DOMContentLoaded", () => {
         dropdowns.forEach((dropdown) => {
             const trigger = dropdown.querySelector(".dropdown-trigger");
             const label = dropdown.querySelector(".dropdown-label");
-            const options = dropdown.querySelectorAll(".dropdown-option");
+            const dropdownMenu = dropdown.querySelector(".dropdown-menu");
 
             if (trigger) {
                 trigger.addEventListener("click", (event) => {
@@ -1540,13 +3781,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             }
 
-            options.forEach((option) => {
-                option.addEventListener("click", () => {
+            if (dropdownMenu) {
+                dropdownMenu.addEventListener("click", (event) => {
+                    const option = event.target.closest(".dropdown-option");
+                    if (!option) {
+                        return;
+                    }
+                    event.preventDefault();
+
+                    const options = dropdown.querySelectorAll(".dropdown-option");
                     options.forEach((item) => item.classList.remove("is-selected"));
                     option.classList.add("is-selected");
 
                     if (label) {
-                        label.textContent = option.textContent;
+                        label.textContent = option.textContent.trim();
                     }
 
                     dropdown.classList.remove("is-open");
@@ -1554,11 +3802,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         trigger.setAttribute("aria-expanded", "false");
                     }
 
+                    if (dropdown.dataset.contractorFilter) {
+                        updateContractorDropdownFilterState(dropdown);
+                        refreshContractorTable();
+                    }
+
+                    refreshRoadMunicipalityOptions();
                     if (typeof refreshRoadRegister === "function") {
                         refreshRoadRegister();
                     }
                 });
-            });
+            }
         });
 
         document.addEventListener("click", () => {
@@ -1571,6 +3825,14 @@ document.addEventListener("DOMContentLoaded", () => {
             closeDropdowns();
             closeEquipmentModal();
             closeScheduleModal();
+            closeRoadEditModal();
+            closeRoadDeleteModal();
+            closeRoadAddModal();
+            closeContractorFloatCard();
+            closeContractorDeleteToast();
+            closeContractorAddModal();
+            closeContractorEditModal();
+            closeContractorEvalModal();
         }
     });
 });

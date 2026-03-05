@@ -2131,11 +2131,25 @@ body {
 .condition-fill {
     display: block;
     height: 100%;
-    background: var(--fill);
+    width: 0;
+    border-radius: inherit;
+    transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.fill-empty {
-    width: 0;
+.fill-good {
+    background: linear-gradient(90deg, #27ae60 0%, #37c978 100%);
+}
+
+.fill-fair {
+    background: linear-gradient(90deg, #3973e4 0%, #5f94ff 100%);
+}
+
+.fill-poor {
+    background: linear-gradient(90deg, #c99113 0%, #e0b347 100%);
+}
+
+.fill-bad {
+    background: linear-gradient(90deg, #d73540 0%, #ef4e57 100%);
 }
 
 .road-filter-panel {
@@ -2255,6 +2269,33 @@ body {
 
 .road-upload-btn:active {
     background: #163356;
+}
+
+.road-add-btn {
+    height: 40px;
+    border: 1px solid #244b75;
+    border-radius: 10px;
+    padding: 0 16px;
+    background: linear-gradient(180deg, #2a5f95 0%, #1c466f 100%);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(15, 41, 70, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.road-add-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 7px 14px rgba(15, 41, 70, 0.25);
+}
+
+.road-add-btn:active {
+    transform: translateY(0);
 }
 
 .road-dropdown {
@@ -2822,6 +2863,453 @@ body {
     color: #ffffff;
 }
 
+.road-add-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 91;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+}
+
+.road-add-modal[hidden] {
+    display: none !important;
+}
+
+.road-add-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(12, 23, 38, 0.45);
+}
+
+.road-add-modal-dialog {
+    position: relative;
+    width: min(760px, 100%);
+    max-height: calc(100vh - 36px);
+    overflow-y: auto;
+    border: 1px solid #d1dbe8;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 24px 56px rgba(9, 25, 44, 0.22);
+    padding: 22px 24px 24px;
+}
+
+.road-add-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.road-add-modal-header h3 {
+    margin: 0;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #1f2a36;
+}
+
+.road-add-modal-header p {
+    margin: 4px 0 0;
+    color: #5f6f82;
+    font-size: 0.96rem;
+}
+
+.road-add-modal-close {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #5e6a78;
+    font-size: 1.45rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.road-add-form {
+    margin-top: 16px;
+}
+
+.road-add-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+    align-items: start;
+}
+
+.road-add-field {
+    display: grid;
+    gap: 8px;
+}
+
+.road-add-field span {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #304050;
+    letter-spacing: 0.01em;
+}
+
+.road-add-field input,
+.road-add-field select {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #c4d0df;
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: #f7f9fc;
+    color: #2f3d4b;
+    font-size: 0.92rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.road-add-field input::placeholder {
+    color: #7f90a4;
+}
+
+.road-add-field input:focus,
+.road-add-field select:focus {
+    border-color: #7f9fc5;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(80, 127, 183, 0.16);
+}
+
+.road-add-field .js-road-add-surface-type-details {
+    margin-top: 2px;
+}
+
+.road-add-field .js-road-add-municipality {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 0.92rem;
+}
+
+.road-add-field .js-road-add-municipality:disabled {
+    background: #eef2f7;
+    color: #7f90a4;
+    cursor: not-allowed;
+}
+
+.road-add-form-actions {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #e6edf6;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.road-add-btn-secondary,
+.road-add-btn-primary {
+    min-width: 140px;
+    height: 44px;
+    border-radius: 12px;
+    padding: 0 16px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.road-add-btn-secondary {
+    border: 1px solid #c6d2e1;
+    background: #f5f7fa;
+    color: #2c3a4c;
+}
+
+.road-add-btn-primary {
+    border: 1px solid #1e3f65;
+    background: linear-gradient(180deg, #24558a 0%, #1b446f 100%);
+    color: #ffffff;
+    box-shadow: 0 10px 20px rgba(23, 60, 97, 0.2);
+}
+
+.road-add-btn-primary:hover,
+.road-add-btn-secondary:hover {
+    transform: translateY(-1px);
+}
+
+.road-add-btn-primary:hover {
+    filter: brightness(1.05);
+}
+
+.road-add-btn-primary:active,
+.road-add-btn-secondary:active {
+    transform: translateY(0);
+}
+
+.road-edit-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 14px;
+}
+
+.road-edit-modal[hidden] {
+    display: none !important;
+}
+
+.road-edit-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(12, 23, 38, 0.45);
+}
+
+.road-edit-modal-dialog {
+    position: relative;
+    width: min(620px, 100%);
+    border: 1px solid #d4dce8;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 22px 42px rgba(9, 25, 44, 0.24);
+    padding: 18px 22px 22px;
+}
+
+.road-edit-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.road-edit-modal-header h3 {
+    margin: 0;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #1f2a36;
+}
+
+.road-edit-modal-header p {
+    margin: 3px 0 0;
+    color: #5f6f82;
+    font-size: 0.9rem;
+}
+
+.road-edit-modal-close {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #5e6a78;
+    font-size: 1.45rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.road-edit-form {
+    margin-top: 12px;
+}
+
+.road-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+}
+
+.road-edit-field {
+    display: grid;
+    gap: 6px;
+}
+
+.road-edit-field--full {
+    margin-bottom: 10px;
+}
+
+.road-edit-field span {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #2f3a47;
+}
+
+.road-edit-field input,
+.road-edit-field select {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid #c6cfdb;
+    border-radius: 10px;
+    padding: 8px 11px;
+    background: #f4f6f9;
+    color: #2f3d4b;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.road-edit-field input:focus,
+.road-edit-field select:focus {
+    border-color: #8ca9cc;
+    background: #ffffff;
+}
+
+.road-edit-form-actions {
+    margin-top: 6px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.road-edit-btn {
+    min-width: 126px;
+    height: 40px;
+    border-radius: 12px;
+    padding: 0 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.road-edit-btn-secondary {
+    border: 1px solid #c8d1de;
+    background: #f3f5f8;
+    color: #2c3a4c;
+}
+
+.road-edit-btn-primary {
+    border: 1px solid #1e3f65;
+    background: #1f426a;
+    color: #ffffff;
+}
+
+.road-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 92;
+    display: grid;
+    place-items: center;
+    padding: 14px;
+}
+
+.road-delete-modal[hidden] {
+    display: none !important;
+}
+
+.road-delete-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(12, 23, 38, 0.45);
+}
+
+.road-delete-modal-dialog {
+    position: relative;
+    width: min(560px, 100%);
+    border: 1px solid #d4dce8;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 22px 42px rgba(9, 25, 44, 0.24);
+    padding: 18px 22px 22px;
+}
+
+.road-delete-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.road-delete-modal-header h3 {
+    margin: 0;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #1f2a36;
+}
+
+.road-delete-modal-header p {
+    margin: 3px 0 0;
+    color: #5f6f82;
+    font-size: 0.9rem;
+}
+
+.road-delete-modal-close {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #5e6a78;
+    font-size: 1.45rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.road-delete-form {
+    margin-top: 12px;
+    display: grid;
+    gap: 10px;
+}
+
+.road-delete-field {
+    display: grid;
+    gap: 6px;
+}
+
+.road-delete-field span {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #2f3a47;
+}
+
+.road-delete-field select {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid #c6cfdb;
+    border-radius: 10px;
+    padding: 8px 11px;
+    background: #f4f6f9;
+    color: #2f3d4b;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.road-delete-field select:focus {
+    border-color: #d07a84;
+    background: #ffffff;
+}
+
+.road-delete-note {
+    margin: 0;
+    border: 1px solid #edd7da;
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #fff4f5;
+    color: #7e3541;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.road-delete-form-actions {
+    margin-top: 4px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.road-delete-btn {
+    min-width: 126px;
+    height: 40px;
+    border-radius: 12px;
+    padding: 0 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.road-delete-btn-secondary {
+    border: 1px solid #c8d1de;
+    background: #f3f5f8;
+    color: #2c3a4c;
+}
+
+.road-delete-btn-primary {
+    border: 1px solid #8a2534;
+    background: linear-gradient(180deg, #c44859 0%, #9a2f3f 100%);
+    color: #ffffff;
+}
+
 /* Professional polish overrides */
 .road-page {
     background:
@@ -2937,6 +3425,121 @@ body {
     margin-top: 14px;
 }
 
+.road-select-row--road {
+    margin-top: 0;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-bottom: 0;
+}
+
+.road-select-row--road .road-dropdown {
+    position: relative;
+    z-index: 1;
+}
+
+.road-select-row--road .road-dropdown.is-open {
+    z-index: 45;
+}
+
+.road-search--inline {
+    flex: 0 0 auto;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    min-height: 40px;
+    border-radius: 12px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+    overflow: visible;
+    position: relative;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.road-search--compact .road-search-toggle {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #5e738d;
+    flex: 0 0 auto;
+}
+
+.road-search--compact .road-search-toggle:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(69, 117, 172, 0.2);
+}
+
+.road-search--compact input {
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%) scale(0.98);
+    width: 248px;
+    min-width: 248px;
+    max-width: 248px;
+    min-height: 40px;
+    border: 1px solid #c7d3e2;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 0 12px;
+    box-shadow: 0 10px 24px rgba(15, 35, 58, 0.18);
+    opacity: 0;
+    pointer-events: none;
+    font-size: 0.92rem;
+    z-index: 31;
+    transition: opacity 0.18s ease, transform 0.2s ease;
+}
+
+.road-search--compact input:focus {
+    outline: 0;
+    border-color: #8eabc9;
+    box-shadow: 0 0 0 3px rgba(71, 117, 170, 0.15), 0 12px 26px rgba(15, 35, 58, 0.2);
+}
+
+.road-search--compact.is-expanded input {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(-50%) scale(1);
+}
+
+.road-search--compact.is-expanded .road-search-toggle {
+    background: #eef4fb;
+    color: #2f567f;
+}
+
+.road-select-row--road .road-add-btn,
+.road-select-row--road .road-upload-btn {
+    white-space: nowrap;
+    flex: 0 0 auto;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 0.85rem;
+}
+
+.road-select-row--road .road-dropdown {
+    flex: 0 0 auto;
+}
+
+.road-select-row--road .dropdown-trigger {
+    min-width: 148px;
+    height: 38px;
+    padding: 0 11px;
+    font-size: 0.86rem;
+}
+
+.road-select-row--road .dropdown-caret {
+    font-size: 0.68rem;
+}
+
 .dropdown-trigger {
     min-width: 168px;
     border-color: #c7d3e2;
@@ -2945,6 +3548,7 @@ body {
 
 .dropdown-trigger:focus-visible,
 .road-tab:focus-visible,
+.road-add-btn:focus-visible,
 .equipment-add-btn:focus-visible,
 .schedule-add-btn:focus-visible,
 .road-upload-btn:focus-visible {
@@ -3052,6 +3656,137 @@ body {
     white-space: nowrap;
 }
 
+.road-municipality-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.road-municipality-toast {
+    max-width: min(56vw, 420px);
+    border: 1px solid #bcdcc8;
+    border-radius: 999px;
+    padding: 4px 10px;
+    background: #e8f5ed;
+    color: #135b37;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    animation: roadMunicipalityToastIn 220ms ease-out;
+}
+
+@keyframes roadMunicipalityToastIn {
+    from {
+        opacity: 0;
+        transform: translateY(-2px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.road-municipality-update-btn {
+    height: 32px;
+    border: 1px solid #1f4c7b;
+    border-radius: 999px;
+    padding: 0 14px;
+    background: linear-gradient(180deg, #28619a 0%, #1a4672 100%);
+    color: #f8fcff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 7px 14px rgba(16, 49, 83, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.road-municipality-update-btn::before {
+    content: "\27F3";
+    font-size: 0.84rem;
+    line-height: 1;
+}
+
+.road-municipality-update-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow: 0 10px 18px rgba(16, 49, 83, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.road-municipality-update-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 5px 10px rgba(16, 49, 83, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.road-municipality-update-btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(87, 140, 201, 0.3), 0 8px 16px rgba(16, 49, 83, 0.24);
+}
+
+.road-municipality-update-btn:disabled {
+    border-color: #c9d5e5;
+    background: #f2f6fb;
+    color: #8093a8;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.road-municipality-delete-btn {
+    height: 32px;
+    border: 1px solid #8c2735;
+    border-radius: 999px;
+    padding: 0 12px;
+    background: linear-gradient(180deg, #c74a5b 0%, #9b2f3e 100%);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 7px 14px rgba(97, 23, 35, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.road-municipality-delete-btn::before {
+    content: "\2715";
+    font-size: 0.72rem;
+    line-height: 1;
+}
+
+.road-municipality-delete-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 10px 18px rgba(97, 23, 35, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.road-municipality-delete-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 5px 10px rgba(97, 23, 35, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.road-municipality-delete-btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(199, 74, 91, 0.26), 0 8px 16px rgba(97, 23, 35, 0.24);
+}
+
+.road-municipality-delete-btn:disabled {
+    border-color: #dfc2c7;
+    background: #f6ecef;
+    color: #9c8087;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
 .road-municipality-table {
     min-width: 640px;
 }
@@ -3066,6 +3801,1529 @@ body {
 
 .road-municipality-table td {
     font-size: 0.9rem;
+}
+
+.road-row-actions {
+    width: 72px;
+    text-align: center;
+}
+
+.road-row-delete-btn {
+    width: 30px;
+    height: 30px;
+    border: 1px solid #efc5cc;
+    border-radius: 10px;
+    background: #fff3f5;
+    color: #c44759;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.road-row-delete-btn svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
+
+.road-row-delete-btn:hover {
+    background: #ffe6ea;
+    color: #a72d3f;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(163, 47, 67, 0.16);
+}
+
+.road-row-delete-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.road-row-delete-btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(199, 74, 91, 0.24);
+}
+
+.road-row-delete-btn:disabled {
+    border-color: #e6d4d8;
+    background: #faf6f7;
+    color: #b9a3a8;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.road-row-delete-placeholder {
+    color: #b8c4d3;
+    font-weight: 600;
+}
+
+.road-municipality-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 14px;
+    border-top: 1px solid #e3ebf5;
+    background: linear-gradient(180deg, #fcfdff 0%, #f5f9ff 100%);
+}
+
+.road-page-btn {
+    min-width: 106px;
+    height: 36px;
+    border: 1px solid #184170;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #215182 0%, #163b62 100%);
+    color: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(16, 48, 82, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease, background-color 0.2s ease;
+}
+
+.road-page-btn:first-of-type::before {
+    content: "\2039";
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.road-page-btn:last-of-type::after {
+    content: "\203A";
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.road-page-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 10px 20px rgba(16, 48, 82, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.road-page-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 5px 10px rgba(16, 48, 82, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.road-page-btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(76, 129, 188, 0.28), 0 8px 18px rgba(16, 48, 82, 0.2);
+}
+
+.road-page-btn:disabled {
+    border-color: #cfd9e6;
+    background: #f4f7fb;
+    color: #8194ab;
+    opacity: 1;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.road-page-info {
+    color: #28476b;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: #ebf2fb;
+    border: 1px solid #d2deed;
+    border-radius: 999px;
+    padding: 6px 10px;
+    white-space: nowrap;
+}
+
+/* Contractor Management */
+.contractor-mgmt {
+    display: grid;
+    gap: 14px;
+}
+
+.contractor-head h2 {
+    margin: 0;
+    color: #1a2c44;
+    font-size: clamp(1.35rem, 2vw, 1.95rem);
+    font-weight: 800;
+}
+
+.contractor-head p {
+    margin: 4px 0 0;
+    color: #5d7087;
+    font-size: 0.9rem;
+}
+
+.contractor-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.contractor-stat-card {
+    border: 1px solid #d6e0ec;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 6px 18px rgba(14, 35, 58, 0.06);
+    padding: 12px 14px;
+    display: grid;
+    gap: 8px;
+}
+
+.contractor-stat-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.contractor-stat-head p {
+    margin: 0;
+    color: #4e647c;
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+.contractor-stat-icon {
+    font-size: 1rem;
+}
+
+.contractor-stat-icon.is-blue {
+    color: #2762a0;
+}
+
+.contractor-stat-icon.is-green {
+    color: #18965a;
+}
+
+.contractor-stat-icon.is-amber {
+    color: #bf8412;
+}
+
+.contractor-stat-icon.is-red {
+    color: #d1444f;
+}
+
+.contractor-stat-value {
+    margin: 0;
+    color: #11253d;
+    font-size: clamp(1.45rem, 2vw, 2rem);
+    font-weight: 800;
+    line-height: 1;
+}
+
+.contractor-stat-sub {
+    margin: 0;
+    color: #6c7f95;
+    font-size: 0.76rem;
+}
+
+.contractor-toolbar {
+    border: 1px solid #d6e0ec;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 6px 18px rgba(14, 35, 58, 0.06);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.contractor-search {
+    flex: 1 1 360px;
+    min-width: 260px;
+    min-height: 40px;
+    border: 1px solid #cad6e6;
+    border-radius: 10px;
+    background: #f8fbff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+}
+
+.contractor-search .material-symbols-outlined {
+    color: #6d8098;
+    font-size: 1.15rem;
+}
+
+.contractor-search input {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    outline: none;
+    color: #1f3550;
+    font-size: 0.88rem;
+}
+
+.contractor-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.contractor-select {
+    min-width: 130px;
+    height: 38px;
+    border: 1px solid #cad6e6;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #1d3450;
+    font-size: 0.84rem;
+    padding: 0 10px;
+    outline: none;
+}
+
+.contractor-select-accent {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 34px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, #3d5571 50%),
+        linear-gradient(135deg, #3d5571 50%, transparent 50%);
+    background-position:
+        calc(100% - 15px) 50%,
+        calc(100% - 10px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+
+.contractor-select-accent:focus {
+    border-color: #7f9fc3;
+    box-shadow: 0 0 0 3px rgba(70, 117, 172, 0.18);
+}
+
+.contractor-select-accent option {
+    background: #ffffff;
+    color: #173552;
+}
+
+.contractor-select-accent option:checked,
+.contractor-select-accent option:hover {
+    color: #10263f;
+    background: linear-gradient(0deg, #efad2a, #efad2a);
+}
+
+.contractor-dropdown {
+    min-width: 140px;
+}
+
+.contractor-dropdown .dropdown-trigger {
+    min-width: 140px;
+    height: 38px;
+    border: 1px solid #cad6e6;
+    border-radius: 11px;
+    background: #ffffff;
+    color: #173552;
+    font-size: 0.84rem;
+    padding: 0 12px;
+}
+
+.contractor-dropdown .dropdown-caret {
+    color: #385472;
+}
+
+.contractor-dropdown .dropdown-menu {
+    margin-top: 4px;
+    min-width: 100%;
+    border-radius: 0;
+    border-color: #8e98a5;
+    box-shadow: none;
+    background: #ffffff;
+}
+
+.contractor-dropdown .dropdown-option {
+    border-radius: 0;
+    font-size: 0.9rem;
+    color: #0f355d;
+}
+
+.contractor-dropdown .dropdown-option.is-selected {
+    background: #efad2a;
+    color: #111111;
+}
+
+.contractor-dropdown .dropdown-option.is-selected::after {
+    content: "\2713";
+    font-weight: 700;
+}
+
+.contractor-add-btn {
+    height: 38px;
+    border: 1px solid #173b62;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #1d4f81 0%, #133a60 100%);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 7px 14px rgba(16, 49, 84, 0.2);
+}
+
+.contractor-add-btn .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.contractor-table-wrap {
+    border: 1px solid #d6e0ec;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 6px 18px rgba(14, 35, 58, 0.06);
+    overflow: hidden;
+}
+
+.contractor-table-head {
+    padding: 11px 14px;
+    border-bottom: 1px solid #e1e8f2;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.contractor-table-head h3 {
+    margin: 0;
+    color: #132b46;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.contractor-table-head p {
+    margin: 0;
+    color: #667d95;
+    font-size: 0.84rem;
+}
+
+.contractor-table-scroll {
+    overflow-x: auto;
+}
+
+.contractor-table {
+    width: 100%;
+    min-width: 980px;
+    border-collapse: collapse;
+}
+
+.contractor-table th,
+.contractor-table td {
+    border-bottom: 1px solid #e7edf5;
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: middle;
+    font-size: 0.84rem;
+}
+
+.contractor-table th {
+    background: #f4f8fd;
+    color: #3f5873;
+    font-size: 0.73rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.contractor-table tbody tr:hover td {
+    background: #f9fcff;
+}
+
+.contractor-name {
+    color: #0f2742;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.contractor-name-btn {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition: color 0.2s ease;
+}
+
+.contractor-name-btn:hover {
+    color: #1c5b98;
+}
+
+.contractor-name-btn:focus-visible {
+    outline: 0;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    color: #1c5b98;
+}
+
+.contractor-meta {
+    color: #667d95;
+    font-size: 0.77rem;
+}
+
+.contractor-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.contractor-status-badge.is-active {
+    color: #0d8448;
+    background: #d8f2e5;
+}
+
+.contractor-status-badge.is-pending {
+    color: #9b6a08;
+    background: #faedcf;
+}
+
+.contractor-status-badge.is-blacklisted {
+    color: #ffffff;
+    background: #d93f49;
+}
+
+.contractor-status-badge.is-suspended {
+    color: #7a4d00;
+    background: #ffe4a9;
+}
+
+.contractor-status-badge.is-inactive {
+    color: #4f6278;
+    background: #e7edf5;
+}
+
+.contractor-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.contractor-icon-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #d6e0ec;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #5a6f87;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.contractor-icon-btn .material-symbols-outlined {
+    font-size: 0.95rem;
+}
+
+.contractor-icon-btn-star {
+    color: #b07a08;
+    background: #fff8e9;
+    border-color: #ecd9a5;
+}
+
+.contractor-icon-btn-star:hover {
+    background: #ffefc9;
+}
+
+.contractor-empty-row td {
+    color: #6e8096;
+    text-align: center;
+    font-size: 0.86rem;
+    padding: 18px 12px;
+}
+
+.contractor-delete-toast {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 110;
+    width: min(400px, calc(100vw - 24px));
+    border: 1px solid #efc8cf;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fff9fa 0%, #fff2f4 100%);
+    box-shadow: 0 16px 30px rgba(64, 18, 25, 0.18);
+    backdrop-filter: blur(4px);
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+    animation: contractorDeleteToastIn 220ms ease-out;
+}
+
+.contractor-delete-toast[hidden] {
+    display: none !important;
+}
+
+.contractor-delete-toast-message {
+    margin: 0;
+    color: #5a1f2a;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.45;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.contractor-delete-toast-message::before {
+    content: "\26A0";
+    font-size: 0.96rem;
+    line-height: 1.1;
+    color: #b33a4d;
+    margin-top: 1px;
+}
+
+.contractor-delete-toast-actions {
+    display: inline-flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.contractor-delete-toast-btn {
+    height: 35px;
+    min-width: 94px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font-size: 0.83rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.16s ease, filter 0.16s ease, box-shadow 0.16s ease;
+}
+
+.contractor-delete-toast-btn-secondary {
+    border-color: #c8d3e1;
+    background: #ffffff;
+    color: #264260;
+}
+
+.contractor-delete-toast-btn-danger {
+    border-color: #8b2636;
+    background: linear-gradient(180deg, #c24759 0%, #a93547 100%);
+    color: #ffffff;
+    box-shadow: 0 8px 15px rgba(117, 30, 45, 0.24);
+}
+
+.contractor-delete-toast-btn-danger:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+}
+
+.contractor-delete-toast-btn-secondary:hover {
+    background: #f5f8fc;
+    transform: translateY(-1px);
+}
+
+.contractor-success-toast {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 111;
+    max-width: min(400px, calc(100vw - 24px));
+    border: 1px solid #bbdcc8;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #f5fbf7 0%, #e9f6ee 100%);
+    color: #145638;
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1.4;
+    padding: 12px 14px;
+    box-shadow: 0 14px 26px rgba(18, 84, 52, 0.18);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    animation: contractorDeleteToastIn 220ms ease-out;
+}
+
+.contractor-success-toast::before {
+    content: "\2713";
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: #1a8a53;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    font-weight: 800;
+    flex: 0 0 auto;
+}
+
+.contractor-success-toast.is-delete {
+    border-color: #bbdcc8;
+    background: linear-gradient(180deg, #f5fbf7 0%, #e9f6ee 100%);
+    color: #145638;
+    box-shadow: 0 14px 26px rgba(18, 84, 52, 0.18);
+}
+
+.contractor-success-toast.is-delete::before {
+    content: "\2713";
+    background: #1a8a53;
+}
+
+.contractor-success-toast[hidden] {
+    display: none !important;
+}
+
+@keyframes contractorDeleteToastIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.contractor-card-list {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+}
+
+.contractor-list-card {
+    border: 1px solid #d9e2ee;
+    border-radius: 12px;
+    background: #ffffff;
+    min-height: 84px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.contractor-list-main {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.contractor-list-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.contractor-list-line {
+    margin: 0;
+    color: #263c57;
+    font-size: 0.83rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.contractor-list-line strong {
+    font-weight: 800;
+}
+
+.contractor-list-line--muted {
+    color: #6a7e95;
+    font-size: 0.79rem;
+}
+
+.contractor-list-line .material-symbols-outlined {
+    font-size: 0.95rem;
+    vertical-align: middle;
+    color: #7388a0;
+}
+
+.contractor-list-card .contractor-actions {
+    margin-left: auto;
+    padding-top: 2px;
+}
+
+.contractor-float-card {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    display: grid;
+    place-items: center;
+    padding: 14px;
+}
+
+.contractor-float-card[hidden] {
+    display: none !important;
+}
+
+.contractor-float-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(11, 24, 40, 0.38);
+}
+
+.contractor-float-dialog {
+    position: relative;
+    width: min(540px, 100%);
+    max-height: calc(100vh - 28px);
+    overflow-y: auto;
+    border: 1px solid #d2dceb;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 20px 46px rgba(10, 26, 45, 0.24);
+    padding: 16px 18px 18px;
+}
+
+.contractor-float-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.contractor-float-head h4 {
+    margin: 0;
+    color: #132c48;
+    font-size: 1.18rem;
+    font-weight: 800;
+}
+
+.contractor-float-head p {
+    margin: 4px 0 0;
+    color: #5f748e;
+    font-size: 0.84rem;
+}
+
+.contractor-float-close {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #60758d;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.contractor-float-tabs {
+    margin-top: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    border: 1px solid #d5e0ee;
+    border-radius: 999px;
+    padding: 3px;
+    background: #f3f7fc;
+}
+
+.contractor-float-tab {
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #3f5976;
+    font-size: 0.86rem;
+    font-weight: 600;
+    padding: 6px 11px;
+    cursor: pointer;
+}
+
+.contractor-float-tab.is-active {
+    background: #ffffff;
+    color: #122b47;
+    box-shadow: 0 2px 8px rgba(17, 40, 65, 0.1);
+}
+
+.contractor-float-panel {
+    margin-top: 12px;
+}
+
+.contractor-float-status-pill {
+    margin-bottom: 10px;
+}
+
+.contractor-float-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.contractor-float-block {
+    border: 1px solid #dde5f1;
+    border-radius: 12px;
+    background: #f8fbff;
+    padding: 12px;
+}
+
+.contractor-float-block h5 {
+    margin: 0 0 10px;
+    color: #2a3f59;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.contractor-float-block p {
+    margin: 0 0 6px;
+    color: #5f748d;
+    font-size: 0.87rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.contractor-float-block p:last-child {
+    margin-bottom: 0;
+}
+
+.contractor-float-block p > span {
+    flex: 0 0 112px;
+}
+
+.contractor-float-block strong {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: #182f49;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.contractor-float-summary {
+    margin-top: 10px;
+    border: 1px solid #dde5f1;
+    border-radius: 12px;
+    background: #f8fbff;
+    padding: 12px;
+}
+
+.contractor-float-summary h5 {
+    margin: 0 0 12px;
+    color: #2a3f59;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.contractor-float-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    text-align: center;
+}
+
+.contractor-float-summary-grid p {
+    margin: 0;
+    color: #1a324d;
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+
+.contractor-float-summary-grid span {
+    color: #667c94;
+    font-size: 0.78rem;
+}
+
+.contractor-float-contract-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.contractor-float-contract-head h5 {
+    margin: 0;
+    color: #213a56;
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.contractor-float-contract-head p {
+    margin: 0;
+    color: #5f768e;
+    font-size: 0.92rem;
+}
+
+.contractor-float-contract-list {
+    display: grid;
+    gap: 10px;
+    max-height: min(52vh, 440px);
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.contractor-float-contract-card {
+    border: 1px solid #dde5f1;
+    border-radius: 12px;
+    background: #fbfdff;
+    padding: 10px 12px;
+    display: grid;
+    gap: 8px;
+}
+
+.contractor-float-contract-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.contractor-float-contract-title {
+    margin: 0;
+    color: #122e4b;
+    font-size: 0.96rem;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.contractor-float-contract-status {
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: #154a79;
+    white-space: nowrap;
+}
+
+.contractor-float-contract-meta {
+    margin: 0;
+    color: #5f768e;
+    font-size: 0.84rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.contractor-float-contract-tags {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.contractor-float-contract-tags span {
+    color: #203a57;
+    font-size: 0.83rem;
+}
+
+.contractor-edit-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 96;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+}
+
+.contractor-edit-modal[hidden] {
+    display: none !important;
+}
+
+.contractor-edit-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 23, 39, 0.46);
+}
+
+.contractor-edit-dialog {
+    position: relative;
+    width: min(860px, 100%);
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    border: 1px solid #d0d8e3;
+    border-radius: 14px;
+    background: #edf1f6;
+    box-shadow: 0 24px 56px rgba(12, 28, 46, 0.28);
+    padding: 16px;
+}
+
+.contractor-edit-form {
+    display: grid;
+    gap: 12px;
+}
+
+.contractor-edit-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #d8e0ea;
+}
+
+.contractor-edit-head h4 {
+    margin: 0;
+    color: #102842;
+    font-size: 1.04rem;
+    font-weight: 700;
+}
+
+.contractor-add-subtitle {
+    margin: 4px 0 0;
+    color: #5b7088;
+    font-size: 0.83rem;
+}
+
+.contractor-edit-close {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #60748b;
+    font-size: 1.62rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.contractor-edit-close:hover {
+    background: rgba(16, 47, 79, 0.08);
+}
+
+.contractor-edit-section {
+    display: grid;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid #d8e0ea;
+}
+
+.contractor-edit-section h5 {
+    margin: 0;
+    color: #102842;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.contractor-edit-section--footer {
+    gap: 12px;
+}
+
+.contractor-edit-grid {
+    display: grid;
+    gap: 10px 14px;
+}
+
+.contractor-edit-grid--two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.contractor-edit-grid--three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contractor-edit-field {
+    display: grid;
+    gap: 6px;
+}
+
+.contractor-edit-field span {
+    color: #0f2238;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.contractor-edit-field input,
+.contractor-edit-field select,
+.contractor-edit-field textarea {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid #c3cbd6;
+    border-radius: 10px;
+    background: #f4f6f9;
+    color: #1a334d;
+    font-size: 0.9rem;
+    padding: 8px 12px;
+    font-family: inherit;
+}
+
+.contractor-edit-field textarea {
+    min-height: 86px;
+    resize: vertical;
+}
+
+.contractor-edit-field select {
+    appearance: none;
+    padding-right: 34px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, #76889f 50%),
+        linear-gradient(135deg, #76889f 50%, transparent 50%);
+    background-position:
+        calc(100% - 16px) 50%,
+        calc(100% - 11px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+
+.contractor-edit-field input:focus,
+.contractor-edit-field select:focus,
+.contractor-edit-field textarea:focus {
+    outline: 0;
+    border-color: #486d98;
+    box-shadow: 0 0 0 3px rgba(72, 109, 152, 0.16);
+    background: #ffffff;
+}
+
+.contractor-edit-field--full {
+    grid-column: 1 / -1;
+}
+
+.contractor-edit-field--status {
+    width: 220px;
+    max-width: 100%;
+}
+
+.contractor-edit-actions {
+    display: inline-flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.contractor-edit-btn {
+    min-width: 94px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.contractor-edit-btn-secondary {
+    border-color: #c5cfdb;
+    background: #eef2f6;
+    color: #1d3550;
+}
+
+.contractor-edit-btn-primary {
+    border-color: #1b436c;
+    background: #1f446a;
+    color: #ffffff;
+}
+
+.contractor-edit-btn-primary:hover {
+    background: #24517e;
+}
+
+.contractor-eval-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 96;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+}
+
+.contractor-eval-modal[hidden] {
+    display: none !important;
+}
+
+.contractor-eval-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 23, 39, 0.46);
+}
+
+.contractor-eval-dialog {
+    position: relative;
+    width: min(940px, 100%);
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    border: 1px solid #d1dceb;
+    border-radius: 16px;
+    background: #f4f8fc;
+    box-shadow: 0 24px 56px rgba(12, 28, 46, 0.28);
+    padding: 18px;
+}
+
+.contractor-eval-form {
+    display: grid;
+    gap: 12px;
+}
+
+.contractor-eval-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.contractor-eval-head h4 {
+    margin: 0;
+    color: #102842;
+    font-size: clamp(1.22rem, 2vw, 1.68rem);
+    font-weight: 800;
+}
+
+.contractor-eval-head p {
+    margin: 4px 0 0;
+    color: #5b7088;
+    font-size: 0.83rem;
+}
+
+.contractor-eval-close {
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #60748b;
+    font-size: 1.72rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.contractor-eval-close:hover {
+    background: rgba(16, 47, 79, 0.08);
+}
+
+.contractor-eval-block {
+    border: 1px solid #d6e1ef;
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 12px;
+}
+
+.contractor-eval-block--top {
+    background: linear-gradient(180deg, #f9fcff 0%, #f4f9ff 100%);
+}
+
+.contractor-eval-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px;
+}
+
+.contractor-eval-field {
+    display: grid;
+    gap: 5px;
+}
+
+.contractor-eval-field span {
+    color: #344e6c;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.contractor-eval-field input,
+.contractor-eval-field textarea {
+    width: 100%;
+    border: 1px solid #c8d5e6;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #19314e;
+    font-size: 0.84rem;
+    padding: 9px 10px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.contractor-eval-field input:focus,
+.contractor-eval-field textarea:focus {
+    outline: 0;
+    border-color: #3d6fa8;
+    box-shadow: 0 0 0 3px rgba(61, 111, 168, 0.14);
+}
+
+.contractor-eval-field input[readonly] {
+    background: #f3f7fc;
+    color: #405a77;
+}
+
+.contractor-eval-field--full {
+    grid-column: 1 / -1;
+}
+
+.contractor-eval-criteria-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e4ebf5;
+}
+
+.contractor-eval-criteria-head h5 {
+    margin: 0;
+    color: #102a45;
+    font-size: 1.02rem;
+    font-weight: 800;
+}
+
+.contractor-eval-criteria-head p {
+    margin: 0;
+    color: #667d95;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.contractor-eval-criteria-list {
+    display: grid;
+    gap: 2px;
+}
+
+.contractor-eval-criteria-item {
+    border-bottom: 1px solid #edf2f8;
+    padding: 11px 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.contractor-eval-criteria-item:last-child {
+    border-bottom: 0;
+}
+
+.contractor-eval-criteria-copy h6 {
+    margin: 0;
+    color: #152f4d;
+    font-size: 0.93rem;
+    font-weight: 800;
+}
+
+.contractor-eval-criteria-copy p {
+    margin: 3px 0 0;
+    color: #647a92;
+    font-size: 0.8rem;
+}
+
+.contractor-eval-rating-box {
+    display: grid;
+    justify-items: end;
+    gap: 4px;
+    min-width: 210px;
+}
+
+.contractor-eval-weight {
+    border: 1px solid #c9d7e8;
+    border-radius: 999px;
+    background: #f2f7fd;
+    color: #2b4b70;
+    font-size: 0.71rem;
+    font-weight: 700;
+    padding: 2px 8px;
+}
+
+.contractor-eval-stars {
+    --rating-fill: 0%;
+    position: relative;
+    display: inline-block;
+    line-height: 1;
+    letter-spacing: 2px;
+    cursor: pointer;
+    user-select: none;
+    touch-action: none;
+}
+
+.contractor-eval-stars:focus-visible {
+    outline: 0;
+    border-radius: 8px;
+    box-shadow: 0 0 0 3px rgba(58, 108, 164, 0.2);
+}
+
+.contractor-eval-stars-base,
+.contractor-eval-stars-fill {
+    font-size: 1.33rem;
+}
+
+.contractor-eval-stars-base {
+    color: #d4dfec;
+}
+
+.contractor-eval-stars-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    color: #f0a000;
+    width: var(--rating-fill);
+    pointer-events: none;
+}
+
+.contractor-eval-rating-value {
+    margin: 0;
+    color: #3a5574;
+    font-size: 0.77rem;
+    font-weight: 700;
+}
+
+.contractor-eval-block--summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #f8fbff;
+}
+
+.contractor-eval-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.contractor-eval-summary-label {
+    margin: 0;
+    color: #67809b;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.contractor-eval-summary-value {
+    margin: 2px 0 0;
+    color: #12304d;
+    font-size: 1.26rem;
+    font-weight: 800;
+    line-height: 1.08;
+}
+
+.contractor-eval-summary-value--accent {
+    color: #0f7d4a;
+    font-size: 1.06rem;
+}
+
+.contractor-eval-summary-value--accent.is-neutral {
+    color: #5f748d;
+}
+
+.contractor-eval-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.contractor-eval-btn {
+    min-width: 122px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.contractor-eval-btn-secondary {
+    border-color: #c8d4e4;
+    background: #ffffff;
+    color: #294969;
+}
+
+.contractor-eval-btn-primary {
+    border-color: #1a4875;
+    background: linear-gradient(180deg, #1f5b93 0%, #154571 100%);
+    color: #ffffff;
+    box-shadow: 0 9px 18px rgba(20, 63, 104, 0.24);
+}
+
+.contractor-eval-btn-primary:hover {
+    background: linear-gradient(180deg, #2668a7 0%, #1b5181 100%);
 }
 
 .road-condition-pill {
@@ -3120,6 +5378,7 @@ body {
 }
 
 .road-upload-btn,
+.road-add-btn,
 .equipment-add-btn,
 .schedule-add-btn {
     height: 40px;
@@ -3130,6 +5389,7 @@ body {
 }
 
 .road-upload-btn:hover,
+.road-add-btn:hover,
 .equipment-add-btn:hover,
 .schedule-add-btn:hover {
     background: #1d4a79;
@@ -3174,12 +5434,48 @@ body {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .contractor-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .contractor-eval-dialog {
+        width: min(860px, 100%);
+    }
+
+    .contractor-edit-dialog {
+        width: min(800px, 100%);
+    }
+
+    .contractor-edit-grid--three {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .contractor-eval-criteria-item {
+        grid-template-columns: 1fr;
+        justify-items: start;
+    }
+
+    .contractor-eval-rating-box {
+        justify-items: start;
+    }
+
     .road-select-row {
         justify-content: flex-start;
     }
 
     .road-select-row--between {
         justify-content: flex-start;
+    }
+
+    .road-select-row--road {
+        flex-wrap: wrap;
+        overflow: visible;
+    }
+
+    .road-search--compact input {
+        width: 224px;
+        min-width: 224px;
+        max-width: 224px;
     }
 }
 
@@ -3201,6 +5497,121 @@ body {
         grid-template-columns: 1fr;
     }
 
+    .contractor-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .contractor-toolbar {
+        align-items: stretch;
+    }
+
+    .contractor-search {
+        min-width: 0;
+        flex: 1 1 100%;
+    }
+
+    .contractor-toolbar-actions {
+        width: 100%;
+    }
+
+    .contractor-select,
+    .contractor-add-btn {
+        width: 100%;
+    }
+
+    .contractor-delete-toast {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        width: auto;
+    }
+
+    .contractor-success-toast {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        max-width: none;
+    }
+
+    .contractor-float-dialog {
+        padding: 14px;
+    }
+
+    .contractor-eval-dialog {
+        padding: 14px;
+    }
+
+    .contractor-edit-dialog {
+        padding: 14px;
+    }
+
+    .contractor-float-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .contractor-float-block p {
+        flex-wrap: wrap;
+        gap: 2px 8px;
+    }
+
+    .contractor-float-block p > span {
+        flex-basis: auto;
+    }
+
+    .contractor-float-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .contractor-list-card {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .contractor-list-card .contractor-actions {
+        margin-left: 0;
+    }
+
+    .contractor-eval-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .contractor-edit-grid--two,
+    .contractor-edit-grid--three {
+        grid-template-columns: 1fr;
+    }
+
+    .contractor-edit-field--status {
+        width: 100%;
+    }
+
+    .contractor-eval-block--summary {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .contractor-eval-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .contractor-eval-actions {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .contractor-eval-btn {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .contractor-edit-actions {
+        width: 100%;
+    }
+
+    .contractor-edit-btn {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
     .road-tabs {
         width: 100%;
         display: grid;
@@ -3209,6 +5620,19 @@ body {
     .road-select-row {
         display: grid;
         gap: 8px;
+    }
+
+    .road-search--compact input {
+        left: 0;
+        top: calc(100% + 8px);
+        transform: scale(0.98);
+        width: min(78vw, 280px);
+        min-width: min(78vw, 280px);
+        max-width: min(78vw, 280px);
+    }
+
+    .road-search--compact.is-expanded input {
+        transform: scale(1);
     }
 
     .road-select-group {
@@ -3221,6 +5645,11 @@ body {
     }
 
     .equipment-add-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .road-add-btn {
         width: 100%;
         justify-content: center;
     }
@@ -3277,6 +5706,57 @@ body {
         width: 100%;
     }
 
+    .road-edit-modal-dialog {
+        padding: 16px;
+    }
+
+    .road-edit-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .road-edit-form-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .road-edit-btn {
+        width: 100%;
+    }
+
+    .road-add-modal-dialog {
+        max-height: calc(100vh - 20px);
+        border-radius: 14px;
+        padding: 16px;
+    }
+
+    .road-add-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .road-add-form-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .road-add-btn-secondary,
+    .road-add-btn-primary {
+        width: 100%;
+    }
+
+    .road-delete-modal-dialog {
+        padding: 16px;
+    }
+
+    .road-delete-form-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .road-delete-btn {
+        width: 100%;
+    }
+
     .equipment-form-actions {
         justify-content: stretch;
         display: grid;
@@ -3296,5 +5776,12 @@ body {
 
 .pa-hidden {
     display: none !important;
+}
+
+/* Keep long dropdown option lists scrollable (e.g., municipalities). */
+.dropdown-menu {
+    max-height: min(320px, calc(100vh - 140px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
