@@ -8,13 +8,8 @@
     <link rel="stylesheet" href="{% static 'styles.css' %}">
 </head>
 <body class="road-page">
-    <main class="road-shell">
-        <section class="road-filter-panel">
-            <h1 style="margin: 0; font-size: 32px;">Task Management</h1>
-            <p style="margin: 10px 0 0; color: #5e6f83; font-size: 18px;">
-                Task management page is ready for scheduling and task list integration.
-            </p>
-        </section>
+    <main class="portal-content task-management-standalone">
+        {% include 'Maintenance/includes/task_management_table.html' %}
     </main>
 </body>
 </html>

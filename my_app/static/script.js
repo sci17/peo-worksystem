@@ -1119,172 +1119,213 @@ document.addEventListener("DOMContentLoaded", () => {
         overlay.id = "admin-new-document-modal";
         overlay.setAttribute("role", "dialog");
         overlay.setAttribute("aria-modal", "true");
-        overlay.style.position = "fixed";
-        overlay.style.inset = "0";
-        overlay.style.background = "rgba(15, 25, 36, 0.4)";
+        overlay.className = "pa-doc-modal-overlay";
         overlay.style.display = "none";
-        overlay.style.alignItems = "center";
-        overlay.style.justifyContent = "center";
-        overlay.style.zIndex = "9999";
-        overlay.style.padding = "16px";
 
         overlay.innerHTML = `
-            <div style="width:min(560px, 100%); max-height:94vh; overflow:auto; background:#f3f6fa; border:1px solid #d0d9e4; border-radius:10px; box-shadow:0 16px 38px rgba(12, 24, 39, 0.2); color:#1f3653; font-family:'Public Sans','Segoe UI',sans-serif;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:14px 14px 8px;">
-                    <div>
-                        <h3 id="admin-new-document-title" style="margin:0; font-size:18px; font-weight:700;">Create New Document</h3>
-                        <p id="admin-new-document-subtitle" style="margin:3px 0 0; font-size:12px; color:#5a6f89;">Add a new document to the register</p>
+            <div class="pa-doc-modal">
+                <div class="pa-doc-modal-head">
+                    <div class="pa-doc-modal-heading">
+                        <span class="pa-doc-modal-kicker">Document Register</span>
+                        <h3 id="admin-new-document-title">Create New Document</h3>
+                        <p id="admin-new-document-subtitle">Add a new document to the register</p>
                     </div>
-                    <button type="button" data-close-modal style="border:0; background:transparent; color:#647993; font-size:18px; cursor:pointer; line-height:1;">&times;</button>
+                    <button type="button" class="pa-doc-modal-close" data-close-modal aria-label="Close document modal">
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                    </button>
                 </div>
-                <form id="admin-new-document-form" style="padding:0 14px 14px;">
-                    <label style="display:block; font-size:12px; font-weight:600; margin:8px 0 6px;">Slip No. *</label>
-                    <input name="slip_no" required placeholder="E.g., SLP-0001" style="width:100%; height:34px; border:1px solid #11355d; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-
-                    <label style="display:block; font-size:12px; font-weight:600; margin:8px 0 6px;">Document Name *</label>
-                    <input name="document_name" required placeholder="E.g., Site Instruction No. 03" style="width:100%; height:34px; border:1px solid #11355d; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-                        <div>
-                            <label style="display:block; font-size:12px; font-weight:600; margin:8px 0 6px;">Location</label>
-                            <input name="location" placeholder="E.g., City Hall Annex" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
+                <form id="admin-new-document-form" class="pa-doc-form">
+                    <div class="pa-doc-form-section">
+                        <div class="pa-doc-form-section-head">
+                            <div class="pa-doc-form-section-icon" aria-hidden="true">
+                                <span class="material-symbols-outlined">description</span>
+                            </div>
+                            <div>
+                                <h4>Document Details</h4>
+                                <p>Core document identity and classification.</p>
+                            </div>
                         </div>
-                        <div>
-                            <label style="display:block; font-size:12px; font-weight:600; margin:8px 0 6px;">Contractor</label>
-                            <input name="contractor" placeholder="E.g., ABC Builders" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
+
+                        <label class="pa-doc-field pa-doc-field--wide">
+                            <span>Slip No. *</span>
+                            <input name="slip_no" required placeholder="E.g., SLP-0001">
+                        </label>
+
+                        <label class="pa-doc-field pa-doc-field--wide">
+                            <span>Document Name *</span>
+                            <input name="document_name" required placeholder="E.g., Site Instruction No. 03">
+                        </label>
+
+                        <div class="pa-doc-form-grid">
+                            <label class="pa-doc-field">
+                                <span>Location</span>
+                                <input name="location" placeholder="E.g., City Hall Annex">
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Contractor</span>
+                                <input name="contractor" placeholder="E.g., ABC Builders">
+                            </label>
+                        </div>
+
+                        <div class="pa-doc-form-grid">
+                            <label class="pa-doc-field">
+                                <span>Type *</span>
+                                <select name="doc_type" required>
+                                    <option value="Site Instruction" selected>Site Instruction</option>
+                                    <option>NCR</option>
+                                    <option>DED Package</option>
+                                    <option>Billing Packet</option>
+                                    <option>Work Order</option>
+                                    <option>Report</option>
+                                    <option>Contract</option>
+                                    <option>Other</option>
+                                </select>
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Division *</span>
+                                <select name="division" required>
+                                    <option value="Admin" selected>Admin</option>
+                                    <option>Planning Division</option>
+                                    <option>Construction</option>
+                                    <option>Quality</option>
+                                    <option>Maintenance</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="pa-doc-form-grid pa-doc-form-grid--compact">
+                            <label class="pa-doc-field">
+                                <span>Status *</span>
+                                <select data-admin-status-select name="status" required>
+                                    <option>Draft</option>
+                                    <option>For Review</option>
+                                    <option>Processing</option>
+                                    <option>Approved</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <label class="pa-doc-field pa-doc-field--wide">
+                            <span>Description</span>
+                            <textarea name="description" rows="2" placeholder="Optional description"></textarea>
+                        </label>
+                    </div>
+
+                    <div class="pa-doc-form-section">
+                        <div class="pa-doc-form-section-head">
+                            <div class="pa-doc-form-section-icon" aria-hidden="true">
+                                <span class="material-symbols-outlined">share</span>
+                            </div>
+                            <div>
+                                <h4>File and Routing</h4>
+                                <p>Upload the scanned file and track document movement.</p>
+                            </div>
+                        </div>
+
+                        <div class="pa-scan-upload-field pa-doc-field pa-doc-field--wide">
+                            <span>Scanned File</span>
+                            <div class="pa-doc-file-row">
+                                <input
+                                    class="pa-scan-upload-input"
+                                    type="file"
+                                    name="scanned_file"
+                                    accept=".pdf,image/*"
+                                >
+                                <small class="pa-scan-upload-help">Accepted file types: PDF or image scans.</small>
+                            </div>
+                            <small class="pa-scan-upload-current" data-admin-file-current>No scanned file uploaded.</small>
+                        </div>
+
+                        <div class="pa-doc-form-grid">
+                            <label class="pa-doc-field">
+                                <span>Date Received by PEO</span>
+                                <input type="date" name="date_received_peo">
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Date Released to Admin</span>
+                                <input type="date" name="date_released_admin">
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Date Received from Admin</span>
+                                <input type="date" name="date_received_admin">
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Date Released to Accounting</span>
+                                <input type="date" name="date_released_accounting">
+                            </label>
                         </div>
                     </div>
 
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-                        <div>
-                            <label style="display:block; font-size:12px; font-weight:600; margin:8px 0 6px;">Type *</label>
-                            <select name="doc_type" required style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                                <option value="Site Instruction" selected>Site Instruction</option>
-                                <option>NCR</option>
-                                <option>DED Package</option>
-                                <option>Billing Packet</option>
-                                <option>Work Order</option>
-                                <option>Report</option>
-                                <option>Contract</option>
-                                <option>Other</option>
-                            </select>
+                    <div class="pa-doc-form-section">
+                        <div class="pa-doc-form-section-head">
+                            <div class="pa-doc-form-section-icon" aria-hidden="true">
+                                <span class="material-symbols-outlined">payments</span>
+                            </div>
+                            <div>
+                                <h4>Billing Information</h4>
+                                <p>Record billing type, value, period, and receipt details.</p>
+                            </div>
                         </div>
-                        <div>
-                            <label style="display:block; font-size:12px; font-weight:600; margin:8px 0 6px;">Division *</label>
-                            <select name="division" required style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                                <option value="Admin" selected>Admin</option>
-                                <option>Planning Division</option>
-                                <option>Construction</option>
-                                <option>Quality</option>
-                                <option>Maintenance</option>
-                            </select>
+
+                        <div class="pa-doc-form-grid">
+                            <label class="pa-doc-field">
+                                <span>Type of Billing</span>
+                                <select data-admin-billing-type-select name="billing_type">
+                                    <option value="">Select billing type</option>
+                                    <option>First Billing</option>
+                                    <option>Second Billing</option>
+                                    <option>Partial</option>
+                                    <option>First Partial</option>
+                                    <option>Second Partial</option>
+                                    <option>Advance Payment</option>
+                                    <option>Final</option>
+                                    <option value="Others">Others</option>
+                                </select>
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Percentage</span>
+                                <input name="percentage" placeholder="e.g., 30%">
+                            </label>
+
+                            <div class="pa-doc-field pa-doc-field--wide pa-form-hidden-field" data-admin-billing-type-other-wrap>
+                                <span>Specify Other Billing Type</span>
+                                <textarea name="billing_type_other" rows="2" placeholder="Enter billing type"></textarea>
+                            </div>
+
+                            <label class="pa-doc-field">
+                                <span>Contract Amount</span>
+                                <input name="contract_amount" placeholder="e.g., PHP 5,000,000">
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Revised Contract Amount</span>
+                                <input name="revised_contract_amount" placeholder="e.g., PHP 5,500,000">
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Period Covered</span>
+                                <input name="period_covered" placeholder="e.g., Jan-Mar 2026">
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Date Started</span>
+                                <input type="date" name="date_started">
+                            </label>
+                            <label class="pa-doc-field">
+                                <span>Completion Date</span>
+                                <input type="date" name="completion_date">
+                            </label>
+                            <label class="pa-doc-field pa-form-hidden-field" data-admin-received-date-wrap>
+                                <span>Date Received</span>
+                                <input type="date" name="date_received">
+                            </label>
+                            <label class="pa-doc-field pa-form-hidden-field" data-admin-received-by-wrap>
+                                <span>Received By</span>
+                                <input name="received_by" placeholder="Name of receiver">
+                            </label>
                         </div>
                     </div>
 
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                        <div>
-                            <label style="display:block; font-size:12px; font-weight:600; margin:8px 0 6px;">Status *</label>
-                            <select data-admin-status-select name="status" required style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                                <option>Draft</option>
-                                <option>For Review</option>
-                                <option>Processing</option>
-                                <option>Approved</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <label style="display:block; font-size:12px; font-weight:600; margin:10px 0 6px;">Description</label>
-                    <textarea name="description" rows="2" placeholder="Optional description" style="width:100%; border:1px solid #c9d3df; border-radius:7px; padding:8px 10px; font-size:12px; resize:vertical; background:#fff;"></textarea>
-
-                    <div class="pa-scan-upload-field">
-                        <label style="display:block; font-size:12px; font-weight:600; margin:10px 0 6px;">Scanned File</label>
-                        <input
-                            class="pa-scan-upload-input"
-                            type="file"
-                            name="scanned_file"
-                            accept=".pdf,image/*"
-                        >
-                        <small class="pa-scan-upload-help">Accepted file types: PDF or image scans.</small>
-                        <small class="pa-scan-upload-current" data-admin-file-current>No scanned file uploaded.</small>
-                    </div>
-
-                    <p style="margin:12px 0 8px; font-size:12px; font-weight:700; color:#2a4260;">Document Routing</p>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Date Received by PEO</label>
-                            <input type="date" name="date_received_peo" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 8px; font-size:12px; background:#fff;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Date Released to Admin</label>
-                            <input type="date" name="date_released_admin" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 8px; font-size:12px; background:#fff;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Date Received from Admin</label>
-                            <input type="date" name="date_received_admin" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 8px; font-size:12px; background:#fff;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Date Released to Accounting</label>
-                            <input type="date" name="date_released_accounting" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 8px; font-size:12px; background:#fff;">
-                        </div>
-                    </div>
-
-                    <p style="margin:12px 0 8px; font-size:12px; font-weight:700; color:#2a4260;">Billing Information</p>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Type of Billing</label>
-                            <select data-admin-billing-type-select name="billing_type" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                                <option value="">Select billing type</option>
-                                <option>First Billing</option>
-                                <option>Second Billing</option>
-                                <option>Partial</option>
-                                <option>First Partial</option>
-                                <option>Second Partial</option>
-                                <option>Advance Payment</option>
-                                <option>Final</option>
-                                <option value="Others">Others</option>
-                            </select>
-                        </div>
-                        <div class="pa-form-hidden-field" data-admin-billing-type-other-wrap>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Specify Other Billing Type</label>
-                            <textarea name="billing_type_other" rows="2" placeholder="Enter billing type" style="width:100%; border:1px solid #c9d3df; border-radius:7px; padding:8px 10px; font-size:12px; resize:vertical; background:#fff;"></textarea>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Percentage</label>
-                            <input name="percentage" placeholder="e.g., 30%" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Contract Amount</label>
-                            <input name="contract_amount" placeholder="e.g., PHP 5,000,000" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Revised Contract Amount</label>
-                            <input name="revised_contract_amount" placeholder="e.g., PHP 5,500,000" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Period Covered</label>
-                            <input name="period_covered" placeholder="e.g., Jan-Mar 2026" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Date Started</label>
-                            <input type="date" name="date_started" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 8px; font-size:12px; background:#fff;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Completion Date</label>
-                            <input type="date" name="completion_date" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 8px; font-size:12px; background:#fff;">
-                        </div>
-                        <div class="pa-form-hidden-field" data-admin-received-date-wrap>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Date Received</label>
-                            <input type="date" name="date_received" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 8px; font-size:12px; background:#fff;">
-                        </div>
-                        <div class="pa-form-hidden-field" data-admin-received-by-wrap>
-                            <label style="display:block; font-size:11px; font-weight:600; margin:0 0 5px;">Received By</label>
-                            <input name="received_by" placeholder="Name of receiver" style="width:100%; height:34px; border:1px solid #c9d3df; border-radius:7px; padding:0 10px; font-size:12px; background:#fff;">
-                        </div>
-                    </div>
-
-                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
-                        <button type="button" data-close-modal style="height:32px; border:1px solid #cbd5e1; border-radius:8px; padding:0 14px; background:#eef2f7; color:#273c57; cursor:pointer;">Cancel</button>
-                        <button id="admin-new-document-submit" type="submit" style="height:32px; border:0; border-radius:8px; padding:0 14px; background:#143a63; color:#fff; font-weight:600; cursor:pointer;">Create</button>
+                    <div class="pa-doc-form-actions">
+                        <button type="button" class="pa-doc-btn pa-doc-btn-secondary" data-close-modal>Cancel</button>
+                        <button id="admin-new-document-submit" class="pa-doc-btn pa-doc-btn-primary" type="submit">Create</button>
                     </div>
                 </form>
             </div>
@@ -1641,10 +1682,29 @@ document.addEventListener("DOMContentLoaded", () => {
     const roadAddSurfaceTypeSelect = document.querySelector(".js-road-add-surface-type");
     const roadAddSurfaceTypeDetailsInput = document.querySelector(".js-road-add-surface-type-details");
     const roadAddConditionSelect = document.querySelector(".js-road-add-condition");
+    const taskSearchInput = document.querySelector(".js-task-search");
+    const taskTableBody = document.querySelector(".js-task-table-body");
+    const taskResultsSummary = document.querySelector(".js-task-results-summary");
+    const taskTableTotal = document.querySelector(".js-task-table-total");
+    const taskStatTotal = document.querySelector(".js-task-stat-total");
+    const taskStatPending = document.querySelector(".js-task-stat-pending");
+    const taskStatProgress = document.querySelector(".js-task-stat-progress");
+    const taskStatCompleted = document.querySelector(".js-task-stat-completed");
+    const taskStatOverdue = document.querySelector(".js-task-stat-overdue");
+    const taskModal = document.querySelector(".js-task-modal");
+    const openTaskModalButtons = document.querySelectorAll(".js-open-task-modal");
+    const closeTaskModalButtons = document.querySelectorAll(".js-close-task-modal");
+    const taskForm = document.querySelector(".js-task-form");
+    const taskAssignedInput = document.querySelector(".js-task-assigned-input");
+    const taskAssignedList = document.querySelector(".js-task-assigned-list");
     const contractorManagement = document.querySelector(".js-contractor-management");
     const contractorSearchInput = document.querySelector(".js-contractor-search");
     const contractorStatusFilter = document.querySelector(".js-contractor-status-filter");
     const contractorPcabFilter = document.querySelector(".js-contractor-pcab-filter");
+    const taskPersonnelModal = document.querySelector(".js-task-personnel-modal");
+    const openTaskPersonnelButtons = document.querySelectorAll(".js-open-task-personnel-modal");
+    const closeTaskPersonnelButtons = document.querySelectorAll(".js-close-task-personnel-modal");
+    const taskPersonnelForm = document.querySelector(".js-task-personnel-form");
     const contractorAddOpenButton = document.querySelector(".js-open-contractor-add");
     const contractorAddModal = document.querySelector(".js-contractor-add-modal");
     const closeContractorAddButtons = document.querySelectorAll(".js-close-contractor-add");
@@ -1722,9 +1782,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let roadUploadDuplicatePromptElement = null;
     let roadUploadAddConfirmPromptElement = null;
     let roadDeleteConfirmToastElement = null;
+    let personnelRecords = [];
 
     const setBodyScrollLock = () => {
-        const isAnyModalOpen = [equipmentModal, scheduleModal, roadEditModal, roadAddModal, roadDeleteModal, contractorAddModal, contractorFloatCard, contractorEditModal, contractorEvalModal].some((modal) => modal && !modal.hidden);
+        const isAnyModalOpen = [equipmentModal, scheduleModal, roadEditModal, roadAddModal, roadDeleteModal, taskPersonnelModal, taskModal, contractorAddModal, contractorFloatCard, contractorEditModal, contractorEvalModal].some((modal) => modal && !modal.hidden);
         document.body.style.overflow = isAnyModalOpen ? "hidden" : "";
     };
 
@@ -5073,6 +5134,189 @@ document.addEventListener("DOMContentLoaded", () => {
         button.addEventListener("click", closeEquipmentModal);
     });
 
+    const resetTaskPersonnelDivision = () => {
+        if (!taskPersonnelModal) {
+            return;
+        }
+        const divisionDropdown = taskPersonnelModal.querySelector(".task-personnel-dropdown");
+        const label = divisionDropdown?.querySelector(".dropdown-label");
+        const hiddenInput = taskPersonnelForm?.elements?.namedItem("division");
+        divisionDropdown?.querySelectorAll(".dropdown-option").forEach((option) => {
+            option.classList.remove("is-selected");
+        });
+        if (label) {
+            label.textContent = "Select division";
+        }
+        if (hiddenInput instanceof HTMLInputElement) {
+            hiddenInput.value = "";
+        }
+    };
+
+    const closeTaskPersonnelModal = () => {
+        if (!taskPersonnelModal) {
+            return;
+        }
+        taskPersonnelModal.hidden = true;
+        if (taskPersonnelForm) {
+            taskPersonnelForm.reset();
+        }
+        resetTaskPersonnelDivision();
+        setBodyScrollLock();
+    };
+
+    const openTaskPersonnelModal = () => {
+        if (!taskPersonnelModal) {
+            return;
+        }
+        if (taskPersonnelForm) {
+            taskPersonnelForm.reset();
+        }
+        resetTaskPersonnelDivision();
+        taskPersonnelModal.hidden = false;
+        setBodyScrollLock();
+        const firstInput = taskPersonnelModal.querySelector("input[name='full_name']");
+        if (firstInput instanceof HTMLInputElement) {
+            firstInput.focus();
+        }
+    };
+
+    const resetTaskModal = () => {
+        if (!taskForm) {
+            return;
+        }
+
+        taskForm.reset();
+        resetTaskFormDropdown(".task-personnel-dropdown[data-input-target='division']", "Select division", "division");
+        resetTaskFormDropdown(".task-personnel-dropdown[data-input-target='priority']", "Select priority", "priority");
+
+        const statusDropdown = taskForm.querySelector(".task-personnel-dropdown[data-input-target='status']");
+        const statusLabel = statusDropdown?.querySelector(".dropdown-label");
+        const statusInput = taskForm.elements.namedItem("status");
+        statusDropdown?.querySelectorAll(".dropdown-option").forEach((option) => {
+            option.classList.toggle("is-selected", String(option.dataset.value || "") === "Pending");
+        });
+        if (statusLabel) {
+            statusLabel.textContent = "Pending";
+        }
+        if (statusInput instanceof HTMLInputElement) {
+            statusInput.value = "Pending";
+        }
+
+        syncTaskPersonnelDropdownOptions();
+    };
+
+    const closeTaskModal = () => {
+        if (!taskModal) {
+            return;
+        }
+        taskModal.hidden = true;
+        resetTaskModal();
+        setBodyScrollLock();
+    };
+
+    const openTaskModal = () => {
+        if (!taskModal) {
+            return;
+        }
+        resetTaskModal();
+        taskModal.hidden = false;
+        setBodyScrollLock();
+        const firstInput = taskModal.querySelector("input[name='title']");
+        if (firstInput instanceof HTMLInputElement) {
+            firstInput.focus();
+        }
+    };
+
+    openTaskPersonnelButtons.forEach((button) => {
+        button.addEventListener("click", openTaskPersonnelModal);
+    });
+
+    closeTaskPersonnelButtons.forEach((button) => {
+        button.addEventListener("click", closeTaskPersonnelModal);
+    });
+
+    openTaskModalButtons.forEach((button) => {
+        button.addEventListener("click", openTaskModal);
+    });
+
+    closeTaskModalButtons.forEach((button) => {
+        button.addEventListener("click", closeTaskModal);
+    });
+
+    if (taskPersonnelForm) {
+        taskPersonnelForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const formData = new FormData(taskPersonnelForm);
+            const fullName = (formData.get("full_name") || "").toString().trim();
+            const division = (formData.get("division") || "").toString().trim();
+
+            if (!fullName || !division) {
+                showRoadUploadStatusToast("Please complete Full Name and Division before saving personnel.", "warning");
+                return;
+            }
+
+            personnelRecords.unshift({
+                fullName,
+                employeeId: (formData.get("employee_id") || "").toString().trim(),
+                division,
+                position: (formData.get("position") || "").toString().trim(),
+                email: (formData.get("email") || "").toString().trim(),
+                phone: (formData.get("phone") || "").toString().trim(),
+                divisionHead: Boolean(formData.get("division_head")),
+            });
+
+            personnelRecords = personnelRecords.filter((record, index, records) => {
+                return records.findIndex((candidate) => candidate.fullName === record.fullName) === index;
+            });
+
+            syncTaskPersonnelDropdownOptions();
+            persistMaintenanceState();
+            closeTaskPersonnelModal();
+            showRoadUploadStatusToast("Personnel added successfully.", "success");
+        });
+    }
+
+    if (taskForm && taskTableBody) {
+        taskForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const formData = new FormData(taskForm);
+            const title = (formData.get("title") || "").toString().trim();
+            const division = (formData.get("division") || "").toString().trim();
+            const dueDateIso = (formData.get("due_date") || "").toString().trim();
+            const priority = (formData.get("priority") || "").toString().trim();
+            const status = (formData.get("status") || "").toString().trim() || "Pending";
+            const assignedTo = (formData.get("assigned_to") || "").toString().trim();
+            const notes = (formData.get("notes") || "").toString().trim();
+
+            if (!title || !division || !dueDateIso || !priority) {
+                showRoadUploadStatusToast("Please complete Task Name, Division, Due Date, and Priority.", "warning");
+                return;
+            }
+
+            const emptyRow = taskTableBody.querySelector(".js-task-empty-row");
+            if (emptyRow) {
+                emptyRow.remove();
+            }
+
+            taskTableBody.prepend(createTaskRowElement({
+                title,
+                division,
+                assignedTo,
+                dueDateIso,
+                dueDateDisplay: formatTaskDateValue(dueDateIso),
+                priority,
+                status,
+                notes,
+            }));
+
+            updateTaskSummary();
+            applyTaskFilters();
+            persistMaintenanceState();
+            closeTaskModal();
+            showRoadUploadStatusToast("Task created successfully.", "success");
+        });
+    }
+
     const closeScheduleModal = () => {
         if (!scheduleModal) {
             return;
@@ -5286,6 +5530,293 @@ document.addEventListener("DOMContentLoaded", () => {
         return "";
     };
 
+    const formatTaskDateValue = (value) => {
+        const rawValue = String(value || "").trim();
+        if (!rawValue) {
+            return "-";
+        }
+
+        const parsedDate = new Date(`${rawValue}T00:00:00`);
+        if (Number.isNaN(parsedDate.getTime())) {
+            return rawValue;
+        }
+
+        return parsedDate.toLocaleDateString("en-US", {
+            month: "short",
+            day: "2-digit",
+            year: "numeric",
+        });
+    };
+
+    const getTaskInitials = (value) => {
+        const words = String(value || "")
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2);
+
+        if (!words.length) {
+            return "NA";
+        }
+
+        return words.map((word) => word.charAt(0).toUpperCase()).join("");
+    };
+
+    const getTaskRows = () => {
+        if (!taskTableBody) {
+            return [];
+        }
+        return Array.from(taskTableBody.querySelectorAll("tr")).filter((row) => !row.classList.contains("js-task-empty-row"));
+    };
+
+    const restoreTaskEmptyRow = () => {
+        if (!taskTableBody) {
+            return;
+        }
+        taskTableBody.innerHTML = `
+            <tr class="task-empty-row js-task-empty-row">
+                <td colspan="6">
+                    <div class="task-empty-state">
+                        <svg viewBox="0 0 64 64" aria-hidden="true">
+                            <rect x="18" y="14" width="12" height="12" rx="2"></rect>
+                            <rect x="18" y="38" width="12" height="12" rx="2"></rect>
+                            <path d="m21 44 4 4 7-9"></path>
+                            <path d="M38 20h12"></path>
+                            <path d="M38 32h12"></path>
+                            <path d="M38 44h12"></path>
+                        </svg>
+                        <div class="task-empty-copy">
+                            <strong>No tasks yet</strong>
+                            <p>New tasks will appear here once you start assigning work.</p>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    };
+
+    const getTaskFilterValue = (filterKey) => {
+        const filterDropdown = document.querySelector(`.task-filter-panel [data-task-filter="${filterKey}"]`);
+        const selectedOption = filterDropdown?.querySelector(".dropdown-option.is-selected");
+        return String(selectedOption?.dataset.value || "all").trim().toLowerCase();
+    };
+
+    const buildTaskPriorityPill = (value) => {
+        const label = String(value || "Medium").trim() || "Medium";
+        const normalized = normalizeStatus(label);
+        return `<span class="task-table-pill task-table-pill--priority task-table-pill--${escapeHtml(normalized)}">${escapeHtml(label)}</span>`;
+    };
+
+    const buildTaskStatusPill = (value) => {
+        const label = String(value || "Pending").trim() || "Pending";
+        const normalized = normalizeStatus(label);
+        return `<span class="task-table-pill task-table-pill--status task-table-pill--${escapeHtml(normalized)}">${escapeHtml(label)}</span>`;
+    };
+
+    const buildTaskAssignedMarkup = (value) => {
+        const label = String(value || "").trim();
+        if (!label) {
+            return `
+                <div class="task-assignee task-assignee--empty">
+                    <span class="task-avatar task-avatar--empty">NA</span>
+                    <span class="task-assignee-name">Unassigned</span>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="task-assignee">
+                <span class="task-avatar">${escapeHtml(getTaskInitials(label))}</span>
+                <span class="task-assignee-name">${escapeHtml(label)}</span>
+            </div>
+        `;
+    };
+
+    const isTaskOverdue = (record) => {
+        const statusValue = normalizeStatus(record?.status || "");
+        if (statusValue === "completed" || statusValue === "cancelled") {
+            return false;
+        }
+
+        const dueDateValue = String(record?.dueDateIso || "").trim();
+        if (!dueDateValue) {
+            return false;
+        }
+
+        const dueDate = new Date(`${dueDateValue}T23:59:59`);
+        if (Number.isNaN(dueDate.getTime())) {
+            return false;
+        }
+
+        return dueDate.getTime() < Date.now();
+    };
+
+    function createTaskRowElement(record) {
+        const row = document.createElement("tr");
+        const normalizedPriority = normalizeStatus(record.priority || "medium");
+        const normalizedStatus = normalizeStatus(record.status || "pending");
+        const overdue = isTaskOverdue(record);
+
+        row.dataset.search = [
+            record.title,
+            record.division,
+            record.assignedTo,
+            record.priority,
+            record.status,
+            record.notes,
+        ].filter(Boolean).join(" ").toLowerCase();
+        row.dataset.division = normalizeKey(record.division || "");
+        row.dataset.divisionLabel = String(record.division || "").trim();
+        row.dataset.priority = normalizedPriority;
+        row.dataset.status = normalizedStatus;
+        row.dataset.dueDateIso = String(record.dueDateIso || "").trim();
+        row.dataset.overdue = overdue ? "true" : "false";
+        row.dataset.title = String(record.title || "").trim();
+        row.dataset.assignedTo = String(record.assignedTo || "").trim();
+        row.dataset.notes = String(record.notes || "").trim();
+
+        row.innerHTML = `
+            <td>
+                <div class="task-title-cell">
+                    <span class="task-row-dot${overdue ? " task-row-dot--alert" : ""}" aria-hidden="true"></span>
+                    <div class="task-title-copy">
+                        <strong>${escapeHtml(record.title || "-")}</strong>
+                        <span>Div: ${escapeHtml(record.division || "-")}</span>
+                    </div>
+                </div>
+            </td>
+            <td>${buildTaskAssignedMarkup(record.assignedTo)}</td>
+            <td>
+                <span class="task-due-date${overdue ? " task-due-date--overdue" : ""}">${escapeHtml(record.dueDateDisplay || "-")}</span>
+            </td>
+            <td>${buildTaskPriorityPill(record.priority)}</td>
+            <td>${buildTaskStatusPill(record.status)}</td>
+            <td>
+                <button type="button" class="task-row-action" aria-label="Task actions" title="Task actions">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </td>
+        `;
+
+        return row;
+    }
+
+    function serializeTaskRows() {
+        return getTaskRows().map((row) => ({
+            title: String(row.dataset.title || "").trim(),
+            division: String(row.dataset.divisionLabel || "").trim(),
+            assignedTo: String(row.dataset.assignedTo || "").trim(),
+            dueDateIso: String(row.dataset.dueDateIso || "").trim(),
+            dueDateDisplay: (row.querySelector(".task-due-date")?.textContent || "").trim(),
+            priority: (row.querySelector(".task-table-pill--priority")?.textContent || "").trim(),
+            status: (row.querySelector(".task-table-pill--status")?.textContent || "").trim(),
+            notes: String(row.dataset.notes || "").trim(),
+        }));
+    }
+
+    const syncTaskPersonnelDropdownOptions = (preferredValue = "") => {
+        if (!taskAssignedList) {
+            return;
+        }
+
+        const names = [...new Set(
+            personnelRecords
+                .map((record) => String(record?.fullName || "").trim())
+                .filter(Boolean)
+        )].sort((nameA, nameB) => nameA.localeCompare(nameB));
+
+        taskAssignedList.innerHTML = names
+            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+            .join("");
+
+        if (taskAssignedInput instanceof HTMLInputElement && preferredValue) {
+            taskAssignedInput.value = preferredValue;
+        }
+    };
+
+    const resetTaskFormDropdown = (selector, labelText, hiddenFieldName = "") => {
+        if (!taskForm) {
+            return;
+        }
+
+        const dropdown = taskForm.querySelector(selector);
+        const label = dropdown?.querySelector(".dropdown-label");
+        dropdown?.querySelectorAll(".dropdown-option").forEach((option) => {
+            option.classList.remove("is-selected");
+        });
+
+        if (label) {
+            label.textContent = labelText;
+        }
+
+        if (hiddenFieldName) {
+            const field = taskForm.elements.namedItem(hiddenFieldName);
+            if (field instanceof HTMLInputElement) {
+                field.value = "";
+            }
+        }
+    };
+
+    const updateTaskSummary = () => {
+        const rows = getTaskRows();
+        const totalCount = rows.length;
+        const visibleRows = rows.filter((row) => !row.hidden);
+        const pendingCount = rows.filter((row) => row.dataset.status === "pending").length;
+        const progressCount = rows.filter((row) => row.dataset.status === "in_progress").length;
+        const completedCount = rows.filter((row) => row.dataset.status === "completed").length;
+        const overdueCount = rows.filter((row) => row.dataset.overdue === "true").length;
+
+        if (taskStatTotal) {
+            taskStatTotal.textContent = String(totalCount);
+        }
+        if (taskStatPending) {
+            taskStatPending.textContent = String(pendingCount);
+        }
+        if (taskStatProgress) {
+            taskStatProgress.textContent = String(progressCount);
+        }
+        if (taskStatCompleted) {
+            taskStatCompleted.textContent = String(completedCount);
+        }
+        if (taskStatOverdue) {
+            taskStatOverdue.textContent = String(overdueCount);
+        }
+        if (taskTableTotal) {
+            taskTableTotal.textContent = `${totalCount} Total`;
+        }
+        if (taskResultsSummary) {
+            const visibleCount = visibleRows.length;
+            const startCount = visibleCount ? 1 : 0;
+            taskResultsSummary.textContent = totalCount
+                ? `Showing ${startCount} to ${visibleCount} of ${totalCount} tasks`
+                : "Showing 0 to 0 of 0 tasks";
+        }
+    };
+
+    const applyTaskFilters = () => {
+        if (!taskTableBody) {
+            return;
+        }
+
+        const searchValue = String(taskSearchInput?.value || "").trim().toLowerCase();
+        const divisionValue = getTaskFilterValue("division");
+        const statusValue = getTaskFilterValue("status");
+        const priorityValue = getTaskFilterValue("priority");
+        const rows = getTaskRows();
+
+        rows.forEach((row) => {
+            const matchesSearch = !searchValue || String(row.dataset.search || "").includes(searchValue);
+            const matchesDivision = divisionValue === "all" || String(row.dataset.division || "") === normalizeKey(divisionValue);
+            const matchesStatus = statusValue === "all" || String(row.dataset.status || "") === statusValue;
+            const matchesPriority = priorityValue === "all" || String(row.dataset.priority || "") === priorityValue;
+            row.hidden = !(matchesSearch && matchesDivision && matchesStatus && matchesPriority);
+        });
+
+        updateTaskSummary();
+    };
+
     const buildTableActionButtonsHtml = (recordType) => {
         return `
             <td class="table-action-cell">
@@ -5371,7 +5902,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function persistMaintenanceState() {
-        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody);
+        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody || taskTableBody);
         if (!hasMaintenanceTargets) {
             return;
         }
@@ -5381,6 +5912,8 @@ document.addEventListener("DOMContentLoaded", () => {
             roadRecords,
             equipmentRows: serializeEquipmentRows(),
             scheduleRows: serializeScheduleRows(),
+            taskRows: serializeTaskRows(),
+            personnelRecords,
         };
 
         try {
@@ -5391,7 +5924,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function restoreMaintenanceState() {
-        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody);
+        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody || taskTableBody);
         if (!hasMaintenanceTargets) {
             return;
         }
@@ -5482,6 +6015,49 @@ document.addEventListener("DOMContentLoaded", () => {
                 restoreScheduleEmptyRow();
             }
         }
+
+        if (Array.isArray(savedState.personnelRecords)) {
+            personnelRecords = savedState.personnelRecords
+                .filter((record) => record && typeof record === "object")
+                .map((record) => ({
+                    fullName: String(record.fullName || "").trim(),
+                    employeeId: String(record.employeeId || "").trim(),
+                    division: String(record.division || "").trim(),
+                    position: String(record.position || "").trim(),
+                    email: String(record.email || "").trim(),
+                    phone: String(record.phone || "").trim(),
+                    divisionHead: Boolean(record.divisionHead),
+                }))
+                .filter((record) => record.fullName);
+        }
+
+        if (taskTableBody && Array.isArray(savedState.taskRows)) {
+            taskTableBody.innerHTML = "";
+            savedState.taskRows.forEach((record) => {
+                if (!record || typeof record !== "object") {
+                    return;
+                }
+                if (!String(record.title || "").trim()) {
+                    return;
+                }
+                taskTableBody.append(createTaskRowElement({
+                    title: String(record.title || "").trim(),
+                    division: String(record.division || "").trim() || "-",
+                    assignedTo: String(record.assignedTo || "").trim(),
+                    dueDateIso: String(record.dueDateIso || "").trim(),
+                    dueDateDisplay: String(record.dueDateDisplay || "").trim() || formatTaskDateValue(record.dueDateIso),
+                    priority: String(record.priority || "").trim() || "Medium",
+                    status: String(record.status || "").trim() || "Pending",
+                    notes: String(record.notes || "").trim(),
+                }));
+            });
+
+            if (!taskTableBody.children.length) {
+                restoreTaskEmptyRow();
+            }
+        }
+
+        syncTaskPersonnelDropdownOptions();
     }
 
     if (scheduleForm && scheduleTableBody) {
@@ -5634,9 +6210,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    if (taskSearchInput) {
+        taskSearchInput.addEventListener("input", applyTaskFilters);
+    }
+
     restoreMaintenanceState();
     updateEquipmentSummary();
     updateScheduleSummary();
+    updateTaskSummary();
+    applyTaskFilters();
     refreshRoadMunicipalityOptions();
     if (typeof refreshRoadRegister === "function") {
         refreshRoadRegister();
@@ -5715,6 +6297,14 @@ document.addEventListener("DOMContentLoaded", () => {
                         label.textContent = option.textContent.trim();
                     }
 
+                    const inputTargetName = String(dropdown.dataset.inputTarget || "").trim();
+                    if (inputTargetName) {
+                        const targetInput = dropdown.closest("form")?.elements?.namedItem(inputTargetName);
+                        if (targetInput instanceof HTMLInputElement || targetInput instanceof HTMLSelectElement || targetInput instanceof HTMLTextAreaElement) {
+                            targetInput.value = String(option.dataset.value || option.textContent || "").trim();
+                        }
+                    }
+
                     dropdown.classList.remove("is-open");
                     if (trigger) {
                         trigger.setAttribute("aria-expanded", "false");
@@ -5723,6 +6313,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (dropdown.dataset.contractorFilter) {
                         updateContractorDropdownFilterState(dropdown);
                         refreshContractorTable();
+                    }
+
+                    if (dropdown.dataset.taskFilter) {
+                        applyTaskFilters();
                     }
 
                     refreshRoadMunicipalityOptions();
@@ -5746,6 +6340,8 @@ document.addEventListener("DOMContentLoaded", () => {
             closeRoadEditModal();
             closeRoadDeleteModal();
             closeRoadAddModal();
+            closeTaskPersonnelModal();
+            closeTaskModal();
             closeRoadDeleteConfirmToast();
             closeRoadUploadDuplicatePrompt();
             closeRoadUploadAddConfirmPrompt();
@@ -8010,6 +8606,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const projectPanelTitle = projectBoard.querySelector(".js-project-panel-title");
         const projectPanelSubtitle = projectBoard.querySelector(".js-project-panel-subtitle");
         const divisionFilter = projectBoard.querySelector('[data-project-filter="division"]');
+        const projectFilterSelects = projectBoard.querySelectorAll(".project-filter select[data-project-filter]");
         const projectTotalSummary = projectBoard.querySelector('[data-project-summary="total"]');
         const projectBudgetSummary = projectBoard.querySelector('[data-project-summary="budget"]');
         const projectApprovedSummary = projectBoard.querySelector('[data-project-summary="approved"]');
@@ -8018,6 +8615,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const openProjectButtons = projectBoard.querySelectorAll(".js-project-open-modal");
         const closeProjectButtons = projectBoard.querySelectorAll(".js-project-close-modal");
         const closeDeleteButtons = projectBoard.querySelectorAll(".js-project-close-delete-modal");
+        const projectFilterDropdownSyncers = [];
 
         const formatProjectCurrency = (amount) => {
             const numericAmount = Number.isFinite(amount) ? amount : 0;
@@ -8033,6 +8631,131 @@ document.addEventListener("DOMContentLoaded", () => {
             const normalizedValue = String(value || "").replace(/[^0-9.-]/g, "");
             const parsedValue = Number.parseFloat(normalizedValue);
             return Number.isFinite(parsedValue) ? parsedValue : 0;
+        };
+
+        const escapeProjectHtml = (value) =>
+            String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+
+        const enhanceProjectFilterSelect = (select) => {
+            if (!(select instanceof HTMLSelectElement)) {
+                return;
+            }
+
+            const projectFilterRoot = select.closest(".project-filter");
+            if (!(projectFilterRoot instanceof HTMLElement) || projectFilterRoot.querySelector(".project-filter-dropdown")) {
+                return;
+            }
+
+            select.classList.add("project-filter-select-hidden");
+
+            const dropdownRoot = document.createElement("div");
+            dropdownRoot.className = "project-filter-dropdown";
+            dropdownRoot.innerHTML = `
+                <button type="button" class="project-filter-dropdown__trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="project-filter-dropdown__label"></span>
+                    <span class="material-symbols-outlined project-filter-dropdown__caret" aria-hidden="true">expand_more</span>
+                </button>
+                <div class="project-filter-dropdown__menu-wrap">
+                    <ul class="project-filter-dropdown__menu" role="listbox"></ul>
+                </div>
+            `;
+            projectFilterRoot.appendChild(dropdownRoot);
+
+            const trigger = dropdownRoot.querySelector(".project-filter-dropdown__trigger");
+            const label = dropdownRoot.querySelector(".project-filter-dropdown__label");
+            const menu = dropdownRoot.querySelector(".project-filter-dropdown__menu");
+
+            const closeDropdown = () => {
+                dropdownRoot.classList.remove("is-open");
+                if (trigger instanceof HTMLElement) {
+                    trigger.setAttribute("aria-expanded", "false");
+                }
+            };
+
+            const renderDropdown = () => {
+                if (!(menu instanceof HTMLElement) || !(label instanceof HTMLElement)) {
+                    return;
+                }
+
+                const selectedOption = select.options[select.selectedIndex];
+                label.textContent = selectedOption?.textContent?.trim() || "Select";
+
+                menu.innerHTML = Array.from(select.options).map((option) => {
+                    const optionValue = String(option.value || "").trim();
+                    const optionLabel = String(option.textContent || "").trim();
+                    const isSelected = option.selected;
+                    return `
+                        <li>
+                            <button
+                                type="button"
+                                class="project-filter-dropdown__option${isSelected ? " is-selected" : ""}"
+                                data-value="${escapeProjectHtml(optionValue)}"
+                                role="option"
+                                aria-selected="${isSelected ? "true" : "false"}"
+                            >
+                                <span>${escapeProjectHtml(optionLabel)}</span>
+                            </button>
+                        </li>
+                    `;
+                }).join("");
+            };
+
+            if (trigger instanceof HTMLElement) {
+                trigger.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    projectBoard.querySelectorAll(".project-filter-dropdown.is-open").forEach((dropdown) => {
+                        if (dropdown !== dropdownRoot) {
+                            dropdown.classList.remove("is-open");
+                            const dropdownTrigger = dropdown.querySelector(".project-filter-dropdown__trigger");
+                            if (dropdownTrigger instanceof HTMLElement) {
+                                dropdownTrigger.setAttribute("aria-expanded", "false");
+                            }
+                        }
+                    });
+                    const opening = !dropdownRoot.classList.contains("is-open");
+                    dropdownRoot.classList.toggle("is-open", opening);
+                    trigger.setAttribute("aria-expanded", opening ? "true" : "false");
+                });
+            }
+
+            if (menu instanceof HTMLElement) {
+                menu.addEventListener("click", (event) => {
+                    const optionButton = event.target.closest(".project-filter-dropdown__option");
+                    if (!(optionButton instanceof HTMLButtonElement)) {
+                        return;
+                    }
+
+                    const nextValue = String(optionButton.dataset.value || "").trim();
+                    if (select.value !== nextValue) {
+                        select.value = nextValue;
+                        select.dispatchEvent(new Event("change", { bubbles: true }));
+                    } else {
+                        renderDropdown();
+                    }
+                    closeDropdown();
+                });
+            }
+
+            document.addEventListener("click", (event) => {
+                if (!dropdownRoot.contains(event.target)) {
+                    closeDropdown();
+                }
+            });
+
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    closeDropdown();
+                }
+            });
+
+            renderDropdown();
+            projectFilterDropdownSyncers.push(renderDropdown);
         };
 
         const getProjectRows = () => {
@@ -8068,6 +8791,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (divisionFilter instanceof HTMLSelectElement && divisionFilter.value !== effectiveDivision) {
                 divisionFilter.value = effectiveDivision;
             }
+            projectFilterDropdownSyncers.forEach((syncDropdown) => syncDropdown());
         };
 
         const syncProjectRegistrySummary = () => {
@@ -8210,6 +8934,10 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
+        projectFilterSelects.forEach((select) => {
+            enhanceProjectFilterSelect(select);
+        });
+
         syncProjectRegistrySummary();
         syncActiveProjectDivision(divisionFilter instanceof HTMLSelectElement ? divisionFilter.value : "Admin Division");
 
@@ -8230,4 +8958,787 @@ document.addEventListener("DOMContentLoaded", () => {
     syncPpaTableState();
 });
 /* PLANNING_DIVISION_MODAL_SCRIPT_END */
+
+document.addEventListener("DOMContentLoaded", () => {
+    const qualityDashboard = document.querySelector(".js-quality-dashboard");
+    if (!(qualityDashboard instanceof HTMLElement)) return;
+
+    const qualityTableWrap = qualityDashboard.querySelector(".quality-table-wrap");
+    const qualityTableBody = qualityDashboard.querySelector(".js-quality-table-body");
+    const qualityRecordMeta = qualityDashboard.querySelector(".js-quality-record-meta");
+    const qualityResultsSummary = qualityDashboard.querySelector(".js-quality-results-summary");
+    const qualityPagination = qualityDashboard.querySelector(".js-quality-pagination");
+    const qualitySearchInput = qualityDashboard.querySelector(".js-quality-search");
+    const qualityTabs = Array.from(qualityDashboard.querySelectorAll("[data-quality-tab]"));
+    const routeFilterButton = qualityDashboard.querySelector(".js-quality-route-filter");
+    const openModalButton = qualityDashboard.querySelector(".js-quality-open-modal");
+    const qualityModal = document.querySelector(".js-quality-modal");
+    const qualityForm = qualityModal ? qualityModal.querySelector(".js-quality-form") : null;
+    const qualityModalTitle = qualityModal ? qualityModal.querySelector("#quality-modal-title") : null;
+    const qualityModalSubtitle = qualityModal ? qualityModal.querySelector(".js-quality-modal-subtitle") : null;
+    const closeQualityButtons = qualityModal
+        ? Array.from(qualityModal.querySelectorAll(".js-quality-close-modal"))
+        : [];
+    const deleteQualityButton = qualityModal ? qualityModal.querySelector(".js-quality-delete-record") : null;
+
+    if (!(qualityTableWrap instanceof HTMLElement) || !(qualityTableBody instanceof HTMLElement) || !(qualityPagination instanceof HTMLElement)) {
+        return;
+    }
+
+    const QUALITY_STORAGE_KEY = "peo_quality_records_v1";
+    const QUALITY_PAGE_SIZE = 10;
+    const ROUTE_FILTERS = ["all", "incoming", "outgoing"];
+    const DEFAULT_QUALITY_RECORDS = [
+        {
+            __id: "quality_seed_1",
+            received_from: "Admin Division",
+            doc_date: "2026-02-28",
+            particulars: "Other",
+            doc_no: "#245",
+            project_location: "Construction of Bridge",
+            location_detail: "Brgy. Paglaum, Taytay",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-02",
+            status: "For Action",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_2",
+            received_from: "Site Operations",
+            doc_date: "2026-03-01",
+            particulars: "Concrete",
+            doc_no: "#246",
+            project_location: "Road Expansion PH-2",
+            location_detail: "Arterial Material, Sector 4",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Technical Team",
+            date_recv: "2026-03-03",
+            status: "In Progress",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_3",
+            received_from: "Procurement",
+            doc_date: "2026-03-02",
+            particulars: "Steel",
+            doc_no: "#247",
+            project_location: "Substation Delta",
+            location_detail: "Industrial Zone A",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-03",
+            status: "Completed",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_4",
+            received_from: "Construction Team",
+            doc_date: "2026-03-03",
+            particulars: "Structural",
+            doc_no: "#248",
+            project_location: "Flood Control Package A",
+            location_detail: "Riverbank Zone 3",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "QA Inspector",
+            date_recv: "2026-03-04",
+            status: "For Release",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_5",
+            received_from: "Materials Unit",
+            doc_date: "2026-03-04",
+            particulars: "Concrete",
+            doc_no: "#249",
+            project_location: "Bridge Retrofit Lot 6",
+            location_detail: "San Isidro, Block 2",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Materials Lab",
+            date_recv: "2026-03-04",
+            status: "In Progress",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_6",
+            received_from: "Electrical Section",
+            doc_date: "2026-03-04",
+            particulars: "Electrical",
+            doc_no: "#250",
+            project_location: "Streetlight Restoration",
+            location_detail: "Poblacion Main Road",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-05",
+            status: "For Action",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_7",
+            received_from: "Procurement",
+            doc_date: "2026-03-05",
+            particulars: "Steel",
+            doc_no: "#251",
+            project_location: "Steel Truss Fabrication",
+            location_detail: "Warehouse Compound",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Release Desk",
+            date_recv: "2026-03-05",
+            status: "For Release",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_8",
+            received_from: "Road Maintenance",
+            doc_date: "2026-03-05",
+            particulars: "Other",
+            doc_no: "#252",
+            project_location: "Asphalt Patching Program",
+            location_detail: "District 5 Corridor",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "QA Inspector",
+            date_recv: "2026-03-05",
+            status: "Completed",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_9",
+            received_from: "Laboratory Unit",
+            doc_date: "2026-03-05",
+            particulars: "Concrete",
+            doc_no: "#253",
+            project_location: "Slope Protection Works",
+            location_detail: "Hillside Section B",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Technical Team",
+            date_recv: "2026-03-06",
+            status: "In Progress",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_10",
+            received_from: "Planning Division",
+            doc_date: "2026-03-06",
+            particulars: "Structural",
+            doc_no: "#254",
+            project_location: "Public Market Rehab",
+            location_detail: "Central District",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-06",
+            status: "For Action",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_11",
+            received_from: "Field Engineering",
+            doc_date: "2026-03-06",
+            particulars: "Electrical",
+            doc_no: "#255",
+            project_location: "Solar Water System",
+            location_detail: "Barangay New Hope",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Release Desk",
+            date_recv: "2026-03-06",
+            status: "For Release",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_12",
+            received_from: "Admin Division",
+            doc_date: "2026-03-06",
+            particulars: "Other",
+            doc_no: "#256",
+            project_location: "Records Archival Batch",
+            location_detail: "PEO Main Office",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-06",
+            status: "Completed",
+            remarks: "",
+        },
+    ];
+
+    const escapeHtml = (value) => {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    };
+
+    const normalizeText = (value) => {
+        return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    };
+
+    const createRecordId = () => {
+        return `quality_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    };
+
+    const formatDate = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return text;
+
+        return parsed.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+        });
+    };
+
+    const readStoredRecords = () => {
+        try {
+            const raw = window.localStorage.getItem(QUALITY_STORAGE_KEY);
+            if (raw === null) {
+                return DEFAULT_QUALITY_RECORDS.map((record) => ({ ...record }));
+            }
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return DEFAULT_QUALITY_RECORDS.map((record) => ({ ...record }));
+        }
+    };
+
+    const writeStoredRecords = (records) => {
+        try {
+            window.localStorage.setItem(QUALITY_STORAGE_KEY, JSON.stringify(records));
+        } catch (error) {
+            // Ignore storage errors.
+        }
+    };
+
+    const getParticularBadgeClass = (value) => {
+        const normalized = normalizeText(value);
+        if (normalized === "concrete") return "is-concrete";
+        if (normalized === "steel") return "is-steel";
+        if (normalized === "electrical") return "is-electrical";
+        if (normalized === "structural") return "is-structural";
+        return "is-neutral";
+    };
+
+    const getStatusClassName = (value) => {
+        const normalized = normalizeText(value);
+        if (normalized === "for action") return "is-action";
+        if (normalized === "for release") return "is-release";
+        if (normalized === "completed") return "is-complete";
+        return "is-progress";
+    };
+
+    const getRouteClassName = (value) => {
+        return normalizeText(value) === "outgoing" ? "is-outgoing" : "is-incoming";
+    };
+
+    const getRouteFilterLabel = (value) => {
+        if (value === "incoming") return "Incoming only";
+        if (value === "outgoing") return "Outgoing only";
+        return "All routes";
+    };
+
+    const buildRecordFromForm = () => {
+        if (!(qualityForm instanceof HTMLFormElement)) return null;
+
+        const formData = new FormData(qualityForm);
+        const record = {
+            __id: createRecordId(),
+            received_from: String(formData.get("received_from") ?? "").trim(),
+            doc_date: String(formData.get("doc_date") ?? "").trim(),
+            particulars: String(formData.get("particulars") ?? "").trim(),
+            doc_no: String(formData.get("doc_no") ?? "").trim(),
+            project_location: String(formData.get("project_location") ?? "").trim(),
+            location_detail: String(formData.get("location_detail") ?? "").trim(),
+            scan_url: String(formData.get("scan_url") ?? "").trim(),
+            route: String(formData.get("route") ?? "").trim(),
+            received_by: String(formData.get("received_by") ?? "").trim(),
+            date_recv: String(formData.get("date_recv") ?? "").trim(),
+            status: String(formData.get("status") ?? "").trim(),
+            remarks: String(formData.get("remarks") ?? "").trim(),
+        };
+
+        return record.received_from && record.doc_date && record.doc_no ? record : null;
+    };
+
+    const fillQualityForm = (record) => {
+        if (!(qualityForm instanceof HTMLFormElement) || !record) return;
+
+        const fieldNames = [
+            "received_from",
+            "doc_date",
+            "particulars",
+            "doc_no",
+            "project_location",
+            "location_detail",
+            "scan_url",
+            "route",
+            "received_by",
+            "date_recv",
+            "status",
+            "remarks",
+        ];
+
+        fieldNames.forEach((fieldName) => {
+            const field = qualityForm.elements.namedItem(fieldName);
+            if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+                field.value = record[fieldName] ?? "";
+            }
+        });
+    };
+
+    let records = readStoredRecords();
+    let currentPage = 1;
+    let activeTab = "all";
+    let activeRouteFilter = "all";
+    let searchQuery = "";
+    let editingRecordId = null;
+    const TABLE_DRAG_THRESHOLD = 8;
+    const DRAG_CLICK_SUPPRESSION_MS = 220;
+    const tableDragState = {
+        activePointerId: null,
+        isPointerDown: false,
+        hasMoved: false,
+        startX: 0,
+        startScrollLeft: 0,
+        suppressClickUntil: 0,
+    };
+
+    const getFilteredRecords = () => {
+        return records.filter((record) => {
+            const normalizedStatus = normalizeText(record.status);
+            const normalizedRoute = normalizeText(record.route);
+            const matchesTab = (
+                activeTab === "all"
+                || (activeTab === "for-action" && normalizedStatus === "for action")
+                || (activeTab === "for-release" && normalizedStatus === "for release")
+                || (activeTab === "completed" && normalizedStatus === "completed")
+            );
+            const matchesRoute = activeRouteFilter === "all" || normalizedRoute === activeRouteFilter;
+            const haystack = [
+                record.received_from,
+                record.particulars,
+                record.doc_no,
+                record.project_location,
+                record.location_detail,
+                record.received_by,
+                record.route,
+                record.status,
+                record.remarks,
+            ].map(normalizeText).join(" ");
+            const matchesSearch = !searchQuery || haystack.includes(searchQuery);
+
+            return matchesTab && matchesRoute && matchesSearch;
+        });
+    };
+
+    const getTotalPages = (filteredRecords) => {
+        return Math.max(1, Math.ceil(filteredRecords.length / QUALITY_PAGE_SIZE));
+    };
+
+    const clampCurrentPage = (filteredRecords) => {
+        currentPage = Math.min(Math.max(1, currentPage), getTotalPages(filteredRecords));
+    };
+
+    const hasHorizontalOverflow = () => {
+        return qualityTableWrap.scrollWidth - qualityTableWrap.clientWidth > 2;
+    };
+
+    const syncHorizontalScrollState = () => {
+        const canScroll = hasHorizontalOverflow();
+        qualityTableWrap.style.cursor = canScroll ? (tableDragState.hasMoved ? "grabbing" : "grab") : "default";
+    };
+
+    const shouldSuppressTableClick = () => {
+        return Date.now() < tableDragState.suppressClickUntil;
+    };
+
+    const resetTableDragState = () => {
+        tableDragState.activePointerId = null;
+        tableDragState.isPointerDown = false;
+        tableDragState.hasMoved = false;
+        qualityTableWrap.classList.remove("is-dragging");
+        syncHorizontalScrollState();
+    };
+
+    const stopDragging = () => {
+        if (!tableDragState.isPointerDown && tableDragState.activePointerId === null) return;
+
+        const activePointerId = tableDragState.activePointerId;
+        const didMove = tableDragState.hasMoved;
+
+        tableDragState.activePointerId = null;
+        tableDragState.isPointerDown = false;
+
+        if (didMove) {
+            tableDragState.suppressClickUntil = Date.now() + DRAG_CLICK_SUPPRESSION_MS;
+        }
+
+        if (
+            activePointerId !== null
+            && qualityTableWrap.hasPointerCapture
+            && qualityTableWrap.hasPointerCapture(activePointerId)
+        ) {
+            qualityTableWrap.releasePointerCapture(activePointerId);
+        }
+
+        resetTableDragState();
+    };
+
+    const createEmptyStateRow = () => {
+        qualityTableBody.innerHTML = `
+            <tr class="quality-empty-row">
+                <td colspan="11">No quality records match the current filters.</td>
+            </tr>
+        `;
+    };
+
+    const createRecordRow = (record) => {
+        const row = document.createElement("tr");
+        row.className = "quality-data-row";
+        row.dataset.recordId = record.__id;
+        row.innerHTML = `
+            <td class="quality-source">${escapeHtml(record.received_from)}</td>
+            <td>${escapeHtml(formatDate(record.doc_date))}</td>
+            <td><span class="quality-badge ${getParticularBadgeClass(record.particulars)}">${escapeHtml(record.particulars || "Other")}</span></td>
+            <td>${escapeHtml(record.doc_no || "-")}</td>
+            <td>${escapeHtml(record.project_location || "-")}</td>
+            <td>${escapeHtml(record.location_detail || "-")}</td>
+            <td>
+                <a href="${escapeHtml(record.scan_url || "#")}" class="quality-scan-link ${record.scan_url ? "" : "is-disabled"}" ${record.scan_url ? 'target="_blank" rel="noopener noreferrer"' : 'aria-disabled="true" tabindex="-1"'}>
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    <span>Scan</span>
+                </a>
+            </td>
+            <td><span class="quality-route ${getRouteClassName(record.route)}">${escapeHtml(record.route || "Incoming")}</span></td>
+            <td>${escapeHtml(record.received_by || "-")}</td>
+            <td>${escapeHtml(formatDate(record.date_recv))}</td>
+            <td><span class="quality-status ${getStatusClassName(record.status)}">${escapeHtml(record.status || "For Action")}</span></td>
+        `;
+        return row;
+    };
+
+    const syncTableSummary = (filteredRecords, pagedRecords, startIndex) => {
+        if (qualityRecordMeta instanceof HTMLElement) {
+            qualityRecordMeta.textContent = `Showing ${filteredRecords.length} active record${filteredRecords.length === 1 ? "" : "s"}`;
+        }
+
+        if (qualityResultsSummary instanceof HTMLElement) {
+            const start = filteredRecords.length ? startIndex + 1 : 0;
+            const end = filteredRecords.length ? startIndex + pagedRecords.length : 0;
+            qualityResultsSummary.textContent = `Showing ${start} to ${end} of ${filteredRecords.length} records`;
+        }
+    };
+
+    const syncRouteFilterButton = () => {
+        if (!(routeFilterButton instanceof HTMLElement)) return;
+        const label = getRouteFilterLabel(activeRouteFilter);
+        routeFilterButton.classList.toggle("is-active", activeRouteFilter !== "all");
+        routeFilterButton.setAttribute("aria-label", `Filter route: ${label}`);
+        routeFilterButton.setAttribute("title", `Filter route: ${label}`);
+    };
+
+    const syncTabs = () => {
+        qualityTabs.forEach((tab) => {
+            const isActive = tab.getAttribute("data-quality-tab") === activeTab;
+            tab.classList.toggle("is-active", isActive);
+            tab.setAttribute("aria-selected", String(isActive));
+        });
+    };
+
+    const renderPagination = (filteredRecords) => {
+        qualityPagination.innerHTML = "";
+        const totalPages = getTotalPages(filteredRecords);
+
+        const makeButton = (label, page, disabled = false, active = false) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = label;
+            button.disabled = disabled;
+            if (active) {
+                button.classList.add("is-active");
+                button.setAttribute("aria-current", "page");
+            }
+            button.dataset.page = String(page);
+            return button;
+        };
+
+        qualityPagination.appendChild(makeButton("Previous", currentPage - 1, currentPage <= 1));
+
+        for (let page = 1; page <= totalPages; page += 1) {
+            qualityPagination.appendChild(makeButton(String(page), page, false, page === currentPage));
+        }
+
+        qualityPagination.appendChild(makeButton("Next", currentPage + 1, currentPage >= totalPages));
+    };
+
+    const renderTable = () => {
+        const filteredRecords = getFilteredRecords();
+        clampCurrentPage(filteredRecords);
+
+        const startIndex = (currentPage - 1) * QUALITY_PAGE_SIZE;
+        const pagedRecords = filteredRecords.slice(startIndex, startIndex + QUALITY_PAGE_SIZE);
+        qualityTableBody.innerHTML = "";
+
+        if (!pagedRecords.length) {
+            createEmptyStateRow();
+        } else {
+            pagedRecords.forEach((record) => {
+                qualityTableBody.appendChild(createRecordRow(record));
+            });
+        }
+
+        syncTableSummary(filteredRecords, pagedRecords, startIndex);
+        syncTabs();
+        syncRouteFilterButton();
+        renderPagination(filteredRecords);
+        window.requestAnimationFrame(syncHorizontalScrollState);
+    };
+
+    const syncModalState = () => {
+        const isOpen = qualityModal instanceof HTMLElement && !qualityModal.hidden;
+        document.body.classList.toggle("quality-modal-open", isOpen);
+    };
+
+    const openQualityModal = (mode = "create", record = null) => {
+        if (!(qualityModal instanceof HTMLElement) || !(qualityForm instanceof HTMLFormElement)) return;
+
+        qualityForm.reset();
+        editingRecordId = mode === "edit" ? record?.__id || null : null;
+
+        if (qualityModalTitle instanceof HTMLElement) {
+            qualityModalTitle.textContent = mode === "edit" ? "Edit Quality Record" : "Add Quality Record";
+        }
+        if (qualityModalSubtitle instanceof HTMLElement) {
+            qualityModalSubtitle.textContent = mode === "edit"
+                ? "Update the selected Quality Division tracker record."
+                : "Create a new Quality Division tracker record.";
+        }
+        if (deleteQualityButton instanceof HTMLElement) {
+            deleteQualityButton.hidden = mode !== "edit";
+        }
+        if (mode === "edit" && record) {
+            fillQualityForm(record);
+        }
+
+        qualityModal.hidden = false;
+        syncModalState();
+        const firstField = qualityForm.elements.namedItem("received_from");
+        if (firstField instanceof HTMLElement) {
+            window.setTimeout(() => firstField.focus(), 0);
+        }
+    };
+
+    const closeQualityModal = () => {
+        if (!(qualityModal instanceof HTMLElement)) return;
+        qualityModal.hidden = true;
+        editingRecordId = null;
+        syncModalState();
+    };
+
+    if (openModalButton instanceof HTMLElement) {
+        openModalButton.addEventListener("click", () => {
+            openQualityModal("create");
+        });
+    }
+
+    closeQualityButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            closeQualityModal();
+        });
+    });
+
+    if (qualityModal instanceof HTMLElement) {
+        qualityModal.addEventListener("click", (event) => {
+            if (event.target === qualityModal) {
+                closeQualityModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && qualityModal instanceof HTMLElement && !qualityModal.hidden) {
+            closeQualityModal();
+        }
+    });
+
+    if (qualityForm instanceof HTMLFormElement) {
+        qualityForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            if (!qualityForm.checkValidity()) {
+                qualityForm.reportValidity();
+                return;
+            }
+
+            const formRecord = buildRecordFromForm();
+            if (!formRecord) return;
+
+            if (editingRecordId) {
+                const targetIndex = records.findIndex((record) => record.__id === editingRecordId);
+                if (targetIndex >= 0) {
+                    records[targetIndex] = { ...formRecord, __id: editingRecordId };
+                }
+            } else {
+                records.unshift(formRecord);
+            }
+
+            currentPage = 1;
+            writeStoredRecords(records);
+            renderTable();
+            closeQualityModal();
+        });
+    }
+
+    if (deleteQualityButton instanceof HTMLElement) {
+        deleteQualityButton.addEventListener("click", () => {
+            if (!editingRecordId) return;
+            if (!window.confirm("Delete this quality record?")) return;
+
+            records = records.filter((record) => record.__id !== editingRecordId);
+            writeStoredRecords(records);
+            renderTable();
+            closeQualityModal();
+        });
+    }
+
+    if (qualitySearchInput instanceof HTMLInputElement) {
+        qualitySearchInput.addEventListener("input", () => {
+            searchQuery = normalizeText(qualitySearchInput.value);
+            currentPage = 1;
+            renderTable();
+        });
+    }
+
+    qualityTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+            activeTab = tab.getAttribute("data-quality-tab") || "all";
+            currentPage = 1;
+            renderTable();
+        });
+    });
+
+    if (routeFilterButton instanceof HTMLElement) {
+        routeFilterButton.addEventListener("click", () => {
+            const currentIndex = ROUTE_FILTERS.indexOf(activeRouteFilter);
+            activeRouteFilter = ROUTE_FILTERS[(currentIndex + 1) % ROUTE_FILTERS.length];
+            currentPage = 1;
+            renderTable();
+        });
+    }
+
+    qualityPagination.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) return;
+
+        const nextPage = Number.parseInt(target.dataset.page || "", 10);
+        if (!Number.isFinite(nextPage) || target.disabled) return;
+        currentPage = nextPage;
+        renderTable();
+    });
+
+    qualityTableBody.addEventListener("click", (event) => {
+        if (shouldSuppressTableClick()) return;
+
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.closest(".quality-scan-link")) return;
+
+        const row = target.closest("tr[data-record-id]");
+        if (!(row instanceof HTMLTableRowElement)) return;
+
+        const recordId = row.dataset.recordId;
+        const record = records.find((item) => item.__id === recordId);
+        if (!record) return;
+
+        openQualityModal("edit", record);
+    });
+
+    qualityTableWrap.addEventListener(
+        "wheel",
+        (event) => {
+            if (!hasHorizontalOverflow()) return;
+
+            const shouldScrollHorizontally = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+            if (!shouldScrollHorizontally) return;
+
+            event.preventDefault();
+            qualityTableWrap.scrollLeft += event.deltaX || event.deltaY;
+            syncHorizontalScrollState();
+        },
+        { passive: false }
+    );
+
+    qualityTableWrap.addEventListener("pointerdown", (event) => {
+        if (!hasHorizontalOverflow()) return;
+
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest("a, button, input, select, textarea, label")) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+
+        tableDragState.activePointerId = event.pointerId;
+        tableDragState.isPointerDown = true;
+        tableDragState.hasMoved = false;
+        tableDragState.startX = event.clientX;
+        tableDragState.startScrollLeft = qualityTableWrap.scrollLeft;
+        qualityTableWrap.setPointerCapture(event.pointerId);
+    });
+
+    qualityTableWrap.addEventListener("pointermove", (event) => {
+        if (!tableDragState.isPointerDown) return;
+        if (tableDragState.activePointerId !== event.pointerId) return;
+
+        const deltaX = event.clientX - tableDragState.startX;
+        if (!tableDragState.hasMoved && Math.abs(deltaX) < TABLE_DRAG_THRESHOLD) return;
+
+        tableDragState.hasMoved = true;
+        qualityTableWrap.classList.add("is-dragging");
+        qualityTableWrap.scrollLeft = tableDragState.startScrollLeft - deltaX;
+        syncHorizontalScrollState();
+        event.preventDefault();
+    });
+
+    qualityTableWrap.addEventListener("scroll", syncHorizontalScrollState);
+    qualityTableWrap.addEventListener("keydown", (event) => {
+        if (!hasHorizontalOverflow()) return;
+
+        const pageStep = Math.max(240, Math.round(qualityTableWrap.clientWidth * 0.8));
+        let nextScrollLeft = qualityTableWrap.scrollLeft;
+
+        if (event.key === "ArrowLeft") nextScrollLeft -= 120;
+        if (event.key === "ArrowRight") nextScrollLeft += 120;
+        if (event.key === "Home") nextScrollLeft = 0;
+        if (event.key === "End") nextScrollLeft = qualityTableWrap.scrollWidth;
+        if (event.key === "PageUp") nextScrollLeft -= pageStep;
+        if (event.key === "PageDown") nextScrollLeft += pageStep;
+
+        if (nextScrollLeft === qualityTableWrap.scrollLeft) return;
+
+        event.preventDefault();
+        qualityTableWrap.scrollTo({
+            left: nextScrollLeft,
+            behavior: "smooth",
+        });
+        window.requestAnimationFrame(syncHorizontalScrollState);
+    });
+
+    qualityTableWrap.addEventListener("pointerup", stopDragging);
+    qualityTableWrap.addEventListener("pointercancel", stopDragging);
+    qualityTableWrap.addEventListener("lostpointercapture", stopDragging);
+    qualityTableWrap.addEventListener("mouseleave", stopDragging);
+    window.addEventListener("resize", syncHorizontalScrollState);
+
+    renderTable();
+});
 

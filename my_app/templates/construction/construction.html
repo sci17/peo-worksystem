@@ -10,83 +10,128 @@
     <div class="construction-modal-backdrop js-close-construction-modal"></div>
     <div class="construction-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="construction-modal-title">
         <div class="construction-modal-header">
-            <div>
+            <div class="construction-modal-heading">
+                <span class="construction-modal-kicker">Construction Register</span>
                 <h3 id="construction-modal-title">Create Construction Record</h3>
                 <p>Add a new project entry to the construction register.</p>
             </div>
-            <button type="button" class="construction-modal-close js-close-construction-modal" aria-label="Close form">&times;</button>
+            <button type="button" class="construction-modal-close js-close-construction-modal" aria-label="Close form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
         </div>
 
         <form class="construction-form js-construction-form">
-            <div class="construction-form-grid">
-                <label class="construction-field construction-field--wide">
-                    <span>Project Name *</span>
-                    <input type="text" name="project_name" required placeholder="Project name">
-                </label>
-                <label class="construction-field">
-                    <span>Location</span>
-                    <input type="text" name="location" placeholder="Location">
-                </label>
-                <label class="construction-field">
-                    <span>MUN</span>
-                    <input type="text" name="mun" placeholder="Municipality">
-                </label>
-                <label class="construction-field">
-                    <span>Contractor</span>
-                    <input type="text" name="contractor" placeholder="Contractor">
-                </label>
-                <label class="construction-field">
-                    <span>Contract Cost</span>
-                    <input type="text" name="contract_cost" placeholder="PHP 0.00">
-                </label>
-                <label class="construction-field">
-                    <span>NTP Date</span>
-                    <input type="date" name="ntp_date">
-                </label>
-                <label class="construction-field">
-                    <span>C.D</span>
-                    <input type="text" name="cd" placeholder="Contract duration">
-                </label>
-                <label class="construction-field">
-                    <span>Original Expiry Date</span>
-                    <input type="date" name="original_expiry_date">
-                </label>
-                <label class="construction-field">
-                    <span>Add'l. C.D</span>
-                    <input type="text" name="addl_cd" placeholder="Additional C.D">
-                </label>
-                <label class="construction-field">
-                    <span>Revised Expiry Date</span>
-                    <input type="date" name="revised_expiry_date">
-                </label>
-                <label class="construction-field">
-                    <span>Date Completed</span>
-                    <input type="date" name="date_completed">
-                </label>
-                <label class="construction-field">
-                    <span>Revised Contract Cost</span>
-                    <input type="text" name="revised_contract_cost" placeholder="PHP 0.00">
-                </label>
-                <label class="construction-field">
-                    <span>Status Previous (%)</span>
-                    <input type="text" name="status_previous" placeholder="0">
-                </label>
-                <label class="construction-field">
-                    <span>Status Current (%)</span>
-                    <input type="text" name="status_current" placeholder="0">
-                </label>
-                <label class="construction-field">
-                    <span>% of Time Elapsed</span>
-                    <input type="text" name="time_elapsed" placeholder="0">
-                </label>
-                <label class="construction-field">
-                    <span>Slippage (+) (-) %</span>
-                    <input type="text" name="slippage" placeholder="0">
-                </label>
-                <label class="construction-field construction-field--wide">
-                    <span>Remarks</span>
-                    <textarea name="remarks" rows="3" placeholder="Remarks"></textarea>
-                </label>
+            <div class="construction-form-section">
+                <div class="construction-form-section-head">
+                    <div class="construction-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">business_center</span>
+                    </div>
+                    <div>
+                        <h4>Project Overview</h4>
+                        <p>Capture the main project identity and contractor details.</p>
+                    </div>
+                </div>
+
+                <div class="construction-form-grid">
+                    <label class="construction-field construction-field--wide">
+                        <span>Project Name *</span>
+                        <input type="text" name="project_name" required placeholder="Project name">
+                    </label>
+                    <label class="construction-field">
+                        <span>Location</span>
+                        <input type="text" name="location" placeholder="Location">
+                    </label>
+                    <label class="construction-field">
+                        <span>MUN</span>
+                        <input type="text" name="mun" placeholder="Municipality">
+                    </label>
+                    <label class="construction-field">
+                        <span>Contractor</span>
+                        <input type="text" name="contractor" placeholder="Contractor">
+                    </label>
+                    <label class="construction-field">
+                        <span>Contract Cost</span>
+                        <input type="text" name="contract_cost" placeholder="PHP 0.00">
+                    </label>
+                    <label class="construction-field">
+                        <span>Revised Contract Cost</span>
+                        <input type="text" name="revised_contract_cost" placeholder="PHP 0.00">
+                    </label>
+                </div>
+            </div>
+
+            <div class="construction-form-section">
+                <div class="construction-form-section-head">
+                    <div class="construction-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">calendar_month</span>
+                    </div>
+                    <div>
+                        <h4>Schedule and Contract Period</h4>
+                        <p>Track notice-to-proceed, duration, and completion milestones.</p>
+                    </div>
+                </div>
+
+                <div class="construction-form-grid">
+                    <label class="construction-field">
+                        <span>NTP Date</span>
+                        <input type="date" name="ntp_date">
+                    </label>
+                    <label class="construction-field">
+                        <span>C.D</span>
+                        <input type="text" name="cd" placeholder="Contract duration">
+                    </label>
+                    <label class="construction-field">
+                        <span>Original Expiry Date</span>
+                        <input type="date" name="original_expiry_date">
+                    </label>
+                    <label class="construction-field">
+                        <span>Add'l. C.D</span>
+                        <input type="text" name="addl_cd" placeholder="Additional C.D">
+                    </label>
+                    <label class="construction-field">
+                        <span>Revised Expiry Date</span>
+                        <input type="date" name="revised_expiry_date">
+                    </label>
+                    <label class="construction-field">
+                        <span>Date Completed</span>
+                        <input type="date" name="date_completed">
+                    </label>
+                </div>
+            </div>
+
+            <div class="construction-form-section">
+                <div class="construction-form-section-head">
+                    <div class="construction-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">monitoring</span>
+                    </div>
+                    <div>
+                        <h4>Progress Status</h4>
+                        <p>Update accomplishment, elapsed time, slippage, and remarks.</p>
+                    </div>
+                </div>
+
+                <div class="construction-form-grid">
+                    <label class="construction-field">
+                        <span>Status Previous (%)</span>
+                        <input type="text" name="status_previous" placeholder="0">
+                    </label>
+                    <label class="construction-field">
+                        <span>Status Current (%)</span>
+                        <input type="text" name="status_current" placeholder="0">
+                    </label>
+                    <label class="construction-field">
+                        <span>% of Time Elapsed</span>
+                        <input type="text" name="time_elapsed" placeholder="0">
+                    </label>
+                    <label class="construction-field">
+                        <span>Slippage (+) (-) %</span>
+                        <input type="text" name="slippage" placeholder="0">
+                    </label>
+                    <label class="construction-field construction-field--wide">
+                        <span>Remarks</span>
+                        <textarea name="remarks" rows="3" placeholder="Remarks"></textarea>
+                    </label>
+                </div>
             </div>
 
             <div class="construction-form-actions">

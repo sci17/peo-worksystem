@@ -1,24 +1,437 @@
-<section class="road-filter-panel">
-    <h2 style="margin: 0; font-size: 28px; color: #16233a;">Task Management</h2>
-    <p style="margin: 8px 0 14px; color: #5e6f83;">Manage maintenance tasks, schedules, and completion status.</p>
+<section class="task-dashboard" aria-label="Task management dashboard">
+    <div class="task-dashboard-head">
+        <div class="task-dashboard-copy">
+            <h1>Task Management</h1>
+        </div>
 
-    <div class="table-wrap">
-        <table class="division-table">
-            <thead>
-                <tr>
-                    <th>Task ID</th>
-                    <th>Road</th>
-                    <th>Assigned To</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                    <th class="align-right">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="6">No maintenance tasks available yet.</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="task-dashboard-actions">
+            <button type="button" class="task-secondary-btn js-open-task-personnel-modal">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"></path>
+                    <circle cx="10" cy="7" r="3"></circle>
+                    <path d="M20 8v6M23 11h-6"></path>
+                </svg>
+                <span>Add Personnel</span>
+            </button>
+            <button type="button" class="task-primary-btn js-open-task-modal">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14"></path>
+                </svg>
+                <span>New Task</span>
+            </button>
+        </div>
     </div>
+
+    <section class="task-stat-grid" aria-label="Task summary">
+        <article class="task-stat-card task-stat-card--total">
+            <div class="task-stat-head">
+                <span class="task-stat-chip">Overview</span>
+                <span class="task-stat-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <rect x="4" y="5" width="6" height="6" rx="1.5"></rect>
+                        <rect x="14" y="5" width="6" height="6" rx="1.5"></rect>
+                        <rect x="4" y="13" width="6" height="6" rx="1.5"></rect>
+                        <rect x="14" y="13" width="6" height="6" rx="1.5"></rect>
+                    </svg>
+                </span>
+            </div>
+            <div class="task-stat-body">
+                <p class="task-stat-value js-task-stat-total">0</p>
+                <p class="task-stat-label">Total Tasks</p>
+            </div>
+        </article>
+
+        <article class="task-stat-card task-stat-card--pending">
+            <div class="task-stat-head">
+                <span class="task-stat-chip">Queue</span>
+                <span class="task-stat-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <path d="M12 8v4l3 2"></path>
+                    </svg>
+                </span>
+            </div>
+            <div class="task-stat-body">
+                <p class="task-stat-value js-task-stat-pending">0</p>
+                <p class="task-stat-label">Pending</p>
+            </div>
+        </article>
+
+        <article class="task-stat-card task-stat-card--progress">
+            <div class="task-stat-head">
+                <span class="task-stat-chip">Active</span>
+                <span class="task-stat-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M5 12h14"></path>
+                        <path d="m13 6 6 6-6 6"></path>
+                    </svg>
+                </span>
+            </div>
+            <div class="task-stat-body">
+                <p class="task-stat-value js-task-stat-progress">0</p>
+                <p class="task-stat-label">In Progress</p>
+            </div>
+        </article>
+
+        <article class="task-stat-card task-stat-card--completed">
+            <div class="task-stat-head">
+                <span class="task-stat-chip">Finished</span>
+                <span class="task-stat-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <path d="m8.5 12 2.4 2.4L15.8 9.5"></path>
+                    </svg>
+                </span>
+            </div>
+            <div class="task-stat-body">
+                <p class="task-stat-value js-task-stat-completed">0</p>
+                <p class="task-stat-label">Completed</p>
+            </div>
+        </article>
+
+        <article class="task-stat-card task-stat-card--alert">
+            <div class="task-stat-head">
+                <span class="task-stat-chip">Attention</span>
+                <span class="task-stat-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 4 3 20h18L12 4Z"></path>
+                        <path d="M12 9v4"></path>
+                        <path d="M12 16h.01"></path>
+                    </svg>
+                </span>
+            </div>
+            <div class="task-stat-body">
+                <div class="task-stat-alert">
+                    <p class="task-stat-value js-task-stat-overdue">0</p>
+                    <p class="task-stat-label">Overdue</p>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <section class="task-filter-panel" aria-label="Task filters">
+        <div class="task-filter-row">
+            <label class="task-search-field">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="m20 20-3.5-3.5"></path>
+                </svg>
+                <input type="search" class="js-task-search" placeholder="Search tasks..." aria-label="Search tasks">
+            </label>
+
+            <div class="road-dropdown task-dropdown js-road-dropdown" data-task-filter="division">
+                <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Filter by division">
+                    <span class="dropdown-label">Division</span>
+                    <span class="dropdown-caret">&#9662;</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><button type="button" class="dropdown-option is-selected" data-value="all">All Divisions</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="admin">Admin</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="planning">Planning Division</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="construction">Construction</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="quality">Quality</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="maintenance">Maintenance</button></li>
+                </ul>
+            </div>
+
+            <div class="road-dropdown task-dropdown js-road-dropdown" data-task-filter="status">
+                <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Filter by status">
+                    <span class="dropdown-label">Status</span>
+                    <span class="dropdown-caret">&#9662;</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><button type="button" class="dropdown-option is-selected" data-value="all">All Statuses</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="pending">Pending</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="in_progress">In Progress</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="completed">Completed</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="cancelled">Cancelled</button></li>
+                </ul>
+            </div>
+
+            <div class="road-dropdown task-dropdown js-road-dropdown" data-task-filter="priority">
+                <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Filter by priority">
+                    <span class="dropdown-label">Priority</span>
+                    <span class="dropdown-caret">&#9662;</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><button type="button" class="dropdown-option is-selected" data-value="all">All Priorities</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="low">Low</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="medium">Medium</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="high">High</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="urgent">Urgent</button></li>
+                </ul>
+            </div>
+
+            <button type="button" class="task-filter-icon-btn" aria-label="More task filters">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h10"></path>
+                    <path d="M18 7h2"></path>
+                    <path d="M10 17h10"></path>
+                    <path d="M4 17h2"></path>
+                    <path d="M14 4v6"></path>
+                    <path d="M8 14v6"></path>
+                </svg>
+            </button>
+        </div>
+    </section>
+
+    <section class="task-table-panel" aria-label="Task table">
+        <div class="task-table-head">
+            <div class="task-table-heading">
+                <h2>Tasks</h2>
+                <p>Managing current task flow</p>
+            </div>
+
+            <div class="task-table-tools">
+                <span class="task-table-total js-task-table-total">0 Total</span>
+            </div>
+        </div>
+
+        <div class="task-table-shell task-table-shell--empty">
+            <table class="task-table">
+                <colgroup>
+                    <col style="width: 36%;">
+                    <col style="width: 16%;">
+                    <col style="width: 16%;">
+                    <col style="width: 13%;">
+                    <col style="width: 13%;">
+                    <col style="width: 6%;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Task Name</th>
+                        <th>Assigned To</th>
+                        <th>Due Date</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody class="js-task-table-body">
+                    <tr class="task-empty-row js-task-empty-row">
+                        <td colspan="6">
+                            <div class="task-empty-state">
+                                <svg viewBox="0 0 64 64" aria-hidden="true">
+                                    <rect x="18" y="14" width="12" height="12" rx="2"></rect>
+                                    <rect x="18" y="38" width="12" height="12" rx="2"></rect>
+                                    <path d="m21 44 4 4 7-9"></path>
+                                    <path d="M38 20h12"></path>
+                                    <path d="M38 32h12"></path>
+                                    <path d="M38 44h12"></path>
+                                </svg>
+                                <div class="task-empty-copy">
+                                    <strong>No tasks yet</strong>
+                                    <p>New tasks will appear here once you start assigning work.</p>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="task-table-footer">
+            <span class="js-task-results-summary">Showing 0 to 0 of 0 tasks</span>
+            <div class="task-table-page">
+                <button type="button" disabled>Previous</button>
+                <span>Page 1 of 1</span>
+                <button type="button" disabled>Next</button>
+            </div>
+        </div>
+    </section>
 </section>
+
+<div class="task-personnel-modal js-task-personnel-modal" hidden>
+    <div class="task-personnel-backdrop js-close-task-personnel-modal"></div>
+    <div class="task-personnel-dialog" role="dialog" aria-modal="true" aria-labelledby="task-personnel-title">
+        <div class="task-personnel-header">
+            <div class="task-personnel-heading">
+                <span class="task-personnel-kicker">Task Assignment</span>
+                <h3 id="task-personnel-title">Add Personnel</h3>
+                <p>Add a new personnel record to assign tasks across divisions.</p>
+            </div>
+            <button type="button" class="task-personnel-close js-close-task-personnel-modal" aria-label="Close add personnel form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </div>
+
+        <form class="task-personnel-form js-task-personnel-form">
+            <section class="task-personnel-panel">
+                <div class="task-personnel-panel-head">
+                    <div class="task-personnel-panel-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">badge</span>
+                    </div>
+                    <div>
+                        <h4>Personnel Details</h4>
+                        <p>Capture the core profile, contact details, and division assignment.</p>
+                    </div>
+                </div>
+
+                <div class="task-personnel-grid">
+                    <label class="task-personnel-field task-personnel-field--full">
+                        <span>Full Name *</span>
+                        <input type="text" name="full_name" placeholder="e.g., Juan Dela Cruz" required>
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Employee ID</span>
+                        <input type="text" name="employee_id" placeholder="e.g., EMP-001">
+                    </label>
+
+                    <div class="task-personnel-field">
+                        <span>Division *</span>
+                        <input type="hidden" name="division" value="">
+                        <div class="road-dropdown task-dropdown task-personnel-dropdown js-road-dropdown" data-input-target="division">
+                            <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Select division">
+                                <span class="dropdown-label">Select division</span>
+                                <span class="dropdown-caret">&#9662;</span>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><button type="button" class="dropdown-option" data-value="Admin">Admin</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Planning Division">Planning Division</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Construction">Construction</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Quality">Quality</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Maintenance">Maintenance</button></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <label class="task-personnel-field">
+                        <span>Position</span>
+                        <input type="text" name="position" placeholder="e.g., Engineer II">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Email</span>
+                        <input type="email" name="email" placeholder="e.g., jdelacruz@peo.gov.ph">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Phone</span>
+                        <input type="tel" name="phone" placeholder="e.g., 09171234567">
+                    </label>
+
+                    <label class="task-personnel-check">
+                        <input type="checkbox" name="division_head">
+                        <span>Division Head</span>
+                    </label>
+                </div>
+            </section>
+
+            <div class="task-personnel-actions">
+                <button type="button" class="task-personnel-btn task-personnel-btn--secondary js-close-task-personnel-modal">Cancel</button>
+                <button type="submit" class="task-personnel-btn task-personnel-btn--primary">Add Personnel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="task-personnel-modal js-task-modal" hidden>
+    <div class="task-personnel-backdrop js-close-task-modal"></div>
+    <div class="task-personnel-dialog task-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+        <div class="task-personnel-header">
+            <div class="task-personnel-heading">
+                <span class="task-personnel-kicker">Task Planner</span>
+                <h3 id="task-modal-title">New Task</h3>
+                <p>Create a task record and place it directly into the task table.</p>
+            </div>
+            <button type="button" class="task-personnel-close js-close-task-modal" aria-label="Close new task form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </div>
+
+        <form class="task-personnel-form js-task-form">
+            <section class="task-personnel-panel">
+                <div class="task-personnel-panel-head">
+                    <div class="task-personnel-panel-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">task</span>
+                    </div>
+                    <div>
+                        <h4>Task Information</h4>
+                        <p>Set the scope, ownership, deadline, and workflow status of this task.</p>
+                    </div>
+                </div>
+
+                <div class="task-personnel-grid">
+                    <label class="task-personnel-field task-personnel-field--full">
+                        <span>Task Name *</span>
+                        <input type="text" name="title" placeholder="e.g., HVAC Maintenance Unit B-12" required>
+                    </label>
+
+                    <div class="task-personnel-field">
+                        <span>Division *</span>
+                        <input type="hidden" name="division" value="">
+                        <div class="road-dropdown task-dropdown task-personnel-dropdown js-road-dropdown" data-input-target="division">
+                            <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Select task division">
+                                <span class="dropdown-label">Select division</span>
+                                <span class="dropdown-caret">&#9662;</span>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><button type="button" class="dropdown-option" data-value="Admin">Admin</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Planning Division">Planning Division</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Construction">Construction</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Quality">Quality</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Maintenance">Maintenance</button></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <label class="task-personnel-field">
+                        <span>Assigned To</span>
+                        <input type="text" name="assigned_to" class="js-task-assigned-input" list="task-personnel-suggestions" placeholder="Type personnel name">
+                        <datalist id="task-personnel-suggestions" class="js-task-assigned-list"></datalist>
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Due Date *</span>
+                        <input type="date" name="due_date" required>
+                    </label>
+
+                    <div class="task-personnel-field">
+                        <span>Priority *</span>
+                        <input type="hidden" name="priority" value="">
+                        <div class="road-dropdown task-dropdown task-personnel-dropdown js-road-dropdown" data-input-target="priority">
+                            <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Select task priority">
+                                <span class="dropdown-label">Select priority</span>
+                                <span class="dropdown-caret">&#9662;</span>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><button type="button" class="dropdown-option" data-value="Low">Low</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Medium">Medium</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="High">High</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Urgent">Urgent</button></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="task-personnel-field">
+                        <span>Status *</span>
+                        <input type="hidden" name="status" value="Pending">
+                        <div class="road-dropdown task-dropdown task-personnel-dropdown js-road-dropdown" data-input-target="status">
+                            <button type="button" class="dropdown-trigger" aria-expanded="false" aria-label="Select task status">
+                                <span class="dropdown-label">Pending</span>
+                                <span class="dropdown-caret">&#9662;</span>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><button type="button" class="dropdown-option is-selected" data-value="Pending">Pending</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="In Progress">In Progress</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Completed">Completed</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="Cancelled">Cancelled</button></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <label class="task-personnel-field task-personnel-field--full">
+                        <span>Description</span>
+                        <textarea name="notes" rows="4" placeholder="Add instructions, deliverables, or context for this task."></textarea>
+                    </label>
+                </div>
+            </section>
+
+            <div class="task-personnel-actions">
+                <button type="button" class="task-personnel-btn task-personnel-btn--secondary js-close-task-modal">Cancel</button>
+                <button type="submit" class="task-personnel-btn task-personnel-btn--primary">Create Task</button>
+            </div>
+        </form>
+    </div>
+</div>

@@ -464,71 +464,86 @@
     <div class="equipment-modal-backdrop js-close-equipment-modal"></div>
     <div class="equipment-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="equipment-modal-title">
         <div class="equipment-modal-header">
-            <div>
+            <div class="maintenance-modal-heading">
+                <span class="maintenance-modal-kicker">Equipment Inventory</span>
                 <h3 id="equipment-modal-title">Add Equipment</h3>
                 <p>Add new equipment to the inventory</p>
             </div>
-            <button type="button" class="equipment-modal-close js-close-equipment-modal" aria-label="Close add equipment form">&times;</button>
+            <button type="button" class="equipment-modal-close js-close-equipment-modal" aria-label="Close add equipment form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
         </div>
 
         <form class="equipment-form js-equipment-form">
-            <div class="equipment-grid">
-                <label class="equipment-field">
-                    <span>Name *</span>
-                    <input type="text" name="name" placeholder="Equipment name" required>
-                </label>
+            <div class="maintenance-form-section">
+                <div class="maintenance-form-section-head">
+                    <div class="maintenance-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">precision_manufacturing</span>
+                    </div>
+                    <div>
+                        <h4>Equipment Details</h4>
+                        <p>Track identification, usage status, and assignment information.</p>
+                    </div>
+                </div>
 
-                <label class="equipment-field">
-                    <span>Code</span>
-                    <input type="text" name="code" placeholder="EQ-001">
-                </label>
+                <div class="equipment-grid">
+                    <label class="equipment-field">
+                        <span>Name *</span>
+                        <input type="text" name="name" placeholder="Equipment name" required>
+                    </label>
 
-                <label class="equipment-field">
-                    <span>Type</span>
-                    <select name="type">
-                        <option value="">Select type</option>
-                        <option value="Heavy Equipment">Heavy Equipment</option>
-                        <option value="Vehicle">Vehicle</option>
-                        <option value="Tool">Tool</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </label>
+                    <label class="equipment-field">
+                        <span>Code</span>
+                        <input type="text" name="code" placeholder="EQ-001">
+                    </label>
 
-                <label class="equipment-field">
-                    <span>Status</span>
-                    <select name="status">
-                        <option value="Available">Available</option>
-                        <option value="In Use">In Use</option>
-                        <option value="Under Maintenance">Under Maintenance</option>
-                        <option value="Out of Service">Out of Service</option>
-                    </select>
-                </label>
+                    <label class="equipment-field">
+                        <span>Type</span>
+                        <select name="type">
+                            <option value="">Select type</option>
+                            <option value="Heavy Equipment">Heavy Equipment</option>
+                            <option value="Vehicle">Vehicle</option>
+                            <option value="Tool">Tool</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </label>
 
-                <label class="equipment-field">
-                    <span>Model</span>
-                    <input type="text" name="model" placeholder="Model name">
-                </label>
+                    <label class="equipment-field">
+                        <span>Status</span>
+                        <select name="status">
+                            <option value="Available">Available</option>
+                            <option value="In Use">In Use</option>
+                            <option value="Under Maintenance">Under Maintenance</option>
+                            <option value="Out of Service">Out of Service</option>
+                        </select>
+                    </label>
 
-                <label class="equipment-field">
-                    <span>Plate Number</span>
-                    <input type="text" name="plate_number" placeholder="ABC-1234">
-                </label>
+                    <label class="equipment-field">
+                        <span>Model</span>
+                        <input type="text" name="model" placeholder="Model name">
+                    </label>
 
-                <label class="equipment-field">
-                    <span>Current Location</span>
-                    <input type="text" name="location" placeholder="Location">
-                </label>
+                    <label class="equipment-field">
+                        <span>Plate Number</span>
+                        <input type="text" name="plate_number" placeholder="ABC-1234">
+                    </label>
 
-                <label class="equipment-field">
-                    <span>Operator</span>
-                    <input type="text" name="operator" placeholder="Operator name">
+                    <label class="equipment-field">
+                        <span>Current Location</span>
+                        <input type="text" name="location" placeholder="Location">
+                    </label>
+
+                    <label class="equipment-field">
+                        <span>Operator</span>
+                        <input type="text" name="operator" placeholder="Operator name">
+                    </label>
+                </div>
+
+                <label class="equipment-field equipment-field--full">
+                    <span>Notes</span>
+                    <textarea name="notes" rows="3" placeholder="Additional notes..."></textarea>
                 </label>
             </div>
-
-            <label class="equipment-field equipment-field--full">
-                <span>Notes</span>
-                <textarea name="notes" rows="3" placeholder="Additional notes..."></textarea>
-            </label>
 
             <div class="equipment-form-actions">
                 <button type="button" class="equipment-btn equipment-btn-secondary js-close-equipment-modal">Cancel</button>
@@ -542,80 +557,95 @@
     <div class="schedule-modal-backdrop js-close-schedule-modal"></div>
     <div class="schedule-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
         <div class="schedule-modal-header">
-            <div>
+            <div class="maintenance-modal-heading">
+                <span class="maintenance-modal-kicker">Maintenance Planner</span>
                 <h3 id="schedule-modal-title">New Maintenance Schedule</h3>
                 <p>Schedule a maintenance task</p>
             </div>
-            <button type="button" class="schedule-modal-close js-close-schedule-modal" aria-label="Close new maintenance schedule form">&times;</button>
+            <button type="button" class="schedule-modal-close js-close-schedule-modal" aria-label="Close new maintenance schedule form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
         </div>
 
         <form class="schedule-form js-schedule-form">
-            <label class="schedule-field schedule-field--full">
-                <span>Title *</span>
-                <input type="text" name="title" placeholder="Maintenance task title" required>
-            </label>
+            <div class="maintenance-form-section">
+                <div class="maintenance-form-section-head">
+                    <div class="maintenance-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">event_note</span>
+                    </div>
+                    <div>
+                        <h4>Schedule Details</h4>
+                        <p>Plan the task scope, timing, priority, and assigned team.</p>
+                    </div>
+                </div>
 
-            <div class="schedule-grid">
-                <label class="schedule-field">
-                    <span>Road</span>
-                    <select name="road">
-                        <option value="No specific road" selected>No specific road</option>
-                        <option value="National Highway">National Highway</option>
-                        <option value="Coastal Road">Coastal Road</option>
-                        <option value="Mountain Pass">Mountain Pass</option>
-                    </select>
+                <label class="schedule-field schedule-field--full">
+                    <span>Title *</span>
+                    <input type="text" name="title" placeholder="Maintenance task title" required>
                 </label>
 
-                <label class="schedule-field">
-                    <span>Type</span>
-                    <select name="type">
-                        <option value="" selected>Select type</option>
-                        <option value="Vegetation Control">Vegetation Control</option>
-                        <option value="Pothole Patching">Pothole Patching</option>
-                        <option value="Grading">Grading</option>
-                        <option value="Drainage Cleaning">Drainage Cleaning</option>
-                        <option value="Road Rehabilitation">Road Rehabilitation</option>
-                        <option value="Emergency Repair">Emergency Repair</option>
-                        <option value="Routine Inspection">Routine Inspection</option>
-                        <option value="Other">Other</option>
-                    </select>
+                <div class="schedule-grid">
+                    <label class="schedule-field">
+                        <span>Road</span>
+                        <select name="road">
+                            <option value="No specific road" selected>No specific road</option>
+                            <option value="National Highway">National Highway</option>
+                            <option value="Coastal Road">Coastal Road</option>
+                            <option value="Mountain Pass">Mountain Pass</option>
+                        </select>
+                    </label>
+
+                    <label class="schedule-field">
+                        <span>Type</span>
+                        <select name="type">
+                            <option value="" selected>Select type</option>
+                            <option value="Vegetation Control">Vegetation Control</option>
+                            <option value="Pothole Patching">Pothole Patching</option>
+                            <option value="Grading">Grading</option>
+                            <option value="Drainage Cleaning">Drainage Cleaning</option>
+                            <option value="Road Rehabilitation">Road Rehabilitation</option>
+                            <option value="Emergency Repair">Emergency Repair</option>
+                            <option value="Routine Inspection">Routine Inspection</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </label>
+
+                    <label class="schedule-field">
+                        <span>Priority</span>
+                        <select name="priority">
+                            <option value="Urgent">Urgent</option>
+                            <option value="High">High</option>
+                            <option value="Medium" selected>Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </label>
+
+                    <label class="schedule-field">
+                        <span>Assigned Team</span>
+                        <input type="text" name="team" placeholder="Team name">
+                    </label>
+
+                    <label class="schedule-field">
+                        <span>Start Date</span>
+                        <input type="date" name="start_date">
+                    </label>
+
+                    <label class="schedule-field">
+                        <span>End Date</span>
+                        <input type="date" name="end_date">
+                    </label>
+                </div>
+
+                <label class="schedule-field schedule-field--full">
+                    <span>Estimated Cost (&#8369;)</span>
+                    <input type="number" name="estimated_cost" min="0" step="0.01" placeholder="0.00">
                 </label>
 
-                <label class="schedule-field">
-                    <span>Priority</span>
-                    <select name="priority">
-                        <option value="Urgent">Urgent</option>
-                        <option value="High">High</option>
-                        <option value="Medium" selected>Medium</option>
-                        <option value="Low">Low</option>
-                    </select>
-                </label>
-
-                <label class="schedule-field">
-                    <span>Assigned Team</span>
-                    <input type="text" name="team" placeholder="Team name">
-                </label>
-
-                <label class="schedule-field">
-                    <span>Start Date</span>
-                    <input type="date" name="start_date">
-                </label>
-
-                <label class="schedule-field">
-                    <span>End Date</span>
-                    <input type="date" name="end_date">
+                <label class="schedule-field schedule-field--full">
+                    <span>Notes</span>
+                    <textarea name="notes" rows="3" placeholder="Additional notes..."></textarea>
                 </label>
             </div>
-
-            <label class="schedule-field schedule-field--full">
-                <span>Estimated Cost (&#8369;)</span>
-                <input type="number" name="estimated_cost" min="0" step="0.01" placeholder="0.00">
-            </label>
-
-            <label class="schedule-field schedule-field--full">
-                <span>Notes</span>
-                <textarea name="notes" rows="3" placeholder="Additional notes..."></textarea>
-            </label>
 
             <div class="schedule-form-actions">
                 <button type="button" class="schedule-btn schedule-btn-secondary js-close-schedule-modal">Cancel</button>
@@ -629,70 +659,85 @@
     <div class="road-add-modal-backdrop js-close-road-add-modal"></div>
     <div class="road-add-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="road-add-modal-title">
         <div class="road-add-modal-header">
-            <div>
+            <div class="maintenance-modal-heading">
+                <span class="maintenance-modal-kicker">Road Registry</span>
                 <h3 id="road-add-modal-title">Add Provincial Road</h3>
                 <p>Create a new road record</p>
             </div>
-            <button type="button" class="road-add-modal-close js-close-road-add-modal" aria-label="Close add provincial road form">&times;</button>
+            <button type="button" class="road-add-modal-close js-close-road-add-modal" aria-label="Close add provincial road form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
         </div>
 
         <form class="road-add-form js-road-add-form">
-            <div class="road-add-grid">
-                <label class="road-add-field">
-                    <span>Road ID</span>
-                    <input type="text" class="js-road-add-road-id" placeholder="Road ID">
-                </label>
+            <div class="maintenance-form-section">
+                <div class="maintenance-form-section-head">
+                    <div class="maintenance-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">add_road</span>
+                    </div>
+                    <div>
+                        <h4>Road Information</h4>
+                        <p>Register the road, location coverage, surface details, and current condition.</p>
+                    </div>
+                </div>
 
-                <label class="road-add-field">
-                    <span>Road Name *</span>
-                    <input type="text" class="js-road-add-road-name" placeholder="Road name" required>
-                </label>
+                <div class="road-add-grid">
+                    <label class="road-add-field">
+                        <span>Road ID</span>
+                        <input type="text" class="js-road-add-road-id" placeholder="Road ID">
+                    </label>
 
-                <label class="road-add-field">
-                    <span>Length (km)</span>
-                    <input type="number" class="js-road-add-length" min="0" step="0.01" placeholder="0.00">
-                </label>
+                    <label class="road-add-field">
+                        <span>Road Name *</span>
+                        <input type="text" class="js-road-add-road-name" placeholder="Road name" required>
+                    </label>
 
-                <label class="road-add-field">
-                    <span>Select Location</span>
-                    <select class="js-road-add-location">
-                        <option value="" selected>Select location</option>
-                        <option value="South">South</option>
-                        <option value="North">North</option>
-                    </select>
-                </label>
+                    <label class="road-add-field">
+                        <span>Length (km)</span>
+                        <input type="number" class="js-road-add-length" min="0" step="0.01" placeholder="0.00">
+                    </label>
 
-                <label class="road-add-field">
-                    <span>Select Municipality</span>
-                    <select class="js-road-add-municipality" disabled>
-                        <option value="" selected>Select location first</option>
-                    </select>
-                </label>
+                    <label class="road-add-field">
+                        <span>Select Location</span>
+                        <select class="js-road-add-location">
+                            <option value="" selected>Select location</option>
+                            <option value="South">South</option>
+                            <option value="North">North</option>
+                        </select>
+                    </label>
 
-                <label class="road-add-field">
-                    <span>Surface Type (km)</span>
-                    <select class="js-road-add-surface-type">
-                        <option value="Concrete" selected>Concrete</option>
-                        <option value="Asphalt">Asphalt</option>
-                        <option value="Earth">Earth</option>
-                        <option value="Gravel">Gravel</option>
-                    </select>
-                    <input
-                        type="text"
-                        class="js-road-add-surface-type-details"
-                        placeholder="4.880km Gravel: 0.620km"
-                    >
-                </label>
+                    <label class="road-add-field">
+                        <span>Select Municipality</span>
+                        <select class="js-road-add-municipality" disabled>
+                            <option value="" selected>Select location first</option>
+                        </select>
+                    </label>
 
-                <label class="road-add-field">
-                    <span>Road Condition</span>
-                    <select class="js-road-add-condition">
-                        <option value="good">Good</option>
-                        <option value="fair">Fair</option>
-                        <option value="poor">Poor</option>
-                        <option value="bad">Bad</option>
-                    </select>
-                </label>
+                    <label class="road-add-field">
+                        <span>Surface Type (km)</span>
+                        <select class="js-road-add-surface-type">
+                            <option value="Concrete" selected>Concrete</option>
+                            <option value="Asphalt">Asphalt</option>
+                            <option value="Earth">Earth</option>
+                            <option value="Gravel">Gravel</option>
+                        </select>
+                        <input
+                            type="text"
+                            class="js-road-add-surface-type-details"
+                            placeholder="4.880km Gravel: 0.620km"
+                        >
+                    </label>
+
+                    <label class="road-add-field">
+                        <span>Road Condition</span>
+                        <select class="js-road-add-condition">
+                            <option value="good">Good</option>
+                            <option value="fair">Fair</option>
+                            <option value="poor">Poor</option>
+                            <option value="bad">Bad</option>
+                        </select>
+                    </label>
+                </div>
             </div>
 
             <div class="road-add-form-actions">
@@ -707,51 +752,66 @@
     <div class="road-edit-modal-backdrop js-close-road-edit-modal"></div>
     <div class="road-edit-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="road-edit-modal-title">
         <div class="road-edit-modal-header">
-            <div>
+            <div class="maintenance-modal-heading">
+                <span class="maintenance-modal-kicker">Municipality Update</span>
                 <h3 id="road-edit-modal-title">Update Municipality Data</h3>
                 <p class="js-road-edit-subtitle">Edit road data</p>
             </div>
-            <button type="button" class="road-edit-modal-close js-close-road-edit-modal" aria-label="Close road edit form">&times;</button>
+            <button type="button" class="road-edit-modal-close js-close-road-edit-modal" aria-label="Close road edit form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
         </div>
 
         <form class="road-edit-form js-road-edit-form">
-            <label class="road-edit-field road-edit-field--full">
-                <span>Select Road</span>
-                <select class="js-road-edit-record-select" required></select>
-            </label>
+            <div class="maintenance-form-section">
+                <div class="maintenance-form-section-head">
+                    <div class="maintenance-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">edit_road</span>
+                    </div>
+                    <div>
+                        <h4>Road Update</h4>
+                        <p>Edit the selected road record and keep municipality data current.</p>
+                    </div>
+                </div>
 
-            <div class="road-edit-grid">
-                <label class="road-edit-field">
-                    <span>Road ID</span>
-                    <input type="text" class="js-road-edit-road-id" placeholder="Road ID">
+                <label class="road-edit-field road-edit-field--full">
+                    <span>Select Road</span>
+                    <select class="js-road-edit-record-select" required></select>
                 </label>
 
-                <label class="road-edit-field">
-                    <span>Road Name *</span>
-                    <input type="text" class="js-road-edit-road-name" placeholder="Road name" required>
-                </label>
+                <div class="road-edit-grid">
+                    <label class="road-edit-field">
+                        <span>Road ID</span>
+                        <input type="text" class="js-road-edit-road-id" placeholder="Road ID">
+                    </label>
 
-                <label class="road-edit-field">
-                    <span>Length (km)</span>
-                    <input type="number" class="js-road-edit-length" min="0" step="0.01" placeholder="0.00">
-                </label>
+                    <label class="road-edit-field">
+                        <span>Road Name *</span>
+                        <input type="text" class="js-road-edit-road-name" placeholder="Road name" required>
+                    </label>
 
-                <label class="road-edit-field">
-                    <span>Condition</span>
-                    <select class="js-road-edit-condition">
-                        <option value="unknown">Unknown</option>
-                        <option value="good">Good</option>
-                        <option value="fair">Fair</option>
-                        <option value="poor">Poor</option>
-                        <option value="bad">Bad</option>
-                    </select>
+                    <label class="road-edit-field">
+                        <span>Length (km)</span>
+                        <input type="number" class="js-road-edit-length" min="0" step="0.01" placeholder="0.00">
+                    </label>
+
+                    <label class="road-edit-field">
+                        <span>Condition</span>
+                        <select class="js-road-edit-condition">
+                            <option value="unknown">Unknown</option>
+                            <option value="good">Good</option>
+                            <option value="fair">Fair</option>
+                            <option value="poor">Poor</option>
+                            <option value="bad">Bad</option>
+                        </select>
+                    </label>
+                </div>
+
+                <label class="road-edit-field road-edit-field--full">
+                    <span>Surface Type</span>
+                    <input type="text" class="js-road-edit-surface-type" placeholder="Surface details">
                 </label>
             </div>
-
-            <label class="road-edit-field road-edit-field--full">
-                <span>Surface Type</span>
-                <input type="text" class="js-road-edit-surface-type" placeholder="Surface details">
-            </label>
 
             <div class="road-edit-form-actions">
                 <button type="button" class="road-edit-btn road-edit-btn-secondary js-close-road-edit-modal">Cancel</button>
