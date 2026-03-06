@@ -55,18 +55,6 @@ def planning_division_dashboard(request):
 
 
 @login_required
-def quality_division_dashboard(request):
-    return render(
-        request,
-        'Dashboard/dashboard.html',
-        {
-            'current_section': 'quality',
-            'page_heading': 'Quality Division',
-        },
-    )
-
-
-@login_required
 def project_dashboard(request):
     return render(
         request,
