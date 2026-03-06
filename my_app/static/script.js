@@ -8229,5 +8229,788 @@ document.addEventListener("DOMContentLoaded", () => {
     removePlanningPpaSampleRows();
     syncPpaTableState();
 });
+
+document.addEventListener("DOMContentLoaded", () => {
+    const qualityDashboard = document.querySelector(".js-quality-dashboard");
+    if (!(qualityDashboard instanceof HTMLElement)) return;
+
+    const qualityTableWrap = qualityDashboard.querySelector(".quality-table-wrap");
+    const qualityTableBody = qualityDashboard.querySelector(".js-quality-table-body");
+    const qualityRecordMeta = qualityDashboard.querySelector(".js-quality-record-meta");
+    const qualityResultsSummary = qualityDashboard.querySelector(".js-quality-results-summary");
+    const qualityPagination = qualityDashboard.querySelector(".js-quality-pagination");
+    const qualitySearchInput = qualityDashboard.querySelector(".js-quality-search");
+    const qualityTabs = Array.from(qualityDashboard.querySelectorAll("[data-quality-tab]"));
+    const routeFilterButton = qualityDashboard.querySelector(".js-quality-route-filter");
+    const openModalButton = qualityDashboard.querySelector(".js-quality-open-modal");
+    const qualityModal = document.querySelector(".js-quality-modal");
+    const qualityForm = qualityModal ? qualityModal.querySelector(".js-quality-form") : null;
+    const qualityModalTitle = qualityModal ? qualityModal.querySelector("#quality-modal-title") : null;
+    const qualityModalSubtitle = qualityModal ? qualityModal.querySelector(".js-quality-modal-subtitle") : null;
+    const closeQualityButtons = qualityModal
+        ? Array.from(qualityModal.querySelectorAll(".js-quality-close-modal"))
+        : [];
+    const deleteQualityButton = qualityModal ? qualityModal.querySelector(".js-quality-delete-record") : null;
+
+    if (!(qualityTableWrap instanceof HTMLElement) || !(qualityTableBody instanceof HTMLElement) || !(qualityPagination instanceof HTMLElement)) {
+        return;
+    }
+
+    const QUALITY_STORAGE_KEY = "peo_quality_records_v1";
+    const QUALITY_PAGE_SIZE = 10;
+    const ROUTE_FILTERS = ["all", "incoming", "outgoing"];
+    const DEFAULT_QUALITY_RECORDS = [
+        {
+            __id: "quality_seed_1",
+            received_from: "Admin Division",
+            doc_date: "2026-02-28",
+            particulars: "Other",
+            doc_no: "#245",
+            project_location: "Construction of Bridge",
+            location_detail: "Brgy. Paglaum, Taytay",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-02",
+            status: "For Action",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_2",
+            received_from: "Site Operations",
+            doc_date: "2026-03-01",
+            particulars: "Concrete",
+            doc_no: "#246",
+            project_location: "Road Expansion PH-2",
+            location_detail: "Arterial Material, Sector 4",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Technical Team",
+            date_recv: "2026-03-03",
+            status: "In Progress",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_3",
+            received_from: "Procurement",
+            doc_date: "2026-03-02",
+            particulars: "Steel",
+            doc_no: "#247",
+            project_location: "Substation Delta",
+            location_detail: "Industrial Zone A",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-03",
+            status: "Completed",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_4",
+            received_from: "Construction Team",
+            doc_date: "2026-03-03",
+            particulars: "Structural",
+            doc_no: "#248",
+            project_location: "Flood Control Package A",
+            location_detail: "Riverbank Zone 3",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "QA Inspector",
+            date_recv: "2026-03-04",
+            status: "For Release",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_5",
+            received_from: "Materials Unit",
+            doc_date: "2026-03-04",
+            particulars: "Concrete",
+            doc_no: "#249",
+            project_location: "Bridge Retrofit Lot 6",
+            location_detail: "San Isidro, Block 2",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Materials Lab",
+            date_recv: "2026-03-04",
+            status: "In Progress",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_6",
+            received_from: "Electrical Section",
+            doc_date: "2026-03-04",
+            particulars: "Electrical",
+            doc_no: "#250",
+            project_location: "Streetlight Restoration",
+            location_detail: "Poblacion Main Road",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-05",
+            status: "For Action",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_7",
+            received_from: "Procurement",
+            doc_date: "2026-03-05",
+            particulars: "Steel",
+            doc_no: "#251",
+            project_location: "Steel Truss Fabrication",
+            location_detail: "Warehouse Compound",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Release Desk",
+            date_recv: "2026-03-05",
+            status: "For Release",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_8",
+            received_from: "Road Maintenance",
+            doc_date: "2026-03-05",
+            particulars: "Other",
+            doc_no: "#252",
+            project_location: "Asphalt Patching Program",
+            location_detail: "District 5 Corridor",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "QA Inspector",
+            date_recv: "2026-03-05",
+            status: "Completed",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_9",
+            received_from: "Laboratory Unit",
+            doc_date: "2026-03-05",
+            particulars: "Concrete",
+            doc_no: "#253",
+            project_location: "Slope Protection Works",
+            location_detail: "Hillside Section B",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Technical Team",
+            date_recv: "2026-03-06",
+            status: "In Progress",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_10",
+            received_from: "Planning Division",
+            doc_date: "2026-03-06",
+            particulars: "Structural",
+            doc_no: "#254",
+            project_location: "Public Market Rehab",
+            location_detail: "Central District",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-06",
+            status: "For Action",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_11",
+            received_from: "Field Engineering",
+            doc_date: "2026-03-06",
+            particulars: "Electrical",
+            doc_no: "#255",
+            project_location: "Solar Water System",
+            location_detail: "Barangay New Hope",
+            scan_url: "",
+            route: "Outgoing",
+            received_by: "Release Desk",
+            date_recv: "2026-03-06",
+            status: "For Release",
+            remarks: "",
+        },
+        {
+            __id: "quality_seed_12",
+            received_from: "Admin Division",
+            doc_date: "2026-03-06",
+            particulars: "Other",
+            doc_no: "#256",
+            project_location: "Records Archival Batch",
+            location_detail: "PEO Main Office",
+            scan_url: "",
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: "2026-03-06",
+            status: "Completed",
+            remarks: "",
+        },
+    ];
+
+    const escapeHtml = (value) => {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    };
+
+    const normalizeText = (value) => {
+        return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    };
+
+    const createRecordId = () => {
+        return `quality_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    };
+
+    const formatDate = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return text;
+
+        return parsed.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+        });
+    };
+
+    const readStoredRecords = () => {
+        try {
+            const raw = window.localStorage.getItem(QUALITY_STORAGE_KEY);
+            if (raw === null) {
+                return DEFAULT_QUALITY_RECORDS.map((record) => ({ ...record }));
+            }
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return DEFAULT_QUALITY_RECORDS.map((record) => ({ ...record }));
+        }
+    };
+
+    const writeStoredRecords = (records) => {
+        try {
+            window.localStorage.setItem(QUALITY_STORAGE_KEY, JSON.stringify(records));
+        } catch (error) {
+            // Ignore storage errors.
+        }
+    };
+
+    const getParticularBadgeClass = (value) => {
+        const normalized = normalizeText(value);
+        if (normalized === "concrete") return "is-concrete";
+        if (normalized === "steel") return "is-steel";
+        if (normalized === "electrical") return "is-electrical";
+        if (normalized === "structural") return "is-structural";
+        return "is-neutral";
+    };
+
+    const getStatusClassName = (value) => {
+        const normalized = normalizeText(value);
+        if (normalized === "for action") return "is-action";
+        if (normalized === "for release") return "is-release";
+        if (normalized === "completed") return "is-complete";
+        return "is-progress";
+    };
+
+    const getRouteClassName = (value) => {
+        return normalizeText(value) === "outgoing" ? "is-outgoing" : "is-incoming";
+    };
+
+    const getRouteFilterLabel = (value) => {
+        if (value === "incoming") return "Incoming only";
+        if (value === "outgoing") return "Outgoing only";
+        return "All routes";
+    };
+
+    const buildRecordFromForm = () => {
+        if (!(qualityForm instanceof HTMLFormElement)) return null;
+
+        const formData = new FormData(qualityForm);
+        const record = {
+            __id: createRecordId(),
+            received_from: String(formData.get("received_from") ?? "").trim(),
+            doc_date: String(formData.get("doc_date") ?? "").trim(),
+            particulars: String(formData.get("particulars") ?? "").trim(),
+            doc_no: String(formData.get("doc_no") ?? "").trim(),
+            project_location: String(formData.get("project_location") ?? "").trim(),
+            location_detail: String(formData.get("location_detail") ?? "").trim(),
+            scan_url: String(formData.get("scan_url") ?? "").trim(),
+            route: String(formData.get("route") ?? "").trim(),
+            received_by: String(formData.get("received_by") ?? "").trim(),
+            date_recv: String(formData.get("date_recv") ?? "").trim(),
+            status: String(formData.get("status") ?? "").trim(),
+            remarks: String(formData.get("remarks") ?? "").trim(),
+        };
+
+        return record.received_from && record.doc_date && record.doc_no ? record : null;
+    };
+
+    const fillQualityForm = (record) => {
+        if (!(qualityForm instanceof HTMLFormElement) || !record) return;
+
+        const fieldNames = [
+            "received_from",
+            "doc_date",
+            "particulars",
+            "doc_no",
+            "project_location",
+            "location_detail",
+            "scan_url",
+            "route",
+            "received_by",
+            "date_recv",
+            "status",
+            "remarks",
+        ];
+
+        fieldNames.forEach((fieldName) => {
+            const field = qualityForm.elements.namedItem(fieldName);
+            if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+                field.value = record[fieldName] ?? "";
+            }
+        });
+    };
+
+    let records = readStoredRecords();
+    let currentPage = 1;
+    let activeTab = "all";
+    let activeRouteFilter = "all";
+    let searchQuery = "";
+    let editingRecordId = null;
+    const TABLE_DRAG_THRESHOLD = 8;
+    const DRAG_CLICK_SUPPRESSION_MS = 220;
+    const tableDragState = {
+        activePointerId: null,
+        isPointerDown: false,
+        hasMoved: false,
+        startX: 0,
+        startScrollLeft: 0,
+        suppressClickUntil: 0,
+    };
+
+    const getFilteredRecords = () => {
+        return records.filter((record) => {
+            const normalizedStatus = normalizeText(record.status);
+            const normalizedRoute = normalizeText(record.route);
+            const matchesTab = (
+                activeTab === "all"
+                || (activeTab === "for-action" && normalizedStatus === "for action")
+                || (activeTab === "for-release" && normalizedStatus === "for release")
+                || (activeTab === "completed" && normalizedStatus === "completed")
+            );
+            const matchesRoute = activeRouteFilter === "all" || normalizedRoute === activeRouteFilter;
+            const haystack = [
+                record.received_from,
+                record.particulars,
+                record.doc_no,
+                record.project_location,
+                record.location_detail,
+                record.received_by,
+                record.route,
+                record.status,
+                record.remarks,
+            ].map(normalizeText).join(" ");
+            const matchesSearch = !searchQuery || haystack.includes(searchQuery);
+
+            return matchesTab && matchesRoute && matchesSearch;
+        });
+    };
+
+    const getTotalPages = (filteredRecords) => {
+        return Math.max(1, Math.ceil(filteredRecords.length / QUALITY_PAGE_SIZE));
+    };
+
+    const clampCurrentPage = (filteredRecords) => {
+        currentPage = Math.min(Math.max(1, currentPage), getTotalPages(filteredRecords));
+    };
+
+    const hasHorizontalOverflow = () => {
+        return qualityTableWrap.scrollWidth - qualityTableWrap.clientWidth > 2;
+    };
+
+    const syncHorizontalScrollState = () => {
+        const canScroll = hasHorizontalOverflow();
+        qualityTableWrap.style.cursor = canScroll ? (tableDragState.hasMoved ? "grabbing" : "grab") : "default";
+    };
+
+    const shouldSuppressTableClick = () => {
+        return Date.now() < tableDragState.suppressClickUntil;
+    };
+
+    const resetTableDragState = () => {
+        tableDragState.activePointerId = null;
+        tableDragState.isPointerDown = false;
+        tableDragState.hasMoved = false;
+        qualityTableWrap.classList.remove("is-dragging");
+        syncHorizontalScrollState();
+    };
+
+    const stopDragging = () => {
+        if (!tableDragState.isPointerDown && tableDragState.activePointerId === null) return;
+
+        const activePointerId = tableDragState.activePointerId;
+        const didMove = tableDragState.hasMoved;
+
+        tableDragState.activePointerId = null;
+        tableDragState.isPointerDown = false;
+
+        if (didMove) {
+            tableDragState.suppressClickUntil = Date.now() + DRAG_CLICK_SUPPRESSION_MS;
+        }
+
+        if (
+            activePointerId !== null
+            && qualityTableWrap.hasPointerCapture
+            && qualityTableWrap.hasPointerCapture(activePointerId)
+        ) {
+            qualityTableWrap.releasePointerCapture(activePointerId);
+        }
+
+        resetTableDragState();
+    };
+
+    const createEmptyStateRow = () => {
+        qualityTableBody.innerHTML = `
+            <tr class="quality-empty-row">
+                <td colspan="11">No quality records match the current filters.</td>
+            </tr>
+        `;
+    };
+
+    const createRecordRow = (record) => {
+        const row = document.createElement("tr");
+        row.className = "quality-data-row";
+        row.dataset.recordId = record.__id;
+        row.innerHTML = `
+            <td class="quality-source">${escapeHtml(record.received_from)}</td>
+            <td>${escapeHtml(formatDate(record.doc_date))}</td>
+            <td><span class="quality-badge ${getParticularBadgeClass(record.particulars)}">${escapeHtml(record.particulars || "Other")}</span></td>
+            <td>${escapeHtml(record.doc_no || "-")}</td>
+            <td>${escapeHtml(record.project_location || "-")}</td>
+            <td>${escapeHtml(record.location_detail || "-")}</td>
+            <td>
+                <a href="${escapeHtml(record.scan_url || "#")}" class="quality-scan-link ${record.scan_url ? "" : "is-disabled"}" ${record.scan_url ? 'target="_blank" rel="noopener noreferrer"' : 'aria-disabled="true" tabindex="-1"'}>
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    <span>Scan</span>
+                </a>
+            </td>
+            <td><span class="quality-route ${getRouteClassName(record.route)}">${escapeHtml(record.route || "Incoming")}</span></td>
+            <td>${escapeHtml(record.received_by || "-")}</td>
+            <td>${escapeHtml(formatDate(record.date_recv))}</td>
+            <td><span class="quality-status ${getStatusClassName(record.status)}">${escapeHtml(record.status || "For Action")}</span></td>
+        `;
+        return row;
+    };
+
+    const syncTableSummary = (filteredRecords, pagedRecords, startIndex) => {
+        if (qualityRecordMeta instanceof HTMLElement) {
+            qualityRecordMeta.textContent = `Showing ${filteredRecords.length} active record${filteredRecords.length === 1 ? "" : "s"}`;
+        }
+
+        if (qualityResultsSummary instanceof HTMLElement) {
+            const start = filteredRecords.length ? startIndex + 1 : 0;
+            const end = filteredRecords.length ? startIndex + pagedRecords.length : 0;
+            qualityResultsSummary.textContent = `Showing ${start} to ${end} of ${filteredRecords.length} records`;
+        }
+    };
+
+    const syncRouteFilterButton = () => {
+        if (!(routeFilterButton instanceof HTMLElement)) return;
+        const label = getRouteFilterLabel(activeRouteFilter);
+        routeFilterButton.classList.toggle("is-active", activeRouteFilter !== "all");
+        routeFilterButton.setAttribute("aria-label", `Filter route: ${label}`);
+        routeFilterButton.setAttribute("title", `Filter route: ${label}`);
+    };
+
+    const syncTabs = () => {
+        qualityTabs.forEach((tab) => {
+            const isActive = tab.getAttribute("data-quality-tab") === activeTab;
+            tab.classList.toggle("is-active", isActive);
+            tab.setAttribute("aria-selected", String(isActive));
+        });
+    };
+
+    const renderPagination = (filteredRecords) => {
+        qualityPagination.innerHTML = "";
+        const totalPages = getTotalPages(filteredRecords);
+
+        const makeButton = (label, page, disabled = false, active = false) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = label;
+            button.disabled = disabled;
+            if (active) {
+                button.classList.add("is-active");
+                button.setAttribute("aria-current", "page");
+            }
+            button.dataset.page = String(page);
+            return button;
+        };
+
+        qualityPagination.appendChild(makeButton("Previous", currentPage - 1, currentPage <= 1));
+
+        for (let page = 1; page <= totalPages; page += 1) {
+            qualityPagination.appendChild(makeButton(String(page), page, false, page === currentPage));
+        }
+
+        qualityPagination.appendChild(makeButton("Next", currentPage + 1, currentPage >= totalPages));
+    };
+
+    const renderTable = () => {
+        const filteredRecords = getFilteredRecords();
+        clampCurrentPage(filteredRecords);
+
+        const startIndex = (currentPage - 1) * QUALITY_PAGE_SIZE;
+        const pagedRecords = filteredRecords.slice(startIndex, startIndex + QUALITY_PAGE_SIZE);
+        qualityTableBody.innerHTML = "";
+
+        if (!pagedRecords.length) {
+            createEmptyStateRow();
+        } else {
+            pagedRecords.forEach((record) => {
+                qualityTableBody.appendChild(createRecordRow(record));
+            });
+        }
+
+        syncTableSummary(filteredRecords, pagedRecords, startIndex);
+        syncTabs();
+        syncRouteFilterButton();
+        renderPagination(filteredRecords);
+        window.requestAnimationFrame(syncHorizontalScrollState);
+    };
+
+    const syncModalState = () => {
+        const isOpen = qualityModal instanceof HTMLElement && !qualityModal.hidden;
+        document.body.classList.toggle("quality-modal-open", isOpen);
+    };
+
+    const openQualityModal = (mode = "create", record = null) => {
+        if (!(qualityModal instanceof HTMLElement) || !(qualityForm instanceof HTMLFormElement)) return;
+
+        qualityForm.reset();
+        editingRecordId = mode === "edit" ? record?.__id || null : null;
+
+        if (qualityModalTitle instanceof HTMLElement) {
+            qualityModalTitle.textContent = mode === "edit" ? "Edit Quality Record" : "Add Quality Record";
+        }
+        if (qualityModalSubtitle instanceof HTMLElement) {
+            qualityModalSubtitle.textContent = mode === "edit"
+                ? "Update the selected Quality Division tracker record."
+                : "Create a new Quality Division tracker record.";
+        }
+        if (deleteQualityButton instanceof HTMLElement) {
+            deleteQualityButton.hidden = mode !== "edit";
+        }
+        if (mode === "edit" && record) {
+            fillQualityForm(record);
+        }
+
+        qualityModal.hidden = false;
+        syncModalState();
+        const firstField = qualityForm.elements.namedItem("received_from");
+        if (firstField instanceof HTMLElement) {
+            window.setTimeout(() => firstField.focus(), 0);
+        }
+    };
+
+    const closeQualityModal = () => {
+        if (!(qualityModal instanceof HTMLElement)) return;
+        qualityModal.hidden = true;
+        editingRecordId = null;
+        syncModalState();
+    };
+
+    if (openModalButton instanceof HTMLElement) {
+        openModalButton.addEventListener("click", () => {
+            openQualityModal("create");
+        });
+    }
+
+    closeQualityButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            closeQualityModal();
+        });
+    });
+
+    if (qualityModal instanceof HTMLElement) {
+        qualityModal.addEventListener("click", (event) => {
+            if (event.target === qualityModal) {
+                closeQualityModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && qualityModal instanceof HTMLElement && !qualityModal.hidden) {
+            closeQualityModal();
+        }
+    });
+
+    if (qualityForm instanceof HTMLFormElement) {
+        qualityForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            if (!qualityForm.checkValidity()) {
+                qualityForm.reportValidity();
+                return;
+            }
+
+            const formRecord = buildRecordFromForm();
+            if (!formRecord) return;
+
+            if (editingRecordId) {
+                const targetIndex = records.findIndex((record) => record.__id === editingRecordId);
+                if (targetIndex >= 0) {
+                    records[targetIndex] = { ...formRecord, __id: editingRecordId };
+                }
+            } else {
+                records.unshift(formRecord);
+            }
+
+            currentPage = 1;
+            writeStoredRecords(records);
+            renderTable();
+            closeQualityModal();
+        });
+    }
+
+    if (deleteQualityButton instanceof HTMLElement) {
+        deleteQualityButton.addEventListener("click", () => {
+            if (!editingRecordId) return;
+            if (!window.confirm("Delete this quality record?")) return;
+
+            records = records.filter((record) => record.__id !== editingRecordId);
+            writeStoredRecords(records);
+            renderTable();
+            closeQualityModal();
+        });
+    }
+
+    if (qualitySearchInput instanceof HTMLInputElement) {
+        qualitySearchInput.addEventListener("input", () => {
+            searchQuery = normalizeText(qualitySearchInput.value);
+            currentPage = 1;
+            renderTable();
+        });
+    }
+
+    qualityTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+            activeTab = tab.getAttribute("data-quality-tab") || "all";
+            currentPage = 1;
+            renderTable();
+        });
+    });
+
+    if (routeFilterButton instanceof HTMLElement) {
+        routeFilterButton.addEventListener("click", () => {
+            const currentIndex = ROUTE_FILTERS.indexOf(activeRouteFilter);
+            activeRouteFilter = ROUTE_FILTERS[(currentIndex + 1) % ROUTE_FILTERS.length];
+            currentPage = 1;
+            renderTable();
+        });
+    }
+
+    qualityPagination.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) return;
+
+        const nextPage = Number.parseInt(target.dataset.page || "", 10);
+        if (!Number.isFinite(nextPage) || target.disabled) return;
+        currentPage = nextPage;
+        renderTable();
+    });
+
+    qualityTableBody.addEventListener("click", (event) => {
+        if (shouldSuppressTableClick()) return;
+
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.closest(".quality-scan-link")) return;
+
+        const row = target.closest("tr[data-record-id]");
+        if (!(row instanceof HTMLTableRowElement)) return;
+
+        const recordId = row.dataset.recordId;
+        const record = records.find((item) => item.__id === recordId);
+        if (!record) return;
+
+        openQualityModal("edit", record);
+    });
+
+    qualityTableWrap.addEventListener(
+        "wheel",
+        (event) => {
+            if (!hasHorizontalOverflow()) return;
+
+            const shouldScrollHorizontally = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+            if (!shouldScrollHorizontally) return;
+
+            event.preventDefault();
+            qualityTableWrap.scrollLeft += event.deltaX || event.deltaY;
+            syncHorizontalScrollState();
+        },
+        { passive: false }
+    );
+
+    qualityTableWrap.addEventListener("pointerdown", (event) => {
+        if (!hasHorizontalOverflow()) return;
+
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest("a, button, input, select, textarea, label")) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+
+        tableDragState.activePointerId = event.pointerId;
+        tableDragState.isPointerDown = true;
+        tableDragState.hasMoved = false;
+        tableDragState.startX = event.clientX;
+        tableDragState.startScrollLeft = qualityTableWrap.scrollLeft;
+        qualityTableWrap.setPointerCapture(event.pointerId);
+    });
+
+    qualityTableWrap.addEventListener("pointermove", (event) => {
+        if (!tableDragState.isPointerDown) return;
+        if (tableDragState.activePointerId !== event.pointerId) return;
+
+        const deltaX = event.clientX - tableDragState.startX;
+        if (!tableDragState.hasMoved && Math.abs(deltaX) < TABLE_DRAG_THRESHOLD) return;
+
+        tableDragState.hasMoved = true;
+        qualityTableWrap.classList.add("is-dragging");
+        qualityTableWrap.scrollLeft = tableDragState.startScrollLeft - deltaX;
+        syncHorizontalScrollState();
+        event.preventDefault();
+    });
+
+    qualityTableWrap.addEventListener("scroll", syncHorizontalScrollState);
+    qualityTableWrap.addEventListener("keydown", (event) => {
+        if (!hasHorizontalOverflow()) return;
+
+        const pageStep = Math.max(240, Math.round(qualityTableWrap.clientWidth * 0.8));
+        let nextScrollLeft = qualityTableWrap.scrollLeft;
+
+        if (event.key === "ArrowLeft") nextScrollLeft -= 120;
+        if (event.key === "ArrowRight") nextScrollLeft += 120;
+        if (event.key === "Home") nextScrollLeft = 0;
+        if (event.key === "End") nextScrollLeft = qualityTableWrap.scrollWidth;
+        if (event.key === "PageUp") nextScrollLeft -= pageStep;
+        if (event.key === "PageDown") nextScrollLeft += pageStep;
+
+        if (nextScrollLeft === qualityTableWrap.scrollLeft) return;
+
+        event.preventDefault();
+        qualityTableWrap.scrollTo({
+            left: nextScrollLeft,
+            behavior: "smooth",
+        });
+        window.requestAnimationFrame(syncHorizontalScrollState);
+    });
+
+    qualityTableWrap.addEventListener("pointerup", stopDragging);
+    qualityTableWrap.addEventListener("pointercancel", stopDragging);
+    qualityTableWrap.addEventListener("lostpointercapture", stopDragging);
+    qualityTableWrap.addEventListener("mouseleave", stopDragging);
+    window.addEventListener("resize", syncHorizontalScrollState);
+
+    renderTable();
+});
 /* PLANNING_DIVISION_MODAL_SCRIPT_END */
 
