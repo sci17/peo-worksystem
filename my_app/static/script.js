@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const navItems = document.querySelectorAll(".portal-nav .nav-item");
     const navSubitems = document.querySelectorAll(".portal-nav .nav-subitem");
     const adminDivisionButton = document.querySelector(".js-admin-division-button");
+    const projectDashboardButton = document.querySelector(".js-project-dashboard-button");
     const maintenanceToggle = document.querySelector(".js-maintenance-toggle");
     const maintenanceMenu = document.querySelector(".js-maintenance-menu");
 
@@ -54,6 +55,16 @@ document.addEventListener("DOMContentLoaded", () => {
         adminDivisionButton.addEventListener("click", (event) => {
             event.preventDefault();
             const targetUrl = adminDivisionButton.dataset.adminDivisionUrl;
+            if (targetUrl) {
+                window.location.href = targetUrl;
+            }
+        });
+    }
+
+    if (projectDashboardButton) {
+        projectDashboardButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            const targetUrl = projectDashboardButton.dataset.projectDashboardUrl;
             if (targetUrl) {
                 window.location.href = targetUrl;
             }
@@ -7987,6 +7998,231 @@ document.addEventListener("DOMContentLoaded", () => {
             closeEditPpaModal();
             showPlanningToast("PPA record updated successfully.", "success");
         });
+    }
+
+    const projectBoard = document.querySelector(".project-board");
+    if (projectBoard) {
+        const projectModal = projectBoard.querySelector(".js-project-modal");
+        const deleteModal = projectBoard.querySelector(".js-project-delete-modal");
+        const projectForm = projectBoard.querySelector("[data-project-form]");
+        const projectTableBody = projectBoard.querySelector("[data-project-table-body]");
+        const projectResultsSummary = projectBoard.querySelector("[data-project-results-summary]");
+        const projectPanelTitle = projectBoard.querySelector(".js-project-panel-title");
+        const projectPanelSubtitle = projectBoard.querySelector(".js-project-panel-subtitle");
+        const divisionFilter = projectBoard.querySelector('[data-project-filter="division"]');
+        const projectTotalSummary = projectBoard.querySelector('[data-project-summary="total"]');
+        const projectBudgetSummary = projectBoard.querySelector('[data-project-summary="budget"]');
+        const projectApprovedSummary = projectBoard.querySelector('[data-project-summary="approved"]');
+        const divisionSummaryCards = projectBoard.querySelectorAll("[data-project-division-count]");
+        const divisionCards = projectBoard.querySelectorAll("[data-project-division-card]");
+        const openProjectButtons = projectBoard.querySelectorAll(".js-project-open-modal");
+        const closeProjectButtons = projectBoard.querySelectorAll(".js-project-close-modal");
+        const closeDeleteButtons = projectBoard.querySelectorAll(".js-project-close-delete-modal");
+
+        const formatProjectCurrency = (amount) => {
+            const numericAmount = Number.isFinite(amount) ? amount : 0;
+            return new Intl.NumberFormat("en-PH", {
+                style: "currency",
+                currency: "PHP",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(numericAmount);
+        };
+
+        const parseProjectAmount = (value) => {
+            const normalizedValue = String(value || "").replace(/[^0-9.-]/g, "");
+            const parsedValue = Number.parseFloat(normalizedValue);
+            return Number.isFinite(parsedValue) ? parsedValue : 0;
+        };
+
+        const getProjectRows = () => {
+            if (!(projectTableBody instanceof HTMLElement)) return [];
+            return Array.from(projectTableBody.querySelectorAll("tr")).filter((row) => {
+                return row instanceof HTMLTableRowElement && row.dataset.projectEmptyRow !== "true";
+            });
+        };
+
+        const syncActiveProjectDivision = (divisionName) => {
+            const normalizedDivision = String(divisionName || "").trim();
+            const effectiveDivision = normalizedDivision || "Admin Division";
+            const isAllDivisions = effectiveDivision.toLowerCase() === "all divisions" || effectiveDivision.toLowerCase() === "all";
+
+            if (projectPanelTitle instanceof HTMLElement) {
+                projectPanelTitle.textContent = isAllDivisions
+                    ? "All Division Projects"
+                    : `${effectiveDivision} Projects`;
+            }
+
+            if (projectPanelSubtitle instanceof HTMLElement) {
+                projectPanelSubtitle.textContent = isAllDivisions
+                    ? "Showing project records and activity across all divisions."
+                    : "Showing project records and activity for the selected division.";
+            }
+
+            divisionCards.forEach((card) => {
+                const cardDivision = String(card.getAttribute("data-project-division-card") || "").trim();
+                const isActive = !isAllDivisions && cardDivision === effectiveDivision;
+                card.classList.toggle("is-active", isActive);
+            });
+
+            if (divisionFilter instanceof HTMLSelectElement && divisionFilter.value !== effectiveDivision) {
+                divisionFilter.value = effectiveDivision;
+            }
+        };
+
+        const syncProjectRegistrySummary = () => {
+            const rows = getProjectRows();
+            const divisionCounts = {
+                "Admin Division": 0,
+                "Planning Division": 0,
+                "Construction Division": 0,
+                "Quality Division": 0,
+                "Maintenance Division": 0,
+            };
+            let totalBudget = 0;
+            let approvedCount = 0;
+
+            rows.forEach((row) => {
+                const divisionValue = String(row.cells[1]?.textContent || "").trim();
+                const amountValue = parseProjectAmount(row.cells[3]?.textContent || "");
+                const statusValue = String(row.cells[4]?.textContent || "").trim().toLowerCase();
+
+                if (divisionValue in divisionCounts) {
+                    divisionCounts[divisionValue] += 1;
+                }
+                totalBudget += amountValue;
+                if (statusValue.includes("approved")) {
+                    approvedCount += 1;
+                }
+            });
+
+            if (projectTotalSummary instanceof HTMLElement) {
+                projectTotalSummary.textContent = String(rows.length);
+            }
+            if (projectBudgetSummary instanceof HTMLElement) {
+                projectBudgetSummary.textContent = formatProjectCurrency(totalBudget);
+            }
+            if (projectApprovedSummary instanceof HTMLElement) {
+                projectApprovedSummary.textContent = String(approvedCount);
+            }
+            if (projectResultsSummary instanceof HTMLElement) {
+                projectResultsSummary.textContent = rows.length
+                    ? `${rows.length} project record${rows.length === 1 ? "" : "s"} in the registry.`
+                    : "No project records available.";
+            }
+
+            divisionSummaryCards.forEach((card) => {
+                const divisionName = String(card.getAttribute("data-project-division-count") || "").trim();
+                const count = divisionCounts[divisionName] || 0;
+                card.textContent = `${count} active project${count === 1 ? "" : "s"}`;
+            });
+        };
+
+        const syncProjectModalState = () => {
+            const hasVisibleModal = [projectModal, deleteModal].some((modal) => {
+                return modal instanceof HTMLElement && !modal.hidden;
+            });
+            body.classList.toggle("project-modal-open", hasVisibleModal);
+        };
+
+        const closeProjectModal = () => {
+            if (projectModal instanceof HTMLElement) {
+                projectModal.hidden = true;
+            }
+            syncProjectModalState();
+        };
+
+        const openProjectModal = () => {
+            if (!(projectModal instanceof HTMLElement)) return;
+            if (deleteModal instanceof HTMLElement) {
+                deleteModal.hidden = true;
+            }
+            projectModal.hidden = false;
+            syncProjectModalState();
+            const firstInput = projectForm?.querySelector('input[name="project_name"]');
+            if (firstInput instanceof HTMLInputElement) {
+                window.setTimeout(() => firstInput.focus(), 0);
+            }
+        };
+
+        const closeDeleteModal = () => {
+            if (deleteModal instanceof HTMLElement) {
+                deleteModal.hidden = true;
+            }
+            syncProjectModalState();
+        };
+
+        closeProjectModal();
+        closeDeleteModal();
+
+        openProjectButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                openProjectModal();
+            });
+        });
+
+        closeProjectButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                closeProjectModal();
+            });
+        });
+
+        closeDeleteButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                closeDeleteModal();
+            });
+        });
+
+        [projectModal, deleteModal].forEach((modal) => {
+            if (!(modal instanceof HTMLElement)) return;
+            modal.addEventListener("click", (event) => {
+                if (event.target !== modal) return;
+                if (modal === projectModal) {
+                    closeProjectModal();
+                    return;
+                }
+                closeDeleteModal();
+            });
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key !== "Escape") return;
+            if (deleteModal instanceof HTMLElement && !deleteModal.hidden) {
+                closeDeleteModal();
+                return;
+            }
+            if (projectModal instanceof HTMLElement && !projectModal.hidden) {
+                closeProjectModal();
+            }
+        });
+
+        divisionCards.forEach((card) => {
+            card.addEventListener("click", () => {
+                const nextDivision = String(card.getAttribute("data-project-division-card") || "").trim();
+                if (!nextDivision) return;
+                syncActiveProjectDivision(nextDivision);
+            });
+        });
+
+        if (divisionFilter instanceof HTMLSelectElement) {
+            divisionFilter.addEventListener("change", () => {
+                syncActiveProjectDivision(divisionFilter.value);
+            });
+        }
+
+        syncProjectRegistrySummary();
+        syncActiveProjectDivision(divisionFilter instanceof HTMLSelectElement ? divisionFilter.value : "Admin Division");
+
+        if (projectTableBody instanceof HTMLElement && typeof MutationObserver !== "undefined") {
+            const projectSummaryObserver = new MutationObserver(() => {
+                syncProjectRegistrySummary();
+            });
+            projectSummaryObserver.observe(projectTableBody, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+            });
+        }
     }
 
     renderPlanningBudgets(planningBudgetRecords);

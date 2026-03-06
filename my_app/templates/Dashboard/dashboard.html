@@ -44,7 +44,11 @@
                     <span class="material-symbols-outlined">architecture</span>
                     <span>Planning Division</span>
                 </a>
-                <a href="#" class="nav-item">
+                <a
+                    href="{% url 'project_dashboard' %}"
+                    class="nav-item js-project-dashboard-button {% if current_section == 'project' %}nav-item-active{% endif %}"
+                    data-project-dashboard-url="{% url 'project_dashboard' %}"
+                >
                     <span class="material-symbols-outlined">folder_open</span>
                     <span>Projects</span>
                 </a>
@@ -123,6 +127,8 @@
                     {% include 'admin/admin_division.html' %}
                 {% elif current_section == 'planning' %}
                     {% include 'Planning/planning_division_table.html' %}
+                {% elif current_section == 'project' %}
+                    {% include 'Project/project_table.html' %}
                 {% elif current_section == 'construction' %}
                     {% include construction_template|default:'construction/construction.html' %}
                 {% elif current_section == 'maintenance' %}

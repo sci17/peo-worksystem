@@ -55,6 +55,18 @@ def planning_division_dashboard(request):
 
 
 @login_required
+def project_dashboard(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'project',
+            'page_heading': 'Project Database',
+        },
+    )
+
+
+@login_required
 def road_management(request):
     return render(
         request,
