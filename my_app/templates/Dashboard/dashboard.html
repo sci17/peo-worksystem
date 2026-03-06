@@ -40,7 +40,7 @@
                     <span class="material-symbols-outlined">admin_panel_settings</span>
                     <span>Admin Division</span>
                 </a>
-                <a href="#" class="nav-item">
+                <a href="{% url 'planning_division_dashboard' %}" class="nav-item {% if current_section == 'planning' %}nav-item-active{% endif %}">
                     <span class="material-symbols-outlined">architecture</span>
                     <span>Planning Division</span>
                 </a>
@@ -121,6 +121,8 @@
             <section class="portal-content">
                 {% if current_section == 'admin' %}
                     {% include 'admin/admin_division.html' %}
+                {% elif current_section == 'planning' %}
+                    {% include 'Planning/planning_division_table.html' %}
                 {% elif current_section == 'construction' %}
                     {% include construction_template|default:'construction/construction.html' %}
                 {% elif current_section == 'maintenance' %}

@@ -6730,3 +6730,1268 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 /* CONSTRUCTION_DIVISION_SCRIPT_END */
 
+/* PLANNING_DIVISION_MODAL_SCRIPT_START */
+document.addEventListener("DOMContentLoaded", () => {
+    const planningBudgetModal = document.querySelector(".js-planning-budget-modal");
+    const planningEditBudgetModal = document.querySelector(".js-planning-edit-budget-modal");
+    const planningPpaModal = document.querySelector(".js-planning-ppa-modal");
+    const planningEditPpaModal = document.querySelector(".js-planning-edit-ppa-modal");
+
+    if (!(planningBudgetModal instanceof HTMLElement)) {
+        return;
+    }
+
+    const planningEmptyState = document.querySelector(".planning-empty-state");
+    const planningBudgetCards = document.getElementById("planning-budget-cards");
+    const planningSummaryTotal = document.querySelector('[data-planning-summary="total"]');
+    const planningSummaryAllocated = document.querySelector('[data-planning-summary="allocated"]');
+    const planningSummaryUtilization = document.querySelector('[data-planning-summary="utilization"]');
+    const planningPpaTableBody = document.querySelector(".planning-ppa-table tbody");
+    const planningPpaFooterSummary = document.querySelector(".planning-ppa-footer > span");
+    const PLANNING_BUDGET_STORAGE_KEY = "peo_planning_budget_records_v1";
+    const PLANNING_PPA_SAMPLE_IDS = new Set([
+        "PPA-2026-0042",
+        "PPA-2026-0115",
+        "PPA-2026-0089",
+        "PPA-2026-0021",
+    ]);
+
+    const closeModalButtons = planningBudgetModal.querySelectorAll(".js-close-planning-budget-modal");
+    const budgetForm = planningBudgetModal.querySelector("#planning-budget-form");
+    const budgetNameInput = planningBudgetModal.querySelector('input[name="budget_name"]');
+    const closeEditModalButtons = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelectorAll(".js-close-planning-edit-modal")
+        : [];
+    const editBudgetForm = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector("#planning-edit-budget-form")
+        : null;
+    const editBudgetSubtitle = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-budget-subtitle")
+        : null;
+    const editTotalBudgetInput = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-total-budget")
+        : null;
+    const editBudgetHelper = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-budget-helper")
+        : null;
+    const editRemarksInput = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-remarks")
+        : null;
+    const closePpaModalButtons = planningPpaModal instanceof HTMLElement
+        ? planningPpaModal.querySelectorAll(".js-close-planning-ppa-modal")
+        : [];
+    const ppaForm = planningPpaModal instanceof HTMLElement
+        ? planningPpaModal.querySelector("#planning-ppa-form")
+        : null;
+    const ppaProjectTitleInput = planningPpaModal instanceof HTMLElement
+        ? planningPpaModal.querySelector('input[name="project_title"]')
+        : null;
+    const closeEditPpaModalButtons = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelectorAll(".js-close-planning-edit-ppa-modal")
+        : [];
+    const editPpaForm = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelector("#planning-edit-ppa-form")
+        : null;
+    const editPpaSubtitle = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-subtitle")
+        : null;
+    const editPpaNameInput = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-name")
+        : null;
+    const editPpaIdInput = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-id")
+        : null;
+    const editPpaFundInput = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-fund")
+        : null;
+    const editPpaAmountInput = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-amount")
+        : null;
+    const editPpaStatusInput = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-status")
+        : null;
+
+    const statusSelect = planningBudgetModal.querySelector(".js-planning-status-select");
+    const statusTrigger = planningBudgetModal.querySelector(".js-planning-status-trigger");
+    const statusMenu = planningBudgetModal.querySelector(".js-planning-status-menu");
+    const statusLabel = planningBudgetModal.querySelector(".js-planning-status-label");
+    const statusInput = planningBudgetModal.querySelector(".js-planning-status-input");
+    const editStatusSelect = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-status-select")
+        : null;
+    const editStatusTrigger = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-status-trigger")
+        : null;
+    const editStatusMenu = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-status-menu")
+        : null;
+    const editStatusLabel = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-status-label")
+        : null;
+    const editStatusInput = planningEditBudgetModal instanceof HTMLElement
+        ? planningEditBudgetModal.querySelector(".js-planning-edit-status-input")
+        : null;
+    const planningTabs = document.querySelectorAll(".planning-tab[data-planning-tab]");
+    const planningPanels = document.querySelectorAll("[data-planning-panel]");
+    const ppaFilterSelects = document.querySelectorAll(".js-planning-ppa-select");
+    const ppaFormSelects = planningPpaModal instanceof HTMLElement
+        ? planningPpaModal.querySelectorAll(".js-planning-ppa-form-select")
+        : [];
+
+    const normalizeStatus = (value) => {
+        const raw = String(value || "").trim().toLowerCase();
+        if (raw === "approved") return "Approved";
+        if (raw === "for approval") return "For Approval";
+        return "Draft";
+    };
+
+    const normalizePpaStatus = (value) => {
+        const raw = String(value || "").trim().toLowerCase();
+        if (raw === "approved") return "Approved";
+        if (raw === "for bidding") return "For Bidding";
+        if (raw === "awarded") return "Awarded";
+        if (raw === "for review") return "For Review";
+        if (raw === "cancelled") return "Cancelled";
+        return "Draft";
+    };
+
+    const getPpaStatusClassName = (status) => {
+        const normalized = normalizePpaStatus(status);
+        if (normalized === "Approved") return "is-approved";
+        if (normalized === "For Bidding") return "is-bidding";
+        if (normalized === "Awarded") return "is-awarded";
+        if (normalized === "For Review") return "is-review";
+        if (normalized === "Cancelled") return "is-cancelled";
+        return "is-draft";
+    };
+
+    const getStatusMeta = (status) => {
+        if (status === "Approved") {
+            return { badgeClass: "is-approved", badgeText: "APPROVED" };
+        }
+        if (status === "For Approval") {
+            return { badgeClass: "is-pending", badgeText: "PENDING" };
+        }
+        return { badgeClass: "is-draft", badgeText: "DRAFT" };
+    };
+
+    const escapeHtml = (value) => String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const formatPhp = (value) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return "PHP 0.00";
+        return `PHP ${numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const formatNumber = (value) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return "0.00";
+        return numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    const parseCurrencyValue = (value) => {
+        const sanitized = String(value || "").replace(/[^0-9.-]+/g, "");
+        const numeric = Number(sanitized);
+        return Number.isFinite(numeric) ? numeric : 0;
+    };
+
+    const parsePercentageValue = (value) => {
+        const sanitized = String(value || "").replace(/[^0-9.-]+/g, "");
+        const numeric = Number(sanitized);
+        return Number.isFinite(numeric) ? numeric : null;
+    };
+
+    const clampPercentage = (value) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return 0;
+        return Math.max(0, Math.min(100, numeric));
+    };
+
+    const getBudgetMetrics = (record) => {
+        const totalBudget = Number(record?.totalBudget);
+        const safeTotalBudget = Number.isFinite(totalBudget) && totalBudget > 0 ? totalBudget : 0;
+
+        const rawAllocatedBudget = Number(
+            record?.allocatedBudget
+            ?? record?.allocated
+            ?? record?.allocatedAmount
+            ?? NaN
+        );
+        const hasAllocatedBudget = Number.isFinite(rawAllocatedBudget);
+
+        const rawUtilization = Number(record?.utilization ?? record?.utilizationRate ?? record?.progress ?? NaN);
+        const hasUtilization = Number.isFinite(rawUtilization);
+
+        let allocatedBudget = hasAllocatedBudget ? rawAllocatedBudget : 0;
+        let utilization = 0;
+
+        if (safeTotalBudget > 0 && hasAllocatedBudget) {
+            utilization = (allocatedBudget / safeTotalBudget) * 100;
+        } else if (hasUtilization) {
+            utilization = rawUtilization;
+            allocatedBudget = safeTotalBudget * (clampPercentage(rawUtilization) / 100);
+        }
+
+        const normalizedAllocatedBudget = Math.max(0, allocatedBudget);
+        const normalizedUtilization = clampPercentage(utilization);
+        const remainingBudget = Math.max(0, safeTotalBudget - normalizedAllocatedBudget);
+
+        return {
+            totalBudget: safeTotalBudget,
+            allocatedBudget: normalizedAllocatedBudget,
+            remainingBudget,
+            utilization: normalizedUtilization,
+        };
+    };
+
+    const syncPpaTableState = () => {
+        if (!(planningPpaTableBody instanceof HTMLTableSectionElement)) return;
+
+        const dataRows = Array.from(planningPpaTableBody.querySelectorAll("tr")).filter((row) => {
+            return row instanceof HTMLTableRowElement && row.dataset.ppaEmptyRow !== "true";
+        });
+
+        const emptyRow = planningPpaTableBody.querySelector('tr[data-ppa-empty-row="true"]');
+        if (dataRows.length) {
+            emptyRow?.remove();
+        } else if (!(emptyRow instanceof HTMLTableRowElement)) {
+            const row = document.createElement("tr");
+            row.dataset.ppaEmptyRow = "true";
+            row.className = "planning-ppa-empty-row";
+            row.innerHTML = '<td colspan="5">No PPA records available.</td>';
+            planningPpaTableBody.appendChild(row);
+        }
+
+        if (planningPpaFooterSummary instanceof HTMLElement) {
+            planningPpaFooterSummary.textContent = dataRows.length
+                ? `Showing 1 to ${dataRows.length} of ${dataRows.length} results`
+                : "No PPA records available";
+        }
+    };
+
+    const removePlanningPpaSampleRows = () => {
+        if (!(planningPpaTableBody instanceof HTMLTableSectionElement)) return;
+
+        planningPpaTableBody.querySelectorAll("tr").forEach((row) => {
+            if (!(row instanceof HTMLTableRowElement)) return;
+            const rowId = row.querySelector("small")?.textContent?.replace(/^ID:\s*/i, "").trim() || "";
+            if (PLANNING_PPA_SAMPLE_IDS.has(rowId)) {
+                row.remove();
+            }
+        });
+    };
+
+    const setActivePlanningPanel = (panelName) => {
+        planningTabs.forEach((tab) => {
+            if (!(tab instanceof HTMLElement)) return;
+            const isActive = tab.dataset.planningTab === panelName;
+            tab.classList.toggle("is-active", isActive);
+            tab.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+        planningPanels.forEach((panel) => {
+            if (!(panel instanceof HTMLElement)) return;
+            const shouldShow = panel.dataset.planningPanel === panelName;
+            panel.hidden = !shouldShow;
+        });
+    };
+
+    const closePpaFilterMenus = (exceptSelect = null) => {
+        ppaFilterSelects.forEach((selectRoot) => {
+            if (!(selectRoot instanceof HTMLElement)) return;
+            if (exceptSelect && selectRoot === exceptSelect) return;
+            const trigger = selectRoot.querySelector(".js-planning-ppa-trigger");
+            const menu = selectRoot.querySelector(".js-planning-ppa-menu");
+            selectRoot.classList.remove("is-open");
+            if (trigger instanceof HTMLElement) {
+                trigger.setAttribute("aria-expanded", "false");
+            }
+            if (menu instanceof HTMLElement) {
+                menu.hidden = true;
+            }
+        });
+    };
+
+    const setPpaFilterValue = (selectRoot, value) => {
+        if (!(selectRoot instanceof HTMLElement)) return;
+        const normalized = String(value || "").trim();
+        const label = selectRoot.querySelector(".js-planning-ppa-label");
+        const input = selectRoot.querySelector(".js-planning-ppa-input");
+        const options = selectRoot.querySelectorAll(".planning-ppa-option");
+
+        if (label instanceof HTMLElement) {
+            label.textContent = normalized;
+        }
+        if (input instanceof HTMLInputElement) {
+            input.value = normalized;
+        }
+
+        options.forEach((option) => {
+            if (!(option instanceof HTMLElement)) return;
+            option.classList.toggle("is-selected", option.dataset.value === normalized);
+        });
+    };
+
+    const closePpaFormSelectMenus = (exceptSelect = null) => {
+        ppaFormSelects.forEach((selectRoot) => {
+            if (!(selectRoot instanceof HTMLElement)) return;
+            if (exceptSelect && selectRoot === exceptSelect) return;
+            const trigger = selectRoot.querySelector(".js-planning-ppa-form-trigger");
+            const menu = selectRoot.querySelector(".js-planning-ppa-form-menu");
+            selectRoot.classList.remove("is-open");
+            if (trigger instanceof HTMLElement) {
+                trigger.setAttribute("aria-expanded", "false");
+            }
+            if (menu instanceof HTMLElement) {
+                menu.hidden = true;
+            }
+        });
+    };
+
+    const setPpaFormSelectValue = (selectRoot, value) => {
+        if (!(selectRoot instanceof HTMLElement)) return;
+        const normalized = String(value || "").trim();
+        const label = selectRoot.querySelector(".js-planning-ppa-form-label");
+        const input = selectRoot.querySelector(".js-planning-ppa-form-input");
+        const options = selectRoot.querySelectorAll(".planning-ppa-form-option");
+
+        if (label instanceof HTMLElement) {
+            label.textContent = normalized;
+        }
+        if (input instanceof HTMLInputElement) {
+            input.value = normalized;
+        }
+
+        options.forEach((option) => {
+            if (!(option instanceof HTMLElement)) return;
+            option.classList.toggle("is-selected", option.dataset.value === normalized);
+        });
+    };
+
+    const readStoredBudgets = () => {
+        try {
+            const raw = localStorage.getItem(PLANNING_BUDGET_STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            return parsed
+                .map((item) => {
+                    const totalBudget = Number(item?.totalBudget);
+                    if (!Number.isFinite(totalBudget) || totalBudget < 0) return null;
+                    const allocatedBudget = Number(
+                        item?.allocatedBudget
+                        ?? item?.allocated
+                        ?? item?.allocatedAmount
+                        ?? NaN
+                    );
+                    const utilization = Number(item?.utilization ?? item?.utilizationRate ?? item?.progress ?? NaN);
+                    return {
+                        id: String(item?.id || ""),
+                        source: "local",
+                        budgetName: String(item?.budgetName || "").trim(),
+                        fiscalYear: String(item?.fiscalYear || "").trim(),
+                        totalBudget,
+                        allocatedBudget: Number.isFinite(allocatedBudget) ? allocatedBudget : null,
+                        utilization: Number.isFinite(utilization) ? utilization : null,
+                        status: normalizeStatus(item?.status),
+                        remarks: String(item?.remarks || "").trim(),
+                        createdAt: Number(item?.createdAt) || Date.now(),
+                    };
+                })
+                .filter((item) => item && item.budgetName && item.fiscalYear);
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeStoredBudgets = (records) => {
+        try {
+            localStorage.setItem(PLANNING_BUDGET_STORAGE_KEY, JSON.stringify(records));
+        } catch (error) {
+            // Ignore storage errors silently.
+        }
+    };
+
+    const renderPlanningSummaries = (records) => {
+        if (!(planningSummaryTotal instanceof HTMLElement)
+            || !(planningSummaryAllocated instanceof HTMLElement)
+            || !(planningSummaryUtilization instanceof HTMLElement)) {
+            return;
+        }
+
+        if (!records.length) {
+            planningSummaryTotal.textContent = "--";
+            planningSummaryAllocated.textContent = "--";
+            planningSummaryUtilization.textContent = "--";
+            return;
+        }
+
+        const total = records.reduce((sum, record) => sum + getBudgetMetrics(record).totalBudget, 0);
+        const allocated = records.reduce((sum, record) => sum + getBudgetMetrics(record).allocatedBudget, 0);
+        const averageUtilization = records.reduce((sum, record) => sum + getBudgetMetrics(record).utilization, 0) / records.length;
+
+        planningSummaryTotal.textContent = formatPhp(total);
+        planningSummaryAllocated.textContent = formatPhp(allocated);
+        planningSummaryUtilization.textContent = `${averageUtilization.toFixed(1)}%`;
+    };
+
+    const renderPlanningBudgets = (records) => {
+        if (!(planningBudgetCards instanceof HTMLElement)) return;
+
+        if (!records.length) {
+            if (planningEmptyState instanceof HTMLElement) {
+                planningEmptyState.hidden = false;
+            }
+            planningBudgetCards.hidden = true;
+            planningBudgetCards.innerHTML = "";
+            renderPlanningSummaries([]);
+            return;
+        }
+
+        if (planningEmptyState instanceof HTMLElement) {
+            planningEmptyState.hidden = true;
+        }
+        planningBudgetCards.hidden = false;
+
+        const cards = records
+            .slice()
+            .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+            .map((record) => {
+                const statusMeta = getStatusMeta(record.status);
+                const metrics = getBudgetMetrics(record);
+                const utilization = metrics.utilization;
+                const allocated = metrics.allocatedBudget;
+                const remaining = metrics.remainingBudget;
+
+                return `
+                    <article class="planning-budget-card">
+                        <div class="planning-budget-card-head">
+                            <h4>${escapeHtml(record.budgetName)}</h4>
+                            <div class="planning-budget-card-actions">
+                                <button type="button" class="js-planning-edit-budget" data-record-id="${escapeHtml(record.id)}" title="Edit budget" aria-label="Edit budget">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                </button>
+                                <button type="button" class="js-planning-delete-budget" data-record-id="${escapeHtml(record.id)}" title="Delete budget" aria-label="Delete budget">
+                                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                </button>
+                            </div>
+                        </div>
+                        <span class="planning-status-chip ${statusMeta.badgeClass}">${statusMeta.badgeText}</span>
+                        <div class="planning-budget-metrics">
+                            <p><span>Total Budget</span><strong>${escapeHtml(formatNumber(record.totalBudget))}</strong></p>
+                            <p><span>Allocated</span><strong>${escapeHtml(formatNumber(allocated))}</strong></p>
+                            <p><span>Remaining Balance</span><strong class="${remaining > 0 ? "planning-value-positive" : ""}">${escapeHtml(formatNumber(remaining))}</strong></p>
+                        </div>
+                        <div class="planning-budget-utilization">
+                            <div class="planning-budget-utilization-row">
+                                <span>Utilization</span>
+                                <strong>${utilization.toFixed(1)}%</strong>
+                            </div>
+                            <div class="planning-budget-progress-track">
+                                <span class="planning-budget-progress-fill ${utilization >= 70 ? "is-high" : ""}" style="width:${utilization.toFixed(1)}%;"></span>
+                            </div>
+                        </div>
+                    </article>
+                `;
+            })
+            .join("");
+
+        planningBudgetCards.innerHTML = cards;
+        renderPlanningSummaries(records);
+    };
+
+    let planningBudgetRecords = readStoredBudgets();
+    let editingBudgetRecordId = null;
+    let editingPpaRow = null;
+    let planningToastElement = null;
+    let planningToastTimer = null;
+    let planningConfirmOverlay = null;
+
+    const syncPlanningModalBodyState = () => {
+        const createVisible = planningBudgetModal instanceof HTMLElement && !planningBudgetModal.hidden;
+        const editVisible = planningEditBudgetModal instanceof HTMLElement && !planningEditBudgetModal.hidden;
+        const ppaVisible = planningPpaModal instanceof HTMLElement && !planningPpaModal.hidden;
+        const editPpaVisible = planningEditPpaModal instanceof HTMLElement && !planningEditPpaModal.hidden;
+        document.body.classList.toggle("planning-modal-open", createVisible || editVisible || ppaVisible || editPpaVisible);
+    };
+
+    const closePlanningToast = () => {
+        if (!planningToastElement) return;
+        planningToastElement.classList.remove("is-visible");
+        const toastToRemove = planningToastElement;
+        planningToastElement = null;
+        window.setTimeout(() => {
+            toastToRemove.remove();
+        }, 180);
+        if (planningToastTimer) {
+            window.clearTimeout(planningToastTimer);
+            planningToastTimer = null;
+        }
+    };
+
+    const showPlanningToast = (message, variant = "success") => {
+        closePlanningToast();
+        const toast = document.createElement("div");
+        toast.className = `planning-toast planning-toast--${variant === "info" ? "info" : "success"}`;
+        toast.setAttribute("role", "status");
+        toast.setAttribute("aria-live", "polite");
+        toast.innerHTML = `
+            <span class="planning-toast__icon" aria-hidden="true">
+                <span class="material-symbols-outlined">${variant === "info" ? "info" : "check"}</span>
+            </span>
+            <span class="planning-toast__message">${escapeHtml(String(message || "").trim() || "Action completed successfully.")}</span>
+        `;
+        document.body.appendChild(toast);
+        planningToastElement = toast;
+        window.requestAnimationFrame(() => {
+            toast.classList.add("is-visible");
+        });
+        planningToastTimer = window.setTimeout(() => {
+            closePlanningToast();
+        }, 3200);
+    };
+
+    const closePlanningConfirm = () => {
+        if (!planningConfirmOverlay) return;
+        planningConfirmOverlay.remove();
+        planningConfirmOverlay = null;
+    };
+
+    const showPlanningConfirm = (options = {}) => {
+        closePlanningConfirm();
+        return new Promise((resolve) => {
+            const titleText = String(options.title || "Delete Data").trim() || "Delete Data";
+            const messageText = String(options.message || "Are you sure you want to delete this data?").trim() || "Are you sure you want to delete this data?";
+            const confirmLabel = String(options.confirmLabel || "Yes, Delete").trim() || "Yes, Delete";
+            const cancelLabel = String(options.cancelLabel || "Cancel").trim() || "Cancel";
+
+            const overlay = document.createElement("div");
+            overlay.className = "planning-confirm-overlay";
+            overlay.innerHTML = `
+                <div class="planning-confirm-dialog" role="alertdialog" aria-live="assertive">
+                    <h4 class="planning-confirm-title">${escapeHtml(titleText)}</h4>
+                    <p class="planning-confirm-message">${escapeHtml(messageText)}</p>
+                    <div class="planning-confirm-actions">
+                        <button type="button" class="planning-confirm-btn planning-confirm-btn--danger" data-action="confirm">${escapeHtml(confirmLabel)}</button>
+                        <button type="button" class="planning-confirm-btn planning-confirm-btn--cancel" data-action="cancel">${escapeHtml(cancelLabel)}</button>
+                    </div>
+                </div>
+            `;
+
+            planningConfirmOverlay = overlay;
+            document.body.appendChild(overlay);
+
+            let settled = false;
+            const settle = (approved) => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener("keydown", onKeyDown);
+                closePlanningConfirm();
+                resolve(Boolean(approved));
+            };
+
+            const onKeyDown = (event) => {
+                if (event.key === "Escape") {
+                    settle(false);
+                }
+            };
+
+            document.addEventListener("keydown", onKeyDown);
+
+            overlay.addEventListener("click", (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                if (target === overlay) {
+                    settle(false);
+                    return;
+                }
+                const actionButton = target.closest("[data-action]");
+                if (!actionButton) return;
+                settle(actionButton.getAttribute("data-action") === "confirm");
+            });
+        });
+    };
+
+    const closeStatusMenu = () => {
+        if (!(statusSelect instanceof HTMLElement) || !(statusTrigger instanceof HTMLElement) || !(statusMenu instanceof HTMLElement)) {
+            return;
+        }
+        statusSelect.classList.remove("is-open");
+        statusTrigger.setAttribute("aria-expanded", "false");
+        statusMenu.hidden = true;
+    };
+
+    const setStatusValue = (value) => {
+        if (!(statusMenu instanceof HTMLElement)) return;
+        const normalizedValue = normalizeStatus(value);
+        if (statusLabel instanceof HTMLElement) {
+            statusLabel.textContent = normalizedValue;
+        }
+        if (statusInput instanceof HTMLInputElement) {
+            statusInput.value = normalizedValue;
+        }
+        statusMenu.querySelectorAll(".planning-status-option").forEach((option) => {
+            if (!(option instanceof HTMLElement)) return;
+            option.classList.toggle("is-selected", option.dataset.value === normalizedValue);
+        });
+    };
+
+    const closeEditStatusMenu = () => {
+        if (!(editStatusSelect instanceof HTMLElement) || !(editStatusTrigger instanceof HTMLElement) || !(editStatusMenu instanceof HTMLElement)) {
+            return;
+        }
+        editStatusSelect.classList.remove("is-open");
+        editStatusTrigger.setAttribute("aria-expanded", "false");
+        editStatusMenu.hidden = true;
+    };
+
+    const setEditStatusValue = (value) => {
+        if (!(editStatusMenu instanceof HTMLElement)) return;
+        const normalizedValue = normalizeStatus(value);
+        if (editStatusLabel instanceof HTMLElement) {
+            editStatusLabel.textContent = normalizedValue;
+        }
+        if (editStatusInput instanceof HTMLInputElement) {
+            editStatusInput.value = normalizedValue;
+        }
+        editStatusMenu.querySelectorAll(".planning-status-option").forEach((option) => {
+            if (!(option instanceof HTMLElement)) return;
+            option.classList.toggle("is-selected", option.dataset.value === normalizedValue);
+        });
+    };
+
+    const updateEditBudgetHelper = () => {
+        if (!(editBudgetHelper instanceof HTMLElement) || !(editTotalBudgetInput instanceof HTMLInputElement)) {
+            return;
+        }
+        const amount = Number(editTotalBudgetInput.value);
+        editBudgetHelper.textContent = formatPhp(Number.isFinite(amount) ? amount : 0);
+    };
+
+    const openModal = () => {
+        closeEditPpaModal();
+        if (planningEditBudgetModal instanceof HTMLElement && !planningEditBudgetModal.hidden) {
+            planningEditBudgetModal.classList.remove("is-open");
+            planningEditBudgetModal.hidden = true;
+            planningEditBudgetModal.setAttribute("hidden", "");
+            planningEditBudgetModal.style.display = "none";
+        }
+        planningBudgetModal.classList.add("is-open");
+        planningBudgetModal.hidden = false;
+        planningBudgetModal.removeAttribute("hidden");
+        planningBudgetModal.style.display = "flex";
+        syncPlanningModalBodyState();
+        closeStatusMenu();
+        const initialStatus = statusInput instanceof HTMLInputElement ? statusInput.value : "Draft";
+        setStatusValue(initialStatus || "Draft");
+        window.requestAnimationFrame(() => {
+            if (budgetNameInput instanceof HTMLInputElement) {
+                budgetNameInput.focus();
+            }
+        });
+    };
+
+    const closeModal = () => {
+        planningBudgetModal.classList.remove("is-open");
+        planningBudgetModal.hidden = true;
+        planningBudgetModal.setAttribute("hidden", "");
+        planningBudgetModal.style.display = "none";
+        syncPlanningModalBodyState();
+        closeStatusMenu();
+    };
+
+    const openEditModal = (recordId) => {
+        if (!(planningEditBudgetModal instanceof HTMLElement)) return;
+        const record = planningBudgetRecords.find((item) => item.id === recordId);
+        if (!record) return;
+        editingBudgetRecordId = record.id;
+
+        if (editBudgetSubtitle instanceof HTMLElement) {
+            editBudgetSubtitle.textContent = `Update budget allocation for FY ${record.fiscalYear}`;
+        }
+        if (editTotalBudgetInput instanceof HTMLInputElement) {
+            editTotalBudgetInput.value = Number(record.totalBudget || 0).toFixed(2);
+        }
+        if (editRemarksInput instanceof HTMLTextAreaElement) {
+            editRemarksInput.value = record.remarks || "";
+        }
+        setEditStatusValue(record.status || "Draft");
+        updateEditBudgetHelper();
+        closeEditStatusMenu();
+
+        closeModal();
+        closeEditPpaModal();
+        planningEditBudgetModal.classList.add("is-open");
+        planningEditBudgetModal.hidden = false;
+        planningEditBudgetModal.removeAttribute("hidden");
+        planningEditBudgetModal.style.display = "flex";
+        syncPlanningModalBodyState();
+
+        window.requestAnimationFrame(() => {
+            if (editTotalBudgetInput instanceof HTMLInputElement) {
+                editTotalBudgetInput.focus();
+                editTotalBudgetInput.select();
+            }
+        });
+    };
+
+    const closeEditModal = () => {
+        if (!(planningEditBudgetModal instanceof HTMLElement)) return;
+        planningEditBudgetModal.classList.remove("is-open");
+        planningEditBudgetModal.hidden = true;
+        planningEditBudgetModal.setAttribute("hidden", "");
+        planningEditBudgetModal.style.display = "none";
+        editingBudgetRecordId = null;
+        syncPlanningModalBodyState();
+        closeEditStatusMenu();
+    };
+
+    const openPpaModal = () => {
+        if (!(planningPpaModal instanceof HTMLElement)) return;
+        closeModal();
+        closeEditModal();
+        closeEditPpaModal();
+        planningPpaModal.classList.add("is-open");
+        planningPpaModal.hidden = false;
+        planningPpaModal.removeAttribute("hidden");
+        planningPpaModal.style.display = "flex";
+        syncPlanningModalBodyState();
+        closePpaFormSelectMenus();
+        window.requestAnimationFrame(() => {
+            if (ppaProjectTitleInput instanceof HTMLInputElement) {
+                ppaProjectTitleInput.focus();
+            }
+        });
+    };
+
+    const closePpaModal = () => {
+        if (!(planningPpaModal instanceof HTMLElement)) return;
+        planningPpaModal.classList.remove("is-open");
+        planningPpaModal.hidden = true;
+        planningPpaModal.setAttribute("hidden", "");
+        planningPpaModal.style.display = "none";
+        syncPlanningModalBodyState();
+        closePpaFormSelectMenus();
+    };
+
+    const openEditPpaModal = (row) => {
+        if (!(planningEditPpaModal instanceof HTMLElement) || !(row instanceof HTMLTableRowElement)) return;
+        const firstCell = row.cells[0];
+        const fundCell = row.cells[1];
+        const statusCell = row.cells[2];
+        const amountCell = row.cells[3];
+
+        if (!firstCell || !fundCell || !statusCell || !amountCell) return;
+
+        const nameValue = firstCell.querySelector("strong")?.textContent?.trim() || "";
+        const idValue = (firstCell.querySelector("small")?.textContent || "").replace(/^ID:\s*/i, "").trim();
+        const fundValue = fundCell.textContent?.trim() || "";
+        const statusValue = normalizePpaStatus(statusCell.querySelector(".planning-ppa-status")?.textContent || statusCell.textContent || "");
+        const amountValue = parseCurrencyValue(amountCell.textContent || "");
+
+        editingPpaRow = row;
+
+        if (editPpaSubtitle instanceof HTMLElement) {
+            editPpaSubtitle.textContent = `Update project details for ${nameValue || "the selected record"}`;
+        }
+        if (editPpaNameInput instanceof HTMLInputElement) {
+            editPpaNameInput.value = nameValue;
+        }
+        if (editPpaIdInput instanceof HTMLInputElement) {
+            editPpaIdInput.value = idValue;
+        }
+        if (editPpaFundInput instanceof HTMLInputElement) {
+            editPpaFundInput.value = fundValue;
+        }
+        if (editPpaAmountInput instanceof HTMLInputElement) {
+            editPpaAmountInput.value = amountValue.toFixed(2);
+        }
+        if (editPpaStatusInput instanceof HTMLSelectElement) {
+            editPpaStatusInput.value = statusValue;
+        }
+
+        closeModal();
+        closeEditModal();
+        closePpaModal();
+        planningEditPpaModal.classList.add("is-open");
+        planningEditPpaModal.hidden = false;
+        planningEditPpaModal.removeAttribute("hidden");
+        planningEditPpaModal.style.display = "flex";
+        syncPlanningModalBodyState();
+
+        window.requestAnimationFrame(() => {
+            if (editPpaNameInput instanceof HTMLInputElement) {
+                editPpaNameInput.focus();
+                editPpaNameInput.select();
+            }
+        });
+    };
+
+    const closeEditPpaModal = () => {
+        if (!(planningEditPpaModal instanceof HTMLElement)) return;
+        planningEditPpaModal.classList.remove("is-open");
+        planningEditPpaModal.hidden = true;
+        planningEditPpaModal.setAttribute("hidden", "");
+        planningEditPpaModal.style.display = "none";
+        editingPpaRow = null;
+        syncPlanningModalBodyState();
+    };
+
+    closeModal();
+    closeEditModal();
+    closePpaModal();
+    closeEditPpaModal();
+
+    if (planningTabs.length && planningPanels.length) {
+        planningTabs.forEach((tab) => {
+            tab.addEventListener("click", () => {
+                setActivePlanningPanel(tab.dataset.planningTab || "budget");
+            });
+        });
+        const initialPanel = document.querySelector(".planning-tab.is-active")?.getAttribute("data-planning-tab") || "budget";
+        setActivePlanningPanel(initialPanel);
+    }
+
+    if (ppaFilterSelects.length) {
+        ppaFilterSelects.forEach((selectRoot) => {
+            if (!(selectRoot instanceof HTMLElement)) return;
+            const trigger = selectRoot.querySelector(".js-planning-ppa-trigger");
+            const menu = selectRoot.querySelector(".js-planning-ppa-menu");
+            const options = selectRoot.querySelectorAll(".planning-ppa-option");
+            const initialOption = selectRoot.querySelector(".planning-ppa-option.is-selected");
+            if (initialOption instanceof HTMLElement) {
+                setPpaFilterValue(selectRoot, initialOption.dataset.value || "");
+            }
+
+            if (trigger instanceof HTMLElement && menu instanceof HTMLElement) {
+                trigger.addEventListener("click", () => {
+                    const willOpen = menu.hidden;
+                    if (!willOpen) {
+                        closePpaFilterMenus();
+                        return;
+                    }
+                    closePpaFilterMenus(selectRoot);
+                    selectRoot.classList.add("is-open");
+                    trigger.setAttribute("aria-expanded", "true");
+                    menu.hidden = false;
+                });
+            }
+
+            options.forEach((option) => {
+                option.addEventListener("click", () => {
+                    if (!(option instanceof HTMLElement)) return;
+                    setPpaFilterValue(selectRoot, option.dataset.value || "");
+                    closePpaFilterMenus();
+                });
+            });
+        });
+    }
+
+    if (ppaFormSelects.length) {
+        ppaFormSelects.forEach((selectRoot) => {
+            if (!(selectRoot instanceof HTMLElement)) return;
+            const trigger = selectRoot.querySelector(".js-planning-ppa-form-trigger");
+            const menu = selectRoot.querySelector(".js-planning-ppa-form-menu");
+            const options = selectRoot.querySelectorAll(".planning-ppa-form-option");
+
+            if (trigger instanceof HTMLElement && menu instanceof HTMLElement) {
+                trigger.addEventListener("click", () => {
+                    const willOpen = menu.hidden;
+                    if (!willOpen) {
+                        closePpaFormSelectMenus();
+                        return;
+                    }
+                    closePpaFormSelectMenus(selectRoot);
+                    selectRoot.classList.add("is-open");
+                    trigger.setAttribute("aria-expanded", "true");
+                    menu.hidden = false;
+                });
+            }
+
+            options.forEach((option) => {
+                option.addEventListener("click", () => {
+                    if (!(option instanceof HTMLElement)) return;
+                    setPpaFormSelectValue(selectRoot, option.dataset.value || "");
+                    closePpaFormSelectMenus();
+                });
+            });
+        });
+    }
+
+    document.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+
+        const openPpaButton = target.closest(".planning-new-ppa-btn");
+        if (openPpaButton) {
+            event.preventDefault();
+            openPpaModal();
+            return;
+        }
+
+        const openButton = target.closest(".planning-new-budget-btn");
+        if (openButton) {
+            event.preventDefault();
+            openModal();
+            return;
+        }
+
+        const closeButton = target.closest(".js-close-planning-budget-modal");
+        if (closeButton) {
+            closeModal();
+            return;
+        }
+
+        const closeEditButton = target.closest(".js-close-planning-edit-modal");
+        if (closeEditButton) {
+            closeEditModal();
+            return;
+        }
+
+        const closePpaButton = target.closest(".js-close-planning-ppa-modal");
+        if (closePpaButton) {
+            closePpaModal();
+            return;
+        }
+
+        const closeEditPpaButton = target.closest(".js-close-planning-edit-ppa-modal");
+        if (closeEditPpaButton) {
+            closeEditPpaModal();
+            return;
+        }
+
+        const editButton = target.closest(".js-planning-edit-budget");
+        if (editButton) {
+            const recordId = editButton.getAttribute("data-record-id");
+            if (!recordId) return;
+            openEditModal(recordId);
+            return;
+        }
+
+        const editPpaButton = target.closest(".js-planning-edit-ppa");
+        if (editPpaButton) {
+            const row = editPpaButton.closest("tr");
+            if (!(row instanceof HTMLTableRowElement)) return;
+            openEditPpaModal(row);
+            return;
+        }
+
+        const deletePpaButton = target.closest(".planning-ppa-action-btn.is-delete");
+        if (deletePpaButton) {
+            const row = deletePpaButton.closest("tr");
+            if (!(row instanceof HTMLTableRowElement)) return;
+            const approved = await showPlanningConfirm({
+                title: "Delete Data",
+                message: "Are you sure to delete this data?",
+                confirmLabel: "Yes, Delete",
+                cancelLabel: "Cancel",
+            });
+            if (!approved) return;
+            if (editingPpaRow === row) {
+                editingPpaRow = null;
+            }
+            row.remove();
+            syncPpaTableState();
+            showPlanningToast("The data is permanently deleted.", "info");
+            return;
+        }
+
+        const deleteButton = target.closest(".js-planning-delete-budget");
+        if (deleteButton) {
+            const recordId = deleteButton.getAttribute("data-record-id");
+            if (!recordId) return;
+            const approved = await showPlanningConfirm({
+                title: "Delete Budget",
+                message: "Are you sure you want to delete this budget record?",
+                confirmLabel: "Yes, Delete",
+                cancelLabel: "Cancel",
+            });
+            if (!approved) return;
+            planningBudgetRecords = planningBudgetRecords.filter((record) => record.id !== recordId);
+            writeStoredBudgets(planningBudgetRecords);
+            renderPlanningBudgets(planningBudgetRecords);
+            showPlanningToast("Budget record deleted successfully.", "info");
+            return;
+        }
+
+        if (target === planningBudgetModal) {
+            closeModal();
+            return;
+        }
+
+        if (target === planningEditBudgetModal) {
+            closeEditModal();
+            return;
+        }
+
+        if (target === planningPpaModal) {
+            closePpaModal();
+            return;
+        }
+
+        if (target === planningEditPpaModal) {
+            closeEditPpaModal();
+        }
+    });
+
+    closeModalButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            closeModal();
+        });
+    });
+
+    closeEditModalButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            closeEditModal();
+        });
+    });
+
+    closeEditPpaModalButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            closeEditPpaModal();
+        });
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        closePpaFilterMenus();
+        if (planningEditPpaModal instanceof HTMLElement && !planningEditPpaModal.hidden) {
+            closeEditPpaModal();
+            return;
+        }
+        if (planningEditBudgetModal instanceof HTMLElement && !planningEditBudgetModal.hidden) {
+            closeEditModal();
+            return;
+        }
+        if (planningPpaModal instanceof HTMLElement && !planningPpaModal.hidden) {
+            closePpaModal();
+            return;
+        }
+        if (!planningBudgetModal.hidden) {
+            closeModal();
+        }
+    });
+
+    if (
+        statusSelect instanceof HTMLElement
+        && statusTrigger instanceof HTMLElement
+        && statusMenu instanceof HTMLElement
+    ) {
+        statusTrigger.addEventListener("click", () => {
+            const willOpen = statusMenu.hidden;
+            if (!willOpen) {
+                closeStatusMenu();
+                return;
+            }
+            statusSelect.classList.add("is-open");
+            statusTrigger.setAttribute("aria-expanded", "true");
+            statusMenu.hidden = false;
+        });
+
+        statusMenu.querySelectorAll(".planning-status-option").forEach((option) => {
+            option.addEventListener("click", () => {
+                if (!(option instanceof HTMLElement)) return;
+                setStatusValue(option.dataset.value || "Draft");
+                closeStatusMenu();
+            });
+        });
+
+        document.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof Node)) return;
+            if (!statusSelect.contains(target)) {
+                closeStatusMenu();
+            }
+        });
+    }
+
+    if (
+        editStatusSelect instanceof HTMLElement
+        && editStatusTrigger instanceof HTMLElement
+        && editStatusMenu instanceof HTMLElement
+    ) {
+        editStatusTrigger.addEventListener("click", () => {
+            const willOpen = editStatusMenu.hidden;
+            if (!willOpen) {
+                closeEditStatusMenu();
+                return;
+            }
+            editStatusSelect.classList.add("is-open");
+            editStatusTrigger.setAttribute("aria-expanded", "true");
+            editStatusMenu.hidden = false;
+        });
+
+        editStatusMenu.querySelectorAll(".planning-status-option").forEach((option) => {
+            option.addEventListener("click", () => {
+                if (!(option instanceof HTMLElement)) return;
+                setEditStatusValue(option.dataset.value || "Draft");
+                closeEditStatusMenu();
+            });
+        });
+
+        document.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof Node)) return;
+            if (!editStatusSelect.contains(target)) {
+                closeEditStatusMenu();
+            }
+        });
+    }
+
+    document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Node)) return;
+        const clickedInsidePpaSelect = Array.from(ppaFilterSelects).some((selectRoot) => {
+            return selectRoot instanceof HTMLElement && selectRoot.contains(target);
+        });
+        if (!clickedInsidePpaSelect) {
+            closePpaFilterMenus();
+        }
+    });
+
+    if (editTotalBudgetInput instanceof HTMLInputElement) {
+        editTotalBudgetInput.addEventListener("input", () => {
+            updateEditBudgetHelper();
+        });
+    }
+
+    if (budgetForm instanceof HTMLFormElement) {
+        budgetForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const formData = new FormData(budgetForm);
+            const budgetName = String(formData.get("budget_name") || "").trim();
+            const fiscalYear = String(formData.get("fiscal_year") || "").trim();
+            const totalBudget = Number(formData.get("total_budget"));
+            const status = normalizeStatus(statusInput instanceof HTMLInputElement ? statusInput.value : formData.get("status"));
+            const remarks = String(formData.get("remarks") || "").trim();
+
+            if (!budgetName || !fiscalYear || !Number.isFinite(totalBudget) || totalBudget < 0) {
+                window.alert("Please complete all required fields before creating a budget.");
+                return;
+            }
+
+            planningBudgetRecords.unshift({
+                id: `planning_budget_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                budgetName,
+                fiscalYear,
+                totalBudget,
+                status,
+                remarks,
+                createdAt: Date.now(),
+            });
+
+            writeStoredBudgets(planningBudgetRecords);
+            renderPlanningBudgets(planningBudgetRecords);
+            budgetForm.reset();
+            setStatusValue("Draft");
+            closeModal();
+            showPlanningToast("New budget added successfully.", "success");
+        });
+    }
+
+    if (editBudgetForm instanceof HTMLFormElement) {
+        editBudgetForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            if (!editingBudgetRecordId) {
+                closeEditModal();
+                return;
+            }
+
+            const totalBudget = Number(editTotalBudgetInput instanceof HTMLInputElement ? editTotalBudgetInput.value : NaN);
+            const status = normalizeStatus(editStatusInput instanceof HTMLInputElement ? editStatusInput.value : "Draft");
+            const remarks = String(editRemarksInput instanceof HTMLTextAreaElement ? editRemarksInput.value : "").trim();
+
+            if (!Number.isFinite(totalBudget) || totalBudget < 0) {
+                window.alert("Please enter a valid total budget.");
+                return;
+            }
+
+            planningBudgetRecords = planningBudgetRecords.map((record) => {
+                if (record.id !== editingBudgetRecordId) return record;
+                return {
+                    ...record,
+                    totalBudget,
+                    status,
+                    remarks,
+                };
+            });
+
+            writeStoredBudgets(planningBudgetRecords);
+            renderPlanningBudgets(planningBudgetRecords);
+            closeEditModal();
+            showPlanningToast("Budget data updated successfully.", "success");
+        });
+    }
+
+    if (editPpaForm instanceof HTMLFormElement) {
+        editPpaForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            if (!(editingPpaRow instanceof HTMLTableRowElement)) {
+                closeEditPpaModal();
+                return;
+            }
+
+            const projectName = String(editPpaNameInput instanceof HTMLInputElement ? editPpaNameInput.value : "").trim();
+            const projectId = String(editPpaIdInput instanceof HTMLInputElement ? editPpaIdInput.value : "").trim();
+            const fundSource = String(editPpaFundInput instanceof HTMLInputElement ? editPpaFundInput.value : "").trim();
+            const amount = Number(editPpaAmountInput instanceof HTMLInputElement ? editPpaAmountInput.value : NaN);
+            const status = normalizePpaStatus(editPpaStatusInput instanceof HTMLSelectElement ? editPpaStatusInput.value : "Draft");
+
+            if (!projectName || !projectId || !fundSource || !Number.isFinite(amount) || amount < 0) {
+                window.alert("Please complete all PPA edit fields with valid values.");
+                return;
+            }
+
+            const firstCell = editingPpaRow.cells[0];
+            const fundCell = editingPpaRow.cells[1];
+            const statusCell = editingPpaRow.cells[2];
+            const amountCell = editingPpaRow.cells[3];
+
+            if (!firstCell || !fundCell || !statusCell || !amountCell) {
+                closeEditPpaModal();
+                return;
+            }
+
+            let titleElement = firstCell.querySelector("strong");
+            if (!(titleElement instanceof HTMLElement)) {
+                titleElement = document.createElement("strong");
+                firstCell.prepend(titleElement);
+            }
+            titleElement.textContent = projectName;
+
+            let idElement = firstCell.querySelector("small");
+            if (!(idElement instanceof HTMLElement)) {
+                idElement = document.createElement("small");
+                firstCell.appendChild(idElement);
+            }
+            idElement.textContent = `ID: ${projectId}`;
+
+            fundCell.textContent = fundSource;
+
+            let statusElement = statusCell.querySelector(".planning-ppa-status");
+            if (!(statusElement instanceof HTMLElement)) {
+                statusElement = document.createElement("span");
+                statusElement.className = "planning-ppa-status";
+                statusCell.textContent = "";
+                statusCell.appendChild(statusElement);
+            }
+            statusElement.className = `planning-ppa-status ${getPpaStatusClassName(status)}`;
+            statusElement.textContent = status;
+
+            amountCell.textContent = formatPhp(amount);
+
+            closeEditPpaModal();
+            showPlanningToast("PPA record updated successfully.", "success");
+        });
+    }
+
+    renderPlanningBudgets(planningBudgetRecords);
+    removePlanningPpaSampleRows();
+    syncPpaTableState();
+});
+/* PLANNING_DIVISION_MODAL_SCRIPT_END */
+

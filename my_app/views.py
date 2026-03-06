@@ -43,6 +43,18 @@ def construction_division_dashboard(request):
 
 
 @login_required
+def planning_division_dashboard(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        {
+            'current_section': 'planning',
+            'page_heading': 'Planning Division',
+        },
+    )
+
+
+@login_required
 def road_management(request):
     return render(
         request,
@@ -51,7 +63,7 @@ def road_management(request):
             'current_section': 'maintenance',
             'current_maintenance': 'road',
             'page_heading': 'Road Management',
-            'maintenance_template': 'Maintinance/includes/road_management_table.html',
+            'maintenance_template': 'Maintenance/includes/road_management_table.html',
         },
     )
 
@@ -65,7 +77,7 @@ def contractor_management(request):
             'current_section': 'maintenance',
             'current_maintenance': 'contractor',
             'page_heading': 'Contractor Management',
-            'maintenance_template': 'Maintinance/includes/contractor_management_table.html',
+            'maintenance_template': 'Maintenance/includes/contractor_management_table.html',
         },
     )
 
@@ -79,7 +91,7 @@ def task_management(request):
             'current_section': 'maintenance',
             'current_maintenance': 'task',
             'page_heading': 'Task Management',
-            'maintenance_template': 'Maintinance/includes/task_management_table.html',
+            'maintenance_template': 'Maintenance/includes/task_management_table.html',
         },
     )
 
