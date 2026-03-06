@@ -1410,15 +1410,41 @@ body {
 }
 
 .pa-new-doc {
-    border: 1px solid #aabed3;
-    border-radius: 8px;
-    background: #eff4f9;
-    color: black;
-    font-weight: 600;
-    font-size: 12px;
-    padding: 0 12px;
-    height: 34px;
+    height: 38px;
+    min-width: 150px;
+    padding: 0 16px;
+    border: 1px solid #18446f;
+    border-radius: 12px;
+    background: #1f4f80;
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    box-shadow: 0 8px 18px rgba(14, 44, 75, 0.24);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.pa-new-doc:hover {
+    transform: translateY(-1px);
+    background: #245b95;
+    border-color: #1f5388;
+    box-shadow: 0 12px 22px rgba(14, 44, 75, 0.28);
+}
+
+.pa-new-doc:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(36, 97, 153, 0.3), 0 12px 22px rgba(14, 44, 75, 0.28);
+}
+
+.pa-new-doc:active {
+    transform: translateY(0);
+    background: #1a446d;
+    border-color: #163a5e;
+    box-shadow: 0 6px 14px rgba(14, 44, 75, 0.22);
 }
 
 .pa-bulk-delete {
@@ -2110,15 +2136,41 @@ body {
 }
 
 .pa-new-doc {
-    border: 1px solid #aabed3;
-    border-radius: 8px;
-    background: #eff4f9;
-    color: blue;
-    font-weight: 600;
-    font-size: 12px;
-    padding: 0 12px;
-    height: 34px;
+    height: 38px;
+    min-width: 150px;
+    padding: 0 16px;
+    border: 1px solid #18446f;
+    border-radius: 12px;
+    background: #1f4f80;
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    box-shadow: 0 8px 18px rgba(14, 44, 75, 0.24);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.pa-new-doc:hover {
+    transform: translateY(-1px);
+    background: #245b95;
+    border-color: #1f5388;
+    box-shadow: 0 12px 22px rgba(14, 44, 75, 0.28);
+}
+
+.pa-new-doc:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(36, 97, 153, 0.3), 0 12px 22px rgba(14, 44, 75, 0.28);
+}
+
+.pa-new-doc:active {
+    transform: translateY(0);
+    background: #1a446d;
+    border-color: #163a5e;
+    box-shadow: 0 6px 14px rgba(14, 44, 75, 0.22);
 }
 
 .pa-table-wrap {
