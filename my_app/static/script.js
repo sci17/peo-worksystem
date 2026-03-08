@@ -1,3 +1,183 @@
+// Global PEO Toast Manager
+(function () {
+    const TOAST_CLASS = 'peo-general-toast';
+    let container = null;
+    let timer = null;
+
+    function ensureContainer() {
+        if (container) return container;
+        container = document.querySelector('.peo-general-toast');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = TOAST_CLASS;
+            container.setAttribute('role', 'status');
+            container.setAttribute('aria-live', 'polite');
+            container.hidden = true;
+            const icon = document.createElement('span');
+            icon.className = 'peo-general-toast__icon material-symbols-outlined';
+            const content = document.createElement('div');
+            content.className = 'peo-general-toast__content';
+            const title = document.createElement('div');
+            title.className = 'peo-general-toast__title';
+            const message = document.createElement('div');
+            message.className = 'peo-general-toast__message';
+            content.appendChild(title);
+            content.appendChild(message);
+            container.appendChild(icon);
+            container.appendChild(content);
+            document.body.appendChild(container);
+        }
+        return container;
+    }
+
+    function hideToast() {
+        const el = ensureContainer();
+        el.classList.remove('is-visible');
+        el.hidden = true;
+        if (timer) { clearTimeout(timer); timer = null; }
+    }
+
+    function setVariant(el, variant) {
+        el.classList.remove('is-success', 'is-info', 'is-warning', 'is-danger');
+        const map = { success: 'is-success', info: 'is-info', warning: 'is-warning', danger: 'is-danger' };
+        el.classList.add(map[variant] || 'is-info');
+    }
+
+    function setIcon(el, variant) {
+        const iconEl = el.querySelector('.peo-general-toast__icon');
+        const iconFor = { success: 'check_circle', info: 'info', warning: 'warning', danger: 'error' };
+        iconEl.textContent = iconFor[variant] || 'info';
+    }
+
+    function setContent(el, title, message) {
+        const titleEl = el.querySelector('.peo-general-toast__title');
+        const msgEl = el.querySelector('.peo-general-toast__message');
+        if (title) { titleEl.textContent = title; titleEl.hidden = false; }
+        else { titleEl.textContent = ''; titleEl.hidden = true; }
+        msgEl.textContent = message || '';
+    }
+
+    function setPosition(el, position) {
+        // Reset position
+        el.style.top = '';
+        el.style.right = '';
+        el.style.bottom = '';
+        el.style.left = '';
+        el.style.transform = '';
+        const pos = String(position || 'bottom-right').toLowerCase();
+        if (pos === 'top-right') { el.style.top = '22px'; el.style.right = '22px'; }
+        else if (pos === 'top-left') { el.style.top = '22px'; el.style.left = '22px'; }
+        else if (pos === 'bottom-left') { el.style.bottom = '22px'; el.style.left = '22px'; }
+        else if (pos === 'center') { el.style.top = '50%'; el.style.left = '50%'; el.style.transform = 'translate(-50%, -50%)'; }
+        else { /* bottom-right default */ el.style.right = '22px'; el.style.bottom = '22px'; }
+    }
+
+    function setStyle(el, style) {
+        const isPill = String(style || '').toLowerCase() === 'pill';
+        if (isPill) {
+            el.style.borderRadius = '9999px';
+            el.style.minWidth = '0';
+            el.style.maxWidth = 'none';
+            el.style.padding = '8px 14px';
+            el.style.boxShadow = '0 10px 24px rgba(15,23,42,0.12)';
+            const titleEl = el.querySelector('.peo-general-toast__title');
+            if (titleEl) { titleEl.hidden = true; }
+        } else {
+            el.style.borderRadius = '';
+            el.style.minWidth = '';
+            el.style.maxWidth = '';
+            el.style.padding = '';
+            el.style.boxShadow = '';
+        }
+    }
+
+    function show(options) {
+        const opts = Object.assign({ variant: 'info', title: '', message: '', duration: 3200, persist: false, position: 'bottom-right', style: '' }, options || {});
+        const el = ensureContainer();
+        setVariant(el, opts.variant);
+        setIcon(el, opts.variant);
+        setContent(el, opts.title, opts.message);
+        setPosition(el, opts.position);
+        setStyle(el, opts.style);
+        el.hidden = false;
+        requestAnimationFrame(() => el.classList.add('is-visible'));
+        if (!opts.persist && opts.duration > 0) {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(hideToast, opts.duration);
+        }
+    }
+
+    function bindDataAttributes() {
+        document.addEventListener('click', (ev) => {
+            const trigger = ev.target.closest('[data-peo-toast-message]');
+            if (!trigger) return;
+            const message = trigger.getAttribute('data-peo-toast-message') || '';
+            const title = trigger.getAttribute('data-peo-toast-title') || '';
+            const variant = trigger.getAttribute('data-peo-toast-variant') || 'info';
+            const persistAttr = trigger.getAttribute('data-peo-toast-persist');
+            const persist = persistAttr === 'true' || persistAttr === '1' || persistAttr === 'navigation';
+            const position = trigger.getAttribute('data-peo-toast-position') || undefined;
+            const style = trigger.getAttribute('data-peo-toast-style') || undefined;
+            show({ variant, title, message, persist, position, style });
+        });
+
+        document.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') hideToast();
+        });
+
+        const el = ensureContainer();
+        el.addEventListener('click', hideToast);
+
+        // Auto show any element that asks for onload toast
+        document.querySelectorAll('[data-peo-toast-onload]')?.forEach((elOnload) => {
+            const message = elOnload.getAttribute('data-peo-toast-message') || '';
+            const title = elOnload.getAttribute('data-peo-toast-title') || '';
+            const variant = elOnload.getAttribute('data-peo-toast-variant') || 'info';
+            const persistAttr = elOnload.getAttribute('data-peo-toast-persist');
+            const persist = persistAttr === 'true' || persistAttr === '1' || persistAttr === 'navigation';
+            const position = elOnload.getAttribute('data-peo-toast-position') || undefined;
+            const style = elOnload.getAttribute('data-peo-toast-style') || undefined;
+            if (message) show({ variant, title, message, persist, position, style });
+        });
+
+        // Django messages (optional): JSON in script#django-messages with array of {level, message}
+        const msgScript = document.getElementById('django-messages');
+        if (msgScript) {
+            try {
+                const payload = JSON.parse(msgScript.textContent || '[]');
+                if (Array.isArray(payload)) {
+                    payload.forEach((m, idx) => {
+                        const level = (m.level || '').toLowerCase();
+                        const variant = level === 'success' ? 'success' : level === 'warning' ? 'warning' : level === 'error' ? 'danger' : 'info';
+                        setTimeout(() => show({ variant, title: m.title || '', message: m.message || '' }), 150 * idx);
+                    });
+                }
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    // Expose API + compatibility wrapper
+    window.PEOToast = {
+        show,
+        success: (message, o={}) => show({ message, variant: 'success', title: o.title || 'Success', duration: o.duration ?? 3200, persist: !!o.persist, position: o.position, style: o.style }),
+        info: (message, o={}) => show({ message, variant: 'info', title: o.title || 'Info', duration: o.duration ?? 3200, persist: !!o.persist, position: o.position, style: o.style }),
+        warning: (message, o={}) => show({ message, variant: 'warning', title: o.title || 'Warning', duration: o.duration ?? 4000, persist: !!o.persist, position: o.position, style: o.style }),
+        danger: (message, o={}) => show({ message, variant: 'danger', title: o.title || 'Error', duration: o.duration ?? 5000, persist: !!o.persist, position: o.position, style: o.style }),
+        clear: hideToast,
+    };
+    window.showPeoGeneralToast = function(message, options) {
+        const opts = options || {};
+        const variant = (opts.variant || 'info').toLowerCase();
+        show({ message, title: opts.title || '', variant, persist: !!opts.persist, position: opts.position, style: opts.style, duration: typeof opts.duration === 'number' ? opts.duration : (variant === 'danger' ? 5000 : 3200) });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindDataAttributes);
+    } else {
+        bindDataAttributes();
+    }
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
     const loginCard = document.querySelector(".login-card");
     if (loginCard) {
