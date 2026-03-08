@@ -22,6 +22,73 @@
         </button>
     </div>
 
+    <section class="quality-overview-grid" aria-label="Quality Division summary">
+        <article class="quality-overview-card quality-overview-card--documents">
+            <div class="quality-overview-card__head">
+                <span>Total Documents</span>
+                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">folder_open</span>
+            </div>
+            <strong id="quality-summary-total-documents">0</strong>
+            <small>all tracker records</small>
+        </article>
+        <article class="quality-overview-card quality-overview-card--pending">
+            <div class="quality-overview-card__head">
+                <span>Total Pending</span>
+                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">pending_actions</span>
+            </div>
+            <strong id="quality-summary-pending">0</strong>
+            <small>waiting for action</small>
+        </article>
+        <article class="quality-overview-card quality-overview-card--ongoing">
+            <div class="quality-overview-card__head">
+                <span>Total Ongoing</span>
+                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">autorenew</span>
+            </div>
+            <strong id="quality-summary-ongoing">0</strong>
+            <small>active quality workflow</small>
+        </article>
+        <article class="quality-overview-card quality-overview-card--progress">
+            <div class="quality-overview-card__head">
+                <span>In Progress</span>
+                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">timeline</span>
+            </div>
+            <strong id="quality-summary-progress">0</strong>
+            <small>currently under review</small>
+        </article>
+        <article class="quality-overview-card quality-overview-card--release">
+            <div class="quality-overview-card__head">
+                <span>For Release</span>
+                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">outbox</span>
+            </div>
+            <strong id="quality-summary-release">0</strong>
+            <small>ready for release stage</small>
+        </article>
+        <article class="quality-overview-card quality-overview-card--remarks">
+            <div class="quality-overview-card__head">
+                <span>Total Remarks</span>
+                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">comment</span>
+            </div>
+            <strong id="quality-summary-remarks">0</strong>
+            <small>records with remarks</small>
+        </article>
+        <article class="quality-overview-card quality-overview-card--completed">
+            <div class="quality-overview-card__head">
+                <span>Completed Tasks</span>
+                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">task_alt</span>
+            </div>
+            <strong id="quality-summary-completed">0</strong>
+            <small>quality records closed</small>
+        </article>
+        <article class="quality-overview-card quality-overview-card--accent">
+            <div class="quality-overview-card__head">
+                <span>Tasks To Do</span>
+                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">assignment</span>
+            </div>
+            <strong id="quality-summary-todo">0</strong>
+            <small>pending and in progress</small>
+        </article>
+    </section>
+
     <section class="quality-shell" aria-label="Quality control tracker table">
         <div class="quality-shell-head">
             <div>
@@ -54,6 +121,7 @@
                     <col style="width: 170px;">
                     <col style="width: 128px;">
                     <col style="width: 138px;">
+                    <col style="width: 112px;">
                 </colgroup>
                 <thead>
                     <tr>
@@ -68,6 +136,7 @@
                         <th>Received By</th>
                         <th>Date Recv</th>
                         <th>Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody class="js-quality-table-body"></tbody>
@@ -105,30 +174,85 @@
 
             <div class="quality-form-grid">
                 <label class="quality-form-field">
-                    <span>Particulars</span>
-                    <select name="particulars" required>
-                        <option value="Other">Other</option>
-                        <option value="Concrete">Concrete</option>
-                        <option value="Steel">Steel</option>
-                        <option value="Electrical">Electrical</option>
-                        <option value="Structural">Structural</option>
-                    </select>
-                </label>
-                <label class="quality-form-field">
                     <span>Doc No.</span>
                     <input type="text" name="doc_no" placeholder="e.g. #245" required>
                 </label>
+                <label class="quality-form-field">
+                    <span>Project Location</span>
+                    <input type="text" name="project_location" required>
+                </label>
             </div>
-
-            <label class="quality-form-field">
-                <span>Project Location</span>
-                <input type="text" name="project_location" required>
-            </label>
 
             <label class="quality-form-field">
                 <span>Location Detail</span>
                 <input type="text" name="location_detail" required>
             </label>
+
+            <fieldset class="quality-form-fieldset">
+                <legend>Particulars</legend>
+                <div class="quality-choice-grid quality-choice-grid--stacked">
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Inspection Request" checked required>
+                        <span>Inspection Request</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Field Density Test Request">
+                        <span>Field Density Test Request</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Pouring Permit Request">
+                        <span>Pouring Permit Request</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Test Result">
+                        <span>Test Result</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Quality Control Program">
+                        <span>Quality Control Program</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Quality Control Assurance">
+                        <span>Quality Control Assurance</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Certificate of No Testing">
+                        <span>Certificate of No Testing</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Affidavit (Inspectorate)">
+                        <span>Affidavit (Inspectorate)</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Accomplishment Report (Signed)">
+                        <span>Accomplishment Report (Signed)</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Travel Order">
+                        <span>Travel Order</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Order of Payment">
+                        <span>Order of Payment</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Certification">
+                        <span>Certification</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Punch List">
+                        <span>Punch List</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Pouring Permit">
+                        <span>Pouring Permit</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="particulars" value="Others">
+                        <span>Others</span>
+                    </label>
+                </div>
+            </fieldset>
 
             <div class="quality-form-grid">
                 <label class="quality-form-field">
@@ -136,40 +260,87 @@
                     <input type="url" name="scan_url" placeholder="https://example.com/document.pdf">
                 </label>
                 <label class="quality-form-field">
-                    <span>Route</span>
-                    <select name="route" required>
-                        <option value="Incoming">Incoming</option>
-                        <option value="Outgoing">Outgoing</option>
-                    </select>
-                </label>
-            </div>
-
-            <div class="quality-form-grid">
-                <label class="quality-form-field">
-                    <span>Received By</span>
-                    <input type="text" name="received_by" required>
-                </label>
-                <label class="quality-form-field">
                     <span>Date Recv</span>
                     <input type="date" name="date_recv" required>
                 </label>
             </div>
 
+            <fieldset class="quality-form-fieldset">
+                <legend>Route</legend>
+                <div class="quality-choice-grid">
+                    <label class="quality-choice-option">
+                        <input type="radio" name="route" value="Incoming" checked required>
+                        <span>Incoming</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="route" value="Outgoing">
+                        <span>Outgoing</span>
+                    </label>
+                </div>
+            </fieldset>
+
+            <fieldset class="quality-form-fieldset">
+                <legend>Workflow Status</legend>
+                <div class="quality-choice-grid">
+                    <label class="quality-choice-option">
+                        <input type="radio" name="status" value="For Action" checked required>
+                        <span>For Action</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="status" value="In Progress">
+                        <span>In Progress</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="status" value="For Release">
+                        <span>For Release</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="status" value="Completed">
+                        <span>Completed</span>
+                    </label>
+                </div>
+            </fieldset>
+
             <div class="quality-form-grid">
                 <label class="quality-form-field">
-                    <span>Status</span>
-                    <select name="status" required>
-                        <option value="For Action">For Action</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="For Release">For Release</option>
-                        <option value="Completed">Completed</option>
-                    </select>
-                </label>
-                <label class="quality-form-field">
-                    <span>Remarks</span>
-                    <input type="text" name="remarks" placeholder="Optional note">
+                    <span>Released/Received By</span>
+                    <input type="text" name="received_by" placeholder="Enter person's name" required>
                 </label>
             </div>
+
+            <fieldset class="quality-form-fieldset">
+                <legend>Initial Status</legend>
+                <div class="quality-choice-grid">
+                    <label class="quality-choice-option">
+                        <input type="radio" name="initial_status" value="For Filing" checked required>
+                        <span>For Filing</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="initial_status" value="For Action">
+                        <span>For Action</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="initial_status" value="For Records Only">
+                        <span>For Records Only</span>
+                    </label>
+                </div>
+            </fieldset>
+
+            <div class="quality-form-grid">
+                <label class="quality-form-field">
+                    <span>Owner/Representative</span>
+                    <input type="text" name="owner_representative" placeholder="Enter owner or representative name">
+                </label>
+                <label class="quality-form-field">
+                    <span>Contact (Email or Contact Number)</span>
+                    <input type="text" name="contact_info" placeholder="Enter email or contact number">
+                </label>
+            </div>
+
+            <label class="quality-form-field">
+                <span>Remarks</span>
+                <input type="text" name="remarks" placeholder="Optional note">
+            </label>
 
             <div class="quality-form-actions">
                 <button type="button" class="quality-form-cancel js-quality-close-modal">Cancel</button>

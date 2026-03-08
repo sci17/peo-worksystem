@@ -34,6 +34,49 @@
             </button>
         </div>
 
+        <div class="planning-budget-summary-grid">
+            <article class="planning-budget-summary-card">
+                <div class="planning-budget-summary-head">
+                    <span class="material-symbols-outlined planning-budget-summary-icon" aria-hidden="true">payments</span>
+                    <span class="planning-budget-summary-label">Total Allocated</span>
+                </div>
+                <strong data-planning-budget-summary="allocated">PHP 0.00</strong>
+                <small>Funds already distributed across all budget lines</small>
+            </article>
+            <article class="planning-budget-summary-card">
+                <div class="planning-budget-summary-head">
+                    <span class="material-symbols-outlined planning-budget-summary-icon" aria-hidden="true">account_balance_wallet</span>
+                    <span class="planning-budget-summary-label">Total Balances</span>
+                </div>
+                <strong data-planning-budget-summary="balance">PHP 0.00</strong>
+                <small>Remaining available ceiling for current allocations</small>
+            </article>
+            <article class="planning-budget-summary-card">
+                <div class="planning-budget-summary-head">
+                    <span class="material-symbols-outlined planning-budget-summary-icon" aria-hidden="true">draft</span>
+                    <span class="planning-budget-summary-label">Draft</span>
+                </div>
+                <strong data-planning-budget-summary="draft">0</strong>
+                <small>Budget records still pending approval routing</small>
+            </article>
+            <article class="planning-budget-summary-card">
+                <div class="planning-budget-summary-head">
+                    <span class="material-symbols-outlined planning-budget-summary-icon" aria-hidden="true">verified</span>
+                    <span class="planning-budget-summary-label">Approved</span>
+                </div>
+                <strong data-planning-budget-summary="approved">0</strong>
+                <small>Budget records already cleared for use</small>
+            </article>
+            <article class="planning-budget-summary-card">
+                <div class="planning-budget-summary-head">
+                    <span class="material-symbols-outlined planning-budget-summary-icon" aria-hidden="true">calendar_month</span>
+                    <span class="planning-budget-summary-label">Current Year</span>
+                </div>
+                <strong data-planning-budget-summary="year">2026</strong>
+                <small>Active fiscal planning cycle reference</small>
+            </article>
+        </div>
+
         <div class="planning-empty-state">
             <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
             <h4>No budget records yet</h4>
@@ -41,21 +84,6 @@
         </div>
 
         <div class="planning-card-grid" id="planning-budget-cards" hidden></div>
-
-        <div class="planning-summary-grid">
-            <article class="planning-summary-card">
-                <p>Total Divisional Budget</p>
-                <strong data-planning-summary="total">--</strong>
-            </article>
-            <article class="planning-summary-card">
-                <p>Total Allocated</p>
-                <strong data-planning-summary="allocated">--</strong>
-            </article>
-            <article class="planning-summary-card">
-                <p>Average Utilization</p>
-                <strong data-planning-summary="utilization">--</strong>
-            </article>
-        </div>
     </section>
 
     <section class="planning-panel" data-planning-panel="ppa" hidden>
@@ -70,7 +98,74 @@
             </button>
         </div>
 
+        <div class="planning-ppa-status-grid">
+            <article class="planning-ppa-status-card planning-ppa-float-card is-total">
+                <div class="planning-ppa-status-card-head">
+                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">analytics</span>
+                    <span class="planning-ppa-status-label">Total PPA</span>
+                </div>
+                <strong data-planning-ppa-summary="total">0</strong>
+                <small>All tracked programs and projects</small>
+            </article>
+            <article class="planning-ppa-status-card planning-ppa-float-card is-draft">
+                <div class="planning-ppa-status-card-head">
+                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">draft</span>
+                    <span class="planning-ppa-status-label">Draft</span>
+                </div>
+                <strong data-planning-ppa-summary="draft">0</strong>
+                <small>Still being prepared for routing</small>
+            </article>
+            <article class="planning-ppa-status-card planning-ppa-float-card is-review">
+                <div class="planning-ppa-status-card-head">
+                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
+                    <span class="planning-ppa-status-label">For Review</span>
+                </div>
+                <strong data-planning-ppa-summary="review">0</strong>
+                <small>Awaiting technical and budget review</small>
+            </article>
+            <article class="planning-ppa-status-card planning-ppa-float-card is-approved">
+                <div class="planning-ppa-status-card-head">
+                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">verified</span>
+                    <span class="planning-ppa-status-label">Approved</span>
+                </div>
+                <strong data-planning-ppa-summary="approved">0</strong>
+                <small>Cleared for implementation planning</small>
+            </article>
+            <article class="planning-ppa-status-card planning-ppa-float-card is-bidding">
+                <div class="planning-ppa-status-card-head">
+                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">gavel</span>
+                    <span class="planning-ppa-status-label">For Bidding</span>
+                </div>
+                <strong data-planning-ppa-summary="bidding">0</strong>
+                <small>Ready to enter the procurement stage</small>
+            </article>
+            <article class="planning-ppa-status-card planning-ppa-float-card is-awarded">
+                <div class="planning-ppa-status-card-head">
+                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">emoji_events</span>
+                    <span class="planning-ppa-status-label">Awarded</span>
+                </div>
+                <strong data-planning-ppa-summary="awarded">0</strong>
+                <small>Already assigned to a winning bidder</small>
+            </article>
+            <article class="planning-ppa-status-card planning-ppa-float-card is-cancelled">
+                <div class="planning-ppa-status-card-head">
+                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">block</span>
+                    <span class="planning-ppa-status-label">Cancelled</span>
+                </div>
+                <strong data-planning-ppa-summary="cancelled">0</strong>
+                <small>Removed from the active program pipeline</small>
+            </article>
+        </div>
+
         <div class="planning-ppa-shell">
+            <div class="planning-ppa-shell-head">
+                <div>
+                    <h4>Project Allocation Register</h4>
+                    <p>Review fund source, status, and allocation details in one workspace.</p>
+                </div>
+                <span class="planning-ppa-count" id="planning-ppa-count">0 projects tracked</span>
+            </div>
+
             <div class="planning-ppa-toolbar">
                 <label class="planning-ppa-search">
                     <span class="material-symbols-outlined" aria-hidden="true">search</span>
@@ -263,12 +358,27 @@
                     <div class="planning-ppa-form-grid planning-form-grid-compact">
                         <label class="planning-form-field">
                             <span>Fiscal Year</span>
-                            <select name="fiscal_year" class="planning-form-select" required>
-                                <option value="2026" selected>2026</option>
-                                <option value="2027">2027</option>
-                                <option value="2028">2028</option>
-                                <option value="2029">2029</option>
-                            </select>
+                            <div class="planning-status-select js-planning-year-select">
+                                <button type="button" class="planning-status-trigger js-planning-year-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                    <span class="js-planning-year-label">2026</span>
+                                    <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                                </button>
+                                <ul class="planning-status-menu js-planning-year-menu" role="listbox" hidden>
+                                    <li><button type="button" class="planning-status-option" data-value="2024"><span>2024</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2025"><span>2025</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option is-selected" data-value="2026"><span>2026</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2027"><span>2027</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2028"><span>2028</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2029"><span>2029</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2030"><span>2030</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2031"><span>2031</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2032"><span>2032</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2033"><span>2033</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2034"><span>2034</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-status-option" data-value="2035"><span>2035</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                </ul>
+                                <input type="hidden" name="fiscal_year" value="2026" class="js-planning-year-input">
+                            </div>
                         </label>
                         <label class="planning-form-field">
                             <span>Total Budget (PHP)</span>
@@ -436,12 +546,19 @@
 
                     <label class="planning-form-field">
                         <span>Budget Allocation *</span>
-                        <select name="budget_allocation" class="planning-form-select planning-ppa-form-select" required>
-                            <option value="" selected>Select approved budget with remaining balance</option>
-                            <option value="20% Development Fund FY 2026">20% Development Fund FY 2026</option>
-                            <option value="SEF FY 2026">SEF FY 2026</option>
-                            <option value="General Fund FY 2026">General Fund FY 2026</option>
-                        </select>
+                        <div class="planning-ppa-form-select-wrap js-planning-ppa-form-select">
+                            <button type="button" class="planning-ppa-form-select-trigger js-planning-ppa-form-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="js-planning-ppa-form-label">Select approved budget with remaining balance</span>
+                                <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                            </button>
+                            <ul class="planning-ppa-form-select-menu js-planning-ppa-form-menu" role="listbox" hidden>
+                                <li><button type="button" class="planning-ppa-form-option is-selected" data-value=""><span>Select approved budget with remaining balance</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                <li><button type="button" class="planning-ppa-form-option" data-value="20% Development Fund FY 2026"><span>20% Development Fund FY 2026</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                <li><button type="button" class="planning-ppa-form-option" data-value="SEF FY 2026"><span>SEF FY 2026</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                <li><button type="button" class="planning-ppa-form-option" data-value="General Fund FY 2026"><span>General Fund FY 2026</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                            </ul>
+                            <input type="hidden" name="budget_allocation" value="" class="js-planning-ppa-form-input">
+                        </div>
                     </label>
 
                     <label class="planning-form-field">
@@ -515,14 +632,21 @@
                     </div>
 
                     <div class="planning-ppa-form-grid">
-                        <label class="planning-form-field">
+                        <div class="planning-form-field">
                             <span>Status</span>
-                            <select name="status" class="planning-form-select planning-ppa-form-select">
-                                <option selected>Draft</option>
-                                <option>For Review</option>
-                                <option>Approved</option>
-                            </select>
-                        </label>
+                            <div class="planning-ppa-form-select-wrap js-planning-ppa-form-select">
+                                <button type="button" class="planning-ppa-form-select-trigger js-planning-ppa-form-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                    <span class="js-planning-ppa-form-label">Draft</span>
+                                    <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                                </button>
+                                <ul class="planning-ppa-form-select-menu js-planning-ppa-form-menu" role="listbox" hidden>
+                                    <li><button type="button" class="planning-ppa-form-option is-selected" data-value="Draft"><span>Draft</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-ppa-form-option" data-value="For Review"><span>For Review</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                    <li><button type="button" class="planning-ppa-form-option" data-value="Approved"><span>Approved</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                                </ul>
+                                <input type="hidden" name="status" value="Draft" class="js-planning-ppa-form-input">
+                            </div>
+                        </div>
                         <div class="planning-form-field">
                             <span>DED Status</span>
                             <div class="planning-ppa-form-select-wrap js-planning-ppa-form-select">
@@ -600,14 +724,21 @@
 
                 <label class="planning-form-field">
                     <span>Status</span>
-                    <select name="status" class="planning-form-select planning-ppa-form-select js-planning-edit-ppa-status" required>
-                        <option value="Draft">Draft</option>
-                        <option value="For Review">For Review</option>
-                        <option value="Approved">Approved</option>
-                        <option value="For Bidding">For Bidding</option>
-                        <option value="Awarded">Awarded</option>
-                        <option value="Cancelled">Cancelled</option>
-                    </select>
+                    <div class="planning-ppa-form-select-wrap js-planning-ppa-form-select js-planning-edit-ppa-status-select">
+                        <button type="button" class="planning-ppa-form-select-trigger js-planning-ppa-form-trigger" aria-haspopup="listbox" aria-expanded="false">
+                            <span class="js-planning-ppa-form-label">Draft</span>
+                            <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                        </button>
+                        <ul class="planning-ppa-form-select-menu js-planning-ppa-form-menu" role="listbox" hidden>
+                            <li><button type="button" class="planning-ppa-form-option is-selected" data-value="Draft"><span>Draft</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                            <li><button type="button" class="planning-ppa-form-option" data-value="For Review"><span>For Review</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                            <li><button type="button" class="planning-ppa-form-option" data-value="Approved"><span>Approved</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                            <li><button type="button" class="planning-ppa-form-option" data-value="For Bidding"><span>For Bidding</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                            <li><button type="button" class="planning-ppa-form-option" data-value="Awarded"><span>Awarded</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                            <li><button type="button" class="planning-ppa-form-option" data-value="Cancelled"><span>Cancelled</span><span class="material-symbols-outlined" aria-hidden="true">check</span></button></li>
+                        </ul>
+                        <input type="hidden" name="status" value="Draft" class="js-planning-edit-ppa-status-input js-planning-ppa-form-input">
+                    </div>
                 </label>
 
                 <div class="planning-form-actions">

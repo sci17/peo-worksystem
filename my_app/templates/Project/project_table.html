@@ -11,12 +11,19 @@
             <span class="material-symbols-outlined" aria-hidden="true">search</span>
             <input id="project-search" type="search" placeholder="Search projects by name, ID, or funding source..." data-project-search>
         </label>
-        <button type="button" class="project-search-submit">Search</button>
+        <button
+            type="button"
+            class="project-search-submit"
+            data-peo-toast-message="Project search action is ready here for the shared registry view."
+            data-peo-toast-variant="info"
+        >
+            Search
+        </button>
     </div>
 
     <section class="project-division-section" aria-label="Division project overview">
         <div class="project-division-grid">
-            <article class="project-division-card is-admin is-active" data-project-division-card="Admin Division">
+            <article class="project-division-card project-float-card is-admin" data-project-division-card="Admin Division">
                 <div class="project-division-icon" aria-hidden="true">
                     <span class="material-symbols-outlined">account_balance</span>
                 </div>
@@ -26,7 +33,7 @@
                 </div>
             </article>
 
-            <article class="project-division-card is-planning" data-project-division-card="Planning Division">
+            <article class="project-division-card project-float-card is-planning" data-project-division-card="Planning Division">
                 <div class="project-division-icon" aria-hidden="true">
                     <span class="material-symbols-outlined">architecture</span>
                 </div>
@@ -36,7 +43,7 @@
                 </div>
             </article>
 
-            <article class="project-division-card is-construction" data-project-division-card="Construction Division">
+            <article class="project-division-card project-float-card is-construction" data-project-division-card="Construction Division">
                 <div class="project-division-icon" aria-hidden="true">
                     <span class="material-symbols-outlined">domain</span>
                 </div>
@@ -46,7 +53,7 @@
                 </div>
             </article>
 
-            <article class="project-division-card is-quality" data-project-division-card="Quality Division">
+            <article class="project-division-card project-float-card is-quality" data-project-division-card="Quality Division">
                 <div class="project-division-icon" aria-hidden="true">
                     <span class="material-symbols-outlined">settings</span>
                 </div>
@@ -56,7 +63,7 @@
                 </div>
             </article>
 
-            <article class="project-division-card is-maintenance" data-project-division-card="Maintenance Division">
+            <article class="project-division-card project-float-card is-maintenance" data-project-division-card="Maintenance Division">
                 <div class="project-division-icon" aria-hidden="true">
                     <span class="material-symbols-outlined">precision_manufacturing</span>
                 </div>
@@ -68,18 +75,86 @@
         </div>
     </section>
 
+    <section class="project-summary-grid" aria-label="Project database analytics">
+        <article class="project-summary-card project-float-card project-summary-card--total">
+            <div class="project-summary-card__head">
+                <span>Total Projects</span>
+                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">dataset</span>
+            </div>
+            <strong data-project-summary="total">0</strong>
+            <small>all registered project records</small>
+        </article>
+
+        <article class="project-summary-card project-float-card project-summary-card--budget">
+            <div class="project-summary-card__head">
+                <span>Total Allocation</span>
+                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">payments</span>
+            </div>
+            <strong data-project-summary="budget">PHP 0.00</strong>
+            <small>combined allocated amount</small>
+        </article>
+
+        <article class="project-summary-card project-float-card project-summary-card--approved">
+            <div class="project-summary-card__head">
+                <span>Approved Projects</span>
+                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">verified</span>
+            </div>
+            <strong data-project-summary="approved">0</strong>
+            <small>cleared for implementation</small>
+        </article>
+
+        <article class="project-summary-card project-float-card project-summary-card--analysis">
+            <div class="project-summary-card__head">
+                <span>Status Analysis</span>
+                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">monitoring</span>
+            </div>
+            <div class="project-status-breakdown">
+                <div class="project-status-breakdown__row">
+                    <span>In Planning</span>
+                    <strong id="project-summary-planning">0</strong>
+                </div>
+                <div class="project-status-breakdown__row">
+                    <span>Approved</span>
+                    <strong id="project-summary-approved-total">0</strong>
+                </div>
+                <div class="project-status-breakdown__row">
+                    <span>Ongoing</span>
+                    <strong id="project-summary-ongoing">0</strong>
+                </div>
+                <div class="project-status-breakdown__row">
+                    <span>Completed</span>
+                    <strong id="project-summary-completed">0</strong>
+                </div>
+                <div class="project-status-breakdown__row">
+                    <span>On Hold</span>
+                    <strong id="project-summary-onhold">0</strong>
+                </div>
+            </div>
+        </article>
+    </section>
+
     <section class="project-shell">
         <div class="project-shell-head">
             <div>
-                <h3 class="js-project-panel-title">Admin Division Projects</h3>
-                <p class="js-project-panel-subtitle">Showing project records and activity for the selected division.</p>
+                <h3 class="js-project-panel-title">All Division Projects</h3>
+                <p class="js-project-panel-subtitle">Showing project records and activity across all divisions.</p>
             </div>
             <div class="project-shell-actions">
-                <button type="button" class="project-secondary-btn">
+                <button
+                    type="button"
+                    class="project-secondary-btn"
+                    data-peo-toast-message="Use the Division, Status, and Sort controls below to filter the project registry."
+                    data-peo-toast-variant="info"
+                >
                     <span class="material-symbols-outlined" aria-hidden="true">filter_list</span>
                     <span>Filter</span>
                 </button>
-                <button type="button" class="project-secondary-btn js-project-export-btn">
+                <button
+                    type="button"
+                    class="project-secondary-btn js-project-export-btn"
+                    data-peo-toast-message="Project CSV export is reserved here for the shared system workflow."
+                    data-peo-toast-variant="info"
+                >
                     <span class="material-symbols-outlined" aria-hidden="true">download</span>
                     <span>Export CSV</span>
                 </button>
@@ -90,8 +165,8 @@
             <label class="project-filter">
                 <span>Division</span>
                 <select data-project-filter="division">
-                    <option value="Admin Division" selected>Admin Division</option>
-                    <option value="all">All Divisions</option>
+                    <option value="all" selected>All Divisions</option>
+                    <option value="Admin Division">Admin Division</option>
                     <option value="Planning Division">Planning Division</option>
                     <option value="Construction Division">Construction Division</option>
                     <option value="Quality Division">Quality Division</option>

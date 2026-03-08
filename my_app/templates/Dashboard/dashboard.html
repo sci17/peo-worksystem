@@ -28,7 +28,14 @@
 
             <nav class="portal-nav" aria-label="Primary">
                 <p class="nav-group">Main</p>
-                <a href="{% url 'user_dashboard' %}" class="nav-item {% if current_section == 'workflow' %}nav-item-active{% endif %}">
+                <a
+                    href="{% url 'user_dashboard' %}"
+                    class="nav-item {% if current_section == 'workflow' %}nav-item-active{% endif %}"
+                    data-peo-toast-message="Workflow Management dashboard is now active."
+                    data-peo-toast-title="Sidebar Navigation"
+                    data-peo-toast-variant="info"
+                    data-peo-toast-persist="navigation"
+                >
                     <span class="material-symbols-outlined">dashboard_customize</span>
                     <span>Workflow Management</span>
                 </a>
@@ -36,11 +43,22 @@
                     href="{% url 'admin_division_dashboard' %}"
                     class="nav-item js-admin-division-button {% if current_section == 'admin' %}nav-item-active{% endif %}"
                     data-admin-division-url="{% url 'admin_division_dashboard' %}"
+                    data-peo-toast-message="Admin Division workspace loaded from the sidebar."
+                    data-peo-toast-title="Sidebar Navigation"
+                    data-peo-toast-variant="info"
+                    data-peo-toast-persist="navigation"
                 >
                     <span class="material-symbols-outlined">admin_panel_settings</span>
                     <span>Admin Division</span>
                 </a>
-                <a href="{% url 'planning_division_dashboard' %}" class="nav-item {% if current_section == 'planning' %}nav-item-active{% endif %}">
+                <a
+                    href="{% url 'planning_division_dashboard' %}"
+                    class="nav-item {% if current_section == 'planning' %}nav-item-active{% endif %}"
+                    data-peo-toast-message="Planning Division workspace loaded from the sidebar."
+                    data-peo-toast-title="Sidebar Navigation"
+                    data-peo-toast-variant="info"
+                    data-peo-toast-persist="navigation"
+                >
                     <span class="material-symbols-outlined">architecture</span>
                     <span>Planning Division</span>
                 </a>
@@ -48,6 +66,10 @@
                     href="{% url 'project_dashboard' %}"
                     class="nav-item js-project-dashboard-button {% if current_section == 'project' %}nav-item-active{% endif %}"
                     data-project-dashboard-url="{% url 'project_dashboard' %}"
+                    data-peo-toast-message="Project registry opened from the sidebar."
+                    data-peo-toast-title="Sidebar Navigation"
+                    data-peo-toast-variant="info"
+                    data-peo-toast-persist="navigation"
                 >
                     <span class="material-symbols-outlined">folder_open</span>
                     <span>Projects</span>
@@ -55,11 +77,22 @@
                 <a
                     href="{% url 'construction_division_dashboard' %}"
                     class="nav-item {% if current_section == 'construction' %}nav-item-active{% endif %}"
+                    data-peo-toast-message="Construction Division workspace loaded from the sidebar."
+                    data-peo-toast-title="Sidebar Navigation"
+                    data-peo-toast-variant="info"
+                    data-peo-toast-persist="navigation"
                 >
                     <span class="material-symbols-outlined">construction</span>
                     <span>Construction Division</span>
                 </a>
-                <a href="{% url 'quality_division_dashboard' %}" class="nav-item {% if current_section == 'quality' %}nav-item-active{% endif %}">
+                <a
+                    href="{% url 'quality_division_dashboard' %}"
+                    class="nav-item {% if current_section == 'quality' %}nav-item-active{% endif %}"
+                    data-peo-toast-message="Quality Division workspace loaded from the sidebar."
+                    data-peo-toast-title="Sidebar Navigation"
+                    data-peo-toast-variant="info"
+                    data-peo-toast-persist="navigation"
+                >
                     <span class="material-symbols-outlined">verified</span>
                     <span>Quality Division</span>
                 </a>
@@ -77,14 +110,46 @@
                         <span class="material-symbols-outlined nav-caret">expand_more</span>
                     </button>
                     <div class="nav-submenu js-maintenance-menu" {% if current_section != 'maintenance' %}hidden{% endif %}>
-                        <a href="{% url 'road_management' %}" class="nav-subitem {% if current_maintenance == 'road' %}nav-subitem-active{% endif %}">Road Management</a>
-                        <a href="{% url 'contractor_management' %}" class="nav-subitem {% if current_maintenance == 'contractor' %}nav-subitem-active{% endif %}">Contractor Management</a>
-                        <a href="{% url 'task_management' %}" class="nav-subitem {% if current_maintenance == 'task' %}nav-subitem-active{% endif %}">Task Management</a>
+                        <a
+                            href="{% url 'road_management' %}"
+                            class="nav-subitem {% if current_maintenance == 'road' %}nav-subitem-active{% endif %}"
+                            data-peo-toast-message="Road Management opened from the sidebar."
+                            data-peo-toast-title="Sidebar Navigation"
+                            data-peo-toast-variant="info"
+                            data-peo-toast-persist="navigation"
+                        >
+                            Road Management
+                        </a>
+                        <a
+                            href="{% url 'contractor_management' %}"
+                            class="nav-subitem {% if current_maintenance == 'contractor' %}nav-subitem-active{% endif %}"
+                            data-peo-toast-message="Contractor Management opened from the sidebar."
+                            data-peo-toast-title="Sidebar Navigation"
+                            data-peo-toast-variant="info"
+                            data-peo-toast-persist="navigation"
+                        >
+                            Contractor Management
+                        </a>
+                        <a
+                            href="{% url 'task_management' %}"
+                            class="nav-subitem {% if current_maintenance == 'task' %}nav-subitem-active{% endif %}"
+                            data-peo-toast-message="Task Management opened from the sidebar."
+                            data-peo-toast-title="Sidebar Navigation"
+                            data-peo-toast-variant="info"
+                            data-peo-toast-persist="navigation"
+                        >
+                            Task Management
+                        </a>
                     </div>
                 </div>
 
                 <p class="nav-group nav-group-secondary">System</p>
-                <a href="#" class="nav-item">
+                <a
+                    href="#"
+                    class="nav-item"
+                    data-peo-toast-message="History tracking will appear here once workflow records are available."
+                    data-peo-toast-variant="info"
+                >
                     <span class="material-symbols-outlined">history</span>
                     <span>History</span>
                 </a>
@@ -113,10 +178,22 @@
                         <span class="material-symbols-outlined">search</span>
                         <input id="dashboard-search" type="text" placeholder="Search tasks, divisions...">
                     </label>
-                    <button type="button" class="icon-btn has-dot" aria-label="Notifications">
+                    <button
+                        type="button"
+                        class="icon-btn has-dot"
+                        aria-label="Notifications"
+                        data-peo-toast-message="Notification center will show new workflow updates here."
+                        data-peo-toast-variant="info"
+                    >
                         <span class="material-symbols-outlined">notifications</span>
                     </button>
-                    <button type="button" class="icon-btn" aria-label="Settings">
+                    <button
+                        type="button"
+                        class="icon-btn"
+                        aria-label="Settings"
+                        data-peo-toast-message="System settings panel is reserved here for the portal."
+                        data-peo-toast-variant="info"
+                    >
                         <span class="material-symbols-outlined">settings</span>
                     </button>
                 </div>
@@ -145,44 +222,254 @@
                     <article class="status-card">
                         <div class="status-head">
                             <span class="material-symbols-outlined icon-blue">work</span>
-                            <span class="delta delta-up">0%</span>
+                            <span class="delta delta-up">+12%</span>
                         </div>
                         <p class="status-label">Active Projects</p>
-                        <p class="status-value">0</p>
+                        <p class="status-value">124</p>
                         <div class="progress-track">
-                            <span class="progress-fill progress-blue fill-15"></span>
+                            <span class="progress-fill progress-blue fill-74"></span>
                         </div>
                     </article>
 
                     <article class="status-card">
                         <div class="status-head">
                             <span class="material-symbols-outlined icon-amber">pending_actions</span>
-                            <span class="delta delta-down">0%</span>
+                            <span class="delta delta-down">-5%</span>
                         </div>
                         <p class="status-label">Pending Approvals</p>
-                        <p class="status-value">0</p>
+                        <p class="status-value">18</p>
                         <div class="progress-track">
-                            <span class="progress-fill progress-amber fill-15"></span>
+                            <span class="progress-fill progress-amber fill-40"></span>
                         </div>
                     </article>
 
                     <article class="status-card">
                         <div class="status-head">
                             <span class="material-symbols-outlined icon-green">autorenew</span>
-                            <span class="delta delta-up">0%</span>
+                            <span class="delta delta-up">+8%</span>
                         </div>
                         <p class="status-label">Recent Updates</p>
-                        <p class="status-value">0</p>
+                        <p class="status-value">42</p>
                         <div class="progress-track">
-                            <span class="progress-fill progress-green fill-15"></span>
+                            <span class="progress-fill progress-green fill-88"></span>
                         </div>
                     </article>
                 </section>
 
-                <section class="panel">
+                <section class="spotlight-section">
+                    <div class="section-head">
+                        <div>
+                            <h3>Accomplished Projects</h3>
+                        </div>
+                        <div class="section-head-actions">
+                            <button
+                                type="button"
+                                class="circle-action"
+                                aria-label="Previous accomplished project"
+                                data-peo-toast-message="Previous project spotlight is not connected yet."
+                                data-peo-toast-variant="info"
+                            >
+                                <span class="material-symbols-outlined">chevron_left</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="circle-action"
+                                aria-label="Next accomplished project"
+                                data-peo-toast-message="Next project spotlight is not connected yet."
+                                data-peo-toast-variant="info"
+                            >
+                                <span class="material-symbols-outlined">chevron_right</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <article class="spotlight-card">
+                        <div class="spotlight-scene">
+                            <span class="spotlight-chip">Infrastructure</span>
+                            <div class="spotlight-copy">
+                                <h4>Harbor Bridge Expansion</h4>
+                                <p>Completed on October 15, 2023</p>
+                            </div>
+                            <div class="spotlight-dots" aria-hidden="true">
+                                <span class="is-active"></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                    </article>
+                </section>
+
+                <section class="leadership-section">
+                    <div class="section-head">
+                        <div>
+                            <h3>Division Leadership</h3>
+                            <p>Executive heads managing respective strategic divisions</p>
+                        </div>
+                        <button
+                            type="button"
+                            class="text-action"
+                            data-peo-toast-message="Leadership directory will open here when the staff directory is connected."
+                            data-peo-toast-variant="info"
+                        >
+                            <span>Directory</span>
+                            <span class="material-symbols-outlined">open_in_new</span>
+                        </button>
+                    </div>
+
+                    <div class="leadership-tree">
+                        <article class="leader-card leader-card-primary">
+                            <div class="leader-avatar leader-avatar-primary">AS</div>
+                            <span class="leader-tag">Executive Office</span>
+                            <h4>Engr. Alejandro Santiago</h4>
+                            <p>Director of Provincial Engineering</p>
+                        </article>
+
+                        <div class="leadership-tree-line"></div>
+
+                        <div class="leader-grid">
+                            <article class="leader-card">
+                                <div class="leader-avatar leader-avatar-admin">AR</div>
+                                <h4>Alex Rivera</h4>
+                                <span class="leader-dept">Admin Division</span>
+                            </article>
+                            <article class="leader-card">
+                                <div class="leader-avatar leader-avatar-planning">JD</div>
+                                <h4>John D.</h4>
+                                <span class="leader-dept">Planning Division</span>
+                            </article>
+                            <article class="leader-card">
+                                <div class="leader-avatar leader-avatar-construction">SW</div>
+                                <h4>Sarah W.</h4>
+                                <span class="leader-dept">Construction Division</span>
+                            </article>
+                            <article class="leader-card">
+                                <div class="leader-avatar leader-avatar-quality">MR</div>
+                                <h4>Michael R.</h4>
+                                <span class="leader-dept">Quality Division</span>
+                            </article>
+                            <article class="leader-card">
+                                <div class="leader-avatar leader-avatar-maintenance">EK</div>
+                                <h4>Emily K.</h4>
+                                <span class="leader-dept">Maintenance Division</span>
+                            </article>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="overview-analytics">
+                    <article class="panel activity-panel">
+                        <div class="panel-head">
+                            <h3>Recent Activity</h3>
+                        </div>
+                        <ul class="activity-list">
+                            <li>
+                                <span class="activity-dot dot-blue"></span>
+                                <div>
+                                    <p>Sarah W. uploaded blueprints</p>
+                                    <small>Construction Division &middot; 12 mins ago</small>
+                                    <span class="activity-file">harbor_bridge_final_v2.pdf</span>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="activity-dot dot-green"></span>
+                                <div>
+                                    <p>Quality Inspection Approved</p>
+                                    <small>Quality Division &middot; 2 hours ago</small>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="activity-dot dot-amber"></span>
+                                <div>
+                                    <p>Status Update: Delayed</p>
+                                    <small>Maintenance Division &middot; 5 hours ago</small>
+                                    <span class="activity-note">Material shipment delayed due to logistics.</span>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="activity-dot dot-slate"></span>
+                                <div>
+                                    <p>New Team Member Assigned</p>
+                                    <small>Admin Division &middot; Yesterday</small>
+                                </div>
+                            </li>
+                        </ul>
+                    </article>
+
+                    <article class="panel analytics-panel">
+                        <div class="panel-head">
+                            <h3>Division Performance</h3>
+                            <div class="chart-legend" aria-label="Chart legend">
+                                <span><i class="legend-dot legend-dot-light"></i>Target</span>
+                                <span><i class="legend-dot legend-dot-strong"></i>Actual</span>
+                            </div>
+                        </div>
+
+                        <div class="performance-chart" aria-hidden="true">
+                            <div class="chart-group">
+                                <div class="chart-bars">
+                                    <span class="chart-bar chart-bar-target chart-h-82"></span>
+                                    <span class="chart-bar chart-bar-actual chart-h-76"></span>
+                                </div>
+                                <p>Admin</p>
+                            </div>
+                            <div class="chart-group">
+                                <div class="chart-bars">
+                                    <span class="chart-bar chart-bar-target chart-h-78"></span>
+                                    <span class="chart-bar chart-bar-actual chart-h-79"></span>
+                                </div>
+                                <p>Planning</p>
+                            </div>
+                            <div class="chart-group">
+                                <div class="chart-bars">
+                                    <span class="chart-bar chart-bar-target chart-h-92"></span>
+                                    <span class="chart-bar chart-bar-actual chart-h-43"></span>
+                                </div>
+                                <p>Construct</p>
+                            </div>
+                            <div class="chart-group">
+                                <div class="chart-bars">
+                                    <span class="chart-bar chart-bar-target chart-h-86"></span>
+                                    <span class="chart-bar chart-bar-actual chart-h-92"></span>
+                                </div>
+                                <p>Quality</p>
+                            </div>
+                            <div class="chart-group">
+                                <div class="chart-bars">
+                                    <span class="chart-bar chart-bar-target chart-h-82"></span>
+                                    <span class="chart-bar chart-bar-actual chart-h-18"></span>
+                                </div>
+                                <p>Maint</p>
+                            </div>
+                        </div>
+
+                        <div class="performance-summary">
+                            <div class="summary-tile">
+                                <span class="material-symbols-outlined">trending_up</span>
+                                <div>
+                                    <small>Top Performer</small>
+                                    <strong>Quality Division</strong>
+                                </div>
+                            </div>
+                            <div class="summary-tile">
+                                <span class="material-symbols-outlined">monitoring</span>
+                                <div>
+                                    <small>Overall Efficiency</small>
+                                    <strong>78.4%</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </section>
+
+                <section class="panel panel-progress">
                     <div class="panel-head">
-                        <h3>Division Progress</h3>
-                        <button type="button" class="text-action">
+                        <h3>Detailed Division Progress</h3>
+                        <button
+                            type="button"
+                            class="text-action"
+                            data-peo-toast-message="The full progress report will open here once reporting routes are connected."
+                            data-peo-toast-variant="info"
+                        >
                             <span>View Full Report</span>
                             <span class="material-symbols-outlined">arrow_forward</span>
                         </button>
@@ -201,33 +488,124 @@
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td colspan="5">No division progress data available yet.</td>
+                                    <td>
+                                        <span class="division-name">
+                                            <span class="material-symbols-outlined">architecture</span>
+                                            Planning Division
+                                        </span>
+                                    </td>
+                                    <td>John D.</td>
+                                    <td>
+                                        <div class="completion-wrap">
+                                            <div class="progress-track">
+                                                <span class="progress-fill progress-blue fill-82"></span>
+                                            </div>
+                                            <span>82%</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="pill pill-blue">On Track</span></td>
+                                    <td class="align-right">
+                                        <button
+                                            type="button"
+                                            class="row-action"
+                                            aria-label="Open Planning Division actions"
+                                            data-peo-toast-message="Planning Division actions will open here."
+                                            data-peo-toast-variant="info"
+                                        >
+                                            <span class="material-symbols-outlined">more_vert</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <span class="division-name">
+                                            <span class="material-symbols-outlined">construction</span>
+                                            Construction Division
+                                        </span>
+                                    </td>
+                                    <td>Sarah W.</td>
+                                    <td>
+                                        <div class="completion-wrap">
+                                            <div class="progress-track">
+                                                <span class="progress-fill progress-amber fill-45"></span>
+                                            </div>
+                                            <span>45%</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="pill pill-amber">In Review</span></td>
+                                    <td class="align-right">
+                                        <button
+                                            type="button"
+                                            class="row-action"
+                                            aria-label="Open Construction Division actions"
+                                            data-peo-toast-message="Construction Division actions will open here."
+                                            data-peo-toast-variant="info"
+                                        >
+                                            <span class="material-symbols-outlined">more_vert</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <span class="division-name">
+                                            <span class="material-symbols-outlined">verified</span>
+                                            Quality Division
+                                        </span>
+                                    </td>
+                                    <td>Michael R.</td>
+                                    <td>
+                                        <div class="completion-wrap">
+                                            <div class="progress-track">
+                                                <span class="progress-fill progress-green fill-95"></span>
+                                            </div>
+                                            <span>95%</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="pill pill-green">Complete</span></td>
+                                    <td class="align-right">
+                                        <button
+                                            type="button"
+                                            class="row-action"
+                                            aria-label="Open Quality Division actions"
+                                            data-peo-toast-message="Quality Division actions will open here."
+                                            data-peo-toast-variant="info"
+                                        >
+                                            <span class="material-symbols-outlined">more_vert</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <span class="division-name">
+                                            <span class="material-symbols-outlined">build</span>
+                                            Maintenance Division
+                                        </span>
+                                    </td>
+                                    <td>Emily K.</td>
+                                    <td>
+                                        <div class="completion-wrap">
+                                            <div class="progress-track">
+                                                <span class="progress-fill progress-slate fill-15"></span>
+                                            </div>
+                                            <span>15%</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="pill pill-slate">Awaiting Data</span></td>
+                                    <td class="align-right">
+                                        <button
+                                            type="button"
+                                            class="row-action"
+                                            aria-label="Open Maintenance Division actions"
+                                            data-peo-toast-message="Maintenance Division actions will open here."
+                                            data-peo-toast-variant="info"
+                                        >
+                                            <span class="material-symbols-outlined">more_vert</span>
+                                        </button>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                </section>
-
-                <section class="bottom-grid">
-                    <article class="panel activity-panel">
-                        <h3>Recent Activity</h3>
-                        <ul class="activity-list">
-                            <li>
-                                <span class="activity-dot dot-amber"></span>
-                                <div>
-                                    <p>No recent activity yet.</p>
-                                    <small>Activity data will appear here.</small>
-                                </div>
-                            </li>
-                        </ul>
-                    </article>
-
-                    <article class="performance-card">
-                        <h3>Division Performance</h3>
-                        <p>No performance data available yet.</p>
-                        <button type="button">No report available</button>
-                        <span class="material-symbols-outlined trend-icon">trending_up</span>
-                    </article>
                 </section>
                 {% endif %}
             </section>

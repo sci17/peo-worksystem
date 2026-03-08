@@ -87,7 +87,14 @@ document.addEventListener("DOMContentLoaded", () => {
         maintenanceToggle.addEventListener("click", (event) => {
             event.preventDefault();
             const isOpen = maintenanceToggle.getAttribute("aria-expanded") === "true";
-            setMaintenanceOpen(!isOpen);
+            const willOpen = !isOpen;
+            setMaintenanceOpen(willOpen);
+            if (willOpen) {
+                showPeoGeneralToast("Maintenance Division tools are available below in the sidebar.", {
+                    title: "Maintenance Division",
+                    variant: "info",
+                });
+            }
         });
     }
 
@@ -108,10 +115,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const docMetricForReview = document.querySelector('[data-doc-metric="for_review"]');
     const docMetricProcessing = document.querySelector('[data-doc-metric="processing"]');
     const docMetricOpenIssues = document.querySelector('[data-doc-metric="open_issues"]');
+    const docMetricThisWeek = document.getElementById("pa-documents-this-week");
+    const docMetricCompleted = document.getElementById("pa-documents-completed");
+    const docMetricApproved = document.getElementById("pa-documents-approved");
+    const docMetricEfficiency = document.getElementById("pa-documents-efficiency");
+    const docMetricEfficiencyBar = document.getElementById("pa-documents-efficiency-bar");
+    const docStatusCardDraft = document.querySelector('[data-doc-status-card="draft"]');
+    const docStatusCardForReview = document.querySelector('[data-doc-status-card="for_review"]');
+    const docStatusCardProcessing = document.querySelector('[data-doc-status-card="processing"]');
+    const docStatusCardApproved = document.querySelector('[data-doc-status-card="approved"]');
     const billingMetricTotal = document.querySelector('[data-billing-metric="total"]');
     const billingMetricReceived = document.querySelector('[data-billing-metric="received"]');
     const billingMetricOnProcess = document.querySelector('[data-billing-metric="on_process"]');
     const billingMetricPending = document.querySelector('[data-billing-metric="pending"]');
+    const billingStatusCardDraft = document.querySelector('[data-billing-status-card="draft"]');
+    const billingStatusCardForReview = document.querySelector('[data-billing-status-card="for_review"]');
+    const billingStatusCardRouted = document.querySelector('[data-billing-status-card="routed"]');
+    const billingStatusCardProcessing = document.querySelector('[data-billing-status-card="processing"]');
+    const billingStatusCardApproved = document.querySelector('[data-billing-status-card="approved"]');
+    const billingStatusCardOpen = document.querySelector('[data-billing-status-card="open"]');
+    const billingStatusCardClosed = document.querySelector('[data-billing-status-card="closed"]');
+    const adminFloatCards = document.querySelectorAll(".admin-division-float-card");
     const documentsPanel = document.querySelector('[data-admin-panel="documents"]');
     const billingPanel = document.querySelector('[data-admin-panel="billing"]');
     const documentSearchInput = documentsPanel?.querySelector("[data-admin-doc-search]")
@@ -290,6 +314,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 button.setAttribute("aria-selected", isSelected ? "true" : "false");
             });
         };
+        select._adminSelectSync = syncFromSelect;
+        select._adminSelectRender = renderOptions;
 
         renderOptions();
         syncFromSelect();
@@ -316,11 +342,59 @@ document.addEventListener("DOMContentLoaded", () => {
             trigger.setAttribute("aria-expanded", "false");
         });
 
-        select.addEventListener("change", syncFromSelect);
+        if (select.dataset.adminSelectListenerBound !== "true") {
+            select.addEventListener("change", () => {
+                if (typeof select._adminSelectSync === "function") {
+                    select._adminSelectSync();
+                }
+            });
+            select.dataset.adminSelectListenerBound = "true";
+        }
+
+        if (!select._adminSelectObserver && typeof MutationObserver !== "undefined") {
+            const observer = new MutationObserver(() => {
+                if (typeof select._adminSelectRender === "function") {
+                    select._adminSelectRender();
+                }
+                if (typeof select._adminSelectSync === "function") {
+                    select._adminSelectSync();
+                }
+            });
+            observer.observe(select, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+            });
+            select._adminSelectObserver = observer;
+        }
 
         wrapper.appendChild(trigger);
         wrapper.appendChild(menu);
         select.insertAdjacentElement("afterend", wrapper);
+    };
+
+    const refreshAdminEnhancedSelect = (select) => {
+        if (!(select instanceof HTMLSelectElement)) return;
+        const wrapper = select.nextElementSibling;
+        if (wrapper instanceof HTMLElement && wrapper.classList.contains("pa-select-custom")) {
+            wrapper.remove();
+        }
+        if (select._adminSelectObserver && typeof select._adminSelectObserver.disconnect === "function") {
+            select._adminSelectObserver.disconnect();
+        }
+        delete select._adminSelectObserver;
+        delete select._adminSelectRender;
+        delete select._adminSelectSync;
+        delete select.dataset.enhanced;
+        select.classList.remove("pa-select-native-hidden");
+        enhanceAdminSelect(select);
+    };
+
+    const enhanceAdminFormSelects = (form) => {
+        if (!(form instanceof HTMLFormElement)) return;
+        form.querySelectorAll("select").forEach((select) => {
+            refreshAdminEnhancedSelect(select);
+        });
     };
 
     [documentDivisionFilter, documentStatusFilter, billingStatusFilter].forEach((select) => {
@@ -351,10 +425,21 @@ document.addEventListener("DOMContentLoaded", () => {
         if (normalized === "on_process") return "On Process";
         if (normalized === "received") return "Received";
         if (normalized === "for_review") return "For Review";
+        if (normalized === "routed") return "Routed";
         if (normalized === "processing") return "Processing";
         if (normalized === "approved") return "Approved";
+        if (normalized === "open") return "Open";
+        if (normalized === "closed") return "Closed";
         if (normalized === "draft") return "Draft";
         return value || "Draft";
+    };
+
+    const createStatusBadge = (value) => {
+        const badge = document.createElement("span");
+        const normalized = normalizeStatus(value) || "draft";
+        badge.className = `admin-division-status-badge is-${normalized}`;
+        badge.textContent = statusLabel(value);
+        return badge;
     };
 
     const formatDate = (value) => {
@@ -387,6 +472,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return billingType || "-";
     };
 
+    const normalizeBillingHistoryStatus = (value) => {
+        const normalized = normalizeStatus(value || "draft");
+        if (normalized === "received") return "approved";
+        if (normalized === "on_process") return "processing";
+        return normalized || "draft";
+    };
+
     const buildBillingHistoryEntry = (record, changedAt) => {
         const snapshot = {
             billing_type: String(record.billing_type || "").trim(),
@@ -394,7 +486,7 @@ document.addEventListener("DOMContentLoaded", () => {
             percentage: String(record.percentage || "").trim(),
             date_received: String(record.date_received || "").trim(),
             received_by: String(record.received_by || "").trim(),
-            status: normalizeStatus(record.billing_status || record.status || "on_process"),
+            status: normalizeBillingHistoryStatus(record.billing_status || record.status || "draft"),
             changed_at: changedAt || new Date().toISOString(),
         };
         return snapshot;
@@ -439,10 +531,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const details = document.createElement("small");
                 const typeDisplay = getBillingTypeDisplay(entry);
-                const pct = entry.percentage || "-";
-                const receivedDate = entry.date_received ? formatDate(entry.date_received) : "-";
-                const receivedBy = entry.received_by || "-";
-                details.textContent = `${typeDisplay} | ${pct} | ${receivedDate} | ${receivedBy}`;
+                const detailParts = [];
+
+                if (typeDisplay && typeDisplay !== "-") {
+                    detailParts.push(typeDisplay);
+                }
+                if (entry.percentage) {
+                    detailParts.push(entry.percentage);
+                }
+                if (entry.date_received) {
+                    detailParts.push(formatDate(entry.date_received));
+                }
+                if (entry.received_by) {
+                    detailParts.push(entry.received_by);
+                }
+
+                details.textContent = detailParts.length
+                    ? detailParts.join(" | ")
+                    : "No billing details recorded";
 
                 item.appendChild(versionTag);
                 item.appendChild(details);
@@ -493,7 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
         normalized.__record_id = normalized.__record_id || generateRecordId();
         const fallbackStatus = normalized.status || "Draft";
         normalized.doc_status = normalized.doc_status || fallbackStatus;
-        normalized.billing_status = normalized.billing_status || "on_process";
+        normalized.billing_status = normalized.billing_status || normalized.doc_status || "Draft";
         normalized.status = normalized.doc_status;
         normalized.division = normalized.division || "Admin";
         normalized.doc_type = normalized.doc_type || "Other";
@@ -626,12 +732,66 @@ document.addEventListener("DOMContentLoaded", () => {
         const forReview = statuses.filter((status) => status === "for_review").length;
         const processing = statuses.filter((status) => status === "processing").length;
         const openIssues = statuses.filter((status) => status === "draft").length;
+        const approved = statuses.filter((status) => status === "approved").length;
+        const efficiencyRate = total > 0 ? Math.round((approved / total) * 100) : 0;
+        const now = new Date();
+        const weekStart = new Date(now);
+        weekStart.setHours(0, 0, 0, 0);
+        weekStart.setDate(now.getDate() - now.getDay());
+        const thisWeek = rows.filter((row) => {
+            const dateValue = String(row.children[8]?.textContent || "").trim();
+            const parsed = new Date(dateValue);
+            return !Number.isNaN(parsed.getTime()) && parsed >= weekStart;
+        }).length;
 
         if (documentsFoundLabel) documentsFoundLabel.textContent = `${total} documents found`;
         if (docMetricTotal) docMetricTotal.textContent = String(total);
         if (docMetricForReview) docMetricForReview.textContent = String(forReview);
         if (docMetricProcessing) docMetricProcessing.textContent = String(processing);
         if (docMetricOpenIssues) docMetricOpenIssues.textContent = String(openIssues);
+        if (docMetricThisWeek) docMetricThisWeek.textContent = String(thisWeek);
+        if (docMetricCompleted) docMetricCompleted.textContent = String(approved);
+        if (docMetricApproved) docMetricApproved.textContent = String(approved);
+        if (docMetricEfficiency) docMetricEfficiency.textContent = `${efficiencyRate}%`;
+        if (docMetricEfficiencyBar) docMetricEfficiencyBar.style.width = `${efficiencyRate}%`;
+        if (docStatusCardDraft) docStatusCardDraft.textContent = String(openIssues);
+        if (docStatusCardForReview) docStatusCardForReview.textContent = String(forReview);
+        if (docStatusCardProcessing) docStatusCardProcessing.textContent = String(processing);
+        if (docStatusCardApproved) docStatusCardApproved.textContent = String(approved);
+    };
+
+    const enableAdminDivisionCardFloat = () => {
+        if (!adminFloatCards.length) return;
+        if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+
+        adminFloatCards.forEach((card) => {
+            if (!(card instanceof HTMLElement)) return;
+
+            card.addEventListener("pointermove", (event) => {
+                const bounds = card.getBoundingClientRect();
+                const relativeX = (event.clientX - bounds.left) / bounds.width;
+                const relativeY = (event.clientY - bounds.top) / bounds.height;
+                const rotateY = (relativeX - 0.5) * 9;
+                const rotateX = (0.5 - relativeY) * 9;
+                const shiftX = (relativeX - 0.5) * 8;
+                const shiftY = (relativeY - 0.5) * 8;
+
+                card.style.setProperty("--admin-card-rotate-x", `${rotateX.toFixed(2)}deg`);
+                card.style.setProperty("--admin-card-rotate-y", `${rotateY.toFixed(2)}deg`);
+                card.style.setProperty("--admin-card-shift-x", `${shiftX.toFixed(2)}px`);
+                card.style.setProperty("--admin-card-shift-y", `${shiftY.toFixed(2)}px`);
+            });
+
+            const resetAdminCardFloat = () => {
+                card.style.setProperty("--admin-card-rotate-x", "0deg");
+                card.style.setProperty("--admin-card-rotate-y", "0deg");
+                card.style.setProperty("--admin-card-shift-x", "0px");
+                card.style.setProperty("--admin-card-shift-y", "0px");
+            };
+
+            card.addEventListener("pointerleave", resetAdminCardFloat);
+            card.addEventListener("pointercancel", resetAdminCardFloat);
+        });
     };
 
     const refreshBillingCounters = () => {
@@ -640,15 +800,26 @@ document.addEventListener("DOMContentLoaded", () => {
         const rows = getTableDataRows(billingTableBody, "pa-empty-billing");
         const statuses = rows.map((row) => normalizeStatus(row.children[7]?.textContent));
         const total = rows.length;
-        const received = statuses.filter((status) => status === "received").length;
-        const onProcess = statuses.filter((status) => status === "on_process").length;
-        const pending = statuses.filter((status) => status !== "received" && status !== "on_process").length;
+        const draft = statuses.filter((status) => status === "draft").length;
+        const forReview = statuses.filter((status) => status === "for_review").length;
+        const routed = statuses.filter((status) => status === "routed").length;
+        const processing = statuses.filter((status) => status === "processing" || status === "on_process").length;
+        const approved = statuses.filter((status) => status === "approved" || status === "received").length;
+        const open = statuses.filter((status) => status === "open").length;
+        const closed = statuses.filter((status) => status === "closed").length;
 
         if (billingCountLabel) billingCountLabel.textContent = `${total} record${total === 1 ? "" : "s"}`;
         if (billingMetricTotal) billingMetricTotal.textContent = String(total);
-        if (billingMetricReceived) billingMetricReceived.textContent = String(received);
-        if (billingMetricOnProcess) billingMetricOnProcess.textContent = String(onProcess);
-        if (billingMetricPending) billingMetricPending.textContent = String(pending);
+        if (billingMetricReceived) billingMetricReceived.textContent = String(approved);
+        if (billingMetricOnProcess) billingMetricOnProcess.textContent = String(processing);
+        if (billingMetricPending) billingMetricPending.textContent = String(open);
+        if (billingStatusCardDraft) billingStatusCardDraft.textContent = String(draft);
+        if (billingStatusCardForReview) billingStatusCardForReview.textContent = String(forReview);
+        if (billingStatusCardRouted) billingStatusCardRouted.textContent = String(routed);
+        if (billingStatusCardProcessing) billingStatusCardProcessing.textContent = String(processing);
+        if (billingStatusCardApproved) billingStatusCardApproved.textContent = String(approved);
+        if (billingStatusCardOpen) billingStatusCardOpen.textContent = String(open);
+        if (billingStatusCardClosed) billingStatusCardClosed.textContent = String(closed);
     };
 
     const getSelectedRecordIds = (tableBody, emptyClass) => {
@@ -709,8 +880,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (tableType === "billing") {
             statusSelect.innerHTML = `
-                <option value="on_process">On Process</option>
-                <option value="received">Received</option>
+                <option value="Draft">Draft</option>
+                <option value="For Review">For Review</option>
+                <option value="Routed">Routed</option>
+                <option value="Processing">Processing</option>
+                <option value="Approved">Approved</option>
+                <option value="Open">Open</option>
+                <option value="Closed">Closed</option>
             `;
             return;
         }
@@ -718,8 +894,11 @@ document.addEventListener("DOMContentLoaded", () => {
         statusSelect.innerHTML = `
             <option value="Draft">Draft</option>
             <option value="For Review">For Review</option>
+            <option value="Routed">Routed</option>
             <option value="Processing">Processing</option>
             <option value="Approved">Approved</option>
+            <option value="Open">Open</option>
+            <option value="Closed">Closed</option>
         `;
     };
 
@@ -748,6 +927,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const modal = buildNewDocumentModal();
         const form = modal.querySelector("#admin-new-document-form");
+        const kicker = modal.querySelector(".pa-doc-modal-kicker");
         const title = modal.querySelector("#admin-new-document-title");
         const subtitle = modal.querySelector("#admin-new-document-subtitle");
         const submitButton = modal.querySelector("#admin-new-document-submit");
@@ -757,10 +937,17 @@ document.addEventListener("DOMContentLoaded", () => {
         editingTableType = tableType;
         form.reset();
         setFormStatusOptionsByMode(form, tableType);
+        enhanceAdminFormSelects(form);
         const recordForForm = {
             ...record,
             status: tableType === "billing"
-                ? (record.billing_status || record.status)
+                ? (
+                    normalizeStatus(record.billing_status || record.status) === "received"
+                        ? "Approved"
+                        : normalizeStatus(record.billing_status || record.status) === "on_process"
+                            ? "Processing"
+                            : (record.billing_status || record.status)
+                )
                 : (record.doc_status || record.status),
         };
         Object.keys(recordForForm).forEach((key) => {
@@ -769,10 +956,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 input.value = recordForForm[key] || "";
             }
         });
+        enhanceAdminFormSelects(form);
 
-        if (title) title.textContent = "Edit Document";
-        if (subtitle) subtitle.textContent = "Update document details";
-        if (submitButton) submitButton.textContent = "Save Changes";
+        if (tableType === "billing") {
+            if (kicker) kicker.textContent = "Billing Records";
+            if (title) title.textContent = "Edit Billing Record";
+            if (subtitle) subtitle.textContent = "Update billing status and payment details";
+            if (submitButton) submitButton.textContent = "Save Billing Changes";
+        } else {
+            if (kicker) kicker.textContent = "Document Register";
+            if (title) title.textContent = "Edit Document";
+            if (subtitle) subtitle.textContent = "Update document details";
+            if (submitButton) submitButton.textContent = "Save Changes";
+        }
         toggleBillingTypeOtherField(form);
         toggleBillingReceivedFields(form);
         setExistingScannedFileName(form, record.scanned_file_name || "");
@@ -888,9 +1084,13 @@ document.addEventListener("DOMContentLoaded", () => {
             formatDate(createdDate),
         ];
 
-        fields.forEach((value) => {
+        fields.forEach((value, index) => {
             const cell = document.createElement("td");
-            cell.textContent = value;
+            if (index === 6) {
+                cell.appendChild(createStatusBadge(value));
+            } else {
+                cell.textContent = value;
+            }
             row.appendChild(cell);
         });
 
@@ -948,9 +1148,13 @@ document.addEventListener("DOMContentLoaded", () => {
             values.received_by || "-",
         ];
 
-        fields.forEach((value) => {
+        fields.forEach((value, index) => {
             const cell = document.createElement("td");
-            cell.textContent = value;
+            if (index === 6) {
+                cell.appendChild(createStatusBadge(value));
+            } else {
+                cell.textContent = value;
+            }
             row.appendChild(cell);
         });
 
@@ -978,9 +1182,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const prepend = options.prepend !== false;
         const normalizedInputStatus = normalizeStatus(values.status || "");
         const resolvedBillingStatus = values.billing_status
-            || (normalizedInputStatus === "received" || normalizedInputStatus === "on_process"
-                ? normalizedInputStatus
-                : "on_process");
+            || values.status
+            || (normalizedInputStatus === "received" ? "Approved" : "Draft");
         const normalized = normalizeRecord({
             ...values,
             doc_status: values.doc_status || values.status,
@@ -1045,7 +1248,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     scanned_file_data: await readFileAsDataUrl(scannedFile),
                 };
             } catch (error) {
-                window.alert("Unable to read the scanned file. Please try again.");
+                showPeoGeneralToast("Unable to read the scanned file. Please try again.", {
+                    title: "Upload Error",
+                    variant: "danger",
+                });
                 return false;
             }
         }
@@ -1075,10 +1281,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 const previousSnapshot = buildBillingHistoryEntry(currentRecord);
                 updatedRecord.billing_status = values.status;
                 updatedRecord.doc_status = currentRecord.doc_status;
-                if (normalizeStatus(values.status) !== "received") {
-                    updatedRecord.date_received = "";
-                    updatedRecord.received_by = "";
-                }
                 const nextSnapshot = buildBillingHistoryEntry(updatedRecord);
                 const currentHistory = ensureBillingHistory(currentRecord);
                 if (hasBillingHistoryChange(previousSnapshot, nextSnapshot)) {
@@ -1199,8 +1401,11 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <select data-admin-status-select name="status" required>
                                     <option>Draft</option>
                                     <option>For Review</option>
+                                    <option>Routed</option>
                                     <option>Processing</option>
                                     <option>Approved</option>
+                                    <option>Open</option>
+                                    <option>Closed</option>
                                 </select>
                             </label>
                         </div>
@@ -1353,6 +1558,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const billingTypeSelect = form.querySelector('[data-admin-billing-type-select]');
         const scannedFileInput = form.querySelector('[name="scanned_file"]');
         setFormStatusOptionsByMode(form, "documents");
+        enhanceAdminFormSelects(form);
         toggleBillingTypeOtherField(form);
         toggleBillingReceivedFields(form);
         setExistingScannedFileName(form, "");
@@ -1413,10 +1619,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (form) form.reset();
             if (form) {
                 setFormStatusOptionsByMode(form, "documents");
+                enhanceAdminFormSelects(form);
                 toggleBillingTypeOtherField(form);
                 toggleBillingReceivedFields(form);
                 setExistingScannedFileName(form, "");
             }
+            const kicker = modal.querySelector(".pa-doc-modal-kicker");
+            if (kicker) kicker.textContent = "Document Register";
             if (title) title.textContent = "Create New Document";
             if (subtitle) subtitle.textContent = "Add a new document to the register";
             if (submitButton) submitButton.textContent = "Create";
@@ -1543,7 +1752,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (action === "view-file") {
                 const record = readAdminDivisionRecords().find((item) => item.__record_id === recordId);
                 if (!record?.scanned_file_data) {
-                    window.alert("No scanned file is available for this record.");
+                    showPeoGeneralToast("No scanned file is available for this record.", {
+                        title: "File Unavailable",
+                        variant: "warning",
+                    });
                     return;
                 }
                 const openedWindow = window.open(record.scanned_file_data, "_blank", "noopener");
@@ -1607,6 +1819,7 @@ document.addEventListener("DOMContentLoaded", () => {
     applyBillingFilters();
     restoreAdminDivisionRecords();
     syncSelectionControls();
+    enableAdminDivisionCardFloat();
 });
 
 /* ROAD_MAINTENANCE_SCRIPT_START */
@@ -1753,6 +1966,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const contractorEvalForm = document.querySelector(".js-contractor-eval-form");
     const contractorEvalCompanyInput = document.querySelector(".js-contractor-eval-company");
     const contractorEvalDateInput = document.querySelector(".js-contractor-eval-date");
+
     const contractorEvalRatings = Array.from(document.querySelectorAll(".js-contractor-eval-rating"));
     const contractorEvalTotal = document.querySelector(".js-contractor-eval-total");
     const contractorEvalOverall = document.querySelector(".js-contractor-eval-overall");
@@ -3349,7 +3563,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         recordIndexes = [...new Set(recordIndexes)];
         if (!recordIndexes.length) {
-            window.alert("No road records found for this municipality.");
+            showPeoGeneralToast("No road records found for this municipality.", {
+                title: "Road Management",
+                variant: "warning",
+            });
             return;
         }
 
@@ -3577,7 +3794,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const normalizedKey = normalizeMunicipalityName(municipalityKey || municipalityName);
         const recordIndexes = getMunicipalityRecordIndexes(normalizedKey);
         if (!recordIndexes.length) {
-            window.alert("No road records found for this municipality.");
+            showPeoGeneralToast("No road records found for this municipality.", {
+                title: "Road Management",
+                variant: "warning",
+            });
             return;
         }
 
@@ -7177,6 +7397,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const formRecord = buildRecordFromForm();
             if (!formRecord) return;
+            const isEditingRecord = Boolean(editingRecordId);
 
             if (editingRecordId) {
                 const index = records.findIndex((record) => record.__id === editingRecordId);
@@ -7190,6 +7411,13 @@ document.addEventListener("DOMContentLoaded", () => {
             writeStoredRecords(records);
             renderTable();
             closeConstructionModal();
+            showPeoGeneralToast(
+                isEditingRecord ? "Construction record updated successfully." : "Construction record added successfully.",
+                {
+                    title: "Construction Division",
+                    variant: "success",
+                }
+            );
         });
     }
 
@@ -7234,7 +7462,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (!uploaded.length) {
-                window.alert("No valid construction rows were found in the selected file(s).");
+                showPeoGeneralToast("No valid construction rows were found in the selected file(s).", {
+                    title: "Construction Upload",
+                    variant: "warning",
+                });
                 uploadInput.value = "";
                 return;
             }
@@ -7244,6 +7475,13 @@ document.addEventListener("DOMContentLoaded", () => {
             writeStoredRecords(records);
             renderTable();
             uploadInput.value = "";
+            showPeoGeneralToast(
+                `${uploaded.length} construction record${uploaded.length === 1 ? "" : "s"} uploaded successfully.`,
+                {
+                    title: "Construction Upload",
+                    variant: "success",
+                }
+            );
         });
     }
 
@@ -7273,7 +7511,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (constructionTableBody) {
-        constructionTableBody.addEventListener("click", (event) => {
+        constructionTableBody.addEventListener("click", async (event) => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
             if (target.classList.contains("js-construction-edit-row")) {
@@ -7289,11 +7527,22 @@ document.addEventListener("DOMContentLoaded", () => {
             const recordId = target.dataset.recordId;
             if (!recordId) return;
 
-            if (!window.confirm("Delete this construction record?")) return;
+            const approved = await showPeoGeneralConfirm({
+                title: "Delete Construction Record",
+                message: "Are you sure you want to delete this construction record?",
+                confirmLabel: "Delete",
+                cancelLabel: "Cancel",
+                variant: "danger",
+            });
+            if (!approved) return;
             records = records.filter((record) => record.__id !== recordId);
             clampCurrentPage();
             writeStoredRecords(records);
             renderTable();
+            showPeoGeneralToast("Construction record deleted successfully.", {
+                title: "Construction Division",
+                variant: "success",
+            });
         });
 
         constructionTableBody.addEventListener("change", (event) => {
@@ -7305,31 +7554,53 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (deleteSelectedButton) {
-        deleteSelectedButton.addEventListener("click", () => {
+        deleteSelectedButton.addEventListener("click", async () => {
             const selectedIds = getVisibleRowCheckboxes()
                 .filter((checkbox) => checkbox.checked)
                 .map((checkbox) => checkbox.dataset.recordId);
             if (!selectedIds.length) return;
 
-            if (!window.confirm(`Delete ${selectedIds.length} selected construction record(s)?`)) return;
+            const approved = await showPeoGeneralConfirm({
+                title: "Delete Selected Records",
+                message: `Delete ${selectedIds.length} selected construction record(s)?`,
+                confirmLabel: "Delete Selected",
+                cancelLabel: "Cancel",
+                variant: "danger",
+            });
+            if (!approved) return;
 
             const removeSet = new Set(selectedIds);
             records = records.filter((record) => !removeSet.has(record.__id));
             clampCurrentPage();
             writeStoredRecords(records);
             renderTable();
+            showPeoGeneralToast(`${selectedIds.length} construction record(s) deleted successfully.`, {
+                title: "Construction Division",
+                variant: "success",
+            });
         });
     }
 
     if (deleteAllButton) {
-        deleteAllButton.addEventListener("click", () => {
+        deleteAllButton.addEventListener("click", async () => {
             if (!records.length) return;
-            if (!window.confirm("Delete all construction records? This action cannot be undone.")) return;
+            const approved = await showPeoGeneralConfirm({
+                title: "Delete All Construction Records",
+                message: "Delete all construction records? This action cannot be undone.",
+                confirmLabel: "Delete All",
+                cancelLabel: "Cancel",
+                variant: "danger",
+            });
+            if (!approved) return;
 
             records = [];
             currentPage = 1;
             writeStoredRecords(records);
             renderTable();
+            showPeoGeneralToast("All construction records were deleted.", {
+                title: "Construction Division",
+                variant: "success",
+            });
         });
     }
 
@@ -7343,18 +7614,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const planningEditBudgetModal = document.querySelector(".js-planning-edit-budget-modal");
     const planningPpaModal = document.querySelector(".js-planning-ppa-modal");
     const planningEditPpaModal = document.querySelector(".js-planning-edit-ppa-modal");
+    const hasPlanningDashboard = planningBudgetModal instanceof HTMLElement;
 
-    if (!(planningBudgetModal instanceof HTMLElement)) {
-        return;
-    }
+    if (hasPlanningDashboard) {
 
     const planningEmptyState = document.querySelector(".planning-empty-state");
     const planningBudgetCards = document.getElementById("planning-budget-cards");
-    const planningSummaryTotal = document.querySelector('[data-planning-summary="total"]');
-    const planningSummaryAllocated = document.querySelector('[data-planning-summary="allocated"]');
-    const planningSummaryUtilization = document.querySelector('[data-planning-summary="utilization"]');
+    const planningBudgetSummaryAllocated = document.querySelector('[data-planning-budget-summary="allocated"]');
+    const planningBudgetSummaryBalance = document.querySelector('[data-planning-budget-summary="balance"]');
+    const planningBudgetSummaryDraft = document.querySelector('[data-planning-budget-summary="draft"]');
+    const planningBudgetSummaryApproved = document.querySelector('[data-planning-budget-summary="approved"]');
+    const planningBudgetSummaryYear = document.querySelector('[data-planning-budget-summary="year"]');
     const planningPpaTableBody = document.querySelector(".planning-ppa-table tbody");
     const planningPpaFooterSummary = document.querySelector(".planning-ppa-footer > span");
+    const planningPpaCount = document.getElementById("planning-ppa-count");
+    const planningPpaFloatCards = document.querySelectorAll(".planning-ppa-float-card");
+    const planningPpaSummaryTotal = document.querySelector('[data-planning-ppa-summary="total"]');
+    const planningPpaSummaryDraft = document.querySelector('[data-planning-ppa-summary="draft"]');
+    const planningPpaSummaryReview = document.querySelector('[data-planning-ppa-summary="review"]');
+    const planningPpaSummaryApproved = document.querySelector('[data-planning-ppa-summary="approved"]');
+    const planningPpaSummaryBidding = document.querySelector('[data-planning-ppa-summary="bidding"]');
+    const planningPpaSummaryAwarded = document.querySelector('[data-planning-ppa-summary="awarded"]');
+    const planningPpaSummaryCancelled = document.querySelector('[data-planning-ppa-summary="cancelled"]');
     const PLANNING_BUDGET_STORAGE_KEY = "peo_planning_budget_records_v1";
     const PLANNING_PPA_SAMPLE_IDS = new Set([
         "PPA-2026-0042",
@@ -7414,8 +7695,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const editPpaAmountInput = planningEditPpaModal instanceof HTMLElement
         ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-amount")
         : null;
+    const editPpaStatusSelect = planningEditPpaModal instanceof HTMLElement
+        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-status-select")
+        : null;
     const editPpaStatusInput = planningEditPpaModal instanceof HTMLElement
-        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-status")
+        ? planningEditPpaModal.querySelector(".js-planning-edit-ppa-status-input")
         : null;
 
     const statusSelect = planningBudgetModal.querySelector(".js-planning-status-select");
@@ -7423,6 +7707,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const statusMenu = planningBudgetModal.querySelector(".js-planning-status-menu");
     const statusLabel = planningBudgetModal.querySelector(".js-planning-status-label");
     const statusInput = planningBudgetModal.querySelector(".js-planning-status-input");
+    const yearSelect = planningBudgetModal.querySelector(".js-planning-year-select");
+    const yearTrigger = planningBudgetModal.querySelector(".js-planning-year-trigger");
+    const yearMenu = planningBudgetModal.querySelector(".js-planning-year-menu");
+    const yearLabel = planningBudgetModal.querySelector(".js-planning-year-label");
+    const yearInput = planningBudgetModal.querySelector(".js-planning-year-input");
     const editStatusSelect = planningEditBudgetModal instanceof HTMLElement
         ? planningEditBudgetModal.querySelector(".js-planning-edit-status-select")
         : null;
@@ -7441,9 +7730,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const planningTabs = document.querySelectorAll(".planning-tab[data-planning-tab]");
     const planningPanels = document.querySelectorAll("[data-planning-panel]");
     const ppaFilterSelects = document.querySelectorAll(".js-planning-ppa-select");
-    const ppaFormSelects = planningPpaModal instanceof HTMLElement
-        ? planningPpaModal.querySelectorAll(".js-planning-ppa-form-select")
-        : [];
+    const ppaFormSelects = document.querySelectorAll(".js-planning-ppa-form-select");
 
     const normalizeStatus = (value) => {
         const raw = String(value || "").trim().toLowerCase();
@@ -7556,12 +7843,74 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     };
 
+    const getPlanningPpaDataRows = () => {
+        if (!(planningPpaTableBody instanceof HTMLTableSectionElement)) return [];
+        return Array.from(planningPpaTableBody.querySelectorAll("tr")).filter((row) => {
+            return row instanceof HTMLTableRowElement && row.dataset.ppaEmptyRow !== "true";
+        });
+    };
+
+    const getPlanningPpaStatusCounts = () => {
+        const counts = {
+            total: 0,
+            draft: 0,
+            review: 0,
+            approved: 0,
+            bidding: 0,
+            awarded: 0,
+            cancelled: 0,
+        };
+
+        getPlanningPpaDataRows().forEach((row) => {
+            const statusCell = row.cells[2];
+            const statusValue = normalizePpaStatus(
+                statusCell?.querySelector(".planning-ppa-status")?.textContent
+                || statusCell?.textContent
+                || ""
+            );
+
+            counts.total += 1;
+            if (statusValue === "Draft") counts.draft += 1;
+            if (statusValue === "For Review") counts.review += 1;
+            if (statusValue === "Approved") counts.approved += 1;
+            if (statusValue === "For Bidding") counts.bidding += 1;
+            if (statusValue === "Awarded") counts.awarded += 1;
+            if (statusValue === "Cancelled") counts.cancelled += 1;
+        });
+
+        return counts;
+    };
+
+    const renderPlanningPpaStatusSummaries = () => {
+        const counts = getPlanningPpaStatusCounts();
+
+        if (planningPpaSummaryTotal instanceof HTMLElement) {
+            planningPpaSummaryTotal.textContent = String(counts.total);
+        }
+        if (planningPpaSummaryDraft instanceof HTMLElement) {
+            planningPpaSummaryDraft.textContent = String(counts.draft);
+        }
+        if (planningPpaSummaryReview instanceof HTMLElement) {
+            planningPpaSummaryReview.textContent = String(counts.review);
+        }
+        if (planningPpaSummaryApproved instanceof HTMLElement) {
+            planningPpaSummaryApproved.textContent = String(counts.approved);
+        }
+        if (planningPpaSummaryBidding instanceof HTMLElement) {
+            planningPpaSummaryBidding.textContent = String(counts.bidding);
+        }
+        if (planningPpaSummaryAwarded instanceof HTMLElement) {
+            planningPpaSummaryAwarded.textContent = String(counts.awarded);
+        }
+        if (planningPpaSummaryCancelled instanceof HTMLElement) {
+            planningPpaSummaryCancelled.textContent = String(counts.cancelled);
+        }
+    };
+
     const syncPpaTableState = () => {
         if (!(planningPpaTableBody instanceof HTMLTableSectionElement)) return;
 
-        const dataRows = Array.from(planningPpaTableBody.querySelectorAll("tr")).filter((row) => {
-            return row instanceof HTMLTableRowElement && row.dataset.ppaEmptyRow !== "true";
-        });
+        const dataRows = getPlanningPpaDataRows();
 
         const emptyRow = planningPpaTableBody.querySelector('tr[data-ppa-empty-row="true"]');
         if (dataRows.length) {
@@ -7579,6 +7928,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? `Showing 1 to ${dataRows.length} of ${dataRows.length} results`
                 : "No PPA records available";
         }
+        if (planningPpaCount instanceof HTMLElement) {
+            planningPpaCount.textContent = `${dataRows.length} project${dataRows.length === 1 ? "" : "s"} tracked`;
+        }
+        renderPlanningPpaStatusSummaries();
+        renderPlanningSummaries(planningBudgetRecords);
     };
 
     const removePlanningPpaSampleRows = () => {
@@ -7665,9 +8019,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const label = selectRoot.querySelector(".js-planning-ppa-form-label");
         const input = selectRoot.querySelector(".js-planning-ppa-form-input");
         const options = selectRoot.querySelectorAll(".planning-ppa-form-option");
+        const matchedOption = Array.from(options).find((option) => {
+            return option instanceof HTMLElement && option.dataset.value === normalized;
+        });
+        const matchedLabel = matchedOption?.querySelector("span")?.textContent?.trim() || normalized;
 
         if (label instanceof HTMLElement) {
-            label.textContent = normalized;
+            label.textContent = matchedLabel;
         }
         if (input instanceof HTMLInputElement) {
             input.value = normalized;
@@ -7724,26 +8082,59 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const renderPlanningSummaries = (records) => {
-        if (!(planningSummaryTotal instanceof HTMLElement)
-            || !(planningSummaryAllocated instanceof HTMLElement)
-            || !(planningSummaryUtilization instanceof HTMLElement)) {
+        if (!(planningBudgetSummaryAllocated instanceof HTMLElement)
+            || !(planningBudgetSummaryBalance instanceof HTMLElement)
+            || !(planningBudgetSummaryDraft instanceof HTMLElement)
+            || !(planningBudgetSummaryApproved instanceof HTMLElement)
+            || !(planningBudgetSummaryYear instanceof HTMLElement)) {
             return;
         }
 
-        if (!records.length) {
-            planningSummaryTotal.textContent = "--";
-            planningSummaryAllocated.textContent = "--";
-            planningSummaryUtilization.textContent = "--";
-            return;
-        }
-
-        const total = records.reduce((sum, record) => sum + getBudgetMetrics(record).totalBudget, 0);
         const allocated = records.reduce((sum, record) => sum + getBudgetMetrics(record).allocatedBudget, 0);
-        const averageUtilization = records.reduce((sum, record) => sum + getBudgetMetrics(record).utilization, 0) / records.length;
+        const balance = records.reduce((sum, record) => sum + getBudgetMetrics(record).remainingBudget, 0);
+        const draftCount = records.filter((record) => normalizeStatus(record.status) !== "Approved").length;
+        const approvedCount = records.filter((record) => normalizeStatus(record.status) === "Approved").length;
+        const currentYear = new Date().getFullYear();
 
-        planningSummaryTotal.textContent = formatPhp(total);
-        planningSummaryAllocated.textContent = formatPhp(allocated);
-        planningSummaryUtilization.textContent = `${averageUtilization.toFixed(1)}%`;
+        planningBudgetSummaryAllocated.textContent = formatPhp(allocated);
+        planningBudgetSummaryBalance.textContent = formatPhp(balance);
+        planningBudgetSummaryDraft.textContent = String(draftCount);
+        planningBudgetSummaryApproved.textContent = String(approvedCount);
+        planningBudgetSummaryYear.textContent = String(currentYear);
+    };
+
+    const enablePlanningPpaCardFloat = () => {
+        if (!planningPpaFloatCards.length) return;
+        if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+
+        planningPpaFloatCards.forEach((card) => {
+            if (!(card instanceof HTMLElement)) return;
+
+            card.addEventListener("pointermove", (event) => {
+                const bounds = card.getBoundingClientRect();
+                const relativeX = (event.clientX - bounds.left) / bounds.width;
+                const relativeY = (event.clientY - bounds.top) / bounds.height;
+                const rotateY = (relativeX - 0.5) * 9;
+                const rotateX = (0.5 - relativeY) * 9;
+                const shiftX = (relativeX - 0.5) * 8;
+                const shiftY = (relativeY - 0.5) * 8;
+
+                card.style.setProperty("--planning-ppa-card-rotate-x", `${rotateX.toFixed(2)}deg`);
+                card.style.setProperty("--planning-ppa-card-rotate-y", `${rotateY.toFixed(2)}deg`);
+                card.style.setProperty("--planning-ppa-card-shift-x", `${shiftX.toFixed(2)}px`);
+                card.style.setProperty("--planning-ppa-card-shift-y", `${shiftY.toFixed(2)}px`);
+            });
+
+            const resetPlanningPpaCardFloat = () => {
+                card.style.setProperty("--planning-ppa-card-rotate-x", "0deg");
+                card.style.setProperty("--planning-ppa-card-rotate-y", "0deg");
+                card.style.setProperty("--planning-ppa-card-shift-x", "0px");
+                card.style.setProperty("--planning-ppa-card-shift-y", "0px");
+            };
+
+            card.addEventListener("pointerleave", resetPlanningPpaCardFloat);
+            card.addEventListener("pointercancel", resetPlanningPpaCardFloat);
+        });
     };
 
     const renderPlanningBudgets = (records) => {
@@ -7947,6 +8338,30 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const closeYearMenu = () => {
+        if (!(yearSelect instanceof HTMLElement) || !(yearTrigger instanceof HTMLElement) || !(yearMenu instanceof HTMLElement)) {
+            return;
+        }
+        yearSelect.classList.remove("is-open");
+        yearTrigger.setAttribute("aria-expanded", "false");
+        yearMenu.hidden = true;
+    };
+
+    const setYearValue = (value) => {
+        if (!(yearMenu instanceof HTMLElement)) return;
+        const normalizedValue = String(value || "").trim() || "2026";
+        if (yearLabel instanceof HTMLElement) {
+            yearLabel.textContent = normalizedValue;
+        }
+        if (yearInput instanceof HTMLInputElement) {
+            yearInput.value = normalizedValue;
+        }
+        yearMenu.querySelectorAll(".planning-status-option").forEach((option) => {
+            if (!(option instanceof HTMLElement)) return;
+            option.classList.toggle("is-selected", option.dataset.value === normalizedValue);
+        });
+    };
+
     const closeEditStatusMenu = () => {
         if (!(editStatusSelect instanceof HTMLElement) || !(editStatusTrigger instanceof HTMLElement) || !(editStatusMenu instanceof HTMLElement)) {
             return;
@@ -7993,8 +8408,11 @@ document.addEventListener("DOMContentLoaded", () => {
         planningBudgetModal.style.display = "flex";
         syncPlanningModalBodyState();
         closeStatusMenu();
+        closeYearMenu();
         const initialStatus = statusInput instanceof HTMLInputElement ? statusInput.value : "Draft";
         setStatusValue(initialStatus || "Draft");
+        const initialYear = yearInput instanceof HTMLInputElement ? yearInput.value : "2026";
+        setYearValue(initialYear || "2026");
         window.requestAnimationFrame(() => {
             if (budgetNameInput instanceof HTMLInputElement) {
                 budgetNameInput.focus();
@@ -8009,6 +8427,7 @@ document.addEventListener("DOMContentLoaded", () => {
         planningBudgetModal.style.display = "none";
         syncPlanningModalBodyState();
         closeStatusMenu();
+        closeYearMenu();
     };
 
     const openEditModal = (recordId) => {
@@ -8117,8 +8536,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (editPpaAmountInput instanceof HTMLInputElement) {
             editPpaAmountInput.value = amountValue.toFixed(2);
         }
-        if (editPpaStatusInput instanceof HTMLSelectElement) {
-            editPpaStatusInput.value = statusValue;
+        if (editPpaStatusSelect instanceof HTMLElement) {
+            setPpaFormSelectValue(editPpaStatusSelect, statusValue);
         }
 
         closeModal();
@@ -8146,6 +8565,7 @@ document.addEventListener("DOMContentLoaded", () => {
         planningEditPpaModal.style.display = "none";
         editingPpaRow = null;
         syncPlanningModalBodyState();
+        closePpaFormSelectMenus();
     };
 
     closeModal();
@@ -8204,6 +8624,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const trigger = selectRoot.querySelector(".js-planning-ppa-form-trigger");
             const menu = selectRoot.querySelector(".js-planning-ppa-form-menu");
             const options = selectRoot.querySelectorAll(".planning-ppa-form-option");
+            const initialOption = selectRoot.querySelector(".planning-ppa-form-option.is-selected");
+
+            if (initialOption instanceof HTMLElement) {
+                setPpaFormSelectValue(selectRoot, initialOption.dataset.value || "");
+            }
 
             if (trigger instanceof HTMLElement && menu instanceof HTMLElement) {
                 trigger.addEventListener("click", () => {
@@ -8417,6 +8842,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (
+        yearSelect instanceof HTMLElement
+        && yearTrigger instanceof HTMLElement
+        && yearMenu instanceof HTMLElement
+    ) {
+        yearTrigger.addEventListener("click", () => {
+            const willOpen = yearMenu.hidden;
+            if (!willOpen) {
+                closeYearMenu();
+                return;
+            }
+            yearSelect.classList.add("is-open");
+            yearTrigger.setAttribute("aria-expanded", "true");
+            yearMenu.hidden = false;
+        });
+
+        yearMenu.querySelectorAll(".planning-status-option").forEach((option) => {
+            option.addEventListener("click", () => {
+                if (!(option instanceof HTMLElement)) return;
+                setYearValue(option.dataset.value || "2026");
+                closeYearMenu();
+            });
+        });
+
+        document.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof Node)) return;
+            if (!yearSelect.contains(target)) {
+                closeYearMenu();
+            }
+        });
+    }
+
+    if (
         editStatusSelect instanceof HTMLElement
         && editStatusTrigger instanceof HTMLElement
         && editStatusMenu instanceof HTMLElement
@@ -8477,7 +8935,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const remarks = String(formData.get("remarks") || "").trim();
 
             if (!budgetName || !fiscalYear || !Number.isFinite(totalBudget) || totalBudget < 0) {
-                window.alert("Please complete all required fields before creating a budget.");
+                showPeoGeneralToast("Please complete all required fields before creating a budget.", {
+                    title: "Planning Division",
+                    variant: "warning",
+                });
                 return;
             }
 
@@ -8495,6 +8956,7 @@ document.addEventListener("DOMContentLoaded", () => {
             renderPlanningBudgets(planningBudgetRecords);
             budgetForm.reset();
             setStatusValue("Draft");
+            setYearValue("2026");
             closeModal();
             showPlanningToast("New budget added successfully.", "success");
         });
@@ -8513,7 +8975,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const remarks = String(editRemarksInput instanceof HTMLTextAreaElement ? editRemarksInput.value : "").trim();
 
             if (!Number.isFinite(totalBudget) || totalBudget < 0) {
-                window.alert("Please enter a valid total budget.");
+                showPeoGeneralToast("Please enter a valid total budget.", {
+                    title: "Planning Division",
+                    variant: "warning",
+                });
                 return;
             }
 
@@ -8546,10 +9011,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const projectId = String(editPpaIdInput instanceof HTMLInputElement ? editPpaIdInput.value : "").trim();
             const fundSource = String(editPpaFundInput instanceof HTMLInputElement ? editPpaFundInput.value : "").trim();
             const amount = Number(editPpaAmountInput instanceof HTMLInputElement ? editPpaAmountInput.value : NaN);
-            const status = normalizePpaStatus(editPpaStatusInput instanceof HTMLSelectElement ? editPpaStatusInput.value : "Draft");
+            const status = normalizePpaStatus(editPpaStatusInput instanceof HTMLInputElement ? editPpaStatusInput.value : "Draft");
 
             if (!projectName || !projectId || !fundSource || !Number.isFinite(amount) || amount < 0) {
-                window.alert("Please complete all PPA edit fields with valid values.");
+                showPeoGeneralToast("Please complete all PPA edit fields with valid values.", {
+                    title: "Planning Division",
+                    variant: "warning",
+                });
                 return;
             }
 
@@ -8596,8 +9064,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+        renderPlanningBudgets(planningBudgetRecords);
+        removePlanningPpaSampleRows();
+        syncPpaTableState();
+        enablePlanningPpaCardFloat();
+    }
+
     const projectBoard = document.querySelector(".project-board");
     if (projectBoard) {
+        const projectBody = document.body;
         const projectModal = projectBoard.querySelector(".js-project-modal");
         const deleteModal = projectBoard.querySelector(".js-project-delete-modal");
         const projectForm = projectBoard.querySelector("[data-project-form]");
@@ -8610,8 +9085,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const projectTotalSummary = projectBoard.querySelector('[data-project-summary="total"]');
         const projectBudgetSummary = projectBoard.querySelector('[data-project-summary="budget"]');
         const projectApprovedSummary = projectBoard.querySelector('[data-project-summary="approved"]');
+        const projectPlanningSummary = projectBoard.querySelector("#project-summary-planning");
+        const projectApprovedTotalSummary = projectBoard.querySelector("#project-summary-approved-total");
+        const projectOngoingSummary = projectBoard.querySelector("#project-summary-ongoing");
+        const projectCompletedSummary = projectBoard.querySelector("#project-summary-completed");
+        const projectOnHoldSummary = projectBoard.querySelector("#project-summary-onhold");
         const divisionSummaryCards = projectBoard.querySelectorAll("[data-project-division-count]");
         const divisionCards = projectBoard.querySelectorAll("[data-project-division-card]");
+        const projectFloatCards = projectBoard.querySelectorAll(".project-float-card");
         const openProjectButtons = projectBoard.querySelectorAll(".js-project-open-modal");
         const closeProjectButtons = projectBoard.querySelectorAll(".js-project-close-modal");
         const closeDeleteButtons = projectBoard.querySelectorAll(".js-project-close-delete-modal");
@@ -8670,6 +9151,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const label = dropdownRoot.querySelector(".project-filter-dropdown__label");
             const menu = dropdownRoot.querySelector(".project-filter-dropdown__menu");
 
+            const syncSelectOptionAttributes = () => {
+                Array.from(select.options).forEach((option) => {
+                    const isSelected = option.value === select.value;
+                    option.selected = isSelected;
+                    option.toggleAttribute("selected", isSelected);
+                });
+            };
+
             const closeDropdown = () => {
                 dropdownRoot.classList.remove("is-open");
                 if (trigger instanceof HTMLElement) {
@@ -8682,6 +9171,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
+                syncSelectOptionAttributes();
                 const selectedOption = select.options[select.selectedIndex];
                 label.textContent = selectedOption?.textContent?.trim() || "Select";
 
@@ -8734,6 +9224,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const nextValue = String(optionButton.dataset.value || "").trim();
                     if (select.value !== nextValue) {
                         select.value = nextValue;
+                        syncSelectOptionAttributes();
                         select.dispatchEvent(new Event("change", { bubbles: true }));
                     } else {
                         renderDropdown();
@@ -8805,6 +9296,10 @@ document.addEventListener("DOMContentLoaded", () => {
             };
             let totalBudget = 0;
             let approvedCount = 0;
+            let planningCount = 0;
+            let ongoingCount = 0;
+            let completedCount = 0;
+            let onHoldCount = 0;
 
             rows.forEach((row) => {
                 const divisionValue = String(row.cells[1]?.textContent || "").trim();
@@ -8818,6 +9313,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (statusValue.includes("approved")) {
                     approvedCount += 1;
                 }
+                if (statusValue.includes("in planning")) {
+                    planningCount += 1;
+                }
+                if (statusValue.includes("ongoing")) {
+                    ongoingCount += 1;
+                }
+                if (statusValue.includes("completed")) {
+                    completedCount += 1;
+                }
+                if (statusValue.includes("on hold")) {
+                    onHoldCount += 1;
+                }
             });
 
             if (projectTotalSummary instanceof HTMLElement) {
@@ -8828,6 +9335,21 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (projectApprovedSummary instanceof HTMLElement) {
                 projectApprovedSummary.textContent = String(approvedCount);
+            }
+            if (projectPlanningSummary instanceof HTMLElement) {
+                projectPlanningSummary.textContent = String(planningCount);
+            }
+            if (projectApprovedTotalSummary instanceof HTMLElement) {
+                projectApprovedTotalSummary.textContent = String(approvedCount);
+            }
+            if (projectOngoingSummary instanceof HTMLElement) {
+                projectOngoingSummary.textContent = String(ongoingCount);
+            }
+            if (projectCompletedSummary instanceof HTMLElement) {
+                projectCompletedSummary.textContent = String(completedCount);
+            }
+            if (projectOnHoldSummary instanceof HTMLElement) {
+                projectOnHoldSummary.textContent = String(onHoldCount);
             }
             if (projectResultsSummary instanceof HTMLElement) {
                 projectResultsSummary.textContent = rows.length
@@ -8842,11 +9364,45 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         };
 
+        const enableProjectCardFloat = () => {
+            if (!projectFloatCards.length) return;
+            if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+
+            projectFloatCards.forEach((card) => {
+                if (!(card instanceof HTMLElement)) return;
+
+                card.addEventListener("pointermove", (event) => {
+                    const bounds = card.getBoundingClientRect();
+                    const relativeX = (event.clientX - bounds.left) / bounds.width;
+                    const relativeY = (event.clientY - bounds.top) / bounds.height;
+                    const rotateY = (relativeX - 0.5) * 9;
+                    const rotateX = (0.5 - relativeY) * 9;
+                    const shiftX = (relativeX - 0.5) * 8;
+                    const shiftY = (relativeY - 0.5) * 8;
+
+                    card.style.setProperty("--project-card-rotate-x", `${rotateX.toFixed(2)}deg`);
+                    card.style.setProperty("--project-card-rotate-y", `${rotateY.toFixed(2)}deg`);
+                    card.style.setProperty("--project-card-shift-x", `${shiftX.toFixed(2)}px`);
+                    card.style.setProperty("--project-card-shift-y", `${shiftY.toFixed(2)}px`);
+                });
+
+                const resetProjectCardFloat = () => {
+                    card.style.setProperty("--project-card-rotate-x", "0deg");
+                    card.style.setProperty("--project-card-rotate-y", "0deg");
+                    card.style.setProperty("--project-card-shift-x", "0px");
+                    card.style.setProperty("--project-card-shift-y", "0px");
+                };
+
+                card.addEventListener("pointerleave", resetProjectCardFloat);
+                card.addEventListener("pointercancel", resetProjectCardFloat);
+            });
+        };
+
         const syncProjectModalState = () => {
             const hasVisibleModal = [projectModal, deleteModal].some((modal) => {
                 return modal instanceof HTMLElement && !modal.hidden;
             });
-            body.classList.toggle("project-modal-open", hasVisibleModal);
+            projectBody.classList.toggle("project-modal-open", hasVisibleModal);
         };
 
         const closeProjectModal = () => {
@@ -8938,8 +9494,11 @@ document.addEventListener("DOMContentLoaded", () => {
             enhanceProjectFilterSelect(select);
         });
 
+        enhanceAdminFormSelects(projectForm);
+
         syncProjectRegistrySummary();
         syncActiveProjectDivision(divisionFilter instanceof HTMLSelectElement ? divisionFilter.value : "Admin Division");
+        enableProjectCardFloat();
 
         if (projectTableBody instanceof HTMLElement && typeof MutationObserver !== "undefined") {
             const projectSummaryObserver = new MutationObserver(() => {
@@ -8953,11 +9512,218 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    renderPlanningBudgets(planningBudgetRecords);
-    removePlanningPpaSampleRows();
-    syncPpaTableState();
 });
 /* PLANNING_DIVISION_MODAL_SCRIPT_END */
+
+const peoEscapeHtml = (value) => String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+let peoGeneralToastElement = null;
+let peoGeneralToastTimer = null;
+let peoGeneralConfirmElement = null;
+const PEO_PERSISTED_TOAST_KEY = "peo_persisted_system_toast_v1";
+
+const closePeoGeneralToast = () => {
+    if (!(peoGeneralToastElement instanceof HTMLElement)) return;
+    peoGeneralToastElement.classList.remove("is-visible");
+    const toastToRemove = peoGeneralToastElement;
+    peoGeneralToastElement = null;
+    window.setTimeout(() => {
+        toastToRemove.remove();
+    }, 180);
+    if (peoGeneralToastTimer) {
+        window.clearTimeout(peoGeneralToastTimer);
+        peoGeneralToastTimer = null;
+    }
+};
+
+const showPeoGeneralToast = (message, options = {}) => {
+    const text = String(message || "").trim() || "Action completed successfully.";
+    const variant = ["success", "info", "warning", "danger"].includes(String(options.variant || "").trim())
+        ? String(options.variant).trim()
+        : "success";
+    const title = String(options.title || "").trim();
+    const iconMap = {
+        success: "check_circle",
+        info: "info",
+        warning: "warning",
+        danger: "error",
+    };
+
+    closePeoGeneralToast();
+
+    const toast = document.createElement("aside");
+    toast.className = `peo-general-toast is-${variant}`;
+    toast.setAttribute("role", variant === "danger" ? "alert" : "status");
+    toast.setAttribute("aria-live", variant === "danger" ? "assertive" : "polite");
+    toast.innerHTML = `
+        <span class="peo-general-toast__icon material-symbols-outlined" aria-hidden="true">${iconMap[variant]}</span>
+        <div class="peo-general-toast__content">
+            ${title ? `<strong class="peo-general-toast__title">${peoEscapeHtml(title)}</strong>` : ""}
+            <span class="peo-general-toast__message">${peoEscapeHtml(text)}</span>
+        </div>
+    `;
+
+    document.body.appendChild(toast);
+    peoGeneralToastElement = toast;
+    window.requestAnimationFrame(() => {
+        toast.classList.add("is-visible");
+    });
+
+    const duration = Number(options.duration);
+    peoGeneralToastTimer = window.setTimeout(() => {
+        closePeoGeneralToast();
+    }, Number.isFinite(duration) && duration > 0 ? duration : 3200);
+
+    return toast;
+};
+
+const closePeoGeneralConfirm = () => {
+    if (!(peoGeneralConfirmElement instanceof HTMLElement)) return;
+    peoGeneralConfirmElement.remove();
+    peoGeneralConfirmElement = null;
+};
+
+const showPeoGeneralConfirm = (options = {}) => {
+    closePeoGeneralConfirm();
+
+    return new Promise((resolve) => {
+        const variant = ["danger", "warning", "info"].includes(String(options.variant || "").trim())
+            ? String(options.variant).trim()
+            : "danger";
+        const titleText = String(options.title || "Confirm Action").trim() || "Confirm Action";
+        const messageText = String(options.message || "Are you sure you want to continue?").trim() || "Are you sure you want to continue?";
+        const confirmLabel = String(options.confirmLabel || "Confirm").trim() || "Confirm";
+        const cancelLabel = String(options.cancelLabel || "Cancel").trim() || "Cancel";
+        const iconMap = {
+            danger: "delete_forever",
+            warning: "warning",
+            info: "help",
+        };
+
+        const overlay = document.createElement("div");
+        overlay.className = "peo-general-confirm";
+        overlay.setAttribute("role", "alertdialog");
+        overlay.setAttribute("aria-modal", "true");
+        overlay.setAttribute("aria-live", "assertive");
+        overlay.innerHTML = `
+            <div class="peo-general-confirm__dialog is-${variant}">
+                <div class="peo-general-confirm__head">
+                    <span class="peo-general-confirm__icon material-symbols-outlined" aria-hidden="true">${iconMap[variant]}</span>
+                    <div class="peo-general-confirm__copy">
+                        <h4>${peoEscapeHtml(titleText)}</h4>
+                        <p>${peoEscapeHtml(messageText)}</p>
+                    </div>
+                </div>
+                <div class="peo-general-confirm__actions">
+                    <button type="button" class="peo-general-confirm__btn peo-general-confirm__btn--cancel" data-action="cancel">${peoEscapeHtml(cancelLabel)}</button>
+                    <button type="button" class="peo-general-confirm__btn peo-general-confirm__btn--confirm" data-action="confirm">${peoEscapeHtml(confirmLabel)}</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        peoGeneralConfirmElement = overlay;
+        const confirmButton = overlay.querySelector('[data-action="confirm"]');
+        if (confirmButton instanceof HTMLButtonElement) {
+            window.setTimeout(() => confirmButton.focus(), 0);
+        }
+
+        let settled = false;
+        const settle = (approved) => {
+            if (settled) return;
+            settled = true;
+            document.removeEventListener("keydown", onKeyDown);
+            closePeoGeneralConfirm();
+            resolve(Boolean(approved));
+        };
+
+        const onKeyDown = (event) => {
+            if (event.key === "Escape") {
+                settle(false);
+            }
+        };
+
+        document.addEventListener("keydown", onKeyDown);
+
+        overlay.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (target === overlay) {
+                settle(false);
+                return;
+            }
+
+            const actionButton = target.closest("[data-action]");
+            if (!(actionButton instanceof HTMLElement)) return;
+            settle(actionButton.getAttribute("data-action") === "confirm");
+        });
+    });
+};
+
+window.PEOSystemMessages = Object.freeze({
+    showToast: showPeoGeneralToast,
+    closeToast: closePeoGeneralToast,
+    showConfirm: showPeoGeneralConfirm,
+    closeConfirm: closePeoGeneralConfirm,
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    try {
+        const persistedToast = window.sessionStorage.getItem(PEO_PERSISTED_TOAST_KEY);
+        if (persistedToast) {
+            window.sessionStorage.removeItem(PEO_PERSISTED_TOAST_KEY);
+            const parsedToast = JSON.parse(persistedToast);
+            showPeoGeneralToast(parsedToast.message, {
+                title: parsedToast.title,
+                variant: parsedToast.variant,
+            });
+        }
+    } catch (error) {
+        // Ignore storage failures and continue without a persisted toast.
+    }
+
+    document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        const trigger = target.closest("[data-peo-toast-message]");
+        if (!(trigger instanceof HTMLElement)) return;
+        if (trigger.matches(":disabled, [aria-disabled='true']")) return;
+
+        const toastPayload = {
+            message: trigger.getAttribute("data-peo-toast-message") || "",
+            title: trigger.getAttribute("data-peo-toast-title") || "",
+            variant: trigger.getAttribute("data-peo-toast-variant") || "info",
+        };
+
+        if (trigger instanceof HTMLAnchorElement) {
+            const href = String(trigger.getAttribute("href") || "").trim();
+            const shouldPersistToNextPage = trigger.dataset.peoToastPersist === "navigation";
+            const isRealNavigation = href && href !== "#" && !href.startsWith("javascript:");
+
+            if (shouldPersistToNextPage && isRealNavigation) {
+                try {
+                    window.sessionStorage.setItem(PEO_PERSISTED_TOAST_KEY, JSON.stringify(toastPayload));
+                } catch (error) {
+                    // Ignore storage failures and allow navigation to continue.
+                }
+                return;
+            }
+
+            event.preventDefault();
+        }
+
+        showPeoGeneralToast(toastPayload.message, {
+            title: toastPayload.title,
+            variant: toastPayload.variant,
+        });
+    });
+});
 
 document.addEventListener("DOMContentLoaded", () => {
     const qualityDashboard = document.querySelector(".js-quality-dashboard");
@@ -8968,6 +9734,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const qualityRecordMeta = qualityDashboard.querySelector(".js-quality-record-meta");
     const qualityResultsSummary = qualityDashboard.querySelector(".js-quality-results-summary");
     const qualityPagination = qualityDashboard.querySelector(".js-quality-pagination");
+    const qualitySummaryTotalDocuments = qualityDashboard.querySelector("#quality-summary-total-documents");
+    const qualitySummaryPending = qualityDashboard.querySelector("#quality-summary-pending");
+    const qualitySummaryOngoing = qualityDashboard.querySelector("#quality-summary-ongoing");
+    const qualitySummaryProgress = qualityDashboard.querySelector("#quality-summary-progress");
+    const qualitySummaryRelease = qualityDashboard.querySelector("#quality-summary-release");
+    const qualitySummaryRemarks = qualityDashboard.querySelector("#quality-summary-remarks");
+    const qualitySummaryCompleted = qualityDashboard.querySelector("#quality-summary-completed");
+    const qualitySummaryTodo = qualityDashboard.querySelector("#quality-summary-todo");
+    const qualityOverviewCards = Array.from(qualityDashboard.querySelectorAll(".quality-overview-card"));
     const qualitySearchInput = qualityDashboard.querySelector(".js-quality-search");
     const qualityTabs = Array.from(qualityDashboard.querySelectorAll("[data-quality-tab]"));
     const routeFilterButton = qualityDashboard.querySelector(".js-quality-route-filter");
@@ -9266,11 +10041,36 @@ document.addEventListener("DOMContentLoaded", () => {
             route: String(formData.get("route") ?? "").trim(),
             received_by: String(formData.get("received_by") ?? "").trim(),
             date_recv: String(formData.get("date_recv") ?? "").trim(),
+            initial_status: String(formData.get("initial_status") ?? "").trim(),
+            owner_representative: String(formData.get("owner_representative") ?? "").trim(),
+            contact_info: String(formData.get("contact_info") ?? "").trim(),
             status: String(formData.get("status") ?? "").trim(),
             remarks: String(formData.get("remarks") ?? "").trim(),
         };
 
         return record.received_from && record.doc_date && record.doc_no ? record : null;
+    };
+
+    const setQualityFormFieldValue = (fieldName, nextValue) => {
+        if (!(qualityForm instanceof HTMLFormElement)) return;
+
+        const radioFields = Array.from(qualityForm.querySelectorAll(`[name="${fieldName}"]`)).filter((field) => {
+            return field instanceof HTMLInputElement && field.type === "radio";
+        });
+        if (radioFields.length) {
+            const normalizedValue = String(nextValue ?? "");
+            const hasMatch = radioFields.some((field) => field.value === normalizedValue);
+            if (!hasMatch) return;
+            radioFields.forEach((field) => {
+                field.checked = field.value === normalizedValue;
+            });
+            return;
+        }
+
+        const field = qualityForm.elements.namedItem(fieldName);
+        if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+            field.value = String(nextValue ?? "");
+        }
     };
 
     const fillQualityForm = (record) => {
@@ -9287,15 +10087,15 @@ document.addEventListener("DOMContentLoaded", () => {
             "route",
             "received_by",
             "date_recv",
+            "initial_status",
+            "owner_representative",
+            "contact_info",
             "status",
             "remarks",
         ];
 
         fieldNames.forEach((fieldName) => {
-            const field = qualityForm.elements.namedItem(fieldName);
-            if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
-                field.value = record[fieldName] ?? "";
-            }
+            setQualityFormFieldValue(fieldName, record[fieldName] ?? "");
         });
     };
 
@@ -9334,6 +10134,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 record.project_location,
                 record.location_detail,
                 record.received_by,
+                record.initial_status,
+                record.owner_representative,
+                record.contact_info,
                 record.route,
                 record.status,
                 record.remarks,
@@ -9400,7 +10203,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const createEmptyStateRow = () => {
         qualityTableBody.innerHTML = `
             <tr class="quality-empty-row">
-                <td colspan="11">No quality records match the current filters.</td>
+                <td colspan="12">No quality records match the current filters.</td>
             </tr>
         `;
     };
@@ -9426,6 +10229,16 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>${escapeHtml(record.received_by || "-")}</td>
             <td>${escapeHtml(formatDate(record.date_recv))}</td>
             <td><span class="quality-status ${getStatusClassName(record.status)}">${escapeHtml(record.status || "For Action")}</span></td>
+            <td>
+                <div class="quality-actions">
+                    <button type="button" class="quality-action-btn quality-action-btn--edit" data-quality-action="edit" aria-label="Edit record" title="Edit">
+                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                    </button>
+                    <button type="button" class="quality-action-btn quality-action-btn--delete" data-quality-action="delete" aria-label="Delete record" title="Delete">
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                </div>
+            </td>
         `;
         return row;
     };
@@ -9455,6 +10268,76 @@ document.addEventListener("DOMContentLoaded", () => {
             const isActive = tab.getAttribute("data-quality-tab") === activeTab;
             tab.classList.toggle("is-active", isActive);
             tab.setAttribute("aria-selected", String(isActive));
+        });
+    };
+
+    const syncQualitySummaryCards = () => {
+        const totalDocuments = records.length;
+        const pendingCount = records.filter((record) => normalizeText(record.status) === "for action").length;
+        const inProgressCount = records.filter((record) => normalizeText(record.status) === "in progress").length;
+        const forReleaseCount = records.filter((record) => normalizeText(record.status) === "for release").length;
+        const completedCount = records.filter((record) => normalizeText(record.status) === "completed").length;
+        const remarksCount = records.filter((record) => String(record.remarks || "").trim().length > 0).length;
+        const ongoingCount = totalDocuments - completedCount;
+        const tasksToDoCount = pendingCount + inProgressCount;
+
+        if (qualitySummaryTotalDocuments instanceof HTMLElement) {
+            qualitySummaryTotalDocuments.textContent = String(totalDocuments);
+        }
+        if (qualitySummaryPending instanceof HTMLElement) {
+            qualitySummaryPending.textContent = String(pendingCount);
+        }
+        if (qualitySummaryOngoing instanceof HTMLElement) {
+            qualitySummaryOngoing.textContent = String(ongoingCount);
+        }
+        if (qualitySummaryProgress instanceof HTMLElement) {
+            qualitySummaryProgress.textContent = String(inProgressCount);
+        }
+        if (qualitySummaryRelease instanceof HTMLElement) {
+            qualitySummaryRelease.textContent = String(forReleaseCount);
+        }
+        if (qualitySummaryRemarks instanceof HTMLElement) {
+            qualitySummaryRemarks.textContent = String(remarksCount);
+        }
+        if (qualitySummaryCompleted instanceof HTMLElement) {
+            qualitySummaryCompleted.textContent = String(completedCount);
+        }
+        if (qualitySummaryTodo instanceof HTMLElement) {
+            qualitySummaryTodo.textContent = String(tasksToDoCount);
+        }
+    };
+
+    const enableQualityCardFloat = () => {
+        if (!qualityOverviewCards.length) return;
+        if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+
+        qualityOverviewCards.forEach((card) => {
+            if (!(card instanceof HTMLElement)) return;
+
+            card.addEventListener("pointermove", (event) => {
+                const bounds = card.getBoundingClientRect();
+                const relativeX = (event.clientX - bounds.left) / bounds.width;
+                const relativeY = (event.clientY - bounds.top) / bounds.height;
+                const rotateY = (relativeX - 0.5) * 9;
+                const rotateX = (0.5 - relativeY) * 9;
+                const shiftX = (relativeX - 0.5) * 8;
+                const shiftY = (relativeY - 0.5) * 8;
+
+                card.style.setProperty("--quality-card-rotate-x", `${rotateX.toFixed(2)}deg`);
+                card.style.setProperty("--quality-card-rotate-y", `${rotateY.toFixed(2)}deg`);
+                card.style.setProperty("--quality-card-shift-x", `${shiftX.toFixed(2)}px`);
+                card.style.setProperty("--quality-card-shift-y", `${shiftY.toFixed(2)}px`);
+            });
+
+            const resetCardFloat = () => {
+                card.style.setProperty("--quality-card-rotate-x", "0deg");
+                card.style.setProperty("--quality-card-rotate-y", "0deg");
+                card.style.setProperty("--quality-card-shift-x", "0px");
+                card.style.setProperty("--quality-card-shift-y", "0px");
+            };
+
+            card.addEventListener("pointerleave", resetCardFloat);
+            card.addEventListener("pointercancel", resetCardFloat);
         });
     };
 
@@ -9501,6 +10384,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         syncTableSummary(filteredRecords, pagedRecords, startIndex);
+        syncQualitySummaryCards();
         syncTabs();
         syncRouteFilterButton();
         renderPagination(filteredRecords);
@@ -9584,6 +10468,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const formRecord = buildRecordFromForm();
             if (!formRecord) return;
+            const isEditingRecord = Boolean(editingRecordId);
 
             if (editingRecordId) {
                 const targetIndex = records.findIndex((record) => record.__id === editingRecordId);
@@ -9598,18 +10483,36 @@ document.addEventListener("DOMContentLoaded", () => {
             writeStoredRecords(records);
             renderTable();
             closeQualityModal();
+            showPeoGeneralToast(
+                isEditingRecord ? "Quality record updated successfully." : "Quality record added successfully.",
+                {
+                    title: "Quality Division",
+                    variant: "success",
+                }
+            );
         });
     }
 
     if (deleteQualityButton instanceof HTMLElement) {
-        deleteQualityButton.addEventListener("click", () => {
+        deleteQualityButton.addEventListener("click", async () => {
             if (!editingRecordId) return;
-            if (!window.confirm("Delete this quality record?")) return;
+            const approved = await showPeoGeneralConfirm({
+                title: "Delete Quality Record",
+                message: "Are you sure you want to delete this quality record?",
+                confirmLabel: "Delete",
+                cancelLabel: "Cancel",
+                variant: "danger",
+            });
+            if (!approved) return;
 
             records = records.filter((record) => record.__id !== editingRecordId);
             writeStoredRecords(records);
             renderTable();
             closeQualityModal();
+            showPeoGeneralToast("Quality record deleted successfully.", {
+                title: "Quality Division",
+                variant: "success",
+            });
         });
     }
 
@@ -9648,7 +10551,7 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTable();
     });
 
-    qualityTableBody.addEventListener("click", (event) => {
+    qualityTableBody.addEventListener("click", async (event) => {
         if (shouldSuppressTableClick()) return;
 
         const target = event.target;
@@ -9661,6 +10564,34 @@ document.addEventListener("DOMContentLoaded", () => {
         const recordId = row.dataset.recordId;
         const record = records.find((item) => item.__id === recordId);
         if (!record) return;
+
+        const actionButton = target.closest("[data-quality-action]");
+        if (actionButton instanceof HTMLButtonElement) {
+            const action = actionButton.dataset.qualityAction;
+            if (action === "delete") {
+                const approved = await showPeoGeneralConfirm({
+                    title: "Delete Quality Record",
+                    message: "Are you sure you want to delete this quality record?",
+                    confirmLabel: "Delete",
+                    cancelLabel: "Cancel",
+                    variant: "danger",
+                });
+                if (!approved) return;
+                records = records.filter((item) => item.__id !== recordId);
+                writeStoredRecords(records);
+                renderTable();
+                showPeoGeneralToast("Quality record deleted successfully.", {
+                    title: "Quality Division",
+                    variant: "success",
+                });
+                return;
+            }
+
+            if (action === "edit") {
+                openQualityModal("edit", record);
+                return;
+            }
+        }
 
         openQualityModal("edit", record);
     });
@@ -9739,6 +10670,7 @@ document.addEventListener("DOMContentLoaded", () => {
     qualityTableWrap.addEventListener("mouseleave", stopDragging);
     window.addEventListener("resize", syncHorizontalScrollState);
 
+    enableQualityCardFloat();
     renderTable();
 });
 

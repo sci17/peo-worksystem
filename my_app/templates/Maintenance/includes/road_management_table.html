@@ -657,22 +657,22 @@
 
 <div class="road-add-modal js-road-add-modal" hidden>
     <div class="road-add-modal-backdrop js-close-road-add-modal"></div>
-    <div class="road-add-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="road-add-modal-title">
-        <div class="road-add-modal-header">
-            <div class="maintenance-modal-heading">
+    <div class="road-add-modal-dialog maintenance-unified-dialog" role="dialog" aria-modal="true" aria-labelledby="road-add-modal-title">
+        <div class="road-add-modal-header maintenance-unified-header">
+            <div class="maintenance-modal-heading maintenance-unified-heading">
                 <span class="maintenance-modal-kicker">Road Registry</span>
                 <h3 id="road-add-modal-title">Add Provincial Road</h3>
                 <p>Create a new road record</p>
             </div>
-            <button type="button" class="road-add-modal-close js-close-road-add-modal" aria-label="Close add provincial road form">
+            <button type="button" class="road-add-modal-close maintenance-unified-close js-close-road-add-modal" aria-label="Close add provincial road form">
                 <span class="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
         </div>
 
-        <form class="road-add-form js-road-add-form">
-            <div class="maintenance-form-section">
-                <div class="maintenance-form-section-head">
-                    <div class="maintenance-form-section-icon" aria-hidden="true">
+        <form class="road-add-form maintenance-unified-form js-road-add-form">
+            <div class="maintenance-form-section maintenance-unified-section">
+                <div class="maintenance-form-section-head maintenance-unified-section-head">
+                    <div class="maintenance-form-section-icon maintenance-unified-section-icon" aria-hidden="true">
                         <span class="material-symbols-outlined">add_road</span>
                     </div>
                     <div>
@@ -740,9 +740,9 @@
                 </div>
             </div>
 
-            <div class="road-add-form-actions">
-                <button type="button" class="road-add-btn-secondary js-close-road-add-modal">Cancel</button>
-                <button type="submit" class="road-add-btn-primary">Add Road</button>
+            <div class="road-add-form-actions maintenance-unified-actions">
+                <button type="button" class="road-add-btn-secondary maintenance-unified-btn maintenance-unified-btn--secondary js-close-road-add-modal">Cancel</button>
+                <button type="submit" class="road-add-btn-primary maintenance-unified-btn maintenance-unified-btn--primary">Add Road</button>
             </div>
         </form>
     </div>
@@ -750,22 +750,22 @@
 
 <div class="road-edit-modal js-road-edit-modal" hidden>
     <div class="road-edit-modal-backdrop js-close-road-edit-modal"></div>
-    <div class="road-edit-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="road-edit-modal-title">
-        <div class="road-edit-modal-header">
-            <div class="maintenance-modal-heading">
+    <div class="road-edit-modal-dialog maintenance-unified-dialog" role="dialog" aria-modal="true" aria-labelledby="road-edit-modal-title">
+        <div class="road-edit-modal-header maintenance-unified-header">
+            <div class="maintenance-modal-heading maintenance-unified-heading">
                 <span class="maintenance-modal-kicker">Municipality Update</span>
                 <h3 id="road-edit-modal-title">Update Municipality Data</h3>
                 <p class="js-road-edit-subtitle">Edit road data</p>
             </div>
-            <button type="button" class="road-edit-modal-close js-close-road-edit-modal" aria-label="Close road edit form">
+            <button type="button" class="road-edit-modal-close maintenance-unified-close js-close-road-edit-modal" aria-label="Close road edit form">
                 <span class="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
         </div>
 
-        <form class="road-edit-form js-road-edit-form">
-            <div class="maintenance-form-section">
-                <div class="maintenance-form-section-head">
-                    <div class="maintenance-form-section-icon" aria-hidden="true">
+        <form class="road-edit-form maintenance-unified-form js-road-edit-form">
+            <div class="maintenance-form-section maintenance-unified-section">
+                <div class="maintenance-form-section-head maintenance-unified-section-head">
+                    <div class="maintenance-form-section-icon maintenance-unified-section-icon" aria-hidden="true">
                         <span class="material-symbols-outlined">edit_road</span>
                     </div>
                     <div>
@@ -813,9 +813,9 @@
                 </label>
             </div>
 
-            <div class="road-edit-form-actions">
-                <button type="button" class="road-edit-btn road-edit-btn-secondary js-close-road-edit-modal">Cancel</button>
-                <button type="submit" class="road-edit-btn road-edit-btn-primary">Save Changes</button>
+            <div class="road-edit-form-actions maintenance-unified-actions">
+                <button type="button" class="road-edit-btn road-edit-btn-secondary maintenance-unified-btn maintenance-unified-btn--secondary js-close-road-edit-modal">Cancel</button>
+                <button type="submit" class="road-edit-btn road-edit-btn-primary maintenance-unified-btn maintenance-unified-btn--primary">Save Changes</button>
             </div>
         </form>
     </div>
@@ -823,16 +823,16 @@
 
 <div class="road-delete-modal js-road-delete-modal" hidden>
     <div class="road-delete-modal-backdrop js-close-road-delete-modal"></div>
-    <div class="road-delete-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="road-delete-modal-title">
-        <div class="road-delete-modal-header">
-            <div>
+    <div class="road-delete-modal-dialog maintenance-unified-dialog" role="dialog" aria-modal="true" aria-labelledby="road-delete-modal-title">
+        <div class="road-delete-modal-header maintenance-unified-header">
+            <div class="maintenance-unified-heading">
                 <h3 id="road-delete-modal-title">Delete Road Data</h3>
                 <p class="js-road-delete-subtitle">Choose a road row to delete</p>
             </div>
-            <button type="button" class="road-delete-modal-close js-close-road-delete-modal" aria-label="Close delete road form">&times;</button>
+            <button type="button" class="road-delete-modal-close maintenance-unified-close js-close-road-delete-modal" aria-label="Close delete road form">&times;</button>
         </div>
 
-        <form class="road-delete-form js-road-delete-form">
+        <form class="road-delete-form maintenance-unified-form js-road-delete-form">
             <label class="road-delete-field">
                 <span>Select Road Row</span>
                 <select class="js-road-delete-record-select" required></select>
@@ -840,9 +840,9 @@
 
             <p class="road-delete-note">This action cannot be undone.</p>
 
-            <div class="road-delete-form-actions">
-                <button type="button" class="road-delete-btn road-delete-btn-secondary js-close-road-delete-modal">Cancel</button>
-                <button type="submit" class="road-delete-btn road-delete-btn-primary">Delete Selected</button>
+            <div class="road-delete-form-actions maintenance-unified-actions">
+                <button type="button" class="road-delete-btn road-delete-btn-secondary maintenance-unified-btn maintenance-unified-btn--secondary js-close-road-delete-modal">Cancel</button>
+                <button type="submit" class="road-delete-btn road-delete-btn-primary maintenance-unified-btn maintenance-unified-btn--primary">Delete Selected</button>
             </div>
         </form>
     </div>

@@ -300,20 +300,20 @@
 
     <div class="contractor-edit-modal contractor-add-modal js-contractor-add-modal" hidden>
         <div class="contractor-edit-backdrop js-close-contractor-add"></div>
-        <div class="contractor-edit-dialog contractor-add-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-add-title">
-            <form class="contractor-edit-form js-contractor-add-form">
-                <header class="contractor-edit-head">
-                    <div class="maintenance-modal-heading">
+        <div class="contractor-edit-dialog contractor-add-dialog maintenance-unified-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-add-title">
+            <form class="contractor-edit-form maintenance-unified-form js-contractor-add-form">
+                <header class="contractor-edit-head maintenance-unified-header">
+                    <div class="maintenance-modal-heading maintenance-unified-heading">
                         <span class="maintenance-modal-kicker">Contractor Registry</span>
                         <h4 id="contractor-add-title">Add New Contractor</h4>
                         <p class="contractor-add-subtitle">Register a new contractor in the system</p>
                     </div>
-                    <button type="button" class="contractor-edit-close js-close-contractor-add" aria-label="Close add contractor form">
+                    <button type="button" class="contractor-edit-close maintenance-unified-close js-close-contractor-add" aria-label="Close add contractor form">
                         <span class="material-symbols-outlined" aria-hidden="true">close</span>
                     </button>
                 </header>
 
-                <section class="contractor-edit-section contractor-edit-grid contractor-edit-grid--two">
+                <section class="contractor-edit-section maintenance-unified-section contractor-edit-grid contractor-edit-grid--two">
                     <label class="contractor-edit-field">
                         <span>Company Name *</span>
                         <input type="text" name="company_name" placeholder="Full company name" required>
@@ -324,7 +324,7 @@
                     </label>
                 </section>
 
-                <section class="contractor-edit-section">
+                <section class="contractor-edit-section maintenance-unified-section">
                     <h5>Registration Details</h5>
 
                     <div class="contractor-edit-grid contractor-edit-grid--two">
@@ -368,7 +368,7 @@
                     </label>
                 </section>
 
-                <section class="contractor-edit-section">
+                <section class="contractor-edit-section maintenance-unified-section">
                     <h5>Contact Information</h5>
 
                     <label class="contractor-edit-field contractor-edit-field--full">
@@ -415,9 +415,9 @@
                     </label>
                 </section>
 
-                <div class="contractor-edit-actions">
-                    <button type="button" class="contractor-edit-btn contractor-edit-btn-secondary js-close-contractor-add">Cancel</button>
-                    <button type="submit" class="contractor-edit-btn contractor-edit-btn-primary">Create</button>
+                <div class="contractor-edit-actions maintenance-unified-actions">
+                    <button type="button" class="contractor-edit-btn contractor-edit-btn-secondary maintenance-unified-btn maintenance-unified-btn--secondary js-close-contractor-add">Cancel</button>
+                    <button type="submit" class="contractor-edit-btn contractor-edit-btn-primary maintenance-unified-btn maintenance-unified-btn--primary">Create</button>
                 </div>
             </form>
         </div>
@@ -498,19 +498,19 @@
 
     <div class="contractor-edit-modal js-contractor-edit-modal" hidden>
         <div class="contractor-edit-backdrop js-close-contractor-edit"></div>
-        <div class="contractor-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-edit-title">
-            <form class="contractor-edit-form js-contractor-edit-form">
-                <header class="contractor-edit-head">
-                    <div class="maintenance-modal-heading">
+        <div class="contractor-edit-dialog maintenance-unified-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-edit-title">
+            <form class="contractor-edit-form maintenance-unified-form js-contractor-edit-form">
+                <header class="contractor-edit-head maintenance-unified-header">
+                    <div class="maintenance-modal-heading maintenance-unified-heading">
                         <span class="maintenance-modal-kicker">Contractor Registry</span>
                         <h4 id="contractor-edit-title">Update contractor information</h4>
                     </div>
-                    <button type="button" class="contractor-edit-close js-close-contractor-edit" aria-label="Close contractor edit form">
+                    <button type="button" class="contractor-edit-close maintenance-unified-close js-close-contractor-edit" aria-label="Close contractor edit form">
                         <span class="material-symbols-outlined" aria-hidden="true">close</span>
                     </button>
                 </header>
 
-                <section class="contractor-edit-section contractor-edit-grid contractor-edit-grid--two">
+                <section class="contractor-edit-section maintenance-unified-section contractor-edit-grid contractor-edit-grid--two">
                     <label class="contractor-edit-field">
                         <span>Company Name *</span>
                         <input type="text" name="company_name" placeholder="Company name" required>
@@ -521,7 +521,7 @@
                     </label>
                 </section>
 
-                <section class="contractor-edit-section">
+                <section class="contractor-edit-section maintenance-unified-section">
                     <h5>Registration Details</h5>
 
                     <div class="contractor-edit-grid contractor-edit-grid--two">
@@ -565,7 +565,7 @@
                     </label>
                 </section>
 
-                <section class="contractor-edit-section">
+                <section class="contractor-edit-section maintenance-unified-section">
                     <h5>Contact Information</h5>
 
                     <label class="contractor-edit-field contractor-edit-field--full">
@@ -607,7 +607,7 @@
                     </div>
                 </section>
 
-                <section class="contractor-edit-section contractor-edit-section--footer">
+                <section class="contractor-edit-section maintenance-unified-section contractor-edit-section--footer">
                     <label class="contractor-edit-field contractor-edit-field--status">
                         <span>Status</span>
                         <select name="status">
@@ -625,9 +625,9 @@
                     </label>
                 </section>
 
-                <div class="contractor-edit-actions">
-                    <button type="button" class="contractor-edit-btn contractor-edit-btn-secondary js-close-contractor-edit">Cancel</button>
-                    <button type="submit" class="contractor-edit-btn contractor-edit-btn-primary">Update</button>
+                <div class="contractor-edit-actions maintenance-unified-actions">
+                    <button type="button" class="contractor-edit-btn contractor-edit-btn-secondary maintenance-unified-btn maintenance-unified-btn--secondary js-close-contractor-edit">Cancel</button>
+                    <button type="submit" class="contractor-edit-btn contractor-edit-btn-primary maintenance-unified-btn maintenance-unified-btn--primary">Update</button>
                 </div>
             </form>
         </div>
@@ -635,20 +635,20 @@
 
     <div class="contractor-eval-modal js-contractor-eval-modal" hidden>
         <div class="contractor-eval-backdrop js-close-contractor-eval"></div>
-        <div class="contractor-eval-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-eval-title">
-            <form class="contractor-eval-form js-contractor-eval-form">
-                <header class="contractor-eval-head">
-                    <div class="maintenance-modal-heading">
+        <div class="contractor-eval-dialog maintenance-unified-dialog" role="dialog" aria-modal="true" aria-labelledby="contractor-eval-title">
+            <form class="contractor-eval-form maintenance-unified-form js-contractor-eval-form">
+                <header class="contractor-eval-head maintenance-unified-header">
+                    <div class="maintenance-modal-heading maintenance-unified-heading">
                         <span class="maintenance-modal-kicker">Contractor Assessment</span>
                         <h4 id="contractor-eval-title">Contractor Performance Evaluation</h4>
                         <p>Comprehensive assessment based on weighted project delivery criteria.</p>
                     </div>
-                    <button type="button" class="contractor-eval-close js-close-contractor-eval" aria-label="Close contractor evaluation form">
+                    <button type="button" class="contractor-eval-close maintenance-unified-close js-close-contractor-eval" aria-label="Close contractor evaluation form">
                         <span class="material-symbols-outlined" aria-hidden="true">close</span>
                     </button>
                 </header>
 
-                <section class="contractor-eval-block contractor-eval-block--top">
+                <section class="contractor-eval-block maintenance-unified-section contractor-eval-block--top">
                     <div class="contractor-eval-grid">
                         <label class="contractor-eval-field">
                             <span>Company Name</span>
@@ -669,7 +669,7 @@
                     </div>
                 </section>
 
-                <section class="contractor-eval-block">
+                <section class="contractor-eval-block maintenance-unified-section">
                     <div class="contractor-eval-criteria-head">
                         <h5>Evaluation Criteria</h5>
                         <p>Rating scale: 0 to 5 stars (half-star allowed)</p>
@@ -828,7 +828,7 @@
                     </div>
                 </section>
 
-                <section class="contractor-eval-block contractor-eval-block--summary">
+                <section class="contractor-eval-block maintenance-unified-section contractor-eval-block--summary">
                     <div class="contractor-eval-summary">
                         <div>
                             <p class="contractor-eval-summary-label">Total Score</p>
@@ -845,7 +845,7 @@
                     </div>
                 </section>
 
-                <section class="contractor-eval-block">
+                <section class="contractor-eval-block maintenance-unified-section">
                     <div class="contractor-eval-grid">
                         <label class="contractor-eval-field">
                             <span>Evaluator Name</span>
