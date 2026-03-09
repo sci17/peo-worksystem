@@ -178,12 +178,35 @@
     }
 })();
 
+function togglePassword() {
+    const passwordInput = document.getElementById("id_password") || document.getElementById("password");
+    const toggle = document.querySelector("[data-password-toggle]");
+
+    if (!(passwordInput instanceof HTMLInputElement) || !(toggle instanceof HTMLElement)) {
+        return;
+    }
+
+    const isHidden = passwordInput.type === "password";
+    passwordInput.type = isHidden ? "text" : "password";
+    toggle.classList.toggle("is-visible", isHidden);
+    toggle.classList.toggle("fa-eye", !isHidden);
+    toggle.classList.toggle("fa-eye-slash", isHidden);
+    toggle.setAttribute("title", isHidden ? "Hide password" : "Show password");
+}
+
+window.togglePassword = togglePassword;
+
 document.addEventListener("DOMContentLoaded", () => {
-    const loginCard = document.querySelector(".login-card");
+    const loginCard = document.querySelector(".login-card, .login-container");
     if (loginCard) {
         requestAnimationFrame(() => {
             loginCard.classList.add("loaded");
         });
+    }
+
+    const passwordToggle = document.querySelector("[data-password-toggle]");
+    if (passwordToggle) {
+        passwordToggle.addEventListener("click", togglePassword);
     }
 
     const body = document.body;
@@ -195,9 +218,88 @@ document.addEventListener("DOMContentLoaded", () => {
     const projectDashboardButton = document.querySelector(".js-project-dashboard-button");
     const maintenanceToggle = document.querySelector(".js-maintenance-toggle");
     const maintenanceMenu = document.querySelector(".js-maintenance-menu");
+    const topbarNotificationsRoot = document.querySelector(".topbar-notifications-menu");
+    const topbarNotificationsToggle = document.querySelector("[data-topbar-notifications-toggle]");
+    const topbarNotificationsMenu = document.querySelector("[data-topbar-notifications-menu]");
+    const topbarNotificationItems = document.querySelectorAll(".topbar-notification-item");
+    const topbarSettingsRoot = document.querySelector(".topbar-settings-menu");
+    const topbarSettingsToggle = document.querySelector("[data-topbar-settings-toggle]");
+    const topbarSettingsMenu = document.querySelector("[data-topbar-settings-menu]");
+    const topbarSettingsItems = document.querySelectorAll(".topbar-settings-item");
+    const accountMenuRoot = document.querySelector(".topbar-user-menu");
+    const accountMenuToggle = document.querySelector("[data-account-menu-toggle]");
+    const accountMenu = document.querySelector("[data-account-menu]");
+    const settingsSections = document.querySelectorAll("[data-settings-section]");
 
     const closeSidebar = () => {
         body.classList.remove("sidebar-open");
+    };
+
+    const setTopbarNotificationsOpen = (open) => {
+        if (!(topbarNotificationsRoot instanceof HTMLElement) || !(topbarNotificationsToggle instanceof HTMLElement) || !(topbarNotificationsMenu instanceof HTMLElement)) {
+            return;
+        }
+        topbarNotificationsRoot.classList.toggle("is-open", open);
+        topbarNotificationsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        topbarNotificationsMenu.hidden = !open;
+    };
+
+    const setTopbarSettingsOpen = (open) => {
+        if (!(topbarSettingsRoot instanceof HTMLElement) || !(topbarSettingsToggle instanceof HTMLElement) || !(topbarSettingsMenu instanceof HTMLElement)) {
+            return;
+        }
+        topbarSettingsRoot.classList.toggle("is-open", open);
+        topbarSettingsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        topbarSettingsMenu.hidden = !open;
+    };
+
+    const setAccountMenuExpanded = (expanded) => {
+        if (!(accountMenuRoot instanceof HTMLElement)) {
+            return;
+        }
+        accountMenuRoot.classList.toggle("is-expanded", expanded);
+    };
+
+    const setAccountMenuOpen = (open) => {
+        if (!(accountMenuRoot instanceof HTMLElement) || !(accountMenuToggle instanceof HTMLElement) || !(accountMenu instanceof HTMLElement)) {
+            return;
+        }
+        accountMenuRoot.classList.toggle("is-expanded", open || accountMenuRoot.classList.contains("is-expanded"));
+        accountMenuRoot.classList.toggle("is-open", open);
+        accountMenuToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        accountMenu.hidden = !open;
+    };
+
+    const collapseAccountMenu = () => {
+        setAccountMenuOpen(false);
+        setAccountMenuExpanded(false);
+    };
+
+    const closeHeaderMenus = () => {
+        setTopbarNotificationsOpen(false);
+        setTopbarSettingsOpen(false);
+        collapseAccountMenu();
+    };
+
+    const setSettingsSelectorOpen = (open) => {
+        if (!(settingsSelectorRoot instanceof HTMLElement) || !(settingsSelectorToggle instanceof HTMLElement) || !(settingsSelectorMenu instanceof HTMLElement)) {
+            return;
+        }
+        settingsSelectorRoot.classList.toggle("is-open", open);
+        settingsSelectorToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        settingsSelectorMenu.hidden = !open;
+    };
+
+    const activateSettingsSection = (sectionId) => {
+        if (!settingsSections.length) {
+            return;
+        }
+
+        settingsSections.forEach((section) => {
+            const isActive = section.id === sectionId;
+            section.hidden = !isActive;
+            section.classList.toggle("is-active", isActive);
+        });
     };
 
     if (sidebarToggle && sidebarOverlay) {
@@ -274,6 +376,108 @@ document.addEventListener("DOMContentLoaded", () => {
                     title: "Maintenance Division",
                     variant: "info",
                 });
+            }
+        });
+    }
+
+    if (topbarNotificationsRoot && topbarNotificationsToggle && topbarNotificationsMenu) {
+        setTopbarNotificationsOpen(false);
+
+        topbarNotificationsToggle.addEventListener("click", (event) => {
+            event.preventDefault();
+            const willOpen = topbarNotificationsToggle.getAttribute("aria-expanded") !== "true";
+            setTopbarSettingsOpen(false);
+            collapseAccountMenu();
+            setTopbarNotificationsOpen(willOpen);
+        });
+
+        if (topbarNotificationItems.length) {
+            topbarNotificationItems.forEach((item) => {
+                item.addEventListener("click", () => {
+                    setTopbarNotificationsOpen(false);
+                });
+            });
+        }
+    }
+
+    if (topbarSettingsRoot && topbarSettingsToggle && topbarSettingsMenu) {
+        setTopbarSettingsOpen(false);
+
+        topbarSettingsToggle.addEventListener("click", (event) => {
+            event.preventDefault();
+            const willOpen = topbarSettingsToggle.getAttribute("aria-expanded") !== "true";
+            setTopbarNotificationsOpen(false);
+            collapseAccountMenu();
+            setTopbarSettingsOpen(willOpen);
+        });
+
+        if (topbarSettingsItems.length) {
+            topbarSettingsItems.forEach((item) => {
+                item.addEventListener("click", () => {
+                    setTopbarSettingsOpen(false);
+                });
+            });
+        }
+    }
+
+    if (settingsSections.length) {
+        const initialHash = window.location.hash ? window.location.hash.slice(1) : "";
+        const initialSection = initialHash && document.getElementById(initialHash)
+            ? initialHash
+            : settingsSections[0].id;
+
+        activateSettingsSection(initialSection);
+
+        window.addEventListener("hashchange", () => {
+            const nextHash = window.location.hash ? window.location.hash.slice(1) : "";
+            if (nextHash && document.getElementById(nextHash)) {
+                activateSettingsSection(nextHash);
+            } else if (settingsSections[0]) {
+                activateSettingsSection(settingsSections[0].id);
+            }
+        });
+    }
+
+    if (accountMenuRoot && accountMenuToggle && accountMenu) {
+        setAccountMenuExpanded(false);
+        setAccountMenuOpen(false);
+
+        accountMenuToggle.addEventListener("click", (event) => {
+            event.preventDefault();
+            setTopbarNotificationsOpen(false);
+            setTopbarSettingsOpen(false);
+            const isExpanded = accountMenuRoot.classList.contains("is-expanded");
+            const isOpen = accountMenuToggle.getAttribute("aria-expanded") === "true";
+
+            if (!isExpanded) {
+                setAccountMenuExpanded(true);
+                setAccountMenuOpen(false);
+                return;
+            }
+
+            if (!isOpen) {
+                setAccountMenuOpen(true);
+                return;
+            }
+
+            collapseAccountMenu();
+        });
+    }
+
+    if (topbarNotificationsRoot || topbarSettingsRoot || accountMenuRoot) {
+        document.addEventListener("click", (event) => {
+            const clickedInsideNotifications = topbarNotificationsRoot instanceof HTMLElement && topbarNotificationsRoot.contains(event.target);
+            const clickedInsideSettings = topbarSettingsRoot instanceof HTMLElement && topbarSettingsRoot.contains(event.target);
+            const clickedInsideAccount = accountMenuRoot instanceof HTMLElement && accountMenuRoot.contains(event.target);
+
+            if (!clickedInsideNotifications && !clickedInsideSettings && !clickedInsideAccount) {
+                closeHeaderMenus();
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                closeHeaderMenus();
             }
         });
     }
@@ -10853,4 +11057,3 @@ document.addEventListener("DOMContentLoaded", () => {
     enableQualityCardFloat();
     renderTable();
 });
-

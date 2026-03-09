@@ -1,52 +1,98 @@
+{% extends "base.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PEO Portal Login</title>
-    <link rel="stylesheet" href="{% static 'styles.css' %}">
-</head>
-<body class="login-body">
-    <main class="login-page">
-        <section class="login-card">
-            <aside class="hero-panel">
-                <div class="hero-overlay"></div>
-                <div class="hero-content">
-                    <h1>PEO Workflow Portal</h1>
-                    <p>Manage division operations, documents, construction status, and accountability workflows in one system.</p>
-                </div>
-            </aside>
 
-            <section class="form-panel">
-                <span class="tag">PEO Secure Access</span>
-                <h2>Login to Your Account</h2>
-                <p class="subtitle">Use your assigned credentials to continue.</p>
+{% block title %}Login Portal{% endblock %}
 
-                {% if form.errors %}
-                    <div class="error-box">Invalid username or password.</div>
-                {% endif %}
+{% block extra_head %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+{% endblock %}
 
-                <form method="post" novalidate>
-                    {% csrf_token %}
-                    <label for="id_username">Username</label>
-                    <input type="text" name="username" id="id_username" required autofocus>
+{% block body_class %}login-body portal-login-body{% endblock %}
 
-                    <label for="id_password">Password</label>
-                    <input type="password" name="password" id="id_password" required>
+{% block content %}
+    <div class="background" aria-hidden="true"></div>
 
-                    {% if next %}
-                        <input type="hidden" name="next" value="{{ next }}">
-                    {% endif %}
+    <div class="login-container">
+        <div class="logo-area">
+            <img src="{% static 'img/peo logo.png' %}" alt="PEO logo" class="logo">
+            <div class="divider" aria-hidden="true"></div>
+            <img src="{% static 'img/prov logo.png' %}" alt="Palawan provincial seal" class="logo logo-secondary">
+        </div>
 
-                    <button type="submit">Login</button>
-                </form>
+        <h2>Login to Your Account</h2>
+        <p class="subtitle">
+            Use your assigned credentials to continue to the PEO Workflow Portal.
+        </p>
 
-                <p class="create-account-link">No account yet? <a href="{% url 'signup' %}">Create an account</a></p>
-                <p class="admin-link">Are you an admin? <a href="{% url 'admin:index' %}">Go to Admin Panel</a></p>
-            </section>
-        </section>
-    </main>
-    <script src="{% static 'script.js' %}"></script>
-</body>
-</html>
+        {% if form.non_field_errors or form.errors %}
+            <div class="portal-login-error">Invalid username or password.</div>
+        {% endif %}
+
+        <form method="post" action="{% url 'login' %}" novalidate>
+            {% csrf_token %}
+
+            <label for="id_username">Username</label>
+            <div class="input-box">
+                <i class="fa-solid fa-user" aria-hidden="true"></i>
+                <input
+                    type="text"
+                    name="username"
+                    id="id_username"
+                    placeholder="Enter your username"
+                    value="{{ form.username.value|default_if_none:'' }}"
+                    autocomplete="username"
+                    required
+                    autofocus
+                >
+            </div>
+            {% if form.username.errors %}
+                <div class="portal-login-field-error">{{ form.username.errors|striptags }}</div>
+            {% endif %}
+
+            <label for="id_password">Password</label>
+            <div class="input-box">
+                <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                <input
+                    type="password"
+                    name="password"
+                    id="id_password"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                    required
+                >
+                <i
+                    class="fa-regular fa-eye toggle"
+                    data-password-toggle
+                    aria-hidden="true"
+                    title="Show password"
+                ></i>
+            </div>
+            {% if form.password.errors %}
+                <div class="portal-login-field-error">{{ form.password.errors|striptags }}</div>
+            {% endif %}
+
+            {% if next %}
+                <input type="hidden" name="next" value="{{ next }}">
+            {% endif %}
+
+            <button type="submit" class="login-btn">
+                Login <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+        </form>
+
+        <div class="login-links">
+            <a href="{% url 'password_reset' %}" class="forgot">Forgot Password?</a>
+            <a href="{% url 'admin:index' %}" class="admin-link">Admin Panel</a>
+        </div>
+
+        <p class="notice">
+            Authorized Access Only. For technical support, please contact the IT Help Desk.
+        </p>
+    </div>
+
+    <div class="footer">
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
+        <a href="#">Accessibility</a>
+    </div>
+{% endblock %}

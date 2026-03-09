@@ -1,4 +1,5 @@
 {% load static %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,7 +19,7 @@
         <aside class="portal-sidebar" id="portal-sidebar">
             <div class="portal-brand">
                 <div class="brand-icon">
-                    <span class="material-symbols-outlined">business_center</span>
+                    <img src="{% static 'img/peo logo.png' %}" alt="PEO Portal logo">
                 </div>
                 <div class="brand-text">
                     <h1>PEO Portal</h1>
@@ -155,13 +156,6 @@
                 </a>
             </nav>
 
-            <div class="portal-user">
-                <div class="user-avatar">AR</div>
-                <div class="user-meta">
-                    <p class="user-name">Alex Rivera</p>
-                    <p class="user-role">Senior Manager</p>
-                </div>
-            </div>
         </aside>
 
         <main class="portal-main">
@@ -178,24 +172,100 @@
                         <span class="material-symbols-outlined">search</span>
                         <input id="dashboard-search" type="text" placeholder="Search tasks, divisions...">
                     </label>
-                    <button
-                        type="button"
-                        class="icon-btn has-dot"
-                        aria-label="Notifications"
-                        data-peo-toast-message="Notification center will show new workflow updates here."
-                        data-peo-toast-variant="info"
-                    >
-                        <span class="material-symbols-outlined">notifications</span>
-                    </button>
-                    <button
-                        type="button"
-                        class="icon-btn"
-                        aria-label="Settings"
-                        data-peo-toast-message="System settings panel is reserved here for the portal."
-                        data-peo-toast-variant="info"
-                    >
-                        <span class="material-symbols-outlined">settings</span>
-                    </button>
+                    <div class="topbar-prov-logo" aria-label="Province logo">
+                        <img src="{% static 'img/prov logo.png' %}" alt="Province of Batangas logo">
+                    </div>
+                    <div class="topbar-notifications-menu">
+                        <button
+                            type="button"
+                            class="icon-btn {% if dashboard_has_notifications %}has-dot{% endif %}"
+                            aria-label="Notifications"
+                            aria-haspopup="menu"
+                            aria-expanded="false"
+                            data-topbar-notifications-toggle
+                        >
+                            <span class="material-symbols-outlined">notifications</span>
+                        </button>
+                        <div class="topbar-notifications-dropdown" hidden data-topbar-notifications-menu>
+                            <div class="topbar-notifications-head">
+                                <div>
+                                    <p>Workflow Updates</p>
+                                    <span>{{ dashboard_notification_count }} active item{{ dashboard_notification_count|pluralize }}</span>
+                                </div>
+                                <a href="{% url 'account_settings' %}#account-settings-history">Activity History</a>
+                            </div>
+                            <div class="topbar-notifications-list">
+                                {% for item in dashboard_notifications %}
+                                    <a href="{{ item.href }}" class="topbar-notification-item">
+                                        <span class="material-symbols-outlined topbar-notification-icon">{{ item.icon }}</span>
+                                        <span class="topbar-notification-copy">
+                                            <strong>{{ item.title }}</strong>
+                                            <span>{{ item.message }}</span>
+                                            <small>{{ item.meta }}</small>
+                                        </span>
+                                    </a>
+                                {% empty %}
+                                    <div class="topbar-notifications-empty">
+                                        No workflow updates are available right now.
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="topbar-settings-menu">
+                        <button
+                            type="button"
+                            class="icon-btn"
+                            aria-label="Settings"
+                            aria-haspopup="menu"
+                            aria-expanded="false"
+                            data-topbar-settings-toggle
+                        >
+                            <span class="material-symbols-outlined">settings</span>
+                        </button>
+                        <div class="topbar-settings-dropdown" hidden data-topbar-settings-menu>
+                            <a href="{% url 'account_settings' %}#account-settings-profile" class="topbar-settings-item">My Profile</a>
+                            <a href="{% url 'account_settings' %}#account-settings-password" class="topbar-settings-item">Change Password</a>
+                            <a href="{% url 'account_settings' %}#account-settings-notifications" class="topbar-settings-item">Notifications</a>
+                            <a href="{% url 'account_settings' %}#account-settings-appearance" class="topbar-settings-item">Appearance</a>
+                            <a href="{% url 'account_settings' %}#account-settings-history" class="topbar-settings-item">Activity History</a>
+                            <a href="{% url 'account_settings' %}#account-settings-support" class="topbar-settings-item">Help &amp; Support</a>
+                        </div>
+                    </div>
+                    <div class="topbar-user-menu">
+                        <button
+                            type="button"
+                            class="topbar-user-trigger"
+                            aria-haspopup="menu"
+                            aria-expanded="false"
+                            data-account-menu-toggle
+                        >
+                            <div class="user-avatar">
+                                {% if dashboard_user_profile_picture_url %}
+                                    <img src="{{ dashboard_user_profile_picture_url }}" alt="{{ dashboard_user_name }}">
+                                {% else %}
+                                    {{ dashboard_user_initials }}
+                                {% endif %}
+                            </div>
+                            <div class="user-meta">
+                                <p class="user-name">{{ dashboard_user_name }}</p>
+                                <p class="user-role">{{ dashboard_user_role }}</p>
+                            </div>
+                            <span class="material-symbols-outlined topbar-user-caret" aria-hidden="true">expand_more</span>
+                        </button>
+                        <div class="topbar-user-dropdown" hidden data-account-menu>
+                            <p class="topbar-user-dropdown-label">Signed in as</p>
+                            <p class="topbar-user-dropdown-name">{{ dashboard_user_name }}</p>
+                            <p class="topbar-user-dropdown-role">{{ dashboard_user_role }}</p>
+                            <form method="post" action="{% url 'logout' %}" class="topbar-user-logout-form">
+                                {% csrf_token %}
+                                <button type="submit" class="topbar-user-logout">
+                                    <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                    <span>Logout</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -210,6 +280,8 @@
                     {% include construction_template|default:'construction/construction.html' %}
                 {% elif current_section == 'quality' %}
                     {% include 'Quality/quality_division_table.html' %}
+                {% elif current_section == 'settings' %}
+                    {% include 'account/settings_panel.html' %}
                 {% elif current_section == 'maintenance' %}
                     {% include maintenance_template %}
                 {% else %}

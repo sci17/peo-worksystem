@@ -1,3 +1,31 @@
+import os
+import uuid
+
+from django.conf import settings
 from django.db import models
 
-# Create your models here.
+
+def user_profile_picture_path(instance, filename):
+    extension = os.path.splitext(filename)[1].lower() or '.png'
+    return f'user_profiles/{instance.user_id}/{uuid.uuid4().hex}{extension}'
+
+
+class UserProfile(models.Model):
+    APPEARANCE_LIGHT = 'light'
+    APPEARANCE_SYSTEM = 'system'
+    APPEARANCE_DARK = 'dark'
+    APPEARANCE_CHOICES = [
+        (APPEARANCE_LIGHT, 'Light'),
+        (APPEARANCE_SYSTEM, 'System'),
+        (APPEARANCE_DARK, 'Dark'),
+    ]
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    profile_picture = models.ImageField(upload_to=user_profile_picture_path, blank=True)
+    email_notifications = models.BooleanField(default=True)
+    portal_notifications = models.BooleanField(default=True)
+    appearance_mode = models.CharField(max_length=10, choices=APPEARANCE_CHOICES, default=APPEARANCE_LIGHT)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.user.get_username()} profile'

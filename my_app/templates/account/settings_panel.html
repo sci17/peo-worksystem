@@ -1,0 +1,276 @@
+<section class="account-settings-shell">
+    <header class="account-settings-head">
+        <div>
+            <p class="account-settings-kicker">Portal Settings</p>
+            <h1>Settings</h1>
+            <p class="account-settings-subtitle">Manage your profile, password, notifications, appearance, activity, and support options from one portal panel.</p>
+        </div>
+    </header>
+
+    {% if saved_section == 'profile' %}
+        <div class="account-settings-alert account-settings-alert--success">
+            Your profile settings were updated successfully.
+        </div>
+    {% elif saved_section == 'password' %}
+        <div class="account-settings-alert account-settings-alert--success">
+            Your password was changed successfully.
+        </div>
+    {% endif %}
+
+    {% if form.non_field_errors %}
+        <div class="account-settings-alert account-settings-alert--error">
+            {{ form.non_field_errors|striptags }}
+        </div>
+    {% endif %}
+
+    {% if password_form.non_field_errors %}
+        <div class="account-settings-alert account-settings-alert--error">
+            {{ password_form.non_field_errors|striptags }}
+        </div>
+    {% endif %}
+
+    <div class="account-settings-layout">
+        <aside class="account-settings-profile-card">
+            <div class="account-settings-avatar">
+                {% if dashboard_user_profile_picture_url %}
+                    <img src="{{ dashboard_user_profile_picture_url }}" alt="{{ dashboard_user_name }}">
+                {% else %}
+                    <span>{{ dashboard_user_initials }}</span>
+                {% endif %}
+            </div>
+            <h2>{{ dashboard_user_name }}</h2>
+            <p>{{ dashboard_user_role }}</p>
+            <div class="account-settings-security" id="account-settings-security">
+                <h3>Security</h3>
+                <p>Authenticated access only.</p>
+                <p>CSRF-protected profile updates.</p>
+                <p>Images only, maximum 2 MB.</p>
+            </div>
+        </aside>
+
+        <div class="account-settings-sections">
+            <section class="account-settings-card account-settings-section is-active" id="account-settings-profile" data-settings-section>
+                <div class="account-settings-section-head">
+                    <div>
+                        <h2>My Profile</h2>
+                        <p>Update your profile details and picture used across the portal.</p>
+                    </div>
+                </div>
+
+                <form method="post" enctype="multipart/form-data" class="account-settings-form" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="settings_form" value="profile">
+
+                    <div class="account-settings-grid">
+                        <div class="account-settings-field">
+                            <label for="id_first_name">First Name</label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                                <div class="account-settings-error">{{ form.first_name.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="account-settings-field">
+                            <label for="id_last_name">Last Name</label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                                <div class="account-settings-error">{{ form.last_name.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="account-settings-field">
+                        <label for="id_email">Email Address</label>
+                        {{ form.email }}
+                        {% if form.email.errors %}
+                            <div class="account-settings-error">{{ form.email.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="account-settings-field">
+                        <label for="id_profile_picture">Profile Picture</label>
+                        {{ form.profile_picture }}
+                        <p class="account-settings-help">Accepted formats: JPG, PNG, WEBP. Maximum size: 2 MB.</p>
+                        {% if form.profile_picture.errors %}
+                            <div class="account-settings-error">{{ form.profile_picture.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+
+                    <label class="account-settings-checkbox">
+                        {{ form.remove_profile_picture }}
+                        <span>Remove current profile picture</span>
+                    </label>
+
+                    <div class="account-settings-actions">
+                        <button type="submit" class="account-settings-save">Save Profile</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="account-settings-card account-settings-section" id="account-settings-password" data-settings-section hidden>
+                <div class="account-settings-section-head">
+                    <div>
+                        <h2>Change Password</h2>
+                        <p>Set a stronger password without leaving the portal.</p>
+                    </div>
+                </div>
+
+                <form method="post" class="account-settings-form" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="settings_form" value="password">
+
+                    <div class="account-settings-field">
+                        <label for="{{ password_form.old_password.id_for_label }}">Current Password</label>
+                        {{ password_form.old_password }}
+                        {% if password_form.old_password.errors %}
+                            <div class="account-settings-error">{{ password_form.old_password.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="account-settings-grid">
+                        <div class="account-settings-field">
+                            <label for="{{ password_form.new_password1.id_for_label }}">New Password</label>
+                            {{ password_form.new_password1 }}
+                            {% if password_form.new_password1.errors %}
+                                <div class="account-settings-error">{{ password_form.new_password1.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="account-settings-field">
+                            <label for="{{ password_form.new_password2.id_for_label }}">Confirm Password</label>
+                            {{ password_form.new_password2 }}
+                            {% if password_form.new_password2.errors %}
+                                <div class="account-settings-error">{{ password_form.new_password2.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if password_form.new_password1.help_text %}
+                        <div class="account-settings-help account-settings-help-block">{{ password_form.new_password1.help_text|safe }}</div>
+                    {% endif %}
+
+                    <div class="account-settings-actions">
+                        <button type="submit" class="account-settings-save">Update Password</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="account-settings-card account-settings-section" id="account-settings-notifications" data-settings-section hidden>
+                <div class="account-settings-section-head">
+                    <div>
+                        <h2>Notifications</h2>
+                        <p>Choose how the portal should notify you about updates.</p>
+                    </div>
+                </div>
+
+                <form method="post" enctype="multipart/form-data" class="account-settings-form" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="settings_form" value="profile">
+                    {{ form.first_name.as_hidden }}
+                    {{ form.last_name.as_hidden }}
+                    {{ form.email.as_hidden }}
+                    {{ form.appearance_mode.as_hidden }}
+                    {{ form.remove_profile_picture.as_hidden }}
+
+                    <div class="account-settings-stack">
+                        <label class="account-settings-toggle">
+                            {{ form.email_notifications }}
+                            <span>
+                                <strong>Email Notifications</strong>
+                                <small>Receive account and workflow updates in your email.</small>
+                            </span>
+                        </label>
+                        <label class="account-settings-toggle">
+                            {{ form.portal_notifications }}
+                            <span>
+                                <strong>Portal Notifications</strong>
+                                <small>Show alerts and updates inside the portal header.</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="account-settings-actions">
+                        <button type="submit" class="account-settings-save">Save Notifications</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="account-settings-card account-settings-section" id="account-settings-appearance" data-settings-section hidden>
+                <div class="account-settings-section-head">
+                    <div>
+                        <h2>Appearance</h2>
+                        <p>Select how the settings profile should be stored for your account.</p>
+                    </div>
+                </div>
+
+                <form method="post" enctype="multipart/form-data" class="account-settings-form" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="settings_form" value="profile">
+                    {{ form.first_name.as_hidden }}
+                    {{ form.last_name.as_hidden }}
+                    {{ form.email.as_hidden }}
+                    {{ form.email_notifications.as_hidden }}
+                    {{ form.portal_notifications.as_hidden }}
+                    {{ form.remove_profile_picture.as_hidden }}
+
+                    <div class="account-settings-field">
+                        <label for="id_appearance_mode">Appearance Mode</label>
+                        {{ form.appearance_mode }}
+                    </div>
+
+                    <div class="account-settings-actions">
+                        <button type="submit" class="account-settings-save">Save Appearance</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="account-settings-card account-settings-section" id="account-settings-history" data-settings-section hidden>
+                <div class="account-settings-section-head">
+                    <div>
+                        <h2>Activity History</h2>
+                        <p>Review recent security and account events related to your portal access.</p>
+                    </div>
+                </div>
+
+                <div class="account-settings-history-list">
+                    <article class="account-settings-history-item">
+                        <strong>Last Login</strong>
+                        <span>{{ request.user.last_login|date:"F j, Y g:i A"|default:"No login history available." }}</span>
+                    </article>
+                    <article class="account-settings-history-item">
+                        <strong>Account Created</strong>
+                        <span>{{ request.user.date_joined|date:"F j, Y g:i A" }}</span>
+                    </article>
+                    <article class="account-settings-history-item">
+                        <strong>Profile Updated</strong>
+                        <span>{{ request.user.profile.updated_at|date:"F j, Y g:i A" }}</span>
+                    </article>
+                </div>
+            </section>
+
+            <section class="account-settings-card account-settings-section" id="account-settings-support" data-settings-section hidden>
+                <div class="account-settings-section-head">
+                    <div>
+                        <h2>Help &amp; Support</h2>
+                        <p>Need help with your account or system access? Reach the support channels below.</p>
+                    </div>
+                </div>
+
+                <div class="account-settings-support-grid">
+                    <article class="account-settings-support-card">
+                        <strong>IT Help Desk</strong>
+                        <span>Local extension: 214</span>
+                    </article>
+                    <article class="account-settings-support-card">
+                        <strong>Email Support</strong>
+                        <span>support@peo-portal.local</span>
+                    </article>
+                    <article class="account-settings-support-card">
+                        <strong>Security Reminder</strong>
+                        <span>Do not share credentials or upload sensitive files outside approved workflows.</span>
+                    </article>
+                </div>
+            </section>
+        </div>
+    </div>
+</section>
