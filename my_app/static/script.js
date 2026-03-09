@@ -8375,6 +8375,24 @@ document.addEventListener("DOMContentLoaded", () => {
         return Number.isFinite(numeric) ? numeric : 0;
     };
 
+    const toPlanningDocInputDate = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+            return text;
+        }
+
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) {
+            return "";
+        }
+
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, "0");
+        const day = String(parsed.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
     const readAdminDivisionRecords = () => {
         try {
             const raw = window.localStorage.getItem(ADMIN_DIVISION_STORAGE_KEY);
@@ -8424,16 +8442,40 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const getPlanningBudgetAllocationOptions = () => {
-        const options = [...PLANNING_BUDGET_ALLOCATION_OPTIONS];
-        if (Array.isArray(planningBudgetRecords)) {
-            planningBudgetRecords.forEach((record) => {
-                const budgetName = String(record?.budgetName || "").trim();
-                if (budgetName && !options.includes(budgetName)) {
-                    options.push(budgetName);
-                }
-            });
+    const getPlanningBudgetRecordNames = () => {
+        if (!Array.isArray(planningBudgetRecords)) {
+            return [];
         }
+
+        return planningBudgetRecords
+            .slice()
+            .sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0))
+            .map((record) => String(record?.budgetName || "").trim())
+            .filter(Boolean);
+    };
+
+    const getPlanningBudgetRecordMatches = (value) => {
+        const normalizedKey = normalizeBudgetAllocationKey(value);
+        if (!normalizedKey || !Array.isArray(planningBudgetRecords)) {
+            return [];
+        }
+
+        return planningBudgetRecords
+            .filter((record) => normalizeBudgetAllocationKey(record?.budgetName) === normalizedKey)
+            .sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0));
+    };
+
+    const getPlanningBudgetAllocationOptions = () => {
+        const options = [...getPlanningBudgetRecordNames()];
+        PLANNING_BUDGET_ALLOCATION_OPTIONS.forEach((option) => {
+            const hasMappedBudgetRecord = option !== "Others" && getPlanningBudgetRecordMatches(option).length > 0;
+            if (hasMappedBudgetRecord) {
+                return;
+            }
+            if (!options.includes(option)) {
+                options.push(option);
+            }
+        });
         return options;
     };
 
@@ -8446,6 +8488,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         if (match) return match;
 
+        const budgetRecordMatches = getPlanningBudgetRecordMatches(value);
+        if (budgetRecordMatches.length === 1) {
+            return String(budgetRecordMatches[0]?.budgetName || "").trim();
+        }
+
         const normalizedKey = normalizeBudgetAllocationKey(value);
         if (!normalizedKey) return null;
 
@@ -8456,15 +8503,32 @@ document.addEventListener("DOMContentLoaded", () => {
         if (normalizedKey === "supplemental budget") return "Supplemental Budget";
         if (normalizedKey === "sef") return "SEF";
         if (normalizedKey === "others") return "Others";
-        const dynamicMatch = options.find((option) => {
-            return normalizeBudgetAllocationKey(option) === normalizedKey;
-        });
-        if (dynamicMatch) return dynamicMatch;
         return null;
     };
 
+    const resolvePlanningBudgetAllocationValue = (value) => {
+        const rawValue = String(value || "").trim();
+        if (!rawValue) {
+            return "";
+        }
+
+        const exactBudgetName = getPlanningBudgetRecordNames().find((budgetName) => {
+            return budgetName.toLowerCase() === rawValue.toLowerCase();
+        });
+        if (exactBudgetName) {
+            return exactBudgetName;
+        }
+
+        const normalizedValue = normalizeBudgetAllocationValue(rawValue);
+        if (normalizedValue) {
+            return normalizedValue;
+        }
+
+        return rawValue;
+    };
+
     const getPlanningDocBudgetAllocationDisplay = (record) => {
-        const allocation = normalizeBudgetAllocationValue(record?.budget_allocation);
+        const allocation = resolvePlanningBudgetAllocationValue(record?.budget_allocation);
         if (!allocation) {
             const fallback = String(record?.budget_allocation || "").trim();
             return fallback || "-";
@@ -8495,14 +8559,26 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const getPlanningDocumentsForBudget = (budgetName) => {
-        const normalizedBudget = normalizeBudgetAllocationKey(budgetName);
-        if (!normalizedBudget) return [];
+        const normalizedBudgetName = String(budgetName || "").trim().toLowerCase();
+        if (!normalizedBudgetName) return [];
         return planningDocumentRecords.filter((record) => {
-            const allocationValue = normalizeBudgetAllocationValue(record?.budget_allocation)
+            const allocationValue = resolvePlanningBudgetAllocationValue(record?.budget_allocation)
                 || String(record?.budget_allocation || "").trim();
-            const allocationKey = normalizeBudgetAllocationKey(allocationValue);
-            return allocationKey && allocationKey === normalizedBudget;
+            return String(allocationValue || "").trim().toLowerCase() === normalizedBudgetName;
         });
+    };
+
+    const getPlanningBudgetRecordIdByAllocation = (allocationValue) => {
+        const resolvedAllocation = resolvePlanningBudgetAllocationValue(allocationValue);
+        if (!resolvedAllocation) {
+            return "";
+        }
+
+        const matchedRecord = planningBudgetRecords.find((record) => {
+            return String(record?.budgetName || "").trim().toLowerCase() === String(resolvedAllocation).trim().toLowerCase();
+        });
+
+        return String(matchedRecord?.id || "").trim();
     };
 
     const getUsedAllocationTotalForBudget = (budgetName) => {
@@ -8542,7 +8618,7 @@ document.addEventListener("DOMContentLoaded", () => {
             received_from: "Admin Division",
             date_received: dateReceived,
             status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
-            budget_allocation: mappedBudgetAllocation || "",
+            budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
             budget_allocation_other: mappedBudgetAllocation === "Others" ? mappedBudgetOther : "",
             remarks: String(adminRecord?.description || "").trim(),
             created_at: Date.now(),
@@ -8581,10 +8657,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 return acc;
             }
 
-            // Keep Planning-side fields while syncing core document fields from Admin.
+            // Preserve Planning-side edits for fields managed in the Planning document register.
             acc.push({
-                ...record,
                 ...mapped,
+                ...record,
+                slip_no: String(record?.slip_no || mapped.slip_no || "").trim(),
+                document_name: String(record?.document_name || mapped.document_name || "").trim(),
+                location: String(record?.location || mapped.location || "").trim(),
+                contractor: String(record?.contractor || mapped.contractor || "").trim(),
+                amount: String(record?.amount || mapped.amount || "").trim(),
+                received_from: String(record?.received_from || mapped.received_from || "").trim(),
+                date_received: String(record?.date_received || mapped.date_received || "").trim(),
                 status: normalizePlanningDocStatus(record.status || mapped.status || "For Review"),
                 budget_allocation: record.budget_allocation || mapped.budget_allocation || "",
                 budget_allocation_other: record.budget_allocation_other || mapped.budget_allocation_other || "",
@@ -9597,10 +9680,10 @@ document.addEventListener("DOMContentLoaded", () => {
         setValue("contractor", record.contractor || "");
         setValue("amount", record.amount || "");
         setValue("received_from", record.received_from || "");
-        setValue("date_received", record.date_received || "");
+        setValue("date_received", toPlanningDocInputDate(record.date_received || ""));
         setValue("status", normalizePlanningDocStatus(record.status));
 
-        const normalizedBudget = normalizeBudgetAllocationValue(record.budget_allocation)
+        const normalizedBudget = resolvePlanningBudgetAllocationValue(record.budget_allocation)
             || String(record.budget_allocation || "").trim();
         refreshPlanningDocBudgetAllocationSelect(normalizedBudget);
         setValue("budget_allocation", normalizedBudget);
@@ -9890,7 +9973,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const formData = new FormData(planningDocEditForm);
-            const budgetAllocation = normalizeBudgetAllocationValue(formData.get("budget_allocation"));
+            const budgetAllocation = resolvePlanningBudgetAllocationValue(formData.get("budget_allocation"));
             if (budgetAllocation === null || budgetAllocation === "") {
                 showPeoGeneralToast("Please select a valid budget allocation.", {
                     title: "Planning Division",
@@ -9921,7 +10004,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 contractor: String(formData.get("contractor") || "").trim(),
                 amount: String(formData.get("amount") || "").trim(),
                 received_from: String(formData.get("received_from") || "").trim(),
-                date_received: String(formData.get("date_received") || "").trim(),
+                date_received: toPlanningDocInputDate(formData.get("date_received")) || String(formData.get("date_received") || "").trim(),
                 status: resolvedStatus,
                 budget_allocation: budgetAllocation,
                 budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
@@ -9940,6 +10023,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (adminRecordIndex >= 0) {
                     adminRecords[adminRecordIndex] = {
                         ...adminRecords[adminRecordIndex],
+                        slip_no: updatedRecord.slip_no,
+                        document_name: updatedRecord.document_name,
+                        location: updatedRecord.location,
+                        contractor: updatedRecord.contractor,
+                        revised_contract_amount: updatedRecord.amount,
+                        contract_amount: updatedRecord.amount,
+                        received_from: updatedRecord.received_from,
+                        date_received_peo: updatedRecord.date_received,
+                        date_received_admin: updatedRecord.date_received,
+                        fund_source: updatedRecord.budget_allocation,
+                        budget_name: updatedRecord.budget_allocation,
+                        budget_allocation: updatedRecord.budget_allocation,
+                        budget_allocation_other: updatedRecord.budget_allocation_other,
+                        description: updatedRecord.remarks,
                         doc_status: updatedRecord.status,
                         status: updatedRecord.status,
                     };
@@ -9947,9 +10044,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
 
+            planningDocumentRecords = syncAdminToPlanningDocuments(planningDocumentRecords);
             renderPlanningDocumentsTable(planningDocumentRecords);
             renderPlanningBudgets(planningBudgetRecords);
-            const returnToDetailRecordId = pendingPlanningBudgetDetailRecordId;
+            const selectedBudgetDetailRecordId = getPlanningBudgetRecordIdByAllocation(updatedRecord.budget_allocation);
+            const returnToDetailRecordId = selectedBudgetDetailRecordId || pendingPlanningBudgetDetailRecordId;
             closePlanningDocModal();
             if (returnToDetailRecordId) {
                 openPlanningBudgetDetail(returnToDetailRecordId);
