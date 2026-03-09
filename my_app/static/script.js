@@ -7295,10 +7295,6 @@ document.addEventListener("DOMContentLoaded", () => {
             routedFromAdmin.map((record) => [record.__admin_source_id, record])
         );
 
-        const nonRouted = currentRecords.filter((record) => {
-            return String(record?.__admin_source || "") !== "admin_document";
-        });
-
         const existingRoutedBySource = new Map();
         currentRecords.forEach((record) => {
             if (String(record?.__admin_source || "") !== "admin_document") return;
@@ -7311,12 +7307,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const existing = existingRoutedBySource.get(incoming.__admin_source_id);
             if (!existing) return incoming;
             return {
-                ...existing,
                 ...incoming,
+                status: String(existing.status || incoming.status || "For Review").trim() || "For Review",
+                route: String(existing.route || incoming.route || "Incoming").trim() || "Incoming",
+                received_by: String(existing.received_by || incoming.received_by || "Quality Division").trim() || "Quality Division",
+                date_recv: String(existing.date_recv || incoming.date_recv || "").trim(),
+                remarks: String(existing.remarks || incoming.remarks || "").trim(),
             };
         });
 
-        const nextRecords = [...mergedRouted, ...nonRouted];
+        const nextRecords = mergedRouted;
         const beforeSignature = JSON.stringify(currentRecords);
         const afterSignature = JSON.stringify(nextRecords);
         if (beforeSignature !== afterSignature) {
@@ -10336,9 +10336,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const projectForm = projectBoard.querySelector("[data-project-form]");
         const projectTableBody = projectBoard.querySelector("[data-project-table-body]");
         const projectResultsSummary = projectBoard.querySelector("[data-project-results-summary]");
+        const projectSearchInput = projectBoard.querySelector("[data-project-search]");
+        const projectSearchButton = projectBoard.querySelector(".project-search-submit");
         const projectPanelTitle = projectBoard.querySelector(".js-project-panel-title");
         const projectPanelSubtitle = projectBoard.querySelector(".js-project-panel-subtitle");
         const divisionFilter = projectBoard.querySelector('[data-project-filter="division"]');
+        const statusFilter = projectBoard.querySelector('[data-project-filter="status"]');
+        const sortFilter = projectBoard.querySelector('[data-project-filter="sort"]');
         const projectFilterSelects = projectBoard.querySelectorAll(".project-filter select[data-project-filter]");
         const projectTotalSummary = projectBoard.querySelector('[data-project-summary="total"]');
         const projectBudgetSummary = projectBoard.querySelector('[data-project-summary="budget"]');
@@ -10355,6 +10359,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const closeProjectButtons = projectBoard.querySelectorAll(".js-project-close-modal");
         const closeDeleteButtons = projectBoard.querySelectorAll(".js-project-close-delete-modal");
         const projectFilterDropdownSyncers = [];
+        const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
+        const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
+        const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+        const QUALITY_STORAGE_KEY = "peo_quality_records_v1";
+        const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
 
         const formatProjectCurrency = (amount) => {
             const numericAmount = Number.isFinite(amount) ? amount : 0;
@@ -10370,6 +10379,70 @@ document.addEventListener("DOMContentLoaded", () => {
             const normalizedValue = String(value || "").replace(/[^0-9.-]/g, "");
             const parsedValue = Number.parseFloat(normalizedValue);
             return Number.isFinite(parsedValue) ? parsedValue : 0;
+        };
+
+        const readJsonArray = (storageKey) => {
+            try {
+                const raw = window.localStorage.getItem(storageKey);
+                const parsed = raw ? JSON.parse(raw) : [];
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (error) {
+                return [];
+            }
+        };
+
+        const readJsonObject = (storageKey) => {
+            try {
+                const raw = window.localStorage.getItem(storageKey);
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === "object" ? parsed : {};
+            } catch (error) {
+                return {};
+            }
+        };
+
+        const normalizeText = (value) => String(value || "").trim().toLowerCase();
+
+        const normalizeDivisionName = (value) => {
+            const raw = normalizeText(value);
+            if (!raw) return "Admin Division";
+            if (raw.includes("planning")) return "Planning Division";
+            if (raw.includes("construction")) return "Construction Division";
+            if (raw.includes("quality")) return "Quality Division";
+            if (raw.includes("maintenance")) return "Maintenance Division";
+            if (raw.includes("admin")) return "Admin Division";
+            return "Admin Division";
+        };
+
+        const mapAdminStatusToProjectStatus = (value) => {
+            const raw = normalizeText(value);
+            if (raw.includes("approved") || raw.includes("closed")) return "Approved";
+            if (raw.includes("processing") || raw.includes("open")) return "Ongoing";
+            if (raw.includes("hold")) return "On Hold";
+            return "In Planning";
+        };
+
+        const mapPlanningStatusToProjectStatus = (value) => {
+            const raw = normalizeText(value);
+            if (raw.includes("approved")) return "Approved";
+            if (raw.includes("rejected") || raw.includes("cancelled")) return "On Hold";
+            return "In Planning";
+        };
+
+        const mapQualityStatusToProjectStatus = (value) => {
+            const raw = normalizeText(value);
+            if (raw === "completed") return "Completed";
+            if (raw === "for release") return "Approved";
+            if (raw === "in progress") return "Ongoing";
+            return "In Planning";
+        };
+
+        const mapTaskStatusToProjectStatus = (value) => {
+            const raw = normalizeText(value);
+            if (raw === "completed") return "Completed";
+            if (raw === "in progress") return "Ongoing";
+            if (raw === "cancelled" || raw === "on hold") return "On Hold";
+            return "In Planning";
         };
 
         const escapeProjectHtml = (value) =>
@@ -10541,10 +10614,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 divisionFilter.value = effectiveDivision;
             }
             projectFilterDropdownSyncers.forEach((syncDropdown) => syncDropdown());
+            refreshProjectBoard();
         };
 
-        const syncProjectRegistrySummary = () => {
-            const rows = getProjectRows();
+        const syncProjectRegistrySummary = (records) => {
+            const projectRecordsList = Array.isArray(records) ? records : [];
             const divisionCounts = {
                 "Admin Division": 0,
                 "Planning Division": 0,
@@ -10559,10 +10633,10 @@ document.addEventListener("DOMContentLoaded", () => {
             let completedCount = 0;
             let onHoldCount = 0;
 
-            rows.forEach((row) => {
-                const divisionValue = String(row.cells[1]?.textContent || "").trim();
-                const amountValue = parseProjectAmount(row.cells[3]?.textContent || "");
-                const statusValue = String(row.cells[4]?.textContent || "").trim().toLowerCase();
+            projectRecordsList.forEach((record) => {
+                const divisionValue = String(record.division || "").trim();
+                const amountValue = Number(record.allocatedAmount) || 0;
+                const statusValue = String(record.status || "").trim().toLowerCase();
 
                 if (divisionValue in divisionCounts) {
                     divisionCounts[divisionValue] += 1;
@@ -10586,7 +10660,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             if (projectTotalSummary instanceof HTMLElement) {
-                projectTotalSummary.textContent = String(rows.length);
+                projectTotalSummary.textContent = String(projectRecordsList.length);
             }
             if (projectBudgetSummary instanceof HTMLElement) {
                 projectBudgetSummary.textContent = formatProjectCurrency(totalBudget);
@@ -10610,8 +10684,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 projectOnHoldSummary.textContent = String(onHoldCount);
             }
             if (projectResultsSummary instanceof HTMLElement) {
-                projectResultsSummary.textContent = rows.length
-                    ? `${rows.length} project record${rows.length === 1 ? "" : "s"} in the registry.`
+                projectResultsSummary.textContent = projectRecordsList.length
+                    ? `${projectRecordsList.length} project record${projectRecordsList.length === 1 ? "" : "s"} in the registry.`
                     : "No project records available.";
             }
 
@@ -10620,6 +10694,186 @@ document.addEventListener("DOMContentLoaded", () => {
                 const count = divisionCounts[divisionName] || 0;
                 card.textContent = `${count} active project${count === 1 ? "" : "s"}`;
             });
+        };
+
+        const buildProjectRecords = () => {
+            const adminRecords = readJsonArray(ADMIN_DIVISION_STORAGE_KEY);
+            const planningDocs = readJsonArray(PLANNING_DOCUMENT_STORAGE_KEY);
+            const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+            const qualityRecords = readJsonArray(QUALITY_STORAGE_KEY);
+            const maintenanceState = readJsonObject(MAINTENANCE_STORAGE_KEY);
+            const maintenanceTasks = Array.isArray(maintenanceState.taskRows) ? maintenanceState.taskRows : [];
+            const maintenanceRoads = Array.isArray(maintenanceState.roadRecords) ? maintenanceState.roadRecords : [];
+
+            const mappedAdmin = adminRecords
+                .filter((item) => {
+                    const recordId = String(item?.__record_id || "").trim();
+                    const documentName = String(item?.document_name || "").trim();
+                    const slipNo = String(item?.slip_no || "").trim();
+                    return Boolean(recordId || documentName || slipNo);
+                })
+                .map((item, index) => ({
+                    id: `admin_${String(item?.__record_id || item?.slip_no || item?.document_name || index).trim()}`,
+                    projectName: String(item?.document_name || item?.slip_no || `Admin Project ${index + 1}`).trim(),
+                    division: normalizeDivisionName(item?.division),
+                    fundSource: String(item?.doc_type || item?.billing_type || "Admin Record").trim() || "Admin Record",
+                    allocatedAmount: parseProjectAmount(item?.revised_contract_amount || item?.contract_amount || 0),
+                    status: mapAdminStatusToProjectStatus(item?.doc_status || item?.status),
+                    createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
+                }));
+
+            const mappedPlanning = planningDocs
+                .filter((item) => String(item?.id || "").trim())
+                .map((item, index) => ({
+                    id: `planning_${String(item.id).trim()}`,
+                    projectName: String(item?.document_name || item?.slip_no || `Planning Project ${index + 1}`).trim(),
+                    division: "Planning Division",
+                    fundSource: String(item?.budget_allocation || "Planning Allocation").trim() || "Planning Allocation",
+                    allocatedAmount: parseProjectAmount(item?.amount || 0),
+                    status: mapPlanningStatusToProjectStatus(item?.status),
+                    createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
+                }));
+
+            const mappedConstruction = constructionRecords
+                .filter((item) => String(item?.__id || item?.project_name || "").trim())
+                .map((item, index) => {
+                    const progress = Number.parseFloat(String(item?.status_current || "").replace(/[^0-9.-]/g, ""));
+                    const mappedStatus = Number.isFinite(progress) && progress >= 100
+                        ? "Completed"
+                        : Number.isFinite(progress) && progress > 0
+                            ? "Ongoing"
+                            : "In Planning";
+                    return {
+                        id: `construction_${String(item?.__id || `${index}`).trim()}`,
+                        projectName: String(item?.project_name || `Construction Project ${index + 1}`).trim(),
+                        division: "Construction Division",
+                        fundSource: String(item?.contractor || "Construction Contract").trim() || "Construction Contract",
+                        allocatedAmount: parseProjectAmount(item?.revised_contract_cost || item?.contract_cost || 0),
+                        status: mappedStatus,
+                        createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
+                    };
+                });
+
+            const mappedQuality = qualityRecords
+                .filter((item) => String(item?.__id || item?.project_location || "").trim())
+                .map((item, index) => ({
+                    id: `quality_${String(item?.__id || `${index}`).trim()}`,
+                    projectName: String(item?.project_location || item?.doc_no || `Quality Project ${index + 1}`).trim(),
+                    division: "Quality Division",
+                    fundSource: String(item?.particulars || "Quality Record").trim() || "Quality Record",
+                    allocatedAmount: 0,
+                    status: mapQualityStatusToProjectStatus(item?.status),
+                    createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
+                }));
+
+            const mappedMaintenanceTasks = maintenanceTasks
+                .filter((item) => String(item?.title || item?.taskTitle || "").trim())
+                .map((item, index) => ({
+                    id: `maintenance_task_${index}_${normalizeText(item?.title || item?.taskTitle || "")}`,
+                    projectName: String(item?.title || item?.taskTitle || `Maintenance Task ${index + 1}`).trim(),
+                    division: "Maintenance Division",
+                    fundSource: String(item?.road || item?.division || "Maintenance Task").trim() || "Maintenance Task",
+                    allocatedAmount: 0,
+                    status: mapTaskStatusToProjectStatus(item?.status),
+                    createdAt: Number(item?.createdAt || Date.now()),
+                }));
+
+            const mappedMaintenanceRoads = !mappedMaintenanceTasks.length
+                ? maintenanceRoads
+                    .filter((item) => String(item?.roadName || "").trim())
+                    .map((item, index) => ({
+                        id: `maintenance_road_${index}_${normalizeText(item?.roadName || "")}`,
+                        projectName: String(item?.roadName || `Maintenance Road ${index + 1}`).trim(),
+                        division: "Maintenance Division",
+                        fundSource: String(item?.municipality || "Road Management").trim() || "Road Management",
+                        allocatedAmount: 0,
+                        status: "In Planning",
+                        createdAt: Number(item?.createdAt || Date.now()),
+                    }))
+                : [];
+
+            const merged = [
+                ...mappedAdmin,
+                ...mappedPlanning,
+                ...mappedConstruction,
+                ...mappedQuality,
+                ...mappedMaintenanceTasks,
+                ...mappedMaintenanceRoads,
+            ].filter((item) => item.projectName);
+
+            const dedupedById = new Map();
+            merged.forEach((item) => {
+                if (!dedupedById.has(item.id)) {
+                    dedupedById.set(item.id, item);
+                }
+            });
+            return Array.from(dedupedById.values());
+        };
+
+        const buildFilteredProjectRecords = (records) => {
+            const divisionValue = divisionFilter instanceof HTMLSelectElement ? String(divisionFilter.value || "all").trim() : "all";
+            const statusValue = statusFilter instanceof HTMLSelectElement ? String(statusFilter.value || "all").trim() : "all";
+            const sortValue = sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest";
+            const query = projectSearchInput instanceof HTMLInputElement ? normalizeText(projectSearchInput.value) : "";
+
+            const filtered = (Array.isArray(records) ? records : []).filter((record) => {
+                const matchesDivision = divisionValue === "all" || record.division === divisionValue;
+                const matchesStatus = statusValue === "all" || record.status === statusValue;
+                const haystack = normalizeText(`${record.projectName} ${record.division} ${record.fundSource} ${record.status}`);
+                const matchesQuery = !query || haystack.includes(query);
+                return matchesDivision && matchesStatus && matchesQuery;
+            });
+
+            filtered.sort((left, right) => {
+                if (sortValue === "name_asc") return String(left.projectName).localeCompare(String(right.projectName));
+                if (sortValue === "amount_desc") return Number(right.allocatedAmount) - Number(left.allocatedAmount);
+                if (sortValue === "amount_asc") return Number(left.allocatedAmount) - Number(right.allocatedAmount);
+                return Number(right.createdAt || 0) - Number(left.createdAt || 0);
+            });
+
+            return filtered;
+        };
+
+        const renderProjectTable = (records) => {
+            if (!(projectTableBody instanceof HTMLElement)) return;
+            const list = Array.isArray(records) ? records : [];
+            if (!list.length) {
+                projectTableBody.innerHTML = `
+                    <tr class="project-empty-row" data-project-empty-row="true">
+                        <td colspan="6">
+                            <div class="project-empty-state">
+                                <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+                                <div>
+                                    <strong>No project records yet</strong>
+                                    <p>No projects matched the selected filters.</p>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            projectTableBody.innerHTML = list.map((record) => `
+                <tr>
+                    <td>${escapeProjectHtml(record.projectName || "-")}</td>
+                    <td>${escapeProjectHtml(record.division || "-")}</td>
+                    <td>${escapeProjectHtml(record.fundSource || "-")}</td>
+                    <td>${escapeProjectHtml(formatProjectCurrency(Number(record.allocatedAmount) || 0))}</td>
+                    <td>${escapeProjectHtml(record.status || "In Planning")}</td>
+                    <td class="project-align-center">-</td>
+                </tr>
+            `).join("");
+        };
+
+        let projectRecords = [];
+        let visibleProjectRecords = [];
+
+        const refreshProjectBoard = () => {
+            projectRecords = buildProjectRecords();
+            visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
+            renderProjectTable(visibleProjectRecords);
+            syncProjectRegistrySummary(projectRecords);
         };
 
         const enableProjectCardFloat = () => {
@@ -10748,19 +11002,43 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
+        if (statusFilter instanceof HTMLSelectElement) {
+            statusFilter.addEventListener("change", () => {
+                refreshProjectBoard();
+            });
+        }
+
+        if (sortFilter instanceof HTMLSelectElement) {
+            sortFilter.addEventListener("change", () => {
+                refreshProjectBoard();
+            });
+        }
+
+        if (projectSearchInput instanceof HTMLInputElement) {
+            projectSearchInput.addEventListener("input", () => {
+                refreshProjectBoard();
+            });
+        }
+
+        if (projectSearchButton instanceof HTMLButtonElement) {
+            projectSearchButton.addEventListener("click", () => {
+                refreshProjectBoard();
+            });
+        }
+
         projectFilterSelects.forEach((select) => {
             enhanceProjectFilterSelect(select);
         });
 
         enhanceAdminFormSelects(projectForm);
 
-        syncProjectRegistrySummary();
-        syncActiveProjectDivision(divisionFilter instanceof HTMLSelectElement ? divisionFilter.value : "Admin Division");
+        refreshProjectBoard();
+        syncActiveProjectDivision("all");
         enableProjectCardFloat();
 
         if (projectTableBody instanceof HTMLElement && typeof MutationObserver !== "undefined") {
             const projectSummaryObserver = new MutationObserver(() => {
-                syncProjectRegistrySummary();
+                syncProjectRegistrySummary(projectRecords);
             });
             projectSummaryObserver.observe(projectTableBody, {
                 childList: true,
@@ -10768,6 +11046,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 characterData: true,
             });
         }
+
+        window.addEventListener("focus", refreshProjectBoard);
+        window.addEventListener("storage", (event) => {
+            const key = String(event.key || "");
+            if (![
+                ADMIN_DIVISION_STORAGE_KEY,
+                PLANNING_DOCUMENT_STORAGE_KEY,
+                CONSTRUCTION_STORAGE_KEY,
+                QUALITY_STORAGE_KEY,
+                MAINTENANCE_STORAGE_KEY,
+            ].includes(key)) {
+                return;
+            }
+            refreshProjectBoard();
+        });
     }
 
 });
@@ -11022,188 +11315,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const QUALITY_PAGE_SIZE = 10;
     const ROUTE_FILTERS = ["all", "incoming", "outgoing"];
-    const DEFAULT_QUALITY_RECORDS = [
-        {
-            __id: "quality_seed_1",
-            received_from: "Admin Division",
-            doc_date: "2026-02-28",
-            particulars: "Other",
-            doc_no: "#245",
-            project_location: "Construction of Bridge",
-            location_detail: "Brgy. Paglaum, Taytay",
-            scan_url: "",
-            route: "Incoming",
-            received_by: "Quality Division",
-            date_recv: "2026-03-02",
-            status: "For Action",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_2",
-            received_from: "Site Operations",
-            doc_date: "2026-03-01",
-            particulars: "Concrete",
-            doc_no: "#246",
-            project_location: "Road Expansion PH-2",
-            location_detail: "Arterial Material, Sector 4",
-            scan_url: "",
-            route: "Outgoing",
-            received_by: "Technical Team",
-            date_recv: "2026-03-03",
-            status: "In Progress",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_3",
-            received_from: "Procurement",
-            doc_date: "2026-03-02",
-            particulars: "Steel",
-            doc_no: "#247",
-            project_location: "Substation Delta",
-            location_detail: "Industrial Zone A",
-            scan_url: "",
-            route: "Incoming",
-            received_by: "Quality Division",
-            date_recv: "2026-03-03",
-            status: "Completed",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_4",
-            received_from: "Construction Team",
-            doc_date: "2026-03-03",
-            particulars: "Structural",
-            doc_no: "#248",
-            project_location: "Flood Control Package A",
-            location_detail: "Riverbank Zone 3",
-            scan_url: "",
-            route: "Incoming",
-            received_by: "QA Inspector",
-            date_recv: "2026-03-04",
-            status: "For Release",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_5",
-            received_from: "Materials Unit",
-            doc_date: "2026-03-04",
-            particulars: "Concrete",
-            doc_no: "#249",
-            project_location: "Bridge Retrofit Lot 6",
-            location_detail: "San Isidro, Block 2",
-            scan_url: "",
-            route: "Outgoing",
-            received_by: "Materials Lab",
-            date_recv: "2026-03-04",
-            status: "In Progress",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_6",
-            received_from: "Electrical Section",
-            doc_date: "2026-03-04",
-            particulars: "Electrical",
-            doc_no: "#250",
-            project_location: "Streetlight Restoration",
-            location_detail: "Poblacion Main Road",
-            scan_url: "",
-            route: "Incoming",
-            received_by: "Quality Division",
-            date_recv: "2026-03-05",
-            status: "For Action",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_7",
-            received_from: "Procurement",
-            doc_date: "2026-03-05",
-            particulars: "Steel",
-            doc_no: "#251",
-            project_location: "Steel Truss Fabrication",
-            location_detail: "Warehouse Compound",
-            scan_url: "",
-            route: "Outgoing",
-            received_by: "Release Desk",
-            date_recv: "2026-03-05",
-            status: "For Release",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_8",
-            received_from: "Road Maintenance",
-            doc_date: "2026-03-05",
-            particulars: "Other",
-            doc_no: "#252",
-            project_location: "Asphalt Patching Program",
-            location_detail: "District 5 Corridor",
-            scan_url: "",
-            route: "Incoming",
-            received_by: "QA Inspector",
-            date_recv: "2026-03-05",
-            status: "Completed",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_9",
-            received_from: "Laboratory Unit",
-            doc_date: "2026-03-05",
-            particulars: "Concrete",
-            doc_no: "#253",
-            project_location: "Slope Protection Works",
-            location_detail: "Hillside Section B",
-            scan_url: "",
-            route: "Outgoing",
-            received_by: "Technical Team",
-            date_recv: "2026-03-06",
-            status: "In Progress",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_10",
-            received_from: "Planning Division",
-            doc_date: "2026-03-06",
-            particulars: "Structural",
-            doc_no: "#254",
-            project_location: "Public Market Rehab",
-            location_detail: "Central District",
-            scan_url: "",
-            route: "Incoming",
-            received_by: "Quality Division",
-            date_recv: "2026-03-06",
-            status: "For Action",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_11",
-            received_from: "Field Engineering",
-            doc_date: "2026-03-06",
-            particulars: "Electrical",
-            doc_no: "#255",
-            project_location: "Solar Water System",
-            location_detail: "Barangay New Hope",
-            scan_url: "",
-            route: "Outgoing",
-            received_by: "Release Desk",
-            date_recv: "2026-03-06",
-            status: "For Release",
-            remarks: "",
-        },
-        {
-            __id: "quality_seed_12",
-            received_from: "Admin Division",
-            doc_date: "2026-03-06",
-            particulars: "Other",
-            doc_no: "#256",
-            project_location: "Records Archival Batch",
-            location_detail: "PEO Main Office",
-            scan_url: "",
-            route: "Incoming",
-            received_by: "Quality Division",
-            date_recv: "2026-03-06",
-            status: "Completed",
-            remarks: "",
-        },
-    ];
+    const DEFAULT_QUALITY_RECORDS = [];
 
     const escapeHtml = (value) => {
         return String(value ?? "")
@@ -11243,7 +11355,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 return DEFAULT_QUALITY_RECORDS.map((record) => ({ ...record }));
             }
             const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : [];
+            if (!Array.isArray(parsed)) return [];
+            return parsed.filter((record) => {
+                const recordId = String(record?.__id || "").trim();
+                return !recordId.startsWith("quality_seed_");
+            });
         } catch (error) {
             return DEFAULT_QUALITY_RECORDS.map((record) => ({ ...record }));
         }
@@ -11275,9 +11391,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const mapAdminStatusToQualityStatus = (value) => {
         const normalized = normalizeText(value);
         if (normalized === "approved" || normalized === "closed") return "Completed";
-        if (normalized === "for review" || normalized === "routed") return "For Action";
+        if (normalized === "for review" || normalized === "routed") return "For Review";
         if (normalized === "open" || normalized === "processing") return "In Progress";
-        return "For Action";
+        return "For Review";
     };
 
     const mapAdminRecordToQuality = (adminRecord) => {
@@ -11304,7 +11420,7 @@ document.addEventListener("DOMContentLoaded", () => {
             route: "Incoming",
             received_by: "Quality Division",
             date_recv: String(adminRecord?.date_received || adminRecord?.date_received_admin || docDate).trim(),
-            initial_status: "For Action",
+            initial_status: "For Review",
             owner_representative: String(adminRecord?.contractor || "").trim(),
             contact_info: "",
             status: mapAdminStatusToQualityStatus(statusValue),
@@ -11316,7 +11432,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
         const adminRecords = readAdminDivisionRecords();
         const routedFromAdmin = adminRecords
-            .filter((record) => normalizeDivisionLabel(record?.division) === "quality")
+            .filter((record) => {
+                const division = normalizeDivisionLabel(record?.division);
+                return division === "quality" || division === "quality division";
+            })
             .filter((record) => String(record?.__record_id || "").trim())
             .map((record) => mapAdminRecordToQuality(record));
 
@@ -11354,6 +11473,68 @@ document.addEventListener("DOMContentLoaded", () => {
         return nextRecords;
     };
 
+    const getQualityStatusRank = (value) => {
+        const normalized = normalizeText(value);
+        if (normalized === "for review") return 1;
+        if (normalized === "for action") return 2;
+        if (normalized === "in progress") return 3;
+        if (normalized === "for release") return 4;
+        if (normalized === "completed") return 5;
+        return 0;
+    };
+
+    const getQualityRecordIdentity = (record) => {
+        const sourceId = String(record?.__admin_source_id || "").trim();
+        if (sourceId) return `admin:${sourceId}`;
+        const docNo = normalizeText(record?.doc_no);
+        const projectLocation = normalizeText(record?.project_location);
+        const locationDetail = normalizeText(record?.location_detail);
+        const docDate = String(record?.doc_date || "").trim();
+        if (docNo || projectLocation || locationDetail) {
+            return `doc:${docNo}|${projectLocation}|${locationDetail}|${docDate}`;
+        }
+        return `id:${String(record?.__id || "").trim()}`;
+    };
+
+    const choosePreferredQualityRecord = (left, right) => {
+        const leftHasAdminSource = Boolean(String(left?.__admin_source_id || "").trim());
+        const rightHasAdminSource = Boolean(String(right?.__admin_source_id || "").trim());
+        if (leftHasAdminSource !== rightHasAdminSource) {
+            return rightHasAdminSource ? right : left;
+        }
+
+        const leftRank = getQualityStatusRank(left?.status);
+        const rightRank = getQualityStatusRank(right?.status);
+        if (leftRank !== rightRank) {
+            return rightRank > leftRank ? right : left;
+        }
+
+        const leftRemarks = String(left?.remarks || "").trim().length;
+        const rightRemarks = String(right?.remarks || "").trim().length;
+        if (leftRemarks !== rightRemarks) {
+            return rightRemarks > leftRemarks ? right : left;
+        }
+
+        return right;
+    };
+
+    const dedupeQualityRecords = (inputRecords) => {
+        const recordsList = Array.isArray(inputRecords) ? inputRecords : [];
+        const byIdentity = new Map();
+
+        recordsList.forEach((record) => {
+            const identity = getQualityRecordIdentity(record);
+            const existing = byIdentity.get(identity);
+            if (!existing) {
+                byIdentity.set(identity, record);
+                return;
+            }
+            byIdentity.set(identity, choosePreferredQualityRecord(existing, record));
+        });
+
+        return Array.from(byIdentity.values());
+    };
+
     const writeStoredRecords = (records) => {
         try {
             window.localStorage.setItem(QUALITY_STORAGE_KEY, JSON.stringify(records));
@@ -11373,6 +11554,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const getStatusClassName = (value) => {
         const normalized = normalizeText(value);
+        if (normalized === "for review") return "is-action";
         if (normalized === "for action") return "is-action";
         if (normalized === "for release") return "is-release";
         if (normalized === "completed") return "is-complete";
@@ -11463,9 +11645,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    let records = syncAdminRoutedQualityRecords(readStoredRecords());
+    let records = dedupeQualityRecords(syncAdminRoutedQualityRecords(readStoredRecords()));
     let currentPage = 1;
     let activeTab = "all";
+    let activeCardFilter = "all";
     let activeRouteFilter = "all";
     let searchQuery = "";
     let editingRecordId = null;
@@ -11481,6 +11664,20 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const getFilteredRecords = () => {
+        const matchesCardFilter = (record) => {
+            const status = normalizeText(record.status);
+            const hasRemarks = String(record.remarks || "").trim().length > 0;
+            if (activeCardFilter === "all") return true;
+            if (activeCardFilter === "pending") return status === "for review" || status === "for action";
+            if (activeCardFilter === "ongoing") return status !== "completed";
+            if (activeCardFilter === "in_progress") return status === "in progress";
+            if (activeCardFilter === "for_release") return status === "for release";
+            if (activeCardFilter === "completed") return status === "completed";
+            if (activeCardFilter === "remarks") return hasRemarks;
+            if (activeCardFilter === "todo") return status === "for review" || status === "for action" || status === "in progress";
+            return true;
+        };
+
         return records.filter((record) => {
             const normalizedStatus = normalizeText(record.status);
             const normalizedRoute = normalizeText(record.route);
@@ -11507,7 +11704,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ].map(normalizeText).join(" ");
             const matchesSearch = !searchQuery || haystack.includes(searchQuery);
 
-            return matchesTab && matchesRoute && matchesSearch;
+            return matchesTab && matchesRoute && matchesSearch && matchesCardFilter(record);
         });
     };
 
@@ -11635,15 +11832,29 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const syncSummaryCardFilterState = () => {
+        qualityOverviewCards.forEach((card) => {
+            if (!(card instanceof HTMLElement)) return;
+            const filter = String(card.dataset.qualityCardFilter || "").trim() || "all";
+            card.classList.toggle("is-active", filter === activeCardFilter && activeCardFilter !== "all");
+        });
+    };
+
     const syncQualitySummaryCards = () => {
         const totalDocuments = records.length;
-        const pendingCount = records.filter((record) => normalizeText(record.status) === "for action").length;
+        const pendingCount = records.filter((record) => {
+            const status = normalizeText(record.status);
+            return status === "for review" || status === "for action";
+        }).length;
         const inProgressCount = records.filter((record) => normalizeText(record.status) === "in progress").length;
         const forReleaseCount = records.filter((record) => normalizeText(record.status) === "for release").length;
         const completedCount = records.filter((record) => normalizeText(record.status) === "completed").length;
         const remarksCount = records.filter((record) => String(record.remarks || "").trim().length > 0).length;
         const ongoingCount = totalDocuments - completedCount;
-        const tasksToDoCount = pendingCount + inProgressCount;
+        const tasksToDoCount = records.filter((record) => {
+            const status = normalizeText(record.status);
+            return status === "for review" || status === "for action" || status === "in progress";
+        }).length;
 
         if (qualitySummaryTotalDocuments instanceof HTMLElement) {
             qualitySummaryTotalDocuments.textContent = String(totalDocuments);
@@ -11750,6 +11961,7 @@ document.addEventListener("DOMContentLoaded", () => {
         syncTableSummary(filteredRecords, pagedRecords, startIndex);
         syncQualitySummaryCards();
         syncTabs();
+        syncSummaryCardFilterState();
         syncRouteFilterButton();
         renderPagination(filteredRecords);
         window.requestAnimationFrame(syncHorizontalScrollState);
@@ -11837,12 +12049,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (editingRecordId) {
                 const targetIndex = records.findIndex((record) => record.__id === editingRecordId);
                 if (targetIndex >= 0) {
-                    records[targetIndex] = { ...formRecord, __id: editingRecordId };
+                    records[targetIndex] = { ...records[targetIndex], ...formRecord, __id: editingRecordId };
                 }
             } else {
                 records.unshift(formRecord);
             }
 
+            records = dedupeQualityRecords(records);
             currentPage = 1;
             writeStoredRecords(records);
             renderTable();
@@ -11870,6 +12083,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!approved) return;
 
             records = records.filter((record) => record.__id !== editingRecordId);
+            records = dedupeQualityRecords(records);
             writeStoredRecords(records);
             renderTable();
             closeQualityModal();
@@ -11891,8 +12105,47 @@ document.addEventListener("DOMContentLoaded", () => {
     qualityTabs.forEach((tab) => {
         tab.addEventListener("click", () => {
             activeTab = tab.getAttribute("data-quality-tab") || "all";
+            activeCardFilter = "all";
             currentPage = 1;
             renderTable();
+        });
+    });
+
+    const qualityCardFilterMap = new Map([
+        ["quality-overview-card--documents", "all"],
+        ["quality-overview-card--pending", "pending"],
+        ["quality-overview-card--ongoing", "ongoing"],
+        ["quality-overview-card--progress", "in_progress"],
+        ["quality-overview-card--release", "for_release"],
+        ["quality-overview-card--remarks", "remarks"],
+        ["quality-overview-card--completed", "completed"],
+        ["quality-overview-card--accent", "todo"],
+    ]);
+
+    qualityOverviewCards.forEach((card) => {
+        if (!(card instanceof HTMLElement)) return;
+        for (const [className, filterName] of qualityCardFilterMap.entries()) {
+            if (!card.classList.contains(className)) continue;
+            card.dataset.qualityCardFilter = filterName;
+            card.setAttribute("role", "button");
+            card.tabIndex = 0;
+            card.style.cursor = "pointer";
+            break;
+        }
+
+        const applyCardFilter = () => {
+            const filterName = String(card.dataset.qualityCardFilter || "all").trim() || "all";
+            activeCardFilter = activeCardFilter === filterName ? "all" : filterName;
+            activeTab = "all";
+            currentPage = 1;
+            renderTable();
+        };
+
+        card.addEventListener("click", applyCardFilter);
+        card.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            applyCardFilter();
         });
     });
 
@@ -11942,6 +12195,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 if (!approved) return;
                 records = records.filter((item) => item.__id !== recordId);
+                records = dedupeQualityRecords(records);
                 writeStoredRecords(records);
                 renderTable();
                 showPeoGeneralToast("Quality record deleted successfully.", {
@@ -12033,6 +12287,17 @@ document.addEventListener("DOMContentLoaded", () => {
     qualityTableWrap.addEventListener("lostpointercapture", stopDragging);
     qualityTableWrap.addEventListener("mouseleave", stopDragging);
     window.addEventListener("resize", syncHorizontalScrollState);
+
+    const refreshQualityRecordsFromAdmin = () => {
+        records = dedupeQualityRecords(syncAdminRoutedQualityRecords(records));
+        currentPage = 1;
+        renderTable();
+    };
+    window.addEventListener("focus", refreshQualityRecordsFromAdmin);
+    window.addEventListener("storage", (event) => {
+        if (event.key !== ADMIN_DIVISION_STORAGE_KEY && event.key !== QUALITY_STORAGE_KEY) return;
+        refreshQualityRecordsFromAdmin();
+    });
 
     enableQualityCardFloat();
     renderTable();

@@ -13,9 +13,6 @@
 
     <div class="quality-tabs" role="tablist" aria-label="Quality workflows">
         <button type="button" class="quality-tab is-active" data-quality-tab="all" role="tab" aria-selected="true">Quality Control Tracker</button>
-        <button type="button" class="quality-tab" data-quality-tab="for-action" role="tab" aria-selected="false">For Action</button>
-        <button type="button" class="quality-tab" data-quality-tab="for-release" role="tab" aria-selected="false">For Release</button>
-        <button type="button" class="quality-tab" data-quality-tab="completed" role="tab" aria-selected="false">Report</button>
         <button type="button" class="quality-primary-btn js-quality-open-modal">
             <span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
             <span>Add Quality Record</span>
@@ -38,14 +35,6 @@
             </div>
             <strong id="quality-summary-pending">0</strong>
             <small>waiting for action</small>
-        </article>
-        <article class="quality-overview-card quality-overview-card--ongoing">
-            <div class="quality-overview-card__head">
-                <span>Total Ongoing</span>
-                <span class="quality-overview-card__icon material-symbols-outlined" aria-hidden="true">autorenew</span>
-            </div>
-            <strong id="quality-summary-ongoing">0</strong>
-            <small>active quality workflow</small>
         </article>
         <article class="quality-overview-card quality-overview-card--progress">
             <div class="quality-overview-card__head">
@@ -283,7 +272,11 @@
                 <legend>Workflow Status</legend>
                 <div class="quality-choice-grid">
                     <label class="quality-choice-option">
-                        <input type="radio" name="status" value="For Action" checked required>
+                        <input type="radio" name="status" value="For Review" checked required>
+                        <span>For Review</span>
+                    </label>
+                    <label class="quality-choice-option">
+                        <input type="radio" name="status" value="For Action" required>
                         <span>For Action</span>
                     </label>
                     <label class="quality-choice-option">
