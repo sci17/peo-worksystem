@@ -1659,12 +1659,11 @@ document.addEventListener("DOMContentLoaded", () => {
                                     <option value="">Select billing type</option>
                                     <option>First Billing</option>
                                     <option>Second Billing</option>
-                                    <option>Partial</option>
-                                    <option>First Partial</option>
-                                    <option>Second Partial</option>
+                                    <option>Third Billing</option>
+                                    <option>Fourth Billing</option>
+                                    <option>Fifth Billing</option>
                                     <option>Advance Payment</option>
-                                    <option>Final</option>
-                                    <option value="Others">Others</option>
+                                    <option>Final Billing</option>
                                 </select>
                             </label>
                             <label class="pa-doc-field">
@@ -6777,6 +6776,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
         : [];
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
     const CONSTRUCTION_FIELDS = [
         "project_name",
@@ -7022,7 +7022,106 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    let records = readStoredRecords();
+    const readAdminDivisionRecords = () => {
+        try {
+            const raw = window.localStorage.getItem(ADMIN_DIVISION_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeAdminDivisionRecords = (records) => {
+        try {
+            window.localStorage.setItem(ADMIN_DIVISION_STORAGE_KEY, JSON.stringify(records));
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    };
+
+    const normalizeDivisionLabel = (value) => {
+        return String(value || "").trim().toLowerCase();
+    };
+
+    const mapAdminStatusToConstructionPercent = (status) => {
+        const normalized = normalizeText(status);
+        if (normalized === "approved" || normalized === "closed") return "100";
+        if (normalized === "processing" || normalized === "open") return "60";
+        if (normalized === "routed" || normalized === "for review") return "35";
+        return "0";
+    };
+
+    const mapAdminRecordToConstruction = (adminRecord) => {
+        const statusValue = String(adminRecord?.doc_status || adminRecord?.status || "").trim();
+        const statusPercent = mapAdminStatusToConstructionPercent(statusValue);
+        return {
+            __id: `construction_admin_${String(adminRecord?.__record_id || "")}`,
+            __admin_source: "admin_document",
+            __admin_source_id: String(adminRecord?.__record_id || ""),
+            project_name: String(adminRecord?.document_name || "").trim(),
+            location: String(adminRecord?.location || "").trim(),
+            mun: "-",
+            contractor: String(adminRecord?.contractor || "").trim(),
+            contract_cost: String(adminRecord?.contract_amount || "").trim(),
+            ntp_date: String(adminRecord?.date_started || "").trim(),
+            cd: String(adminRecord?.period_covered || "").trim(),
+            original_expiry_date: String(adminRecord?.completion_date || "").trim(),
+            addl_cd: String(adminRecord?.billing_type || "").trim(),
+            revised_expiry_date: String(adminRecord?.date_released_accounting || "").trim(),
+            date_completed: String(adminRecord?.completion_date || "").trim(),
+            revised_contract_cost: String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim(),
+            status_previous: "0",
+            status_current: statusPercent,
+            time_elapsed: statusPercent,
+            slippage: "0",
+            remarks: String(adminRecord?.description || adminRecord?.doc_type || "").trim(),
+        };
+    };
+
+    const syncAdminRoutedConstructionRecords = (existingRecords) => {
+        const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
+        const adminRecords = readAdminDivisionRecords();
+        const routedFromAdmin = adminRecords
+            .filter((record) => normalizeDivisionLabel(record?.division) === "construction")
+            .filter((record) => String(record?.__record_id || "").trim())
+            .map((record) => mapAdminRecordToConstruction(record));
+
+        const routedBySourceId = new Map(
+            routedFromAdmin.map((record) => [record.__admin_source_id, record])
+        );
+
+        const nonRouted = currentRecords.filter((record) => {
+            return String(record?.__admin_source || "") !== "admin_document";
+        });
+
+        const existingRoutedBySource = new Map();
+        currentRecords.forEach((record) => {
+            if (String(record?.__admin_source || "") !== "admin_document") return;
+            const sourceId = String(record?.__admin_source_id || "").trim();
+            if (!sourceId) return;
+            existingRoutedBySource.set(sourceId, record);
+        });
+
+        const mergedRouted = Array.from(routedBySourceId.values()).map((incoming) => {
+            const existing = existingRoutedBySource.get(incoming.__admin_source_id);
+            if (!existing) return incoming;
+            return {
+                ...existing,
+                ...incoming,
+            };
+        });
+
+        const nextRecords = [...mergedRouted, ...nonRouted];
+        const beforeSignature = JSON.stringify(currentRecords);
+        const afterSignature = JSON.stringify(nextRecords);
+        if (beforeSignature !== afterSignature) {
+            writeStoredRecords(nextRecords);
+        }
+        return nextRecords;
+    };
+
+    let records = syncAdminRoutedConstructionRecords(readStoredRecords());
     let currentPage = 1;
     let editingRecordId = null;
 
@@ -7800,6 +7899,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const planningEmptyState = document.querySelector(".planning-empty-state");
     const planningBudgetCards = document.getElementById("planning-budget-cards");
+    const planningBudgetMainSection = document.querySelector(".js-planning-budget-main");
+    const planningBudgetSummaryTotalBudget = document.querySelector('[data-planning-budget-summary="total_budget"]');
+    const planningBudgetDetailSection = document.querySelector(".js-planning-budget-detail");
+    const planningBudgetDetailTitle = document.querySelector(".js-planning-budget-detail-title");
+    const planningBudgetDetailSubtitle = document.querySelector(".js-planning-budget-detail-subtitle");
+    const planningBudgetDetailTotal = document.querySelector(".js-planning-budget-detail-total");
+    const planningBudgetDetailAllocated = document.querySelector(".js-planning-budget-detail-allocated");
+    const planningBudgetDetailRemaining = document.querySelector(".js-planning-budget-detail-remaining");
+    const planningBudgetDetailUtilization = document.querySelector(".js-planning-budget-detail-utilization");
+    const planningBudgetDetailTbody = document.querySelector(".js-planning-budget-detail-tbody");
+    const planningBudgetDetailCloseButtons = document.querySelectorAll(".js-planning-budget-detail-close");
     const planningBudgetSummaryAllocated = document.querySelector('[data-planning-budget-summary="allocated"]');
     const planningBudgetSummaryBalance = document.querySelector('[data-planning-budget-summary="balance"]');
     const planningBudgetSummaryDraft = document.querySelector('[data-planning-budget-summary="draft"]');
@@ -7816,7 +7926,37 @@ document.addEventListener("DOMContentLoaded", () => {
     const planningPpaSummaryBidding = document.querySelector('[data-planning-ppa-summary="bidding"]');
     const planningPpaSummaryAwarded = document.querySelector('[data-planning-ppa-summary="awarded"]');
     const planningPpaSummaryCancelled = document.querySelector('[data-planning-ppa-summary="cancelled"]');
+    const planningDocumentsTableBody = document.getElementById("planning-documents-tbody");
+    const planningDocCountLabel = document.getElementById("planning-doc-count");
+    const planningDocModal = document.querySelector(".js-planning-doc-modal");
+    const planningDocEditForm = planningDocModal instanceof HTMLElement
+        ? planningDocModal.querySelector("#planning-doc-edit-form")
+        : null;
+    const planningDocBudgetAllocationSelect = planningDocEditForm instanceof HTMLFormElement
+        ? planningDocEditForm.querySelector(".js-planning-doc-budget-allocation")
+        : null;
+    const planningDocBudgetOtherWrap = planningDocEditForm instanceof HTMLFormElement
+        ? planningDocEditForm.querySelector(".js-planning-doc-budget-other-wrap")
+        : null;
+    const planningDocBudgetOtherInput = planningDocEditForm instanceof HTMLFormElement
+        ? planningDocEditForm.querySelector(".js-planning-doc-budget-other")
+        : null;
+    const planningDocCloseButtons = planningDocModal instanceof HTMLElement
+        ? Array.from(planningDocModal.querySelectorAll(".js-close-planning-doc-modal"))
+        : [];
     const PLANNING_BUDGET_STORAGE_KEY = "peo_planning_budget_records_v1";
+    const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
+    const PLANNING_DOCUMENT_DELETED_ADMIN_IDS_KEY = "peo_planning_deleted_admin_ids_v1";
+    const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
+    const PLANNING_BUDGET_ALLOCATION_OPTIONS = [
+        "20% Development Fund",
+        "Trust Fund",
+        "SFVIP",
+        "RBDP",
+        "Supplemental Budget",
+        "SEF",
+        "Others",
+    ];
     const PLANNING_PPA_SAMPLE_IDS = new Set([
         "PPA-2026-0042",
         "PPA-2026-0115",
@@ -7986,16 +8126,345 @@ document.addEventListener("DOMContentLoaded", () => {
         return Math.max(0, Math.min(100, numeric));
     };
 
-    const getBudgetMetrics = (record) => {
+    const normalizeDivisionLabel = (value) => {
+        return String(value || "").trim().toLowerCase();
+    };
+
+    const normalizePlanningDocStatus = (value) => {
+        const raw = String(value || "").trim().toLowerCase();
+        if (raw === "approved" || raw === "closed") return "Approved";
+        if (raw === "rejected") return "Rejected";
+        if (raw === "for review" || raw === "for_review" || raw === "review") return "For Review";
+        if (raw === "draft") return "Draft";
+        return "For Review";
+    };
+
+    const getPlanningDocStatusClass = (value) => {
+        const normalized = normalizePlanningDocStatus(value).toLowerCase().replace(/\s+/g, "-");
+        return `is-${normalized}`;
+    };
+
+    const formatPlanningDocDate = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return "-";
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return text;
+        return parsed.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+        });
+    };
+
+    const formatPlanningDocAmount = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return "-";
+        const numeric = Number(text.replace(/[^0-9.-]+/g, ""));
+        if (!Number.isFinite(numeric)) return text;
+        return `PHP ${numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const parsePlanningDocAmount = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return 0;
+        const numeric = Number(text.replace(/[^0-9.-]+/g, ""));
+        return Number.isFinite(numeric) ? numeric : 0;
+    };
+
+    const readAdminDivisionRecords = () => {
+        try {
+            const raw = window.localStorage.getItem(ADMIN_DIVISION_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const readStoredPlanningDocuments = () => {
+        try {
+            const raw = window.localStorage.getItem(PLANNING_DOCUMENT_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeStoredPlanningDocuments = (records) => {
+        try {
+            window.localStorage.setItem(PLANNING_DOCUMENT_STORAGE_KEY, JSON.stringify(records));
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    };
+
+    const readDeletedPlanningAdminIds = () => {
+        try {
+            const raw = window.localStorage.getItem(PLANNING_DOCUMENT_DELETED_ADMIN_IDS_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()) : []);
+        } catch (error) {
+            return new Set();
+        }
+    };
+
+    const writeDeletedPlanningAdminIds = (idsSet) => {
+        try {
+            window.localStorage.setItem(
+                PLANNING_DOCUMENT_DELETED_ADMIN_IDS_KEY,
+                JSON.stringify(Array.from(idsSet))
+            );
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    };
+
+    const getPlanningBudgetAllocationOptions = () => {
+        const options = [...PLANNING_BUDGET_ALLOCATION_OPTIONS];
+        if (Array.isArray(planningBudgetRecords)) {
+            planningBudgetRecords.forEach((record) => {
+                const budgetName = String(record?.budgetName || "").trim();
+                if (budgetName && !options.includes(budgetName)) {
+                    options.push(budgetName);
+                }
+            });
+        }
+        return options;
+    };
+
+    const normalizeBudgetAllocationValue = (value) => {
+        const normalized = String(value || "").trim().toLowerCase();
+        if (!normalized) return "";
+        const options = getPlanningBudgetAllocationOptions();
+        const match = options.find((option) => {
+            return option.toLowerCase() === normalized;
+        });
+        if (match) return match;
+
+        const normalizedKey = normalizeBudgetAllocationKey(value);
+        if (!normalizedKey) return null;
+
+        if (normalizedKey === "20% development fund") return "20% Development Fund";
+        if (normalizedKey === "trust fund") return "Trust Fund";
+        if (normalizedKey === "sfvip") return "SFVIP";
+        if (normalizedKey === "rbdp") return "RBDP";
+        if (normalizedKey === "supplemental budget") return "Supplemental Budget";
+        if (normalizedKey === "sef") return "SEF";
+        if (normalizedKey === "others") return "Others";
+        const dynamicMatch = options.find((option) => {
+            return normalizeBudgetAllocationKey(option) === normalizedKey;
+        });
+        if (dynamicMatch) return dynamicMatch;
+        return null;
+    };
+
+    const getPlanningDocBudgetAllocationDisplay = (record) => {
+        const allocation = normalizeBudgetAllocationValue(record?.budget_allocation);
+        if (!allocation) {
+            const fallback = String(record?.budget_allocation || "").trim();
+            return fallback || "-";
+        }
+        if (allocation === "Others") {
+            const otherText = String(record?.budget_allocation_other || "").trim();
+            return otherText ? `Others - ${otherText}` : "Others";
+        }
+        return allocation;
+    };
+
+    const normalizeBudgetAllocationKey = (value) => {
+        const raw = String(value || "").trim().toLowerCase();
+        if (!raw) return "";
+        const compact = raw
+            .replace(/fy\s*\d{4}/g, "")
+            .replace(/dashboard/g, "")
+            .replace(/budget/g, "budget")
+            .replace(/[^a-z0-9%]+/g, "");
+
+        if (compact.includes("20%developmentfund") || compact.includes("20developmentfund")) return "20% development fund";
+        if (compact.includes("trustfund")) return "trust fund";
+        if (compact.includes("sfvip")) return "sfvip";
+        if (compact.includes("rbdp")) return "rbdp";
+        if (compact.includes("supplementalbudget")) return "supplemental budget";
+        if (compact.includes("sef")) return "sef";
+        return compact;
+    };
+
+    const getPlanningDocumentsForBudget = (budgetName) => {
+        const normalizedBudget = normalizeBudgetAllocationKey(budgetName);
+        if (!normalizedBudget) return [];
+        return planningDocumentRecords.filter((record) => {
+            const allocationValue = normalizeBudgetAllocationValue(record?.budget_allocation)
+                || String(record?.budget_allocation || "").trim();
+            const allocationKey = normalizeBudgetAllocationKey(allocationValue);
+            return allocationKey && allocationKey === normalizedBudget;
+        });
+    };
+
+    const getUsedAllocationTotalForBudget = (budgetName) => {
+        return getPlanningDocumentsForBudget(budgetName)
+            .reduce((sum, record) => sum + parsePlanningDocAmount(record?.amount), 0);
+    };
+
+    const mapAdminRecordToPlanningDocument = (adminRecord) => {
+        const fallbackDate = new Date().toISOString().slice(0, 10);
+        const dateReceived = String(
+            adminRecord?.date_received_peo
+            || adminRecord?.date_received_admin
+            || adminRecord?.date_received
+            || adminRecord?.date_started
+            || fallbackDate
+        ).trim();
+        const mappedBudgetAllocation = normalizeBudgetAllocationValue(
+            adminRecord?.budget_allocation
+            || adminRecord?.budget_name
+            || adminRecord?.fund_source
+            || ""
+        );
+        const mappedBudgetOther = String(
+            adminRecord?.budget_allocation_other
+            || adminRecord?.budget_name_other
+            || ""
+        ).trim();
+
+        return {
+            id: `planning_doc_admin_${String(adminRecord?.__record_id || "")}`,
+            __admin_source_id: String(adminRecord?.__record_id || ""),
+            slip_no: String(adminRecord?.slip_no || "").trim(),
+            document_name: String(adminRecord?.document_name || "").trim(),
+            location: String(adminRecord?.location || "").trim(),
+            contractor: String(adminRecord?.contractor || "").trim(),
+            amount: String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim(),
+            received_from: "Admin Division",
+            date_received: dateReceived,
+            status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
+            budget_allocation: mappedBudgetAllocation || "",
+            budget_allocation_other: mappedBudgetAllocation === "Others" ? mappedBudgetOther : "",
+            remarks: String(adminRecord?.description || "").trim(),
+            created_at: Date.now(),
+        };
+    };
+
+    const syncAdminToPlanningDocuments = (currentRecords) => {
+        const records = Array.isArray(currentRecords) ? [...currentRecords] : [];
+        const deletedAdminIds = readDeletedPlanningAdminIds();
+
+        const adminMappedRecords = readAdminDivisionRecords()
+            .filter((record) => {
+                const division = normalizeDivisionLabel(record?.division);
+                return division === "planning division" || division === "planning";
+            })
+            .filter((record) => {
+                const sourceId = String(record?.__record_id || "").trim();
+                return sourceId && !deletedAdminIds.has(sourceId);
+            })
+            .map((record) => mapAdminRecordToPlanningDocument(record));
+
+        const adminBySourceId = new Map(
+            adminMappedRecords.map((record) => [String(record.__admin_source_id || "").trim(), record])
+        );
+
+        const mergedExisting = records.reduce((acc, record) => {
+            const sourceId = String(record?.__admin_source_id || "").trim();
+            if (!sourceId) {
+                acc.push(record);
+                return acc;
+            }
+
+            const mapped = adminBySourceId.get(sourceId);
+            if (!mapped) {
+                // Drop records no longer routed to Planning or removed in Admin.
+                return acc;
+            }
+
+            // Keep Planning-side fields while syncing core document fields from Admin.
+            acc.push({
+                ...record,
+                ...mapped,
+                status: normalizePlanningDocStatus(record.status || mapped.status || "For Review"),
+                budget_allocation: record.budget_allocation || mapped.budget_allocation || "",
+                budget_allocation_other: record.budget_allocation_other || mapped.budget_allocation_other || "",
+                remarks: record.remarks || mapped.remarks || "",
+            });
+            adminBySourceId.delete(sourceId);
+            return acc;
+        }, []);
+
+        const newIncoming = Array.from(adminBySourceId.values());
+        const merged = [...newIncoming, ...mergedExisting];
+
+        const before = JSON.stringify(records);
+        const after = JSON.stringify(merged);
+        if (before !== after) {
+            writeStoredPlanningDocuments(merged);
+        }
+        return merged;
+    };
+
+    const renderPlanningDocumentsTable = (records) => {
+        if (!(planningDocumentsTableBody instanceof HTMLTableSectionElement)) return;
+        planningDocumentsTableBody.innerHTML = "";
+
+        if (!Array.isArray(records) || !records.length) {
+            const emptyRow = document.createElement("tr");
+            emptyRow.className = "planning-doc-empty-row";
+            emptyRow.innerHTML = '<td colspan="11">No planning documents available yet.</td>';
+            planningDocumentsTableBody.appendChild(emptyRow);
+            if (planningDocCountLabel instanceof HTMLElement) {
+                planningDocCountLabel.textContent = "0 document(s)";
+            }
+            return;
+        }
+
+        records.forEach((record) => {
+            const row = document.createElement("tr");
+            row.dataset.recordId = String(record.id || "");
+            const safeStatus = normalizePlanningDocStatus(record.status);
+            const budgetAllocation = getPlanningDocBudgetAllocationDisplay(record);
+
+            row.innerHTML = `
+                <td>${escapeHtml(record.slip_no || "-")}</td>
+                <td>${escapeHtml(record.document_name || "-")}</td>
+                <td>${escapeHtml(record.location || "-")}</td>
+                <td>${escapeHtml(record.contractor || "-")}</td>
+                <td>${escapeHtml(formatPlanningDocAmount(record.amount))}</td>
+                <td>${escapeHtml(record.received_from || "-")}</td>
+                <td>${escapeHtml(formatPlanningDocDate(record.date_received))}</td>
+                <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
+                <td>${escapeHtml(budgetAllocation)}</td>
+                <td class="planning-doc-remarks">${escapeHtml(record.remarks || "-")}</td>
+                <td class="planning-doc-actions">
+                    <div class="planning-doc-actions-group">
+                        <button type="button" class="planning-doc-action-btn is-edit js-planning-doc-edit" data-record-id="${escapeHtml(record.id || "")}" aria-label="Edit document" title="Edit">
+                            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                        </button>
+                        <button type="button" class="planning-doc-action-btn is-delete js-planning-doc-delete" data-record-id="${escapeHtml(record.id || "")}" aria-label="Delete document" title="Delete">
+                            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                        </button>
+                    </div>
+                </td>
+            `;
+            planningDocumentsTableBody.appendChild(row);
+        });
+
+        if (planningDocCountLabel instanceof HTMLElement) {
+            planningDocCountLabel.textContent = `${records.length} document(s)`;
+        }
+    };
+
+    const getBudgetMetrics = (record, allocatedOverride = null) => {
         const totalBudget = Number(record?.totalBudget);
         const safeTotalBudget = Number.isFinite(totalBudget) && totalBudget > 0 ? totalBudget : 0;
 
-        const rawAllocatedBudget = Number(
-            record?.allocatedBudget
-            ?? record?.allocated
-            ?? record?.allocatedAmount
-            ?? NaN
-        );
+        const hasOverride = Number.isFinite(Number(allocatedOverride));
+        const rawAllocatedBudget = hasOverride
+            ? Number(allocatedOverride)
+            : Number(
+                record?.allocatedBudget
+                ?? record?.allocated
+                ?? record?.allocatedAmount
+                ?? NaN
+            );
         const hasAllocatedBudget = Number.isFinite(rawAllocatedBudget);
 
         const rawUtilization = Number(record?.utilization ?? record?.utilizationRate ?? record?.progress ?? NaN);
@@ -8262,7 +8731,8 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const renderPlanningSummaries = (records) => {
-        if (!(planningBudgetSummaryAllocated instanceof HTMLElement)
+        if (!(planningBudgetSummaryTotalBudget instanceof HTMLElement)
+            || !(planningBudgetSummaryAllocated instanceof HTMLElement)
             || !(planningBudgetSummaryBalance instanceof HTMLElement)
             || !(planningBudgetSummaryDraft instanceof HTMLElement)
             || !(planningBudgetSummaryApproved instanceof HTMLElement)
@@ -8270,12 +8740,23 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        const allocated = records.reduce((sum, record) => sum + getBudgetMetrics(record).allocatedBudget, 0);
-        const balance = records.reduce((sum, record) => sum + getBudgetMetrics(record).remainingBudget, 0);
+        const totalBudget = records.reduce((sum, record) => {
+            const numeric = Number(record?.totalBudget);
+            return sum + (Number.isFinite(numeric) ? numeric : 0);
+        }, 0);
+        const allocated = records.reduce((sum, record) => {
+            const usedAllocation = getUsedAllocationTotalForBudget(record.budgetName);
+            return sum + getBudgetMetrics(record, usedAllocation).allocatedBudget;
+        }, 0);
+        const balance = records.reduce((sum, record) => {
+            const usedAllocation = getUsedAllocationTotalForBudget(record.budgetName);
+            return sum + getBudgetMetrics(record, usedAllocation).remainingBudget;
+        }, 0);
         const draftCount = records.filter((record) => normalizeStatus(record.status) !== "Approved").length;
         const approvedCount = records.filter((record) => normalizeStatus(record.status) === "Approved").length;
         const currentYear = new Date().getFullYear();
 
+        planningBudgetSummaryTotalBudget.textContent = formatPhp(totalBudget);
         planningBudgetSummaryAllocated.textContent = formatPhp(allocated);
         planningBudgetSummaryBalance.textContent = formatPhp(balance);
         planningBudgetSummaryDraft.textContent = String(draftCount);
@@ -8319,6 +8800,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const renderPlanningBudgets = (records) => {
         if (!(planningBudgetCards instanceof HTMLElement)) return;
+        closePlanningBudgetDetail();
+        refreshPlanningDocBudgetAllocationSelect();
 
         if (!records.length) {
             if (planningEmptyState instanceof HTMLElement) {
@@ -8340,13 +8823,14 @@ document.addEventListener("DOMContentLoaded", () => {
             .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
             .map((record) => {
                 const statusMeta = getStatusMeta(record.status);
-                const metrics = getBudgetMetrics(record);
+                const usedAllocation = getUsedAllocationTotalForBudget(record.budgetName);
+                const metrics = getBudgetMetrics(record, usedAllocation);
                 const utilization = metrics.utilization;
                 const allocated = metrics.allocatedBudget;
                 const remaining = metrics.remainingBudget;
 
                 return `
-                    <article class="planning-budget-card">
+                    <article class="planning-budget-card is-expandable" data-planning-budget-record-id="${escapeHtml(record.id)}">
                         <div class="planning-budget-card-head">
                             <h4>${escapeHtml(record.budgetName)}</h4>
                             <div class="planning-budget-card-actions">
@@ -8382,9 +8866,94 @@ document.addEventListener("DOMContentLoaded", () => {
         renderPlanningSummaries(records);
     };
 
+    const closePlanningBudgetDetail = (options = {}) => {
+        const shouldClearActive = options.clearActive !== false;
+        if (!(planningBudgetDetailSection instanceof HTMLElement)) return;
+        planningBudgetDetailSection.hidden = true;
+        if (planningBudgetMainSection instanceof HTMLElement) {
+            planningBudgetMainSection.hidden = false;
+        }
+        if (shouldClearActive) {
+            activePlanningBudgetDetailRecordId = null;
+        }
+    };
+
+    const openPlanningBudgetDetail = (recordId) => {
+        if (!(planningBudgetDetailSection instanceof HTMLElement)
+            || !(planningBudgetDetailTbody instanceof HTMLTableSectionElement)) {
+            return;
+        }
+        const record = planningBudgetRecords.find((item) => String(item?.id || "") === String(recordId || ""));
+        if (!record) return;
+
+        const matchedDocuments = getPlanningDocumentsForBudget(record.budgetName);
+        const usedAllocation = getUsedAllocationTotalForBudget(record.budgetName);
+        const metrics = getBudgetMetrics(record, usedAllocation);
+
+        if (planningBudgetDetailTitle instanceof HTMLElement) {
+            planningBudgetDetailTitle.textContent = `${record.budgetName} Dashboard`;
+        }
+        if (planningBudgetDetailSubtitle instanceof HTMLElement) {
+            planningBudgetDetailSubtitle.textContent = `${matchedDocuments.length} registered document(s) under this allocation.`;
+        }
+        if (planningBudgetDetailTotal instanceof HTMLElement) {
+            planningBudgetDetailTotal.textContent = formatPhp(metrics.totalBudget);
+        }
+        if (planningBudgetDetailAllocated instanceof HTMLElement) {
+            planningBudgetDetailAllocated.textContent = formatPhp(metrics.allocatedBudget);
+        }
+        if (planningBudgetDetailRemaining instanceof HTMLElement) {
+            planningBudgetDetailRemaining.textContent = formatPhp(metrics.remainingBudget);
+        }
+        if (planningBudgetDetailUtilization instanceof HTMLElement) {
+            planningBudgetDetailUtilization.textContent = `${metrics.utilization.toFixed(1)}%`;
+        }
+
+        planningBudgetDetailTbody.innerHTML = "";
+        if (!matchedDocuments.length) {
+            planningBudgetDetailTbody.innerHTML = '<tr class="planning-budget-detail-empty-row"><td colspan="10">No documents registered under this budget allocation.</td></tr>';
+        } else {
+            const rows = matchedDocuments.map((doc, index) => {
+                const safeStatus = normalizePlanningDocStatus(doc.status);
+                return `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${escapeHtml(doc.slip_no || "-")}</td>
+                        <td>${escapeHtml(doc.document_name || "-")}</td>
+                        <td>${escapeHtml(doc.location || "-")}</td>
+                        <td>${escapeHtml(doc.contractor || "-")}</td>
+                        <td>${escapeHtml(formatPlanningDocAmount(doc.amount))}</td>
+                        <td>${escapeHtml(formatPlanningDocDate(doc.date_received))}</td>
+                        <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
+                        <td class="planning-doc-remarks">${escapeHtml(doc.remarks || "-")}</td>
+                        <td class="planning-doc-actions">
+                            <div class="planning-doc-actions-group">
+                                <button type="button" class="planning-doc-action-btn is-edit js-planning-budget-detail-edit" data-record-id="${escapeHtml(doc.id || "")}" aria-label="Edit document" title="Edit">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+            planningBudgetDetailTbody.innerHTML = rows;
+        }
+
+        activePlanningBudgetDetailRecordId = String(record.id || "");
+        planningBudgetDetailSection.hidden = false;
+        if (planningBudgetMainSection instanceof HTMLElement) {
+            planningBudgetMainSection.hidden = true;
+        }
+        planningBudgetDetailSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
     let planningBudgetRecords = readStoredBudgets();
+    let planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
     let editingBudgetRecordId = null;
     let editingPpaRow = null;
+    let editingPlanningDocumentId = null;
+    let activePlanningBudgetDetailRecordId = null;
+    let pendingPlanningBudgetDetailRecordId = null;
     let planningToastElement = null;
     let planningToastTimer = null;
     let planningConfirmOverlay = null;
@@ -8394,7 +8963,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const editVisible = planningEditBudgetModal instanceof HTMLElement && !planningEditBudgetModal.hidden;
         const ppaVisible = planningPpaModal instanceof HTMLElement && !planningPpaModal.hidden;
         const editPpaVisible = planningEditPpaModal instanceof HTMLElement && !planningEditPpaModal.hidden;
-        document.body.classList.toggle("planning-modal-open", createVisible || editVisible || ppaVisible || editPpaVisible);
+        const docVisible = planningDocModal instanceof HTMLElement && !planningDocModal.hidden;
+        document.body.classList.toggle("planning-modal-open", createVisible || editVisible || ppaVisible || editPpaVisible || docVisible);
     };
 
     const closePlanningToast = () => {
@@ -8575,6 +9145,8 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const openModal = () => {
+        closePlanningBudgetDetail();
+        closePlanningDocModal();
         closeEditPpaModal();
         if (planningEditBudgetModal instanceof HTMLElement && !planningEditBudgetModal.hidden) {
             planningEditBudgetModal.classList.remove("is-open");
@@ -8630,6 +9202,8 @@ document.addEventListener("DOMContentLoaded", () => {
         closeEditStatusMenu();
 
         closeModal();
+        closePlanningBudgetDetail();
+        closePlanningDocModal();
         closeEditPpaModal();
         planningEditBudgetModal.classList.add("is-open");
         planningEditBudgetModal.hidden = false;
@@ -8658,6 +9232,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const openPpaModal = () => {
         if (!(planningPpaModal instanceof HTMLElement)) return;
+        closePlanningBudgetDetail();
+        closePlanningDocModal();
         closeModal();
         closeEditModal();
         closeEditPpaModal();
@@ -8748,10 +9324,112 @@ document.addEventListener("DOMContentLoaded", () => {
         closePpaFormSelectMenus();
     };
 
+    const refreshPlanningDocBudgetAllocationSelect = (selectedValue = "") => {
+        if (!(planningDocBudgetAllocationSelect instanceof HTMLSelectElement)) return;
+
+        const options = getPlanningBudgetAllocationOptions();
+        const selected = String(selectedValue || "").trim();
+        const optionList = options.includes(selected) || !selected
+            ? options
+            : [...options, selected];
+
+        planningDocBudgetAllocationSelect.innerHTML = "";
+        const placeholderOption = document.createElement("option");
+        placeholderOption.value = "";
+        placeholderOption.textContent = "Select budget allocation";
+        planningDocBudgetAllocationSelect.appendChild(placeholderOption);
+
+        optionList.forEach((option) => {
+            const optionElement = document.createElement("option");
+            optionElement.value = option;
+            optionElement.textContent = option;
+            planningDocBudgetAllocationSelect.appendChild(optionElement);
+        });
+    };
+
+    const syncPlanningDocBudgetOtherField = () => {
+        if (!(planningDocBudgetAllocationSelect instanceof HTMLSelectElement)
+            || !(planningDocBudgetOtherWrap instanceof HTMLElement)
+            || !(planningDocBudgetOtherInput instanceof HTMLInputElement)) {
+            return;
+        }
+        const isOthers = planningDocBudgetAllocationSelect.value === "Others";
+        planningDocBudgetOtherWrap.hidden = !isOthers;
+        planningDocBudgetOtherInput.required = isOthers;
+        if (!isOthers) {
+            planningDocBudgetOtherInput.value = "";
+        }
+    };
+
+    const closePlanningDocModal = () => {
+        if (!(planningDocModal instanceof HTMLElement)) return;
+        planningDocModal.classList.remove("is-open");
+        planningDocModal.hidden = true;
+        planningDocModal.setAttribute("hidden", "");
+        planningDocModal.style.display = "none";
+        editingPlanningDocumentId = null;
+        pendingPlanningBudgetDetailRecordId = null;
+        syncPlanningModalBodyState();
+    };
+
+    const openPlanningDocModal = (recordId) => {
+        if (!(planningDocModal instanceof HTMLElement) || !(planningDocEditForm instanceof HTMLFormElement)) return;
+        const record = planningDocumentRecords.find((item) => String(item?.id || "") === String(recordId || ""));
+        if (!record) return;
+
+        editingPlanningDocumentId = String(record.id || "");
+        planningDocEditForm.reset();
+
+        const setValue = (fieldName, value) => {
+            const field = planningDocEditForm.elements.namedItem(fieldName);
+            if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+                field.value = String(value ?? "");
+            }
+        };
+
+        setValue("slip_no", record.slip_no || "");
+        setValue("document_name", record.document_name || "");
+        setValue("location", record.location || "");
+        setValue("contractor", record.contractor || "");
+        setValue("amount", record.amount || "");
+        setValue("received_from", record.received_from || "");
+        setValue("date_received", record.date_received || "");
+        setValue("status", normalizePlanningDocStatus(record.status));
+
+        const normalizedBudget = normalizeBudgetAllocationValue(record.budget_allocation)
+            || String(record.budget_allocation || "").trim();
+        refreshPlanningDocBudgetAllocationSelect(normalizedBudget);
+        setValue("budget_allocation", normalizedBudget);
+        setValue("budget_allocation_other", record.budget_allocation_other || "");
+        setValue("remarks", record.remarks || "");
+        syncPlanningDocBudgetOtherField();
+
+        closeModal();
+        closeEditModal();
+        closePlanningBudgetDetail();
+        closePlanningDocModal();
+        closePpaModal();
+        closeEditPpaModal();
+        planningDocModal.classList.add("is-open");
+        planningDocModal.hidden = false;
+        planningDocModal.removeAttribute("hidden");
+        planningDocModal.style.display = "flex";
+        syncPlanningModalBodyState();
+
+        window.requestAnimationFrame(() => {
+            const firstField = planningDocEditForm.elements.namedItem("slip_no");
+            if (firstField instanceof HTMLInputElement) {
+                firstField.focus();
+                firstField.select();
+            }
+        });
+    };
+
     closeModal();
     closeEditModal();
     closePpaModal();
     closeEditPpaModal();
+    closePlanningDocModal();
 
     if (planningTabs.length && planningPanels.length) {
         planningTabs.forEach((tab) => {
@@ -8876,6 +9554,12 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        const closePlanningDocButton = target.closest(".js-close-planning-doc-modal");
+        if (closePlanningDocButton) {
+            closePlanningDocModal();
+            return;
+        }
+
         const editButton = target.closest(".js-planning-edit-budget");
         if (editButton) {
             const recordId = editButton.getAttribute("data-record-id");
@@ -8947,6 +9631,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (target === planningEditPpaModal) {
             closeEditPpaModal();
+            return;
+        }
+
+        if (target === planningDocModal) {
+            closePlanningDocModal();
         }
     });
 
@@ -8968,6 +9657,103 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    planningDocCloseButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            closePlanningDocModal();
+        });
+    });
+
+    if (planningDocBudgetAllocationSelect instanceof HTMLSelectElement) {
+        planningDocBudgetAllocationSelect.addEventListener("change", () => {
+            syncPlanningDocBudgetOtherField();
+        });
+    }
+
+    if (planningDocEditForm instanceof HTMLFormElement) {
+        planningDocEditForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            if (!editingPlanningDocumentId) {
+                closePlanningDocModal();
+                return;
+            }
+
+            const recordIndex = planningDocumentRecords.findIndex((record) => {
+                return String(record?.id || "") === editingPlanningDocumentId;
+            });
+            if (recordIndex === -1) {
+                closePlanningDocModal();
+                return;
+            }
+
+            const formData = new FormData(planningDocEditForm);
+            const budgetAllocation = normalizeBudgetAllocationValue(formData.get("budget_allocation"));
+            if (budgetAllocation === null || budgetAllocation === "") {
+                showPeoGeneralToast("Please select a valid budget allocation.", {
+                    title: "Planning Division",
+                    variant: "warning",
+                });
+                return;
+            }
+
+            const budgetAllocationOther = String(formData.get("budget_allocation_other") || "").trim();
+            if (budgetAllocation === "Others" && !budgetAllocationOther) {
+                showPeoGeneralToast("Please provide the budget allocation value for Others.", {
+                    title: "Planning Division",
+                    variant: "warning",
+                });
+                return;
+            }
+
+            const rawStatus = String(formData.get("status") || "").trim();
+            const resolvedStatus = rawStatus
+                ? normalizePlanningDocStatus(rawStatus)
+                : "For Review";
+
+            const updatedRecord = {
+                ...planningDocumentRecords[recordIndex],
+                slip_no: String(formData.get("slip_no") || "").trim(),
+                document_name: String(formData.get("document_name") || "").trim(),
+                location: String(formData.get("location") || "").trim(),
+                contractor: String(formData.get("contractor") || "").trim(),
+                amount: String(formData.get("amount") || "").trim(),
+                received_from: String(formData.get("received_from") || "").trim(),
+                date_received: String(formData.get("date_received") || "").trim(),
+                status: resolvedStatus,
+                budget_allocation: budgetAllocation,
+                budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
+                remarks: String(formData.get("remarks") || "").trim(),
+            };
+
+            planningDocumentRecords[recordIndex] = updatedRecord;
+            writeStoredPlanningDocuments(planningDocumentRecords);
+
+            const adminSourceId = String(updatedRecord.__admin_source_id || "").trim();
+            if (adminSourceId) {
+                const adminRecords = readAdminDivisionRecords();
+                const adminRecordIndex = adminRecords.findIndex((item) => {
+                    return String(item?.__record_id || "").trim() === adminSourceId;
+                });
+                if (adminRecordIndex >= 0) {
+                    adminRecords[adminRecordIndex] = {
+                        ...adminRecords[adminRecordIndex],
+                        doc_status: updatedRecord.status,
+                        status: updatedRecord.status,
+                    };
+                    writeAdminDivisionRecords(adminRecords);
+                }
+            }
+
+            renderPlanningDocumentsTable(planningDocumentRecords);
+            renderPlanningBudgets(planningBudgetRecords);
+            const returnToDetailRecordId = pendingPlanningBudgetDetailRecordId;
+            closePlanningDocModal();
+            if (returnToDetailRecordId) {
+                openPlanningBudgetDetail(returnToDetailRecordId);
+            }
+            showPlanningToast("Planning document updated successfully.", "success");
+        });
+    }
+
     document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
         closePpaFilterMenus();
@@ -8981,6 +9767,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (planningPpaModal instanceof HTMLElement && !planningPpaModal.hidden) {
             closePpaModal();
+            return;
+        }
+        if (planningDocModal instanceof HTMLElement && !planningDocModal.hidden) {
+            closePlanningDocModal();
+            return;
+        }
+        if (planningBudgetDetailSection instanceof HTMLElement && !planningBudgetDetailSection.hidden) {
+            closePlanningBudgetDetail();
             return;
         }
         if (!planningBudgetModal.hidden) {
@@ -9244,7 +10038,87 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    if (planningDocumentsTableBody instanceof HTMLTableSectionElement) {
+        planningDocumentsTableBody.addEventListener("click", async (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+
+            const editButton = target.closest(".js-planning-doc-edit");
+            if (editButton) {
+                const recordId = String(editButton.getAttribute("data-record-id") || "").trim();
+                if (!recordId) return;
+                openPlanningDocModal(recordId);
+                return;
+            }
+
+            const deleteButton = target.closest(".js-planning-doc-delete");
+            if (!deleteButton) return;
+            const recordId = String(deleteButton.getAttribute("data-record-id") || "").trim();
+            if (!recordId) return;
+            const recordIndex = planningDocumentRecords.findIndex((record) => String(record?.id || "") === recordId);
+            if (recordIndex === -1) return;
+
+            const approved = await showPlanningConfirm({
+                title: "Delete Document",
+                message: "Are you sure you want to delete this planning document?",
+                confirmLabel: "Yes, Delete",
+                cancelLabel: "Cancel",
+            });
+            if (!approved) return;
+
+            const deletingRecord = planningDocumentRecords[recordIndex];
+            const sourceId = String(deletingRecord?.__admin_source_id || "").trim();
+            if (sourceId) {
+                const deletedIds = readDeletedPlanningAdminIds();
+                deletedIds.add(sourceId);
+                writeDeletedPlanningAdminIds(deletedIds);
+            }
+
+            planningDocumentRecords.splice(recordIndex, 1);
+            writeStoredPlanningDocuments(planningDocumentRecords);
+            renderPlanningDocumentsTable(planningDocumentRecords);
+            renderPlanningBudgets(planningBudgetRecords);
+            showPlanningToast("Planning document deleted.", "info");
+        });
+    }
+
+    if (planningBudgetCards instanceof HTMLElement) {
+        planningBudgetCards.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (target.closest(".planning-budget-card-actions")) return;
+
+            const card = target.closest(".planning-budget-card.is-expandable");
+            if (!(card instanceof HTMLElement)) return;
+            const recordId = String(card.getAttribute("data-planning-budget-record-id") || "").trim();
+            if (!recordId) return;
+            openPlanningBudgetDetail(recordId);
+        });
+    }
+
+    if (planningBudgetDetailTbody instanceof HTMLTableSectionElement) {
+        planningBudgetDetailTbody.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+
+            const editButton = target.closest(".js-planning-budget-detail-edit");
+            if (!editButton) return;
+            const recordId = String(editButton.getAttribute("data-record-id") || "").trim();
+            if (!recordId) return;
+
+            pendingPlanningBudgetDetailRecordId = activePlanningBudgetDetailRecordId;
+            openPlanningDocModal(recordId);
+        });
+    }
+
+    planningBudgetDetailCloseButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            closePlanningBudgetDetail();
+        });
+    });
+
         renderPlanningBudgets(planningBudgetRecords);
+        renderPlanningDocumentsTable(planningDocumentRecords);
         removePlanningPpaSampleRows();
         syncPpaTableState();
         enablePlanningPpaCardFloat();
@@ -9941,6 +10815,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const QUALITY_STORAGE_KEY = "peo_quality_records_v1";
+    const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const QUALITY_PAGE_SIZE = 10;
     const ROUTE_FILTERS = ["all", "incoming", "outgoing"];
     const DEFAULT_QUALITY_RECORDS = [
@@ -10170,6 +11045,111 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const readAdminDivisionRecords = () => {
+        try {
+            const raw = window.localStorage.getItem(ADMIN_DIVISION_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const normalizeDivisionLabel = (value) => {
+        return String(value || "").trim().toLowerCase();
+    };
+
+    const mapAdminDocTypeToQualityParticular = (value) => {
+        const normalized = normalizeText(value);
+        if (normalized.includes("concrete")) return "Concrete";
+        if (normalized.includes("steel")) return "Steel";
+        if (normalized.includes("electrical")) return "Electrical";
+        if (normalized.includes("structural")) return "Structural";
+        return "Other";
+    };
+
+    const mapAdminStatusToQualityStatus = (value) => {
+        const normalized = normalizeText(value);
+        if (normalized === "approved" || normalized === "closed") return "Completed";
+        if (normalized === "for review" || normalized === "routed") return "For Action";
+        if (normalized === "open" || normalized === "processing") return "In Progress";
+        return "For Action";
+    };
+
+    const mapAdminRecordToQuality = (adminRecord) => {
+        const fallbackDate = new Date().toISOString().slice(0, 10);
+        const docDate = String(
+            adminRecord?.date_received_peo
+            || adminRecord?.date_started
+            || adminRecord?.date_received_admin
+            || fallbackDate
+        ).trim();
+        const statusValue = String(adminRecord?.doc_status || adminRecord?.status || "").trim();
+
+        return {
+            __id: `quality_admin_${String(adminRecord?.__record_id || "")}`,
+            __admin_source: "admin_document",
+            __admin_source_id: String(adminRecord?.__record_id || ""),
+            received_from: "Admin Division",
+            doc_date: docDate,
+            particulars: mapAdminDocTypeToQualityParticular(adminRecord?.doc_type),
+            doc_no: String(adminRecord?.slip_no || "").trim(),
+            project_location: String(adminRecord?.document_name || "").trim(),
+            location_detail: String(adminRecord?.location || "").trim(),
+            scan_url: String(adminRecord?.scanned_file_data || "").trim(),
+            route: "Incoming",
+            received_by: "Quality Division",
+            date_recv: String(adminRecord?.date_received || adminRecord?.date_received_admin || docDate).trim(),
+            initial_status: "For Action",
+            owner_representative: String(adminRecord?.contractor || "").trim(),
+            contact_info: "",
+            status: mapAdminStatusToQualityStatus(statusValue),
+            remarks: String(adminRecord?.description || "").trim(),
+        };
+    };
+
+    const syncAdminRoutedQualityRecords = (existingRecords) => {
+        const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
+        const adminRecords = readAdminDivisionRecords();
+        const routedFromAdmin = adminRecords
+            .filter((record) => normalizeDivisionLabel(record?.division) === "quality")
+            .filter((record) => String(record?.__record_id || "").trim())
+            .map((record) => mapAdminRecordToQuality(record));
+
+        const routedBySourceId = new Map(
+            routedFromAdmin.map((record) => [record.__admin_source_id, record])
+        );
+
+        const nonRouted = currentRecords.filter((record) => {
+            return String(record?.__admin_source || "") !== "admin_document";
+        });
+
+        const existingRoutedBySource = new Map();
+        currentRecords.forEach((record) => {
+            if (String(record?.__admin_source || "") !== "admin_document") return;
+            const sourceId = String(record?.__admin_source_id || "").trim();
+            if (!sourceId) return;
+            existingRoutedBySource.set(sourceId, record);
+        });
+
+        const mergedRouted = Array.from(routedBySourceId.values()).map((incoming) => {
+            const existing = existingRoutedBySource.get(incoming.__admin_source_id);
+            if (!existing) return incoming;
+            return {
+                ...existing,
+                ...incoming,
+            };
+        });
+
+        const nextRecords = [...mergedRouted, ...nonRouted];
+        const beforeSignature = JSON.stringify(currentRecords);
+        const afterSignature = JSON.stringify(nextRecords);
+        if (beforeSignature !== afterSignature) {
+            writeStoredRecords(nextRecords);
+        }
+        return nextRecords;
+    };
+
     const writeStoredRecords = (records) => {
         try {
             window.localStorage.setItem(QUALITY_STORAGE_KEY, JSON.stringify(records));
@@ -10279,7 +11259,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    let records = readStoredRecords();
+    let records = syncAdminRoutedQualityRecords(readStoredRecords());
     let currentPage = 1;
     let activeTab = "all";
     let activeRouteFilter = "all";

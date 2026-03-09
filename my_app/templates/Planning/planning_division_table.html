@@ -23,6 +23,7 @@
     </div>
 
     <section class="planning-panel" data-planning-panel="budget">
+        <div class="js-planning-budget-main">
         <div class="planning-section-head">
             <div>
                 <h3>Annual Budget Allocations</h3>
@@ -35,6 +36,14 @@
         </div>
 
         <div class="planning-budget-summary-grid">
+            <article class="planning-budget-summary-card">
+                <div class="planning-budget-summary-head">
+                    <span class="material-symbols-outlined planning-budget-summary-icon" aria-hidden="true">account_balance</span>
+                    <span class="planning-budget-summary-label">Total Budget</span>
+                </div>
+                <strong data-planning-budget-summary="total_budget">PHP 0.00</strong>
+                <small>Combined budget ceiling across all allocations</small>
+            </article>
             <article class="planning-budget-summary-card">
                 <div class="planning-budget-summary-head">
                     <span class="material-symbols-outlined planning-budget-summary-icon" aria-hidden="true">payments</span>
@@ -77,6 +86,132 @@
             </article>
         </div>
 
+        <div class="planning-doc-shell">
+            <div class="planning-doc-shell-head">
+                <div>
+                    <h4>Planning Document Register</h4>
+                    <p>Documents routed from Admin Division for planning review and allocation tagging.</p>
+                </div>
+                <span class="planning-doc-count" id="planning-doc-count">0 document(s)</span>
+            </div>
+
+            <div class="planning-doc-table-wrap">
+                <table class="planning-doc-table">
+                    <thead>
+                        <tr>
+                            <th>Slip No.</th>
+                            <th>Document Name</th>
+                            <th>Location</th>
+                            <th>Contractor</th>
+                            <th>Amount</th>
+                            <th>Received From</th>
+                            <th>Date Received</th>
+                            <th>Status</th>
+                            <th>Budget Allocation</th>
+                            <th>Remarks</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="planning-documents-tbody">
+                        <tr class="planning-doc-empty-row">
+                            <td colspan="11">No planning documents available yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="planning-modal-overlay js-planning-doc-modal" hidden>
+            <div class="planning-modal planning-modal--ppa-edit" role="dialog" aria-modal="true" aria-labelledby="planning-doc-edit-title">
+                <div class="planning-modal-head">
+                    <div>
+                        <h4 id="planning-doc-edit-title">Edit Planning Document</h4>
+                        <p>Update document details, status, budget allocation, and remarks.</p>
+                    </div>
+                    <button type="button" class="planning-modal-close-btn js-close-planning-doc-modal" aria-label="Close modal">x</button>
+                </div>
+
+                <form id="planning-doc-edit-form" class="planning-budget-form planning-ppa-edit-form">
+                    <div class="planning-ppa-form-grid planning-ppa-edit-grid">
+                        <label class="planning-form-field">
+                            <span>Slip No.</span>
+                            <input type="text" name="slip_no" class="planning-form-input" required>
+                        </label>
+                        <label class="planning-form-field">
+                            <span>Document Name</span>
+                            <input type="text" name="document_name" class="planning-form-input" required>
+                        </label>
+                    </div>
+
+                    <div class="planning-ppa-form-grid planning-ppa-edit-grid">
+                        <label class="planning-form-field">
+                            <span>Location</span>
+                            <input type="text" name="location" class="planning-form-input">
+                        </label>
+                        <label class="planning-form-field">
+                            <span>Contractor</span>
+                            <input type="text" name="contractor" class="planning-form-input">
+                        </label>
+                    </div>
+
+                    <label class="planning-form-field">
+                        <span>Amount</span>
+                        <input type="text" name="amount" class="planning-form-input" placeholder="e.g., PHP 2,500,000.00">
+                    </label>
+
+                    <div class="planning-ppa-form-grid planning-ppa-edit-grid">
+                        <label class="planning-form-field">
+                            <span>Received From</span>
+                            <input type="text" name="received_from" class="planning-form-input" required>
+                        </label>
+                        <label class="planning-form-field">
+                            <span>Date Received</span>
+                            <input type="date" name="date_received" class="planning-form-input" required>
+                        </label>
+                    </div>
+
+                    <div class="planning-ppa-form-grid planning-ppa-edit-grid">
+                        <label class="planning-form-field">
+                            <span>Status</span>
+                            <select name="status" class="planning-form-input" required>
+                                <option value="For Review">For Review</option>
+                                <option value="Approved">Approved</option>
+                                <option value="Rejected">Rejected</option>
+                            </select>
+                        </label>
+                        <label class="planning-form-field">
+                            <span>Budget Allocation</span>
+                            <select name="budget_allocation" class="planning-form-input js-planning-doc-budget-allocation" required>
+                                <option value="">Select budget allocation</option>
+                                <option value="20% Development Fund">20% Development Fund</option>
+                                <option value="Trust Fund">Trust Fund</option>
+                                <option value="SFVIP">SFVIP</option>
+                                <option value="RBDP">RBDP</option>
+                                <option value="Supplemental Budget">Supplemental Budget</option>
+                                <option value="SEF">SEF</option>
+                                <option value="Others">Others</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <label class="planning-form-field js-planning-doc-budget-other-wrap" hidden>
+                        <span>Specify Other Budget Allocation</span>
+                        <input type="text" name="budget_allocation_other" class="planning-form-input js-planning-doc-budget-other" placeholder="Enter budget allocation">
+                    </label>
+
+                    <label class="planning-form-field">
+                        <span>Remarks</span>
+                        <textarea name="remarks" class="planning-form-input planning-form-textarea" placeholder="Optional remarks..."></textarea>
+                    </label>
+
+                    <div class="planning-form-actions">
+                        <button type="button" class="planning-btn-cancel js-close-planning-doc-modal">Cancel</button>
+                        <button type="submit" class="planning-btn-submit">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <div class="planning-empty-state">
             <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
             <h4>No budget records yet</h4>
@@ -84,6 +219,63 @@
         </div>
 
         <div class="planning-card-grid" id="planning-budget-cards" hidden></div>
+        </div>
+
+        <section class="planning-budget-detail js-planning-budget-detail" hidden>
+            <div class="planning-budget-detail-head">
+                <button type="button" class="planning-budget-detail-back js-planning-budget-detail-close">
+                    <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                    <span>Back to Budget Cards</span>
+                </button>
+                <div>
+                    <h4 class="js-planning-budget-detail-title">Budget Detail</h4>
+                    <p class="js-planning-budget-detail-subtitle">Detailed register and allocation breakdown.</p>
+                </div>
+            </div>
+
+            <div class="planning-budget-detail-metrics">
+                <article>
+                    <span>Total Budget</span>
+                    <strong class="js-planning-budget-detail-total">PHP 0.00</strong>
+                </article>
+                <article>
+                    <span>Allocated</span>
+                    <strong class="js-planning-budget-detail-allocated">PHP 0.00</strong>
+                </article>
+                <article>
+                    <span>Remaining Balance</span>
+                    <strong class="js-planning-budget-detail-remaining">PHP 0.00</strong>
+                </article>
+                <article>
+                    <span>Utilization</span>
+                    <strong class="js-planning-budget-detail-utilization">0.0%</strong>
+                </article>
+            </div>
+
+            <div class="planning-budget-detail-table-wrap">
+                <table class="planning-budget-detail-table">
+                    <thead>
+                        <tr>
+                            <th>Budget No.</th>
+                            <th>Slip No.</th>
+                            <th>Project Name</th>
+                            <th>Location</th>
+                            <th>Contractor</th>
+                            <th>Amount</th>
+                            <th>Date Received</th>
+                            <th>Status</th>
+                            <th>Remarks</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="js-planning-budget-detail-tbody">
+                        <tr class="planning-budget-detail-empty-row">
+                            <td colspan="10">No documents registered under this budget allocation.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </section>
 
     <section class="planning-panel" data-planning-panel="ppa" hidden>
