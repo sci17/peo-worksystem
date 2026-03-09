@@ -9901,6 +9901,15 @@ body.construction-modal-open {
     border: 1px solid #cdd6e0;
     border-radius: 16px;
     padding: 22px;
+    overflow-x: hidden;
+}
+
+.planning-panel,
+.planning-doc-shell,
+.planning-budget-detail,
+.planning-ppa-shell {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .planning-header {
@@ -10073,7 +10082,7 @@ body.construction-modal-open {
 
 .planning-budget-summary-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 14px;
     margin-bottom: 18px;
 }
@@ -10124,10 +10133,14 @@ body.construction-modal-open {
 }
 
 .planning-budget-summary-card strong {
+    display: block;
+    max-width: 100%;
     color: #113a67;
     font-size: 1.75rem;
     line-height: 1.05;
     font-weight: 800;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .planning-budget-summary-card small {
@@ -10665,6 +10678,200 @@ body.construction-modal-open {
     height: 34px;
     padding: 0 12px;
     cursor: pointer;
+}
+
+.planning-doc-shell {
+    margin-top: 18px;
+    border: 1px solid #d8e1ec;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 12px 24px rgba(20, 36, 57, 0.08);
+    overflow: hidden;
+}
+
+.planning-doc-shell-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid #e5edf6;
+}
+
+.planning-doc-shell-head h4 {
+    margin: 0;
+    color: #123b66;
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.planning-doc-shell-head p {
+    margin: 4px 0 0;
+    color: #68809a;
+    font-size: 0.82rem;
+}
+
+.planning-doc-count {
+    color: #4d6783;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.planning-doc-table-wrap {
+    overflow-x: auto;
+}
+
+.planning-doc-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1320px;
+}
+
+.planning-doc-table th,
+.planning-doc-table td {
+    padding: 13px 14px;
+    border-bottom: 1px solid #e7eef6;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.planning-doc-table th {
+    color: #778aa3;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: #f8fbff;
+}
+
+.planning-doc-table td {
+    color: #213a53;
+    font-size: 0.86rem;
+}
+
+.planning-doc-table tbody tr:hover td {
+    background: #fbfdff;
+}
+
+.planning-doc-empty-row td {
+    text-align: center;
+    color: #6d829b;
+    font-style: italic;
+}
+
+.planning-doc-status {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.planning-doc-status.is-draft {
+    background: #ffe9b7;
+    color: #9a6a0e;
+}
+
+.planning-doc-status.is-for-review {
+    background: #fff3cf;
+    color: #9a6f12;
+}
+
+.planning-doc-status.is-routed {
+    background: #dbe8ff;
+    color: #305fba;
+}
+
+.planning-doc-status.is-processing {
+    background: #d7ebff;
+    color: #2b67a7;
+}
+
+.planning-doc-status.is-approved {
+    background: #c8f0dd;
+    color: #18784f;
+}
+
+.planning-doc-status.is-rejected {
+    background: #f7d9dd;
+    color: #b44555;
+}
+
+.planning-doc-status.is-open {
+    background: #e5f3ff;
+    color: #2b69aa;
+}
+
+.planning-doc-status.is-closed {
+    background: #eceff4;
+    color: #5b6778;
+}
+
+.planning-doc-actions {
+    text-align: center;
+}
+
+.planning-doc-actions-group {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.planning-doc-action-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid #d6e0eb;
+    background: #f8fafd;
+    color: #6f849d;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.planning-doc-action-btn .material-symbols-outlined {
+    font-size: 16px;
+}
+
+.planning-doc-action-btn.is-edit:hover {
+    transform: translateY(-1px);
+    border-color: #bfcddd;
+    background: #e7eef6;
+    color: #4f6782;
+    box-shadow: 0 6px 12px rgba(32, 57, 88, 0.12);
+}
+
+.planning-doc-action-btn.is-delete {
+    border-color: #efb9bf;
+    background: #fff2f4;
+    color: #d15c67;
+}
+
+.planning-doc-action-btn.is-delete:hover {
+    transform: translateY(-1px);
+    border-color: #e9a2aa;
+    background: #ffe9ec;
+    color: #c44755;
+    box-shadow: 0 6px 12px rgba(173, 62, 76, 0.16);
+}
+
+.planning-doc-remarks {
+    max-width: 220px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.planning-panel[data-planning-panel="budget"] .planning-empty-state {
+    margin-top: 16px;
+}
+
+.planning-panel[data-planning-panel="budget"] #planning-budget-cards {
+    margin-top: 14px;
 }
 
 .planning-new-budget-btn {
@@ -11382,6 +11589,10 @@ body.planning-modal-open {
     transition: box-shadow 0.16s ease, transform 0.16s ease;
 }
 
+.planning-budget-card.is-expandable {
+    cursor: pointer;
+}
+
 .planning-budget-card:hover {
     transform: translateY(-1px);
     box-shadow: 0 8px 18px rgba(18, 45, 75, 0.12);
@@ -11542,6 +11753,128 @@ body.planning-modal-open {
 
 .planning-budget-progress-fill.is-high {
     background: #12a574;
+}
+
+.planning-budget-detail {
+    margin-top: 16px;
+    border: 1px solid #d4deea;
+    border-radius: 14px;
+    background: #f6f9fd;
+    box-shadow: 0 10px 20px rgba(18, 45, 75, 0.08);
+    padding: 14px;
+}
+
+.planning-budget-detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.planning-budget-detail-back {
+    border: 1px solid #c6d2de;
+    background: #eef2f6;
+    color: #253747;
+    border-radius: 10px;
+    min-height: 36px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.planning-budget-detail-back .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.planning-budget-detail-head h4 {
+    margin: 0;
+    color: #163a61;
+    font-size: 1.06rem;
+    font-weight: 800;
+}
+
+.planning-budget-detail-head p {
+    margin: 4px 0 0;
+    color: #547089;
+    font-size: 0.84rem;
+}
+
+.planning-budget-detail-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.planning-budget-detail-metrics article {
+    border: 1px solid #d8e2ed;
+    border-radius: 11px;
+    background: #ffffff;
+    padding: 10px 12px;
+}
+
+.planning-budget-detail-metrics span {
+    display: block;
+    color: #627b95;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+
+.planning-budget-detail-metrics strong {
+    display: block;
+    margin-top: 4px;
+    color: #163d66;
+    font-size: 1rem;
+    font-family: "Consolas", "Courier New", monospace;
+    font-weight: 700;
+}
+
+.planning-budget-detail-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #d6e1ec;
+    border-radius: 10px;
+    background: #ffffff;
+}
+
+.planning-budget-detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 930px;
+}
+
+.planning-budget-detail-table th,
+.planning-budget-detail-table td {
+    padding: 10px 11px;
+    border-bottom: 1px solid #e4edf7;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.planning-budget-detail-table th {
+    color: #6f879f;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: #f3f8ff;
+}
+
+.planning-budget-detail-table td {
+    color: #20384f;
+    font-size: 0.79rem;
+}
+
+.planning-budget-detail-empty-row td {
+    text-align: center;
+    color: #6a829b;
+    font-style: italic;
 }
 
 .planning-pagination {
