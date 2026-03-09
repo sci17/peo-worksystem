@@ -8403,6 +8403,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const writeAdminDivisionRecords = (records) => {
+        try {
+            window.localStorage.setItem(ADMIN_DIVISION_STORAGE_KEY, JSON.stringify(records));
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    };
+
     const readStoredPlanningDocuments = () => {
         try {
             const raw = window.localStorage.getItem(PLANNING_DOCUMENT_STORAGE_KEY);
@@ -8440,6 +8448,10 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             // Ignore storage failures.
         }
+    };
+
+    const pickPlanningEditedValue = (recordValue, fallbackValue = "") => {
+        return recordValue === undefined || recordValue === null ? fallbackValue : recordValue;
     };
 
     const getPlanningBudgetRecordNames = () => {
@@ -8661,17 +8673,17 @@ document.addEventListener("DOMContentLoaded", () => {
             acc.push({
                 ...mapped,
                 ...record,
-                slip_no: String(record?.slip_no || mapped.slip_no || "").trim(),
-                document_name: String(record?.document_name || mapped.document_name || "").trim(),
-                location: String(record?.location || mapped.location || "").trim(),
-                contractor: String(record?.contractor || mapped.contractor || "").trim(),
-                amount: String(record?.amount || mapped.amount || "").trim(),
-                received_from: String(record?.received_from || mapped.received_from || "").trim(),
-                date_received: String(record?.date_received || mapped.date_received || "").trim(),
-                status: normalizePlanningDocStatus(record.status || mapped.status || "For Review"),
-                budget_allocation: record.budget_allocation || mapped.budget_allocation || "",
-                budget_allocation_other: record.budget_allocation_other || mapped.budget_allocation_other || "",
-                remarks: record.remarks || mapped.remarks || "",
+                slip_no: String(pickPlanningEditedValue(record?.slip_no, mapped.slip_no || "")).trim(),
+                document_name: String(pickPlanningEditedValue(record?.document_name, mapped.document_name || "")).trim(),
+                location: String(pickPlanningEditedValue(record?.location, mapped.location || "")).trim(),
+                contractor: String(pickPlanningEditedValue(record?.contractor, mapped.contractor || "")).trim(),
+                amount: String(pickPlanningEditedValue(record?.amount, mapped.amount || "")).trim(),
+                received_from: String(pickPlanningEditedValue(record?.received_from, mapped.received_from || "")).trim(),
+                date_received: String(pickPlanningEditedValue(record?.date_received, mapped.date_received || "")).trim(),
+                status: normalizePlanningDocStatus(pickPlanningEditedValue(record?.status, mapped.status || "For Review")),
+                budget_allocation: String(pickPlanningEditedValue(record?.budget_allocation, mapped.budget_allocation || "")).trim(),
+                budget_allocation_other: String(pickPlanningEditedValue(record?.budget_allocation_other, mapped.budget_allocation_other || "")).trim(),
+                remarks: String(pickPlanningEditedValue(record?.remarks, mapped.remarks || "")).trim(),
             });
             adminBySourceId.delete(sourceId);
             return acc;
@@ -8705,37 +8717,74 @@ document.addEventListener("DOMContentLoaded", () => {
 
         records.forEach((record) => {
             const row = document.createElement("tr");
-            row.dataset.recordId = String(record.id || "");
-            const safeStatus = normalizePlanningDocStatus(record.status);
-            const budgetAllocation = getPlanningDocBudgetAllocationDisplay(record);
-
-            row.innerHTML = `
-                <td>${escapeHtml(record.slip_no || "-")}</td>
-                <td>${escapeHtml(record.document_name || "-")}</td>
-                <td>${escapeHtml(record.location || "-")}</td>
-                <td>${escapeHtml(record.contractor || "-")}</td>
-                <td>${escapeHtml(formatPlanningDocAmount(record.amount))}</td>
-                <td>${escapeHtml(record.received_from || "-")}</td>
-                <td>${escapeHtml(formatPlanningDocDate(record.date_received))}</td>
-                <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
-                <td>${escapeHtml(budgetAllocation)}</td>
-                <td class="planning-doc-remarks">${escapeHtml(record.remarks || "-")}</td>
-                <td class="planning-doc-actions">
-                    <div class="planning-doc-actions-group">
-                        <button type="button" class="planning-doc-action-btn is-edit js-planning-doc-edit" data-record-id="${escapeHtml(record.id || "")}" aria-label="Edit document" title="Edit">
-                            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                        </button>
-                        <button type="button" class="planning-doc-action-btn is-delete js-planning-doc-delete" data-record-id="${escapeHtml(record.id || "")}" aria-label="Delete document" title="Delete">
-                            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                        </button>
-                    </div>
-                </td>
-            `;
+            applyPlanningDocumentRow(row, record);
             planningDocumentsTableBody.appendChild(row);
         });
 
         if (planningDocCountLabel instanceof HTMLElement) {
             planningDocCountLabel.textContent = `${records.length} document(s)`;
+        }
+    };
+
+    const getPlanningDocumentRowMarkup = (record) => {
+        const safeStatus = normalizePlanningDocStatus(record?.status);
+        const budgetAllocation = getPlanningDocBudgetAllocationDisplay(record);
+
+        return `
+            <td>${escapeHtml(record?.slip_no || "-")}</td>
+            <td>${escapeHtml(record?.document_name || "-")}</td>
+            <td>${escapeHtml(record?.location || "-")}</td>
+            <td>${escapeHtml(record?.contractor || "-")}</td>
+            <td>${escapeHtml(formatPlanningDocAmount(record?.amount))}</td>
+            <td>${escapeHtml(record?.received_from || "-")}</td>
+            <td>${escapeHtml(formatPlanningDocDate(record?.date_received))}</td>
+            <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
+            <td>${escapeHtml(budgetAllocation)}</td>
+            <td class="planning-doc-remarks">${escapeHtml(record?.remarks || "-")}</td>
+            <td class="planning-doc-actions">
+                <div class="planning-doc-actions-group">
+                    <button type="button" class="planning-doc-action-btn is-edit js-planning-doc-edit" data-record-id="${escapeHtml(record?.id || "")}" aria-label="Edit document" title="Edit">
+                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                    </button>
+                    <button type="button" class="planning-doc-action-btn is-delete js-planning-doc-delete" data-record-id="${escapeHtml(record?.id || "")}" aria-label="Delete document" title="Delete">
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                </div>
+            </td>
+        `;
+    };
+
+    const applyPlanningDocumentRow = (row, record) => {
+        if (!(row instanceof HTMLTableRowElement)) {
+            return;
+        }
+
+        row.dataset.recordId = String(record?.id || "");
+        row.innerHTML = getPlanningDocumentRowMarkup(record);
+    };
+
+    const upsertPlanningDocumentTableRow = (record) => {
+        if (!(planningDocumentsTableBody instanceof HTMLTableSectionElement) || !record) {
+            return;
+        }
+
+        planningDocumentsTableBody.querySelector(".planning-doc-empty-row")?.remove();
+
+        const recordId = String(record?.id || "").trim();
+        let targetRow = recordId
+            ? planningDocumentsTableBody.querySelector(`tr[data-record-id="${recordId}"]`)
+            : null;
+
+        if (!(targetRow instanceof HTMLTableRowElement)) {
+            targetRow = document.createElement("tr");
+            planningDocumentsTableBody.prepend(targetRow);
+        }
+
+        applyPlanningDocumentRow(targetRow, record);
+
+        if (planningDocCountLabel instanceof HTMLElement) {
+            const rowCount = planningDocumentsTableBody.querySelectorAll('tr[data-record-id]').length;
+            planningDocCountLabel.textContent = `${rowCount} document(s)`;
         }
     };
 
@@ -9664,6 +9713,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const record = planningDocumentRecords.find((item) => String(item?.id || "") === String(recordId || ""));
         if (!record) return;
 
+        closeModal();
+        closeEditModal();
+        closePlanningBudgetDetail();
+        closePpaModal();
+        closeEditPpaModal();
+
         editingPlanningDocumentId = String(record.id || "");
         planningDocEditForm.reset();
 
@@ -9691,12 +9746,6 @@ document.addEventListener("DOMContentLoaded", () => {
         setValue("remarks", record.remarks || "");
         syncPlanningDocBudgetOtherField();
 
-        closeModal();
-        closeEditModal();
-        closePlanningBudgetDetail();
-        closePlanningDocModal();
-        closePpaModal();
-        closeEditPpaModal();
         planningDocModal.classList.add("is-open");
         planningDocModal.hidden = false;
         planningDocModal.removeAttribute("hidden");
@@ -9973,6 +10022,20 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const formData = new FormData(planningDocEditForm);
+            const slipNo = String(formData.get("slip_no") || "").trim();
+            const documentName = String(formData.get("document_name") || "").trim();
+            const receivedFrom = String(formData.get("received_from") || "").trim();
+            const dateReceived = toPlanningDocInputDate(formData.get("date_received")) || String(formData.get("date_received") || "").trim();
+            const rawStatus = String(formData.get("status") || "").trim();
+
+            if (!slipNo || !documentName || !receivedFrom || !dateReceived || !rawStatus) {
+                showPeoGeneralToast("Please complete all required fields before saving changes.", {
+                    title: "Planning Division",
+                    variant: "warning",
+                });
+                return;
+            }
+
             const budgetAllocation = resolvePlanningBudgetAllocationValue(formData.get("budget_allocation"));
             if (budgetAllocation === null || budgetAllocation === "") {
                 showPeoGeneralToast("Please select a valid budget allocation.", {
@@ -9991,20 +10054,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const rawStatus = String(formData.get("status") || "").trim();
             const resolvedStatus = rawStatus
                 ? normalizePlanningDocStatus(rawStatus)
                 : "For Review";
 
             const updatedRecord = {
                 ...planningDocumentRecords[recordIndex],
-                slip_no: String(formData.get("slip_no") || "").trim(),
-                document_name: String(formData.get("document_name") || "").trim(),
+                slip_no: slipNo,
+                document_name: documentName,
                 location: String(formData.get("location") || "").trim(),
                 contractor: String(formData.get("contractor") || "").trim(),
                 amount: String(formData.get("amount") || "").trim(),
-                received_from: String(formData.get("received_from") || "").trim(),
-                date_received: toPlanningDocInputDate(formData.get("date_received")) || String(formData.get("date_received") || "").trim(),
+                received_from: receivedFrom,
+                date_received: dateReceived,
                 status: resolvedStatus,
                 budget_allocation: budgetAllocation,
                 budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
@@ -10013,46 +10075,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             planningDocumentRecords[recordIndex] = updatedRecord;
             writeStoredPlanningDocuments(planningDocumentRecords);
-
-            const adminSourceId = String(updatedRecord.__admin_source_id || "").trim();
-            if (adminSourceId) {
-                const adminRecords = readAdminDivisionRecords();
-                const adminRecordIndex = adminRecords.findIndex((item) => {
-                    return String(item?.__record_id || "").trim() === adminSourceId;
-                });
-                if (adminRecordIndex >= 0) {
-                    adminRecords[adminRecordIndex] = {
-                        ...adminRecords[adminRecordIndex],
-                        slip_no: updatedRecord.slip_no,
-                        document_name: updatedRecord.document_name,
-                        location: updatedRecord.location,
-                        contractor: updatedRecord.contractor,
-                        revised_contract_amount: updatedRecord.amount,
-                        contract_amount: updatedRecord.amount,
-                        received_from: updatedRecord.received_from,
-                        date_received_peo: updatedRecord.date_received,
-                        date_received_admin: updatedRecord.date_received,
-                        fund_source: updatedRecord.budget_allocation,
-                        budget_name: updatedRecord.budget_allocation,
-                        budget_allocation: updatedRecord.budget_allocation,
-                        budget_allocation_other: updatedRecord.budget_allocation_other,
-                        description: updatedRecord.remarks,
-                        doc_status: updatedRecord.status,
-                        status: updatedRecord.status,
-                    };
-                    writeAdminDivisionRecords(adminRecords);
-                }
-            }
-
-            planningDocumentRecords = syncAdminToPlanningDocuments(planningDocumentRecords);
             renderPlanningDocumentsTable(planningDocumentRecords);
-            renderPlanningBudgets(planningBudgetRecords);
-            const selectedBudgetDetailRecordId = getPlanningBudgetRecordIdByAllocation(updatedRecord.budget_allocation);
-            const returnToDetailRecordId = selectedBudgetDetailRecordId || pendingPlanningBudgetDetailRecordId;
             closePlanningDocModal();
-            if (returnToDetailRecordId) {
-                openPlanningBudgetDetail(returnToDetailRecordId);
-            }
             showPlanningToast("Planning document updated successfully.", "success");
         });
     }

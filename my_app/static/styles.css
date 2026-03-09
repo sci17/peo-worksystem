@@ -11407,6 +11407,106 @@ body.construction-modal-open {
         #ffffff;
 }
 
+.planning-modal--doc-register {
+    width: min(96vw, 900px);
+    max-height: calc(100vh - 10px);
+    border-radius: 28px;
+    background: #f6f8fb;
+    border-color: #d6dee9;
+}
+
+.planning-doc-edit-head {
+    padding: 22px 26px 18px;
+    background: #f6f8fb;
+}
+
+.planning-doc-edit-head h4 {
+    font-size: 1.12rem;
+    font-weight: 800;
+    color: #1b2f4b;
+}
+
+.planning-doc-edit-head p {
+    margin-top: 6px;
+    color: #6f85a0;
+    font-size: 0.84rem;
+}
+
+.planning-doc-edit-form {
+    padding: 18px 26px 18px;
+    gap: 18px;
+    background: #f6f8fb;
+}
+
+.planning-doc-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 14px;
+}
+
+.planning-doc-edit-field--full {
+    grid-column: 1 / -1;
+}
+
+.planning-doc-edit-form .planning-form-field {
+    gap: 8px;
+}
+
+.planning-doc-edit-form .planning-form-field > span {
+    color: #5f748d;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+.planning-doc-edit-form .planning-form-input {
+    min-height: 56px;
+    border: 1px solid #c9d5e3;
+    border-radius: 18px;
+    background: #fbfcfe;
+    color: #24415f;
+    padding: 0 18px;
+    font-size: 0.94rem;
+}
+
+.planning-doc-edit-form select.planning-form-input {
+    appearance: none;
+    background-image:
+        linear-gradient(45deg, transparent 50%, #335274 50%),
+        linear-gradient(135deg, #335274 50%, transparent 50%);
+    background-position:
+        calc(100% - 22px) calc(50% - 2px),
+        calc(100% - 16px) calc(50% - 2px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    padding-right: 42px;
+}
+
+.planning-doc-edit-form .planning-form-input:focus {
+    border-color: #8fb5ff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.16);
+    background: #ffffff;
+}
+
+.planning-doc-edit-form .planning-form-textarea {
+    min-height: 112px;
+    padding: 14px 18px;
+    resize: vertical;
+}
+
+.planning-doc-edit-actions {
+    margin-top: 0;
+    padding-top: 14px;
+    padding-bottom: 6px;
+    background: linear-gradient(180deg, rgba(246, 248, 251, 0) 0%, #f6f8fb 28%);
+}
+
+.planning-modal--doc-register .planning-btn-cancel,
+.planning-modal--doc-register .planning-btn-submit {
+    min-width: 138px;
+    border-radius: 16px;
+}
+
 body.planning-modal-open {
     overflow: hidden;
 }
@@ -12048,6 +12148,10 @@ body.planning-modal-open {
     }
 
     .planning-ppa-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .planning-doc-edit-grid {
         grid-template-columns: 1fr;
     }
 

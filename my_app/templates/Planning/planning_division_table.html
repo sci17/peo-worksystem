@@ -122,55 +122,54 @@
         </div>
 
         <div class="planning-modal-overlay js-planning-doc-modal" hidden>
-            <div class="planning-modal planning-modal--ppa-edit" role="dialog" aria-modal="true" aria-labelledby="planning-doc-edit-title">
-                <div class="planning-modal-head">
-                    <div>
+            <div class="planning-modal planning-modal--doc-register" role="dialog" aria-modal="true" aria-labelledby="planning-doc-edit-title">
+                <div class="planning-modal-head planning-doc-edit-head">
+                    <div class="planning-modal-heading">
                         <h4 id="planning-doc-edit-title">Edit Planning Document</h4>
                         <p>Update document details, status, budget allocation, and remarks.</p>
                     </div>
-                    <button type="button" class="planning-modal-close-btn js-close-planning-doc-modal" aria-label="Close modal">x</button>
+                    <button type="button" class="planning-modal-close-btn js-close-planning-doc-modal" aria-label="Close modal">
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                    </button>
                 </div>
 
-                <form id="planning-doc-edit-form" class="planning-budget-form planning-ppa-edit-form">
-                    <div class="planning-ppa-form-grid planning-ppa-edit-grid">
+                <form id="planning-doc-edit-form" class="planning-budget-form planning-doc-edit-form" novalidate>
+                    <div class="planning-doc-edit-grid">
                         <label class="planning-form-field">
                             <span>Slip No.</span>
                             <input type="text" name="slip_no" class="planning-form-input" required>
                         </label>
+
                         <label class="planning-form-field">
                             <span>Document Name</span>
                             <input type="text" name="document_name" class="planning-form-input" required>
                         </label>
-                    </div>
 
-                    <div class="planning-ppa-form-grid planning-ppa-edit-grid">
                         <label class="planning-form-field">
                             <span>Location</span>
                             <input type="text" name="location" class="planning-form-input">
                         </label>
+
                         <label class="planning-form-field">
                             <span>Contractor</span>
                             <input type="text" name="contractor" class="planning-form-input">
                         </label>
-                    </div>
 
-                    <label class="planning-form-field">
-                        <span>Amount</span>
-                        <input type="text" name="amount" class="planning-form-input" placeholder="e.g., PHP 2,500,000.00">
-                    </label>
+                        <label class="planning-form-field planning-doc-edit-field--full">
+                            <span>Amount</span>
+                            <input type="text" name="amount" class="planning-form-input" placeholder="e.g., PHP 2,500,000.00">
+                        </label>
 
-                    <div class="planning-ppa-form-grid planning-ppa-edit-grid">
                         <label class="planning-form-field">
                             <span>Received From</span>
                             <input type="text" name="received_from" class="planning-form-input" required>
                         </label>
+
                         <label class="planning-form-field">
                             <span>Date Received</span>
                             <input type="date" name="date_received" class="planning-form-input" required>
                         </label>
-                    </div>
 
-                    <div class="planning-ppa-form-grid planning-ppa-edit-grid">
                         <label class="planning-form-field">
                             <span>Status</span>
                             <select name="status" class="planning-form-input" required>
@@ -180,25 +179,26 @@
                                 <option value="Rejected">Rejected</option>
                             </select>
                         </label>
+
                         <label class="planning-form-field">
                             <span>Budget Allocation</span>
                             <select name="budget_allocation" class="planning-form-input js-planning-doc-budget-allocation" required>
                                 <option value="">Select budget allocation</option>
                             </select>
                         </label>
+
+                        <label class="planning-form-field planning-doc-edit-field--full js-planning-doc-budget-other-wrap" hidden>
+                            <span>Specify Other Budget Allocation</span>
+                            <input type="text" name="budget_allocation_other" class="planning-form-input js-planning-doc-budget-other" placeholder="Enter budget allocation">
+                        </label>
+
+                        <label class="planning-form-field planning-doc-edit-field--full">
+                            <span>Remarks</span>
+                            <textarea name="remarks" class="planning-form-input planning-form-textarea" placeholder="Optional remarks..."></textarea>
+                        </label>
                     </div>
 
-                    <label class="planning-form-field js-planning-doc-budget-other-wrap" hidden>
-                        <span>Specify Other Budget Allocation</span>
-                        <input type="text" name="budget_allocation_other" class="planning-form-input js-planning-doc-budget-other" placeholder="Enter budget allocation">
-                    </label>
-
-                    <label class="planning-form-field">
-                        <span>Remarks</span>
-                        <textarea name="remarks" class="planning-form-input planning-form-textarea" placeholder="Optional remarks..."></textarea>
-                    </label>
-
-                    <div class="planning-form-actions">
+                    <div class="planning-form-actions planning-doc-edit-actions">
                         <button type="button" class="planning-btn-cancel js-close-planning-doc-modal">Cancel</button>
                         <button type="submit" class="planning-btn-submit">Save Changes</button>
                     </div>
