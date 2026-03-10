@@ -1,0 +1,52 @@
+<section class="road-dashboard-head" aria-label="Construction project dashboard">
+    <div class="road-dashboard-copy">
+        <h1 class="js-construction-project-title">Construction Project</h1>
+        <p class="js-construction-project-subtitle">Update accomplishment progress and attach an image.</p>
+    </div>
+    <a class="road-upload-btn" href="{% url 'construction_division_dashboard' %}">Back to Register</a>
+</section>
+
+<section class="road-filter-panel js-construction-project-dashboard" aria-label="Construction project editor" data-current-user="{{ dashboard_user_name|default:request.user.username }}">
+    <div class="road-table-wrap construction-table-wrap">
+        <div class="road-table-head">
+            <h3>Project Details</h3>
+            <span class="js-construction-project-meta">Loading…</span>
+        </div>
+
+        <div class="construction-form" style="padding:1rem;">
+            <div class="construction-form-grid">
+                <label class="construction-field construction-field--wide">
+                    <span>Project Name</span>
+                    <input type="text" class="js-construction-project-name" readonly>
+                </label>
+
+                <label class="construction-field">
+                    <span>Accomplishment (%)</span>
+                    <input type="number" class="js-construction-project-accomplishment" min="0" max="100" step="0.01" placeholder="0">
+                </label>
+
+                <label class="construction-field construction-field--wide">
+                    <span>Upload Images</span>
+                    <input type="file" class="js-construction-project-image-input" accept="image/*" multiple>
+                </label>
+            </div>
+
+            <div class="road-table-wrap" style="margin-top:1rem;">
+                <div class="road-table-head">
+                    <h3 style="margin:0;">Image Preview</h3>
+                    <span class="js-construction-project-image-meta">No images uploaded.</span>
+                </div>
+                <div style="padding:1rem; border:1px solid #e5e7eb; border-radius:12px; background:#fff;">
+                    <div class="js-construction-project-image-gallery" style="display:flex; gap:12px; flex-wrap:wrap;"></div>
+                </div>
+            </div>
+
+            <div class="construction-form-actions" style="margin-top:1rem;">
+                <button type="button" class="construction-btn construction-btn-secondary js-construction-project-remove-image" disabled>Remove All Images</button>
+                <button type="button" class="construction-btn construction-btn-primary js-construction-project-save">Save Changes</button>
+            </div>
+
+            <p class="js-construction-project-warning" style="margin:0.75rem 0 0; color:#b45309;" hidden></p>
+        </div>
+    </div>
+</section>

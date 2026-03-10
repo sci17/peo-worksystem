@@ -7489,10 +7489,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const constructionTableBody = constructionDashboard.querySelector(".js-construction-table-body");
     const constructionRecordMeta = constructionDashboard.querySelector(".js-construction-record-meta");
+    const constructionProjectDashboardUrl = String(constructionDashboard.dataset.projectDashboardUrl || "").trim();
     const addRecordButton = constructionDashboard.querySelector(".js-construction-add-record");
     const uploadInput = constructionDashboard.querySelector("#construction-upload-input");
     const deleteSelectedButton = constructionDashboard.querySelector(".js-construction-delete-selected");
-    const deleteAllButton = constructionDashboard.querySelector(".js-construction-delete-all");
     const selectAllCheckbox = constructionDashboard.querySelector(".js-construction-select-all");
     const prevPageButton = constructionDashboard.querySelector(".js-construction-prev-page");
     const nextPageButton = constructionDashboard.querySelector(".js-construction-next-page");
@@ -7665,6 +7665,147 @@ document.addEventListener("DOMContentLoaded", () => {
         return text.replace(/%/g, "").trim() || "-";
     };
 
+    const CONSTRUCTION_FIELD_LABELS = {
+        project_name: "Project Name",
+        location: "Location",
+        mun: "MUN",
+        contractor: "Contractor",
+        contract_cost: "Contract Cost",
+        ntp_date: "NTP Date",
+        cd: "C.D",
+        original_expiry_date: "Original Expiry Date",
+        addl_cd: "Add'l. C.D",
+        revised_expiry_date: "Revised Expiry Date",
+        date_completed: "Date Completed",
+        revised_contract_cost: "Revised Contract Cost",
+        status_previous: "Status Previous (%)",
+        status_current: "Status Current (%)",
+        time_elapsed: "% of Time Elapsed",
+        slippage: "Slippage (+) (-) %",
+        remarks: "Remarks",
+    };
+
+    const normalizeStringValue = (value) => {
+        return String(value ?? "").trim();
+    };
+
+    const formatConstructionDateTime = (value) => {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+        });
+    };
+
+    const getConstructionCurrentMonthKey = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    };
+
+    const formatConstructionMonth = (value) => {
+        const text = normalizeStringValue(value);
+        const monthMatch = text.match(/^(\d{4})-(\d{2})$/);
+        if (!monthMatch) return text || "-";
+        const parsed = new Date(Number(monthMatch[1]), Number(monthMatch[2]) - 1, 1);
+        if (Number.isNaN(parsed.getTime())) return text;
+        return parsed.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+        });
+    };
+
+    const getConstructionCurrentUser = () => {
+        const dashboardName = normalizeStringValue(constructionDashboard.dataset.currentUser);
+        if (dashboardName) return dashboardName;
+        const bodyName = normalizeStringValue(document.body?.dataset?.userName);
+        return bodyName || "Local User";
+    };
+
+    const normalizeConstructionHistoryEntry = (entry, record) => {
+        const normalized = { ...(entry || {}) };
+        normalized.changed_at = normalizeStringValue(normalized.changed_at) || new Date().toISOString();
+        normalized.changed_by = normalizeStringValue(normalized.changed_by) || getConstructionCurrentUser();
+        normalized.update_month = normalizeStringValue(normalized.update_month) || getConstructionCurrentMonthKey();
+        normalized.update_type = normalizeStringValue(normalized.update_type) || "edited";
+        normalized.changed_fields = Array.isArray(normalized.changed_fields)
+            ? normalized.changed_fields.map((field) => normalizeStringValue(field)).filter(Boolean)
+            : [];
+
+        CONSTRUCTION_FIELDS.forEach((field) => {
+            normalized[field] = normalizeStringValue(
+                normalized[field] !== undefined ? normalized[field] : record?.[field]
+            );
+        });
+
+        return normalized;
+    };
+
+    const buildConstructionHistoryEntry = (record, options = {}) => {
+        const snapshot = {
+            changed_at: options.changedAt || new Date().toISOString(),
+            changed_by: normalizeStringValue(options.changedBy) || getConstructionCurrentUser(),
+            update_month: normalizeStringValue(options.updateMonth) || getConstructionCurrentMonthKey(),
+            update_type: normalizeStringValue(options.updateType) || "edited",
+            changed_fields: Array.isArray(options.changedFields)
+                ? options.changedFields.map((field) => normalizeStringValue(field)).filter(Boolean)
+                : [],
+        };
+
+        CONSTRUCTION_FIELDS.forEach((field) => {
+            snapshot[field] = normalizeStringValue(record?.[field]);
+        });
+
+        return normalizeConstructionHistoryEntry(snapshot, record);
+    };
+
+    const ensureConstructionHistory = (record) => {
+        const existingHistory = Array.isArray(record?.update_history) ? [...record.update_history] : [];
+        if (existingHistory.length) {
+            return existingHistory.map((entry) => normalizeConstructionHistoryEntry(entry, record));
+        }
+
+        return [
+            buildConstructionHistoryEntry(record, {
+                updateType: String(record?.__admin_source || "").trim() === "admin_document" ? "routed" : "created",
+                changedFields: [],
+                changedBy: normalizeStringValue(record?.__created_by) || getConstructionCurrentUser(),
+                changedAt: normalizeStringValue(record?.__created_at) || new Date().toISOString(),
+            }),
+        ];
+    };
+
+    const getConstructionChangedFields = (previousRecord, nextRecord) => {
+        return CONSTRUCTION_FIELDS.filter((field) => {
+            return normalizeStringValue(previousRecord?.[field]) !== normalizeStringValue(nextRecord?.[field]);
+        });
+    };
+
+    const getConstructionFieldLabel = (field) => {
+        return CONSTRUCTION_FIELD_LABELS[field] || field;
+    };
+
+    const getConstructionUpdateTypeLabel = (value) => {
+        const normalized = normalizeStringValue(value).toLowerCase();
+        if (normalized === "monthly_update") return "Monthly Update";
+        if (normalized === "uploaded") return "Uploaded";
+        if (normalized === "created") return "Created";
+        if (normalized === "routed") return "Routed";
+        return "Edited";
+    };
+
+    const buildConstructionHistoryBadges = (fields) => {
+        const items = Array.isArray(fields) ? fields : [];
+        if (!items.length) return '<span class="construction-history-badge">Initial record</span>';
+        return items
+            .map((field) => `<span class="construction-history-badge">${escapeHtml(getConstructionFieldLabel(field))}</span>`)
+            .join("");
+    };
+
     const getHeadersMap = (row) => {
         const map = new Map();
         Object.keys(row || {}).forEach((key) => {
@@ -7818,6 +7959,10 @@ document.addEventListener("DOMContentLoaded", () => {
             routedFromAdmin.map((record) => [record.__admin_source_id, record])
         );
 
+        const nonRouted = currentRecords.filter((record) => {
+            return String(record?.__admin_source || "") !== "admin_document";
+        });
+
         const existingRoutedBySource = new Map();
         currentRecords.forEach((record) => {
             if (String(record?.__admin_source || "") !== "admin_document") return;
@@ -7828,8 +7973,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const mergedRouted = Array.from(routedBySourceId.values()).map((incoming) => {
             const existing = existingRoutedBySource.get(incoming.__admin_source_id);
-            if (!existing) return incoming;
+            if (!existing) {
+                return { ...incoming };
+            }
             return {
+                ...existing,
                 ...incoming,
                 status: String(existing.status || incoming.status || "For Review").trim() || "For Review",
                 route: String(existing.route || incoming.route || "Incoming").trim() || "Incoming",
@@ -7839,7 +7987,7 @@ document.addEventListener("DOMContentLoaded", () => {
             };
         });
 
-        const nextRecords = mergedRouted;
+        const nextRecords = [...mergedRouted, ...nonRouted];
         const beforeSignature = JSON.stringify(currentRecords);
         const afterSignature = JSON.stringify(nextRecords);
         if (beforeSignature !== afterSignature) {
@@ -7924,12 +8072,16 @@ document.addEventListener("DOMContentLoaded", () => {
             pagedRecords.forEach((record, index) => {
                 const row = document.createElement("tr");
                 row.dataset.recordId = record.__id;
+                const projectName = escapeHtml(toDisplay(record.project_name));
+                const projectDashboardHref = constructionProjectDashboardUrl && record.__id
+                    ? `${constructionProjectDashboardUrl}?id=${encodeURIComponent(record.__id)}`
+                    : "";
                 row.innerHTML = `
                     <td class="pa-select-col">
                         <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}">
                     </td>
                     <td>${pageStartIndex + index + 1}</td>
-                    <td>${escapeHtml(toDisplay(record.project_name))}</td>
+                    <td>${projectDashboardHref ? `<a class="construction-project-link" href="${escapeHtml(projectDashboardHref)}">${projectName}</a>` : projectName}</td>
                     <td>${escapeHtml(toDisplay(record.location))}</td>
                     <td>${escapeHtml(toDisplay(record.mun))}</td>
                     <td>${escapeHtml(toDisplay(record.contractor))}</td>
@@ -7975,6 +8127,58 @@ document.addEventListener("DOMContentLoaded", () => {
     const createRecordId = () => {
         return `construction_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     };
+
+    const initializeConstructionRecord = (record, options = {}) => {
+        const baseRecord = { ...(record || {}) };
+        baseRecord.__id = baseRecord.__id || createRecordId();
+        baseRecord.__created_at = normalizeStringValue(baseRecord.__created_at) || new Date().toISOString();
+        baseRecord.__created_by = normalizeStringValue(baseRecord.__created_by) || getConstructionCurrentUser();
+        delete baseRecord.update_history;
+
+        CONSTRUCTION_FIELDS.forEach((field) => {
+            baseRecord[field] = normalizeStringValue(baseRecord[field]);
+        });
+        baseRecord.__updated_at = normalizeStringValue(options.changedAt) || baseRecord.__created_at;
+        baseRecord.__updated_by = normalizeStringValue(options.changedBy) || baseRecord.__created_by;
+        return baseRecord;
+    };
+
+    const normalizeConstructionRecord = (record) => {
+        const normalized = { ...(record || {}) };
+        normalized.__id = normalized.__id || createRecordId();
+        normalized.__created_at = normalizeStringValue(normalized.__created_at) || new Date().toISOString();
+        normalized.__created_by = normalizeStringValue(normalized.__created_by) || getConstructionCurrentUser();
+
+        CONSTRUCTION_FIELDS.forEach((field) => {
+            normalized[field] = normalizeStringValue(normalized[field]);
+        });
+        delete normalized.update_history;
+        normalized.__updated_at = normalizeStringValue(normalized.__updated_at) || normalized.__created_at;
+        normalized.__updated_by = normalizeStringValue(normalized.__updated_by) || normalized.__created_by;
+        return normalized;
+    };
+
+    const applyConstructionRecordUpdate = (previousRecord, nextValues, options = {}) => {
+        const merged = normalizeConstructionRecord({
+            ...previousRecord,
+            ...nextValues,
+            __id: previousRecord?.__id || nextValues?.__id || createRecordId(),
+            __created_at: previousRecord?.__created_at,
+            __created_by: previousRecord?.__created_by,
+        });
+        const changedFields = Array.isArray(options.changedFields)
+            ? options.changedFields
+            : getConstructionChangedFields(previousRecord, merged);
+
+        if (!changedFields.length) return merged;
+
+        merged.__updated_at = normalizeStringValue(options.changedAt) || new Date().toISOString();
+        merged.__updated_by = normalizeStringValue(options.changedBy) || getConstructionCurrentUser();
+        return merged;
+    };
+
+    records = records.map((record) => normalizeConstructionRecord(record));
+    writeStoredRecords(records);
 
     const getTrimmedFormValue = (formData, key) => {
         return String(formData.get(key) ?? "").trim();
@@ -8408,10 +8612,30 @@ document.addEventListener("DOMContentLoaded", () => {
             if (editingRecordId) {
                 const index = records.findIndex((record) => record.__id === editingRecordId);
                 if (index >= 0) {
-                    records[index] = { ...formRecord, __id: editingRecordId };
+                    const previousRecord = records[index];
+                    const nextRecord = applyConstructionRecordUpdate(
+                        previousRecord,
+                        { ...formRecord, __id: editingRecordId },
+                        {
+                            updateType: "edited",
+                            changedBy: getConstructionCurrentUser(),
+                        }
+                    );
+                    const changedFields = getConstructionChangedFields(previousRecord, nextRecord);
+                    if (!changedFields.length) {
+                        showPeoGeneralToast("No changes were detected for this construction record.", {
+                            title: "Construction Division",
+                            variant: "warning",
+                        });
+                        return;
+                    }
+                    records[index] = nextRecord;
                 }
             } else {
-                records.unshift(formRecord);
+                records.unshift(initializeConstructionRecord(formRecord, {
+                    updateType: "created",
+                    changedBy: getConstructionCurrentUser(),
+                }));
             }
             currentPage = 1;
             writeStoredRecords(records);
@@ -8435,8 +8659,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
-        if (!constructionModal || constructionModal.hidden) return;
-        closeConstructionModal();
+        if (constructionModal && !constructionModal.hidden) {
+            closeConstructionModal();
+        }
     });
 
     if (uploadInput) {
@@ -8460,7 +8685,13 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (uploadSignatures.has(signature)) return;
 
                         uploadSignatures.add(signature);
-                        uploaded.push({ __id: createRecordId(), ...parsed });
+                        uploaded.push(initializeConstructionRecord(
+                            { __id: createRecordId(), ...parsed },
+                            {
+                                updateType: "uploaded",
+                                changedBy: getConstructionCurrentUser(),
+                            }
+                        ));
                     });
                 } catch (error) {
                     // Skip files that cannot be parsed.
@@ -8520,18 +8751,21 @@ document.addEventListener("DOMContentLoaded", () => {
         constructionTableBody.addEventListener("click", async (event) => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
-            if (target.classList.contains("js-construction-edit-row")) {
-                const recordId = target.dataset.recordId;
-                if (!recordId) return;
-                const record = records.find((item) => item.__id === recordId);
-                if (!record) return;
+            const actionButton = target.closest("button");
+            if (!(actionButton instanceof HTMLButtonElement)) return;
+
+            const recordId = actionButton.dataset.recordId;
+            if (!recordId) return;
+
+            const record = records.find((item) => item.__id === recordId);
+            if (!record) return;
+
+            if (actionButton.classList.contains("js-construction-edit-row")) {
                 openConstructionModal("edit", record);
                 return;
             }
-            if (!target.classList.contains("js-construction-delete-row")) return;
 
-            const recordId = target.dataset.recordId;
-            if (!recordId) return;
+            if (!actionButton.classList.contains("js-construction-delete-row")) return;
 
             const approved = await showPeoGeneralConfirm({
                 title: "Delete Construction Record",
@@ -8587,32 +8821,387 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    if (deleteAllButton) {
-        deleteAllButton.addEventListener("click", async () => {
-            if (!records.length) return;
-            const approved = await showPeoGeneralConfirm({
-                title: "Delete All Construction Records",
-                message: "Delete all construction records? This action cannot be undone.",
-                confirmLabel: "Delete All",
-                cancelLabel: "Cancel",
-                variant: "danger",
-            });
-            if (!approved) return;
-
-            records = [];
-            currentPage = 1;
-            writeStoredRecords(records);
-            renderTable();
-            showPeoGeneralToast("All construction records were deleted.", {
-                title: "Construction Division",
-                variant: "success",
-            });
-        });
-    }
-
     renderTable();
 });
 /* CONSTRUCTION_DIVISION_SCRIPT_END */
+
+/* CONSTRUCTION_PROJECT_DASHBOARD_SCRIPT_START */
+document.addEventListener("DOMContentLoaded", () => {
+    const projectDashboard = document.querySelector(".js-construction-project-dashboard");
+    if (!projectDashboard) return;
+
+    const titleEl = document.querySelector(".js-construction-project-title");
+    const subtitleEl = document.querySelector(".js-construction-project-subtitle");
+    const metaEl = projectDashboard.querySelector(".js-construction-project-meta");
+    const nameInput = projectDashboard.querySelector(".js-construction-project-name");
+    const accomplishmentInput = projectDashboard.querySelector(".js-construction-project-accomplishment");
+    const imageInput = projectDashboard.querySelector(".js-construction-project-image-input");
+    const imageGallery = projectDashboard.querySelector(".js-construction-project-image-gallery");
+    const imageMeta = projectDashboard.querySelector(".js-construction-project-image-meta");
+    const removeImageButton = projectDashboard.querySelector(".js-construction-project-remove-image");
+    const saveButton = projectDashboard.querySelector(".js-construction-project-save");
+    const warningEl = projectDashboard.querySelector(".js-construction-project-warning");
+
+    const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const currentUser = String(projectDashboard.dataset.currentUser || "").trim() || "Local User";
+    const recordId = String(new URLSearchParams(window.location.search).get("id") || "").trim();
+    const MAX_IMAGE_COUNT = 10;
+    const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+    const HISTORY_LIMIT = 12;
+
+    const showWarning = (message) => {
+        if (!warningEl) return;
+        warningEl.textContent = message;
+        warningEl.hidden = false;
+    };
+
+    const disableEditor = () => {
+        if (accomplishmentInput) accomplishmentInput.disabled = true;
+        if (imageInput) imageInput.disabled = true;
+        if (removeImageButton) removeImageButton.disabled = true;
+        if (saveButton) saveButton.disabled = true;
+    };
+
+    const readStoredRecords = () => {
+        try {
+            const raw = localStorage.getItem(CONSTRUCTION_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeStoredRecords = (items) => {
+        const safeItems = Array.isArray(items) ? items : [];
+        try {
+            localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(safeItems));
+            return true;
+        } catch (error) {
+            // Ignore storage errors.
+            return false;
+        }
+    };
+
+    const toast = (message, options = {}) => {
+        if (typeof showPeoGeneralToast === "function") {
+            showPeoGeneralToast(message, options);
+            return;
+        }
+        // Fallback for pages that do not load toast helpers.
+        window.alert(message);
+    };
+
+    const renderGallery = (items) => {
+        const images = Array.isArray(items) ? items : [];
+        if (imageMeta) {
+            imageMeta.textContent = images.length
+                ? `${images.length} image${images.length === 1 ? "" : "s"} selected.`
+                : "No images uploaded.";
+        }
+        if (removeImageButton) {
+            removeImageButton.disabled = images.length === 0;
+        }
+        if (!imageGallery) return;
+        imageGallery.innerHTML = "";
+
+        images.forEach((img, index) => {
+            const url = String(img?.dataUrl || "").trim();
+            if (!url) return;
+
+            const card = document.createElement("div");
+            card.style.width = "180px";
+            card.style.border = "1px solid #e5e7eb";
+            card.style.borderRadius = "12px";
+            card.style.overflow = "hidden";
+            card.style.background = "#fff";
+
+            const thumb = document.createElement("img");
+            thumb.src = url;
+            thumb.alt = String(img?.name || "Uploaded project image");
+            thumb.style.width = "100%";
+            thumb.style.height = "120px";
+            thumb.style.objectFit = "cover";
+            thumb.style.display = "block";
+
+            const footer = document.createElement("div");
+            footer.style.padding = "10px";
+            footer.style.display = "flex";
+            footer.style.gap = "8px";
+            footer.style.alignItems = "center";
+            footer.style.justifyContent = "space-between";
+
+            const label = document.createElement("div");
+            label.style.fontSize = "0.85rem";
+            label.style.color = "#334155";
+            label.style.overflow = "hidden";
+            label.style.textOverflow = "ellipsis";
+            label.style.whiteSpace = "nowrap";
+            label.style.flex = "1";
+            label.title = String(img?.name || "");
+            label.textContent = String(img?.name || "Image");
+
+            const removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.className = "construction-btn construction-btn-secondary";
+            removeBtn.style.padding = "0.35rem 0.5rem";
+            removeBtn.style.whiteSpace = "nowrap";
+            removeBtn.dataset.imageIndex = String(index);
+            removeBtn.textContent = "Remove";
+
+            footer.appendChild(label);
+            footer.appendChild(removeBtn);
+            card.appendChild(thumb);
+            card.appendChild(footer);
+            imageGallery.appendChild(card);
+        });
+    };
+
+    const readFilesAsDataUrls = async (files) => {
+        const list = Array.from(files || []).filter(Boolean);
+        const results = [];
+
+        for (const file of list) {
+            if (results.length >= MAX_IMAGE_COUNT) break;
+            if (file.size > MAX_IMAGE_BYTES) {
+                toast(`Skipped ${file.name}: image must be smaller than 6MB.`, {
+                    title: "Construction Project",
+                    variant: "warning",
+                });
+                continue;
+            }
+
+            // eslint-disable-next-line no-await-in-loop
+            const dataUrl = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = () => resolve("");
+                reader.readAsDataURL(file);
+            });
+            if (!dataUrl) continue;
+            results.push({
+                dataUrl,
+                name: String(file.name || ""),
+                uploaded_at: new Date().toISOString(),
+            });
+        }
+
+        return results;
+    };
+
+    const createHistoryId = () => {
+        return `construction_hist_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    };
+
+    const getMonthKey = (date) => {
+        const value = date instanceof Date && Number.isFinite(date.getTime()) ? date : new Date();
+        return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+    };
+
+    const normalizeHistoryItems = (items, fallbackRecord) => {
+        const list = Array.isArray(items) ? items : [];
+        const recordFallback = fallbackRecord || {};
+
+        const normalized = list
+            .map((entry) => {
+                const snapshot = entry && typeof entry === "object" ? entry : {};
+                const monthKey = String(snapshot.month || snapshot.update_month || "").trim();
+                const savedAt = String(snapshot.saved_at || snapshot.changed_at || "").trim();
+                const statusCurrent = String(snapshot.status_current ?? "").trim();
+                const imageDataUrl = String(snapshot.image_data_url || snapshot.dataUrl || snapshot.image || "").trim();
+                const imageName = String(snapshot.image_name || snapshot.name || "").trim();
+
+                return {
+                    id: String(snapshot.id || snapshot.__id || "").trim() || createHistoryId(),
+                    month: monthKey || getMonthKey(savedAt ? new Date(savedAt) : new Date()),
+                    saved_at: savedAt || new Date().toISOString(),
+                    project_name: String(snapshot.project_name || recordFallback.project_name || "").trim(),
+                    location: String(snapshot.location || recordFallback.location || "").trim(),
+                    contractor: String(snapshot.contractor || recordFallback.contractor || "").trim(),
+                    status_current: statusCurrent,
+                    image_data_url: imageDataUrl,
+                    image_name: imageName,
+                };
+            })
+            .filter((entry) => entry.project_name || entry.location || entry.contractor || entry.status_current || entry.image_data_url);
+
+        normalized.sort((a, b) => {
+            const at = new Date(a.saved_at).getTime();
+            const bt = new Date(b.saved_at).getTime();
+            return (Number.isFinite(bt) ? bt : 0) - (Number.isFinite(at) ? at : 0);
+        });
+
+        return normalized.slice(0, HISTORY_LIMIT);
+    };
+
+    if (!recordId) {
+        if (metaEl) metaEl.textContent = "Missing project id.";
+        showWarning("No project id was provided. Please go back and click a project name from the register.");
+        disableEditor();
+        return;
+    }
+
+    const records = readStoredRecords();
+    const recordIndex = records.findIndex((item) => String(item?.__id || "") === recordId);
+    if (recordIndex < 0) {
+        if (metaEl) metaEl.textContent = "Project not found.";
+        showWarning("This project could not be found in local storage. It may have been deleted or not yet created on this device.");
+        disableEditor();
+        return;
+    }
+
+    const record = records[recordIndex] || {};
+    const projectName = String(record.project_name || "").trim() || "Construction Project";
+    const isAdminRouted = String(record.__admin_source || "") === "admin_document";
+
+    if (titleEl) titleEl.textContent = projectName;
+    if (subtitleEl) subtitleEl.textContent = "Update accomplishment progress and attach an image.";
+    if (nameInput instanceof HTMLInputElement) nameInput.value = projectName;
+
+    if (metaEl) {
+        const location = String(record.location || "").trim();
+        const contractor = String(record.contractor || "").trim();
+        const parts = [location, contractor].filter(Boolean);
+        metaEl.textContent = parts.length ? parts.join(" · ") : `Record ID: ${recordId}`;
+    }
+
+    const percentRaw = String(record.status_current ?? "").trim();
+    const percentValue = Number.parseFloat(percentRaw.replace("%", ""));
+    if (accomplishmentInput instanceof HTMLInputElement && Number.isFinite(percentValue)) {
+        accomplishmentInput.value = String(percentValue);
+    }
+
+    const legacyImageUrl = String(record.accomplishment_image || "").trim();
+    const legacyImageName = String(record.accomplishment_image_name || "").trim();
+    let pendingImages = Array.isArray(record.accomplishment_images)
+        ? record.accomplishment_images.slice(0, MAX_IMAGE_COUNT)
+        : (legacyImageUrl ? [{ dataUrl: legacyImageUrl, name: legacyImageName || "Image", uploaded_at: "" }] : []);
+    pendingImages = pendingImages
+        .map((img) => ({ dataUrl: String(img?.dataUrl || ""), name: String(img?.name || ""), uploaded_at: String(img?.uploaded_at || "") }))
+        .filter((img) => img.dataUrl);
+    renderGallery(pendingImages);
+
+    let accomplishmentHistory = normalizeHistoryItems(record.accomplishment_history, record);
+
+    if (isAdminRouted) {
+        showWarning("This project was routed from the Admin Division and is read-only here.");
+        disableEditor();
+        return;
+    }
+
+    if (imageInput instanceof HTMLInputElement) {
+        imageInput.addEventListener("change", async () => {
+            const files = imageInput.files ? Array.from(imageInput.files) : [];
+            if (!files.length) return;
+
+            if (pendingImages.length >= MAX_IMAGE_COUNT) {
+                toast(`You can upload up to ${MAX_IMAGE_COUNT} images. Remove some first.`, {
+                    title: "Construction Project",
+                    variant: "warning",
+                });
+                imageInput.value = "";
+                return;
+            }
+
+            const remaining = Math.max(0, MAX_IMAGE_COUNT - pendingImages.length);
+            const nextFiles = files.slice(0, remaining);
+            const nextImages = await readFilesAsDataUrls(nextFiles);
+            if (!nextImages.length) {
+                imageInput.value = "";
+                return;
+            }
+
+            pendingImages = [...pendingImages, ...nextImages].slice(0, MAX_IMAGE_COUNT);
+            renderGallery(pendingImages);
+            imageInput.value = "";
+        });
+    }
+
+    if (imageGallery) {
+        imageGallery.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const button = target.closest("button");
+            if (!(button instanceof HTMLButtonElement)) return;
+            const idxRaw = String(button.dataset.imageIndex || "").trim();
+            if (!idxRaw) return;
+            const idx = Number.parseInt(idxRaw, 10);
+            if (!Number.isFinite(idx) || idx < 0 || idx >= pendingImages.length) return;
+            pendingImages = pendingImages.filter((_, i) => i !== idx);
+            renderGallery(pendingImages);
+        });
+    }
+
+    if (removeImageButton) {
+        removeImageButton.addEventListener("click", () => {
+            pendingImages = [];
+            if (imageInput instanceof HTMLInputElement) imageInput.value = "";
+            renderGallery(pendingImages);
+        });
+    }
+
+    if (saveButton) {
+        saveButton.addEventListener("click", () => {
+            const nextPercentRaw = accomplishmentInput instanceof HTMLInputElement
+                ? String(accomplishmentInput.value || "").trim()
+                : "";
+            const nextPercent = nextPercentRaw === "" ? null : Number.parseFloat(nextPercentRaw);
+
+            if (nextPercent !== null && (!Number.isFinite(nextPercent) || nextPercent < 0 || nextPercent > 100)) {
+                toast("Accomplishment must be a number between 0 and 100.", {
+                    title: "Construction Project",
+                    variant: "warning",
+                });
+                return;
+            }
+
+            const nextRecord = { ...(records[recordIndex] || {}) };
+            nextRecord.status_current = nextPercent === null ? "" : String(nextPercent);
+            nextRecord.__updated_at = new Date().toISOString();
+            nextRecord.__updated_by = currentUser;
+
+            if (pendingImages.length) {
+                nextRecord.accomplishment_images = pendingImages.slice(0, MAX_IMAGE_COUNT);
+            } else {
+                delete nextRecord.accomplishment_images;
+            }
+            delete nextRecord.accomplishment_image;
+            delete nextRecord.accomplishment_image_name;
+
+            const historyEntry = {
+                id: createHistoryId(),
+                saved_at: nextRecord.__updated_at,
+                month: getMonthKey(new Date(nextRecord.__updated_at)),
+                project_name: String(nextRecord.project_name || "").trim(),
+                location: String(nextRecord.location || "").trim(),
+                contractor: String(nextRecord.contractor || "").trim(),
+                status_current: String(nextRecord.status_current ?? "").trim(),
+                image_data_url: String(pendingImages?.[0]?.dataUrl || "").trim(),
+                image_name: String(pendingImages?.[0]?.name || "").trim(),
+            };
+
+            accomplishmentHistory = normalizeHistoryItems(
+                [historyEntry, ...(Array.isArray(nextRecord.accomplishment_history) ? nextRecord.accomplishment_history : [])],
+                nextRecord
+            );
+            nextRecord.accomplishment_history = accomplishmentHistory;
+
+            records[recordIndex] = nextRecord;
+            const wrote = writeStoredRecords(records);
+
+            if (!wrote) {
+                toast("Could not save to local storage (storage may be full). Try removing some images and save again.", {
+                    title: "Construction Project",
+                    variant: "warning",
+                });
+                return;
+            }
+
+            toast("Project details saved.", { title: "Construction Project", variant: "success" });
+        });
+    }
+});
+/* CONSTRUCTION_PROJECT_DASHBOARD_SCRIPT_END */
 
 /* PLANNING_DIVISION_MODAL_SCRIPT_START */
 document.addEventListener("DOMContentLoaded", () => {
@@ -10979,6 +11568,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const projectBody = document.body;
         const projectModal = projectBoard.querySelector(".js-project-modal");
         const deleteModal = projectBoard.querySelector(".js-project-delete-modal");
+        const constructionHistoryModal = projectBoard.querySelector(".js-project-construction-history-modal");
+        const constructionHistoryCards = projectBoard.querySelector(".js-project-construction-history-cards");
+        const constructionHistoryTitle = projectBoard.querySelector("#project-construction-history-title");
+        const constructionHistorySubtitle = projectBoard.querySelector(".js-project-construction-history-subtitle");
         const projectForm = projectBoard.querySelector("[data-project-form]");
         const projectTableBody = projectBoard.querySelector("[data-project-table-body]");
         const projectResultsSummary = projectBoard.querySelector("[data-project-results-summary]");
@@ -11004,6 +11597,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const openProjectButtons = projectBoard.querySelectorAll(".js-project-open-modal");
         const closeProjectButtons = projectBoard.querySelectorAll(".js-project-close-modal");
         const closeDeleteButtons = projectBoard.querySelectorAll(".js-project-close-delete-modal");
+        const closeConstructionHistoryButtons = projectBoard.querySelectorAll(".js-project-close-construction-history");
         const projectFilterDropdownSyncers = [];
         const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
         const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
@@ -11098,6 +11692,56 @@ document.addEventListener("DOMContentLoaded", () => {
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#39;");
+
+        const getMonthKey = (dateLike) => {
+            const date = dateLike instanceof Date ? dateLike : new Date(String(dateLike || ""));
+            const safe = date instanceof Date && Number.isFinite(date.getTime()) ? date : new Date();
+            return `${safe.getFullYear()}-${String(safe.getMonth() + 1).padStart(2, "0")}`;
+        };
+
+        const formatMonthLabel = (monthKey) => {
+            const text = String(monthKey || "").trim();
+            const match = text.match(/^(\d{4})-(\d{2})$/);
+            if (!match) return text || "-";
+            const parsed = new Date(Number(match[1]), Number(match[2]) - 1, 1);
+            if (Number.isNaN(parsed.getTime())) return text;
+            return parsed.toLocaleDateString("en-US", { year: "numeric", month: "long" });
+        };
+
+        const normalizeConstructionSnapshots = (record) => {
+            const base = record && typeof record === "object" ? record : {};
+            const raw = Array.isArray(base.accomplishment_history) ? base.accomplishment_history : [];
+
+            const normalized = raw
+                .map((entry) => {
+                    const snap = entry && typeof entry === "object" ? entry : {};
+                    const savedAt = String(snap.saved_at || snap.changed_at || "").trim() || "";
+                    const month = String(snap.month || snap.update_month || "").trim() || getMonthKey(savedAt || new Date());
+                    const percent = String(snap.status_current ?? "").trim();
+                    const imageUrl = String(snap.image_data_url || "").trim();
+                    const imageName = String(snap.image_name || "").trim();
+                    const images = Array.isArray(snap.images) ? snap.images : (imageUrl ? [{ dataUrl: imageUrl, name: imageName }] : []);
+
+                    return {
+                        month,
+                        saved_at: savedAt || "",
+                        project_name: String(snap.project_name || base.project_name || "").trim(),
+                        location: String(snap.location || base.location || "").trim(),
+                        contractor: String(snap.contractor || base.contractor || "").trim(),
+                        status_current: percent,
+                        images: images
+                            .map((img) => ({
+                                dataUrl: String(img?.dataUrl || img?.image_data_url || "").trim(),
+                                name: String(img?.name || img?.image_name || "").trim(),
+                            }))
+                            .filter((img) => img.dataUrl),
+                    };
+                })
+                .filter((snap) => snap.month);
+
+            normalized.sort((a, b) => String(b.month).localeCompare(String(a.month)) || String(b.saved_at).localeCompare(String(a.saved_at)));
+            return normalized;
+        };
 
         const enhanceProjectFilterSelect = (select) => {
             if (!(select instanceof HTMLSelectElement)) {
@@ -11391,6 +12035,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             : "In Planning";
                     return {
                         id: `construction_${String(item?.__id || `${index}`).trim()}`,
+                        sourceRecordId: String(item?.__id || "").trim(),
                         projectName: String(item?.project_name || `Construction Project ${index + 1}`).trim(),
                         division: "Construction Division",
                         fundSource: String(item?.contractor || "Construction Contract").trim() || "Construction Contract",
@@ -11500,16 +12145,25 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            projectTableBody.innerHTML = list.map((record) => `
+            projectTableBody.innerHTML = list.map((record) => {
+                const isConstruction = String(record.division || "").trim() === "Construction Division";
+                const sourceId = String(record.sourceRecordId || "").trim();
+                const projectName = escapeProjectHtml(record.projectName || "-");
+                const projectNameCell = isConstruction && sourceId
+                    ? `<button type="button" class="project-name-link js-project-open-construction-history" data-construction-source-id="${escapeProjectHtml(sourceId)}">${projectName}</button>`
+                    : projectName;
+
+                return `
                 <tr>
-                    <td>${escapeProjectHtml(record.projectName || "-")}</td>
+                    <td>${projectNameCell}</td>
                     <td>${escapeProjectHtml(record.division || "-")}</td>
                     <td>${escapeProjectHtml(record.fundSource || "-")}</td>
                     <td>${escapeProjectHtml(formatProjectCurrency(Number(record.allocatedAmount) || 0))}</td>
                     <td>${escapeProjectHtml(record.status || "In Planning")}</td>
                     <td class="project-align-center">-</td>
                 </tr>
-            `).join("");
+                `;
+            }).join("");
         };
 
         let projectRecords = [];
@@ -11557,7 +12211,7 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         const syncProjectModalState = () => {
-            const hasVisibleModal = [projectModal, deleteModal].some((modal) => {
+            const hasVisibleModal = [projectModal, deleteModal, constructionHistoryModal].some((modal) => {
                 return modal instanceof HTMLElement && !modal.hidden;
             });
             projectBody.classList.toggle("project-modal-open", hasVisibleModal);
@@ -11590,8 +12244,136 @@ document.addEventListener("DOMContentLoaded", () => {
             syncProjectModalState();
         };
 
+        const closeConstructionHistoryModal = () => {
+            if (constructionHistoryModal instanceof HTMLElement) {
+                constructionHistoryModal.hidden = true;
+            }
+            if (constructionHistoryCards instanceof HTMLElement) {
+                constructionHistoryCards.innerHTML = "";
+            }
+            syncProjectModalState();
+        };
+
+        const buildConstructionMonthlyHistoryCards = (constructionRecord) => {
+            const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
+            const snapshots = normalizeConstructionSnapshots(record);
+
+            const ensureFallbackSnapshot = () => {
+                const images = Array.isArray(record.accomplishment_images)
+                    ? record.accomplishment_images
+                        .map((img) => ({
+                            dataUrl: String(img?.dataUrl || "").trim(),
+                            name: String(img?.name || "").trim(),
+                        }))
+                        .filter((img) => img.dataUrl)
+                    : [];
+
+                if (!images.length) return [];
+
+                return [{
+                    month: getMonthKey(new Date()),
+                    saved_at: String(record.__updated_at || record.__created_at || "").trim(),
+                    project_name: String(record.project_name || "").trim(),
+                    location: String(record.location || "").trim(),
+                    contractor: String(record.contractor || "").trim(),
+                    status_current: String(record.status_current ?? "").trim(),
+                    images,
+                }];
+            };
+
+            const effectiveSnapshots = snapshots.length ? snapshots : ensureFallbackSnapshot();
+            if (!effectiveSnapshots.length) {
+                return `<div style="color:#64748b;">No monthly history found for this project yet.</div>`;
+            }
+
+            const grouped = new Map();
+            effectiveSnapshots.forEach((snap) => {
+                const month = String(snap.month || "").trim() || getMonthKey(snap.saved_at || new Date());
+                const existing = grouped.get(month) || { month, snapshots: [], images: [] };
+                existing.snapshots.push(snap);
+                (Array.isArray(snap.images) ? snap.images : []).forEach((img) => {
+                    const url = String(img?.dataUrl || "").trim();
+                    if (!url) return;
+                    existing.images.push({ dataUrl: url, name: String(img?.name || "").trim() });
+                });
+                grouped.set(month, existing);
+            });
+
+            const monthGroups = Array.from(grouped.values()).sort((a, b) => String(b.month).localeCompare(String(a.month)));
+
+            return monthGroups.map((group) => {
+                group.snapshots.sort((a, b) => String(b.saved_at).localeCompare(String(a.saved_at)));
+                const latest = group.snapshots[0] || {};
+                const projectName = String(latest.project_name || record.project_name || "Construction Project").trim();
+                const location = String(latest.location || record.location || "").trim();
+                const contractor = String(latest.contractor || record.contractor || "").trim();
+                const percent = String(latest.status_current ?? "").trim();
+
+                const uniqueImages = [];
+                const seen = new Set();
+                group.images.forEach((img) => {
+                    const url = String(img?.dataUrl || "").trim();
+                    if (!url || seen.has(url)) return;
+                    seen.add(url);
+                    uniqueImages.push(img);
+                });
+
+                const imagesHtml = uniqueImages.length
+                    ? `<div class="project-history-month-images">
+                        ${uniqueImages.map((img) => `<img src="${escapeProjectHtml(img.dataUrl)}" alt="${escapeProjectHtml(img.name || projectName || "Project image")}">`).join("")}
+                      </div>`
+                    : `<div style="color:#64748b;">No images saved for this month.</div>`;
+
+                return `
+                    <article class="project-history-month-card">
+                        <div class="project-history-month-head">
+                            <div>
+                                <h5>${escapeProjectHtml(formatMonthLabel(group.month))}</h5>
+                                <div class="project-history-month-meta">${escapeProjectHtml(projectName)}</div>
+                            </div>
+                            <div class="project-history-month-meta">${percent ? `${escapeProjectHtml(percent)}%` : ""}</div>
+                        </div>
+                        <div class="project-history-month-grid">
+                            <div class="project-history-month-field">
+                                <small>Location</small>
+                                <strong>${escapeProjectHtml(location || "-")}</strong>
+                            </div>
+                            <div class="project-history-month-field">
+                                <small>Contractor</small>
+                                <strong>${escapeProjectHtml(contractor || "-")}</strong>
+                            </div>
+                        </div>
+                        ${imagesHtml}
+                    </article>
+                `;
+            }).join("");
+        };
+
+        const openConstructionHistoryModal = (constructionRecord) => {
+            if (!(constructionHistoryModal instanceof HTMLElement)) return;
+            if (projectModal instanceof HTMLElement) projectModal.hidden = true;
+            if (deleteModal instanceof HTMLElement) deleteModal.hidden = true;
+
+            const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
+            const projectName = String(record.project_name || "Construction Project").trim();
+
+            if (constructionHistoryTitle instanceof HTMLElement) {
+                constructionHistoryTitle.textContent = "Construction Monthly History";
+            }
+            if (constructionHistorySubtitle instanceof HTMLElement) {
+                constructionHistorySubtitle.textContent = `Monthly snapshots and uploaded images for: ${projectName}`;
+            }
+            if (constructionHistoryCards instanceof HTMLElement) {
+                constructionHistoryCards.innerHTML = buildConstructionMonthlyHistoryCards(record);
+            }
+
+            constructionHistoryModal.hidden = false;
+            syncProjectModalState();
+        };
+
         closeProjectModal();
         closeDeleteModal();
+        closeConstructionHistoryModal();
 
         openProjectButtons.forEach((button) => {
             button.addEventListener("click", () => {
@@ -11611,12 +12393,22 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
 
-        [projectModal, deleteModal].forEach((modal) => {
+        closeConstructionHistoryButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                closeConstructionHistoryModal();
+            });
+        });
+
+        [projectModal, deleteModal, constructionHistoryModal].forEach((modal) => {
             if (!(modal instanceof HTMLElement)) return;
             modal.addEventListener("click", (event) => {
                 if (event.target !== modal) return;
                 if (modal === projectModal) {
                     closeProjectModal();
+                    return;
+                }
+                if (modal === constructionHistoryModal) {
+                    closeConstructionHistoryModal();
                     return;
                 }
                 closeDeleteModal();
@@ -11629,10 +12421,42 @@ document.addEventListener("DOMContentLoaded", () => {
                 closeDeleteModal();
                 return;
             }
+            if (constructionHistoryModal instanceof HTMLElement && !constructionHistoryModal.hidden) {
+                closeConstructionHistoryModal();
+                return;
+            }
             if (projectModal instanceof HTMLElement && !projectModal.hidden) {
                 closeProjectModal();
             }
         });
+
+        if (projectTableBody instanceof HTMLElement) {
+            projectTableBody.addEventListener("click", (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                const trigger = target.closest(".js-project-open-construction-history");
+                if (!(trigger instanceof HTMLButtonElement)) return;
+
+                const sourceId = String(trigger.dataset.constructionSourceId || "").trim();
+                if (!sourceId) return;
+
+                const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+                const record = constructionRecords.find((item) => String(item?.__id || "").trim() === sourceId);
+                if (!record) {
+                    if (typeof showPeoGeneralToast === "function") {
+                        showPeoGeneralToast("Construction project history was not found on this device.", {
+                            title: "Projects",
+                            variant: "warning",
+                        });
+                    } else {
+                        window.alert("Construction project history was not found on this device.");
+                    }
+                    return;
+                }
+
+                openConstructionHistoryModal(record);
+            });
+        }
 
         divisionCards.forEach((card) => {
             card.addEventListener("click", () => {
