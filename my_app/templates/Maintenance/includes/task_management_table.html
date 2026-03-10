@@ -37,7 +37,24 @@
             </div>
             <div class="task-stat-body">
                 <p class="task-stat-value js-task-stat-total">0</p>
-                <p class="task-stat-label">Total Tasks</p>
+                <p class="task-stat-label">Total Records</p>
+            </div>
+        </article>
+
+        <article class="task-stat-card task-stat-card--incoming">
+            <div class="task-stat-head">
+                <span class="task-stat-chip">Incoming</span>
+                <span class="task-stat-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <path d="M7 10l5 5 5-5"></path>
+                        <path d="M12 15V3"></path>
+                    </svg>
+                </span>
+            </div>
+            <div class="task-stat-body">
+                <p class="task-stat-value js-task-stat-incoming">0</p>
+                <p class="task-stat-label">Incoming</p>
             </div>
         </article>
 
@@ -69,23 +86,7 @@
             </div>
             <div class="task-stat-body">
                 <p class="task-stat-value js-task-stat-progress">0</p>
-                <p class="task-stat-label">In Progress</p>
-            </div>
-        </article>
-
-        <article class="task-stat-card task-stat-card--completed">
-            <div class="task-stat-head">
-                <span class="task-stat-chip">Finished</span>
-                <span class="task-stat-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="8"></circle>
-                        <path d="m8.5 12 2.4 2.4L15.8 9.5"></path>
-                    </svg>
-                </span>
-            </div>
-            <div class="task-stat-body">
-                <p class="task-stat-value js-task-stat-completed">0</p>
-                <p class="task-stat-label">Completed</p>
+                <p class="task-stat-label">On Process</p>
             </div>
         </article>
 
@@ -101,9 +102,25 @@
                 </span>
             </div>
             <div class="task-stat-body">
+                <p class="task-stat-value js-task-stat-cancelled">0</p>
+                <p class="task-stat-label">Cancelled</p>
+            </div>
+        </article>
+
+        <article class="task-stat-card task-stat-card--completed">
+            <div class="task-stat-head">
+                <span class="task-stat-chip">Finished</span>
+                <span class="task-stat-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <path d="m8.5 12 2.4 2.4L15.8 9.5"></path>
+                    </svg>
+                </span>
+            </div>
+            <div class="task-stat-body">
                 <div class="task-stat-alert">
-                    <p class="task-stat-value js-task-stat-overdue">0</p>
-                    <p class="task-stat-label">Overdue</p>
+                    <p class="task-stat-value js-task-stat-completed">0</p>
+                    <p class="task-stat-label">Completed</p>
                 </div>
             </div>
         </article>
@@ -127,7 +144,7 @@
                 <ul class="dropdown-menu">
                     <li><button type="button" class="dropdown-option is-selected" data-value="all">All Divisions</button></li>
                     <li><button type="button" class="dropdown-option" data-value="admin">Admin</button></li>
-                    <li><button type="button" class="dropdown-option" data-value="planning">Planning Division</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="planningdivision">Planning Division</button></li>
                     <li><button type="button" class="dropdown-option" data-value="construction">Construction</button></li>
                     <li><button type="button" class="dropdown-option" data-value="quality">Quality</button></li>
                     <li><button type="button" class="dropdown-option" data-value="maintenance">Maintenance</button></li>
@@ -141,6 +158,7 @@
                 </button>
                 <ul class="dropdown-menu">
                     <li><button type="button" class="dropdown-option is-selected" data-value="all">All Statuses</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="incoming">Incoming</button></li>
                     <li><button type="button" class="dropdown-option" data-value="pending">Pending</button></li>
                     <li><button type="button" class="dropdown-option" data-value="in_progress">In Progress</button></li>
                     <li><button type="button" class="dropdown-option" data-value="completed">Completed</button></li>
@@ -190,32 +208,47 @@
 
             <div class="task-table-tools">
                 <span class="task-table-total js-task-table-total">0 Total</span>
+                <button type="button" class="task-analysis-btn js-open-task-analysis" aria-label="Analyze table">
+                    Analyze
+                </button>
             </div>
         </div>
 
         <div class="task-table-shell task-table-shell--empty">
             <table class="task-table">
                 <colgroup>
-                    <col style="width: 36%;">
-                    <col style="width: 16%;">
-                    <col style="width: 16%;">
-                    <col style="width: 13%;">
-                    <col style="width: 13%;">
+                    <col style="width: 8%;">
+                    <col style="width: 18%;">
+                    <col style="width: 12%;">
+                    <col style="width: 12%;">
+                    <col style="width: 12%;">
+                    <col style="width: 10%;">
+                    <col style="width: 10%;">
+                    <col style="width: 10%;">
+                    <col style="width: 8%;">
+                    <col style="width: 10%;">
+                    <col style="width: 14%;">
                     <col style="width: 6%;">
                 </colgroup>
                 <thead>
                     <tr>
-                        <th>Task Name</th>
-                        <th>Assigned To</th>
-                        <th>Due Date</th>
-                        <th>Priority</th>
+                        <th>Slip No.</th>
+                        <th>Document Name</th>
+                        <th>Location</th>
+                        <th>Contractor</th>
+                        <th>Type of Billing</th>
+                        <th>Amount</th>
+                        <th>Receive From</th>
+                        <th>Date Received</th>
                         <th>Status</th>
+                        <th>Allocation</th>
+                        <th>Remarks</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody class="js-task-table-body">
                     <tr class="task-empty-row js-task-empty-row">
-                        <td colspan="6">
+                        <td colspan="12">
                             <div class="task-empty-state">
                                 <svg viewBox="0 0 64 64" aria-hidden="true">
                                     <rect x="18" y="14" width="12" height="12" rx="2"></rect>
@@ -226,8 +259,8 @@
                                     <path d="M38 44h12"></path>
                                 </svg>
                                 <div class="task-empty-copy">
-                                    <strong>No tasks yet</strong>
-                                    <p>New tasks will appear here once you start assigning work.</p>
+                                    <strong>No records yet</strong>
+                                    <p>New entries will appear here once they are added.</p>
                                 </div>
                             </div>
                         </td>
@@ -329,6 +362,50 @@
                 <button type="submit" class="task-personnel-btn task-personnel-btn--primary">Add Personnel</button>
             </div>
         </form>
+    </div>
+</div>
+
+<div class="task-analysis-card js-task-analysis-card" hidden>
+    <div class="task-analysis-backdrop js-close-task-analysis"></div>
+    <div class="task-analysis-dialog" role="dialog" aria-modal="true" aria-labelledby="task-analysis-title">
+        <div class="task-analysis-head">
+            <div>
+                <h4 id="task-analysis-title">Table Analysis</h4>
+                <p>Summary based on current filters.</p>
+            </div>
+            <button type="button" class="task-analysis-close js-close-task-analysis" aria-label="Close analysis">&times;</button>
+        </div>
+
+        <div class="task-analysis-kpis">
+            <div class="task-analysis-kpi">
+                <p class="task-analysis-kpi-value"><span class="js-task-analysis-visible">0</span> / <span class="js-task-analysis-total">0</span></p>
+                <p class="task-analysis-kpi-label">Records (visible / total)</p>
+            </div>
+            <div class="task-analysis-kpi">
+                <p class="task-analysis-kpi-value js-task-analysis-amount">P 0</p>
+                <p class="task-analysis-kpi-label">Total Amount (visible)</p>
+            </div>
+        </div>
+
+        <div class="task-analysis-section">
+            <h5>Status</h5>
+            <div class="task-analysis-breakdown js-task-analysis-status"></div>
+        </div>
+
+        <div class="task-analysis-section">
+            <h5>Allocation</h5>
+            <div class="task-analysis-breakdown js-task-analysis-allocation"></div>
+        </div>
+
+        <div class="task-analysis-section">
+            <h5>Contractor</h5>
+            <div class="task-analysis-breakdown js-task-analysis-contractor"></div>
+        </div>
+
+        <div class="task-analysis-section">
+            <h5>Type of Billing</h5>
+            <div class="task-analysis-breakdown js-task-analysis-billing"></div>
+        </div>
     </div>
 </div>
 
