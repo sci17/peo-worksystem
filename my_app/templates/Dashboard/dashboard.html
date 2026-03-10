@@ -294,36 +294,54 @@
                     <article class="status-card">
                         <div class="status-head">
                             <span class="material-symbols-outlined icon-blue">work</span>
-                            <span class="delta delta-up">+12%</span>
+                            {% if overview_active_projects_delta %}
+                                <span class="delta delta-up">{{ overview_active_projects_delta }}</span>
+                            {% endif %}
                         </div>
                         <p class="status-label">Active Projects</p>
-                        <p class="status-value">124</p>
+                        <p class="status-value">{{ overview_active_projects|default:"0" }}</p>
                         <div class="progress-track">
-                            <span class="progress-fill progress-blue fill-74"></span>
+                            <span
+                                class="progress-fill progress-blue"
+                                style="width: {{ overview_active_projects_progress|default:'0' }}%;"
+                                aria-hidden="true"
+                            ></span>
                         </div>
                     </article>
 
                     <article class="status-card">
                         <div class="status-head">
                             <span class="material-symbols-outlined icon-amber">pending_actions</span>
-                            <span class="delta delta-down">-5%</span>
+                            {% if overview_pending_approvals_delta %}
+                                <span class="delta delta-down">{{ overview_pending_approvals_delta }}</span>
+                            {% endif %}
                         </div>
                         <p class="status-label">Pending Approvals</p>
-                        <p class="status-value">18</p>
+                        <p class="status-value">{{ overview_pending_approvals|default:"0" }}</p>
                         <div class="progress-track">
-                            <span class="progress-fill progress-amber fill-40"></span>
+                            <span
+                                class="progress-fill progress-amber"
+                                style="width: {{ overview_pending_approvals_progress|default:'0' }}%;"
+                                aria-hidden="true"
+                            ></span>
                         </div>
                     </article>
 
                     <article class="status-card">
                         <div class="status-head">
                             <span class="material-symbols-outlined icon-green">autorenew</span>
-                            <span class="delta delta-up">+8%</span>
+                            {% if overview_recent_updates_delta %}
+                                <span class="delta delta-up">{{ overview_recent_updates_delta }}</span>
+                            {% endif %}
                         </div>
                         <p class="status-label">Recent Updates</p>
-                        <p class="status-value">42</p>
+                        <p class="status-value">{{ overview_recent_updates|default:"0" }}</p>
                         <div class="progress-track">
-                            <span class="progress-fill progress-green fill-88"></span>
+                            <span
+                                class="progress-fill progress-green"
+                                style="width: {{ overview_recent_updates_progress|default:'0' }}%;"
+                                aria-hidden="true"
+                            ></span>
                         </div>
                     </article>
                 </section>
@@ -334,41 +352,57 @@
                             <h3>Accomplished Projects</h3>
                         </div>
                         <div class="section-head-actions">
-                            <button
-                                type="button"
-                                class="circle-action"
-                                aria-label="Previous accomplished project"
-                                data-peo-toast-message="Previous project spotlight is not connected yet."
-                                data-peo-toast-variant="info"
-                            >
-                                <span class="material-symbols-outlined">chevron_left</span>
-                            </button>
-                            <button
-                                type="button"
-                                class="circle-action"
-                                aria-label="Next accomplished project"
-                                data-peo-toast-message="Next project spotlight is not connected yet."
-                                data-peo-toast-variant="info"
-                            >
-                                <span class="material-symbols-outlined">chevron_right</span>
-                            </button>
+                            {% if overview_spotlight_projects|length > 1 %}
+                                <button
+                                    type="button"
+                                    class="circle-action"
+                                    aria-label="Previous accomplished project"
+                                    data-peo-toast-message="Previous project spotlight is not connected yet."
+                                    data-peo-toast-variant="info"
+                                >
+                                    <span class="material-symbols-outlined">chevron_left</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="circle-action"
+                                    aria-label="Next accomplished project"
+                                    data-peo-toast-message="Next project spotlight is not connected yet."
+                                    data-peo-toast-variant="info"
+                                >
+                                    <span class="material-symbols-outlined">chevron_right</span>
+                                </button>
+                            {% endif %}
                         </div>
                     </div>
 
-                    <article class="spotlight-card">
-                        <div class="spotlight-scene">
-                            <span class="spotlight-chip">Infrastructure</span>
-                            <div class="spotlight-copy">
-                                <h4>Harbor Bridge Expansion</h4>
-                                <p>Completed on October 15, 2023</p>
+                    {% if overview_spotlight_projects %}
+                        {% with spotlight=overview_spotlight_projects.0 %}
+                            <article class="spotlight-card">
+                                <div class="spotlight-scene">
+                                    <span class="spotlight-chip">{{ spotlight.category|default:"Spotlight" }}</span>
+                                    <div class="spotlight-copy">
+                                        <h4>{{ spotlight.title|default:"Accomplished Project" }}</h4>
+                                        <p>{{ spotlight.subtitle|default:"" }}</p>
+                                    </div>
+                                    <div class="spotlight-dots" aria-hidden="true">
+                                        {% for item in overview_spotlight_projects %}
+                                            <span {% if forloop.first %}class="is-active"{% endif %}></span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </article>
+                        {% endwith %}
+                    {% else %}
+                        <article class="spotlight-card">
+                            <div class="spotlight-scene">
+                                <span class="spotlight-chip">Spotlight</span>
+                                <div class="spotlight-copy">
+                                    <h4>No accomplished projects yet</h4>
+                                    <p>Add projects to highlight progress here.</p>
+                                </div>
                             </div>
-                            <div class="spotlight-dots" aria-hidden="true">
-                                <span class="is-active"></span>
-                                <span></span>
-                                <span></span>
-                            </div>
-                        </div>
-                    </article>
+                        </article>
+                    {% endif %}
                 </section>
 
                 <section class="leadership-section">
@@ -389,41 +423,42 @@
                     </div>
 
                     <div class="leadership-tree">
-                        <article class="leader-card leader-card-primary">
-                            <div class="leader-avatar leader-avatar-primary">AS</div>
-                            <span class="leader-tag">Executive Office</span>
-                            <h4>Engr. Alejandro Santiago</h4>
-                            <p>Director of Provincial Engineering</p>
-                        </article>
+                        {% if overview_leadership_executive %}
+                            <article class="leader-card leader-card-primary">
+                                <div class="leader-avatar leader-avatar-primary">
+                                    {{ overview_leadership_executive.initials|default:"--" }}
+                                </div>
+                                <span class="leader-tag">{{ overview_leadership_executive.tag|default:"Executive Office" }}</span>
+                                <h4>{{ overview_leadership_executive.name|default:"" }}</h4>
+                                <p>{{ overview_leadership_executive.title|default:"" }}</p>
+                            </article>
+                        {% else %}
+                            <article class="leader-card leader-card-primary">
+                                <div class="leader-avatar leader-avatar-primary">--</div>
+                                <span class="leader-tag">Leadership</span>
+                                <h4>Not configured</h4>
+                                <p>Connect the staff directory to populate leadership.</p>
+                            </article>
+                        {% endif %}
 
                         <div class="leadership-tree-line"></div>
 
                         <div class="leader-grid">
-                            <article class="leader-card">
-                                <div class="leader-avatar leader-avatar-admin">AR</div>
-                                <h4>Alex Rivera</h4>
-                                <span class="leader-dept">Admin Division</span>
-                            </article>
-                            <article class="leader-card">
-                                <div class="leader-avatar leader-avatar-planning">JD</div>
-                                <h4>John D.</h4>
-                                <span class="leader-dept">Planning Division</span>
-                            </article>
-                            <article class="leader-card">
-                                <div class="leader-avatar leader-avatar-construction">SW</div>
-                                <h4>Sarah W.</h4>
-                                <span class="leader-dept">Construction Division</span>
-                            </article>
-                            <article class="leader-card">
-                                <div class="leader-avatar leader-avatar-quality">MR</div>
-                                <h4>Michael R.</h4>
-                                <span class="leader-dept">Quality Division</span>
-                            </article>
-                            <article class="leader-card">
-                                <div class="leader-avatar leader-avatar-maintenance">EK</div>
-                                <h4>Emily K.</h4>
-                                <span class="leader-dept">Maintenance Division</span>
-                            </article>
+                            {% if overview_leadership_divisions %}
+                                {% for leader in overview_leadership_divisions %}
+                                    <article class="leader-card">
+                                        <div class="leader-avatar {{ leader.avatar_class|default:'' }}">{{ leader.initials|default:"--" }}</div>
+                                        <h4>{{ leader.name|default:"" }}</h4>
+                                        <span class="leader-dept">{{ leader.department|default:"" }}</span>
+                                    </article>
+                                {% endfor %}
+                            {% else %}
+                                <article class="leader-card">
+                                    <div class="leader-avatar leader-avatar-admin">--</div>
+                                    <h4>No division leads</h4>
+                                    <span class="leader-dept">Add leaders to list here</span>
+                                </article>
+                            {% endif %}
                         </div>
                     </div>
                 </section>
@@ -434,36 +469,31 @@
                             <h3>Recent Activity</h3>
                         </div>
                         <ul class="activity-list">
-                            <li>
-                                <span class="activity-dot dot-blue"></span>
-                                <div>
-                                    <p>Sarah W. uploaded blueprints</p>
-                                    <small>Construction Division &middot; 12 mins ago</small>
-                                    <span class="activity-file">harbor_bridge_final_v2.pdf</span>
-                                </div>
-                            </li>
-                            <li>
-                                <span class="activity-dot dot-green"></span>
-                                <div>
-                                    <p>Quality Inspection Approved</p>
-                                    <small>Quality Division &middot; 2 hours ago</small>
-                                </div>
-                            </li>
-                            <li>
-                                <span class="activity-dot dot-amber"></span>
-                                <div>
-                                    <p>Status Update: Delayed</p>
-                                    <small>Maintenance Division &middot; 5 hours ago</small>
-                                    <span class="activity-note">Material shipment delayed due to logistics.</span>
-                                </div>
-                            </li>
-                            <li>
-                                <span class="activity-dot dot-slate"></span>
-                                <div>
-                                    <p>New Team Member Assigned</p>
-                                    <small>Admin Division &middot; Yesterday</small>
-                                </div>
-                            </li>
+                            {% if overview_recent_activity %}
+                                {% for event in overview_recent_activity %}
+                                    <li>
+                                        <span class="activity-dot {{ event.dot_class|default:'dot-slate' }}"></span>
+                                        <div>
+                                            <p>{{ event.title|default:"" }}</p>
+                                            <small>{{ event.meta|default:"" }}</small>
+                                            {% if event.file %}
+                                                <span class="activity-file">{{ event.file }}</span>
+                                            {% endif %}
+                                            {% if event.note %}
+                                                <span class="activity-note">{{ event.note }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            {% else %}
+                                <li class="activity-empty">
+                                    <span class="activity-dot dot-slate"></span>
+                                    <div>
+                                        <p>No recent activity yet</p>
+                                        <small>Connect division workflows to see updates here.</small>
+                                    </div>
+                                </li>
+                            {% endif %}
                         </ul>
                     </article>
 
@@ -476,57 +506,37 @@
                             </div>
                         </div>
 
-                        <div class="performance-chart" aria-hidden="true">
-                            <div class="chart-group">
-                                <div class="chart-bars">
-                                    <span class="chart-bar chart-bar-target chart-h-82"></span>
-                                    <span class="chart-bar chart-bar-actual chart-h-76"></span>
-                                </div>
-                                <p>Admin</p>
+                        {% if overview_division_performance %}
+                            <div class="performance-chart" aria-hidden="true">
+                                {% for metric in overview_division_performance %}
+                                    <div class="chart-group">
+                                        <div class="chart-bars">
+                                            <span class="chart-bar chart-bar-target" style="height: {{ metric.target|default:0 }}%;"></span>
+                                            <span class="chart-bar chart-bar-actual" style="height: {{ metric.actual|default:0 }}%;"></span>
+                                        </div>
+                                        <p>{{ metric.label|default:"" }}</p>
+                                    </div>
+                                {% endfor %}
                             </div>
-                            <div class="chart-group">
-                                <div class="chart-bars">
-                                    <span class="chart-bar chart-bar-target chart-h-78"></span>
-                                    <span class="chart-bar chart-bar-actual chart-h-79"></span>
-                                </div>
-                                <p>Planning</p>
+                        {% else %}
+                            <div class="performance-chart">
+                                <p class="overview-empty">No performance metrics yet.</p>
                             </div>
-                            <div class="chart-group">
-                                <div class="chart-bars">
-                                    <span class="chart-bar chart-bar-target chart-h-92"></span>
-                                    <span class="chart-bar chart-bar-actual chart-h-43"></span>
-                                </div>
-                                <p>Construct</p>
-                            </div>
-                            <div class="chart-group">
-                                <div class="chart-bars">
-                                    <span class="chart-bar chart-bar-target chart-h-86"></span>
-                                    <span class="chart-bar chart-bar-actual chart-h-92"></span>
-                                </div>
-                                <p>Quality</p>
-                            </div>
-                            <div class="chart-group">
-                                <div class="chart-bars">
-                                    <span class="chart-bar chart-bar-target chart-h-82"></span>
-                                    <span class="chart-bar chart-bar-actual chart-h-18"></span>
-                                </div>
-                                <p>Maint</p>
-                            </div>
-                        </div>
+                        {% endif %}
 
                         <div class="performance-summary">
                             <div class="summary-tile">
                                 <span class="material-symbols-outlined">trending_up</span>
                                 <div>
                                     <small>Top Performer</small>
-                                    <strong>Quality Division</strong>
+                                    <strong>{{ overview_top_performer|default:"—" }}</strong>
                                 </div>
                             </div>
                             <div class="summary-tile">
                                 <span class="material-symbols-outlined">monitoring</span>
                                 <div>
                                     <small>Overall Efficiency</small>
-                                    <strong>78.4%</strong>
+                                    <strong>{{ overview_overall_efficiency|default:"—" }}</strong>
                                 </div>
                             </div>
                         </div>
@@ -559,122 +569,43 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td>
-                                        <span class="division-name">
-                                            <span class="material-symbols-outlined">architecture</span>
-                                            Planning Division
-                                        </span>
-                                    </td>
-                                    <td>John D.</td>
-                                    <td>
-                                        <div class="completion-wrap">
-                                            <div class="progress-track">
-                                                <span class="progress-fill progress-blue fill-82"></span>
-                                            </div>
-                                            <span>82%</span>
-                                        </div>
-                                    </td>
-                                    <td><span class="pill pill-blue">On Track</span></td>
-                                    <td class="align-right">
-                                        <button
-                                            type="button"
-                                            class="row-action"
-                                            aria-label="Open Planning Division actions"
-                                            data-peo-toast-message="Planning Division actions will open here."
-                                            data-peo-toast-variant="info"
-                                        >
-                                            <span class="material-symbols-outlined">more_vert</span>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <span class="division-name">
-                                            <span class="material-symbols-outlined">construction</span>
-                                            Construction Division
-                                        </span>
-                                    </td>
-                                    <td>Sarah W.</td>
-                                    <td>
-                                        <div class="completion-wrap">
-                                            <div class="progress-track">
-                                                <span class="progress-fill progress-amber fill-45"></span>
-                                            </div>
-                                            <span>45%</span>
-                                        </div>
-                                    </td>
-                                    <td><span class="pill pill-amber">In Review</span></td>
-                                    <td class="align-right">
-                                        <button
-                                            type="button"
-                                            class="row-action"
-                                            aria-label="Open Construction Division actions"
-                                            data-peo-toast-message="Construction Division actions will open here."
-                                            data-peo-toast-variant="info"
-                                        >
-                                            <span class="material-symbols-outlined">more_vert</span>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <span class="division-name">
-                                            <span class="material-symbols-outlined">verified</span>
-                                            Quality Division
-                                        </span>
-                                    </td>
-                                    <td>Michael R.</td>
-                                    <td>
-                                        <div class="completion-wrap">
-                                            <div class="progress-track">
-                                                <span class="progress-fill progress-green fill-95"></span>
-                                            </div>
-                                            <span>95%</span>
-                                        </div>
-                                    </td>
-                                    <td><span class="pill pill-green">Complete</span></td>
-                                    <td class="align-right">
-                                        <button
-                                            type="button"
-                                            class="row-action"
-                                            aria-label="Open Quality Division actions"
-                                            data-peo-toast-message="Quality Division actions will open here."
-                                            data-peo-toast-variant="info"
-                                        >
-                                            <span class="material-symbols-outlined">more_vert</span>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <span class="division-name">
-                                            <span class="material-symbols-outlined">build</span>
-                                            Maintenance Division
-                                        </span>
-                                    </td>
-                                    <td>Emily K.</td>
-                                    <td>
-                                        <div class="completion-wrap">
-                                            <div class="progress-track">
-                                                <span class="progress-fill progress-slate fill-15"></span>
-                                            </div>
-                                            <span>15%</span>
-                                        </div>
-                                    </td>
-                                    <td><span class="pill pill-slate">Awaiting Data</span></td>
-                                    <td class="align-right">
-                                        <button
-                                            type="button"
-                                            class="row-action"
-                                            aria-label="Open Maintenance Division actions"
-                                            data-peo-toast-message="Maintenance Division actions will open here."
-                                            data-peo-toast-variant="info"
-                                        >
-                                            <span class="material-symbols-outlined">more_vert</span>
-                                        </button>
-                                    </td>
-                                </tr>
+                                {% if overview_division_progress %}
+                                    {% for row in overview_division_progress %}
+                                        <tr>
+                                            <td>
+                                                <span class="division-name">
+                                                    <span class="material-symbols-outlined">{{ row.icon|default:"dashboard" }}</span>
+                                                    {{ row.division|default:"" }}
+                                                </span>
+                                            </td>
+                                            <td>{{ row.manager|default:"—" }}</td>
+                                            <td>
+                                                <div class="completion-wrap">
+                                                    <div class="progress-track">
+                                                        <span class="progress-fill {{ row.progress_class|default:'progress-blue' }}" style="width: {{ row.completion|default:0 }}%;"></span>
+                                                    </div>
+                                                    <span>{{ row.completion|default:0 }}%</span>
+                                                </div>
+                                            </td>
+                                            <td><span class="pill {{ row.status_class|default:'pill-slate' }}">{{ row.status|default:"—" }}</span></td>
+                                            <td class="align-right">
+                                                <button
+                                                    type="button"
+                                                    class="row-action"
+                                                    aria-label="Open division actions"
+                                                    data-peo-toast-message="Division actions will open here."
+                                                    data-peo-toast-variant="info"
+                                                >
+                                                    <span class="material-symbols-outlined">more_vert</span>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr class="division-table-empty">
+                                        <td colspan="5">No division progress data yet.</td>
+                                    </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>

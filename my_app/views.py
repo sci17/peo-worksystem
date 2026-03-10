@@ -208,6 +208,26 @@ def _build_dashboard_context(request, **extra):
         )
     )
     context.update(extra)
+
+    if current_section in ('', 'workflow'):
+        context.setdefault('overview_active_projects', 0)
+        context.setdefault('overview_active_projects_delta', '')
+        context.setdefault('overview_active_projects_progress', 0)
+        context.setdefault('overview_pending_approvals', 0)
+        context.setdefault('overview_pending_approvals_delta', '')
+        context.setdefault('overview_pending_approvals_progress', 0)
+        context.setdefault('overview_recent_updates', 0)
+        context.setdefault('overview_recent_updates_delta', '')
+        context.setdefault('overview_recent_updates_progress', 0)
+        context.setdefault('overview_spotlight_projects', [])
+        context.setdefault('overview_leadership_executive', None)
+        context.setdefault('overview_leadership_divisions', [])
+        context.setdefault('overview_recent_activity', [])
+        context.setdefault('overview_division_performance', [])
+        context.setdefault('overview_top_performer', '')
+        context.setdefault('overview_overall_efficiency', '')
+        context.setdefault('overview_division_progress', [])
+
     return context
 
 

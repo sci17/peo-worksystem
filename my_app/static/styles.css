@@ -1734,6 +1734,21 @@ body {
     gap: 12px;
 }
 
+.activity-empty p {
+    font-weight: 700;
+}
+
+.overview-empty {
+    margin: 0;
+    color: #7a8ca2;
+    font-size: 0.82rem;
+    font-weight: 700;
+    align-self: center;
+    justify-self: center;
+    grid-column: 1 / -1;
+    text-align: center;
+}
+
 .activity-dot {
     width: 22px;
     height: 22px;
@@ -1982,6 +1997,13 @@ body {
     font-size: 13px;
     padding: 11px 14px;
     border-top: 1px solid #edf2f8;
+}
+
+.division-table-empty td {
+    padding: 32px 16px;
+    text-align: center;
+    color: #8290a4;
+    font-weight: 700;
 }
 
 .division-name {
