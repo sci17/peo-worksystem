@@ -4208,6 +4208,7 @@ body {
     background: var(--surface);
     box-shadow: var(--shadow);
     padding: 14px;
+    min-width: 0;
 }
 
 .road-search {
@@ -7049,6 +7050,14 @@ body.construction-modal-open {
     padding: 14px;
     border-radius: 14px;
     overflow-x: hidden;
+    min-width: 0;
+}
+
+.js-construction-admin-assigned {
+    padding: 14px;
+    border-radius: 14px;
+    overflow-x: hidden;
+    min-width: 0;
 }
 
 .js-construction-dashboard .schedule-toolbar-row {
@@ -7068,6 +7077,16 @@ body.construction-modal-open {
     max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
+    overscroll-behavior-x: contain;
+}
+
+.js-construction-admin-assigned .construction-table-wrap {
+    margin-top: 12px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
 }
 
 .js-construction-dashboard .construction-table {
@@ -7078,7 +7097,27 @@ body.construction-modal-open {
     background: #ffffff;
 }
 
+.js-construction-admin-assigned .construction-table {
+    min-width: 2160px;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #c8d4e4;
+    background: #ffffff;
+}
+
 .js-construction-dashboard .construction-table thead th {
+    font-size: 0.71rem;
+    line-height: 1.25;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    text-align: center;
+    font-weight: 700;
+    color: #1f3550;
+    background: #e8eef6;
+}
+
+.js-construction-admin-assigned .construction-table thead th {
     font-size: 0.71rem;
     line-height: 1.25;
     text-transform: none;
@@ -7101,8 +7140,24 @@ body.construction-modal-open {
     line-height: 1.3;
 }
 
+.js-construction-admin-assigned .construction-table th,
+.js-construction-admin-assigned .construction-table td {
+    padding: 7px 8px;
+    font-size: 0.72rem;
+    vertical-align: middle;
+    white-space: nowrap;
+    border-right: 1px solid #cfd9e6;
+    border-bottom: 1px solid #cfd9e6;
+    line-height: 1.3;
+}
+
 .js-construction-dashboard .construction-table th:last-child,
 .js-construction-dashboard .construction-table td:last-child {
+    border-right: 0;
+}
+
+.js-construction-admin-assigned .construction-table th:last-child,
+.js-construction-admin-assigned .construction-table td:last-child {
     border-right: 0;
 }
 
@@ -7112,11 +7167,25 @@ body.construction-modal-open {
     background: #ffffff;
 }
 
+.js-construction-admin-assigned .construction-table td {
+    text-align: left;
+    color: #2f4258;
+    background: #ffffff;
+}
+
 .js-construction-dashboard .construction-table tbody tr:nth-child(even) td {
     background: #f8fbff;
 }
 
+.js-construction-admin-assigned .construction-table tbody tr:nth-child(even) td {
+    background: #f8fbff;
+}
+
 .js-construction-dashboard .construction-table tbody tr:hover td {
+    background: #edf4fc;
+}
+
+.js-construction-admin-assigned .construction-table tbody tr:hover td {
     background: #edf4fc;
 }
 
@@ -7130,8 +7199,23 @@ body.construction-modal-open {
     text-align: center;
 }
 
+.js-construction-admin-assigned .construction-table td:nth-child(2),
+.js-construction-admin-assigned .construction-table td:nth-child(5),
+.js-construction-admin-assigned .construction-table td:nth-child(9),
+.js-construction-admin-assigned .construction-table td:nth-child(15),
+.js-construction-admin-assigned .construction-table td:nth-child(16),
+.js-construction-admin-assigned .construction-table td:nth-child(17),
+.js-construction-admin-assigned .construction-table td:nth-child(18) {
+    text-align: center;
+}
+
 .js-construction-dashboard .construction-table td:nth-child(7),
 .js-construction-dashboard .construction-table td:nth-child(14) {
+    text-align: right;
+}
+
+.js-construction-admin-assigned .construction-table td:nth-child(7),
+.js-construction-admin-assigned .construction-table td:nth-child(14) {
     text-align: right;
 }
 
@@ -7142,8 +7226,20 @@ body.construction-modal-open {
     line-height: 1.22;
 }
 
+.js-construction-admin-assigned .construction-table td:nth-child(3),
+.js-construction-admin-assigned .construction-table td:nth-child(19) {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.22;
+}
+
 .js-construction-dashboard .construction-table th:nth-child(3),
 .js-construction-dashboard .construction-table td:nth-child(3) {
+    min-width: 280px;
+}
+
+.js-construction-admin-assigned .construction-table th:nth-child(3),
+.js-construction-admin-assigned .construction-table td:nth-child(3) {
     min-width: 280px;
 }
 
@@ -7152,7 +7248,16 @@ body.construction-modal-open {
     min-width: 260px;
 }
 
+.js-construction-admin-assigned .construction-table th:nth-child(19),
+.js-construction-admin-assigned .construction-table td:nth-child(19) {
+    min-width: 260px;
+}
+
 .js-construction-dashboard .construction-table th[rowspan="2"] {
+    vertical-align: middle;
+}
+
+.js-construction-admin-assigned .construction-table th[rowspan="2"] {
     vertical-align: middle;
 }
 

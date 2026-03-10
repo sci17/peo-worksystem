@@ -6,6 +6,70 @@
     <span class="road-dashboard-chip">Construction Division</span>
 </section>
 
+<section class="road-filter-panel js-construction-admin-assigned" aria-label="Admin assigned construction projects" hidden>
+    <div class="road-table-wrap construction-table-wrap">
+        <div class="road-table-head">
+            <h3>Admin Assigned Projects</h3>
+            <span class="js-construction-admin-meta">0 projects</span>
+        </div>
+        <table class="road-table construction-table">
+            <colgroup>
+                <col style="width:44px;">
+                <col style="width:52px;">
+                <col style="width:300px;">
+                <col style="width:150px;">
+                <col style="width:80px;">
+                <col style="width:180px;">
+                <col style="width:140px;">
+                <col style="width:110px;">
+                <col style="width:75px;">
+                <col style="width:130px;">
+                <col style="width:90px;">
+                <col style="width:130px;">
+                <col style="width:120px;">
+                <col style="width:160px;">
+                <col style="width:92px;">
+                <col style="width:92px;">
+                <col style="width:120px;">
+                <col style="width:110px;">
+                <col style="width:280px;">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th rowspan="2" class="pa-select-col"></th>
+                    <th rowspan="2">#</th>
+                    <th rowspan="2">Project Name</th>
+                    <th rowspan="2">Location</th>
+                    <th rowspan="2">MUN</th>
+                    <th rowspan="2">Contractor</th>
+                    <th rowspan="2">Contract Cost</th>
+                    <th rowspan="2">NTP Date</th>
+                    <th rowspan="2">C.D</th>
+                    <th colspan="3">Contract Period</th>
+                    <th rowspan="2">Date Completed</th>
+                    <th rowspan="2">Revised Contract Cost</th>
+                    <th colspan="2">Status (%) DECEMBER 2025</th>
+                    <th rowspan="2">% of Time Elapsed</th>
+                    <th rowspan="2">Slippage (+) (-) %</th>
+                    <th rowspan="2">Remarks</th>
+                </tr>
+                <tr>
+                    <th>Original Expiry Date</th>
+                    <th>Add'l. C.D</th>
+                    <th>Revised Expiry Date</th>
+                    <th>Previous</th>
+                    <th>Current</th>
+                </tr>
+            </thead>
+            <tbody class="js-construction-admin-table-body">
+                <tr class="construction-empty-row">
+                    <td colspan="19">No admin-assigned projects yet.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
 <div class="construction-modal js-construction-modal" hidden>
     <div class="construction-modal-backdrop js-close-construction-modal"></div>
     <div class="construction-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="construction-modal-title">
@@ -182,7 +246,6 @@
                 <col style="width:120px;">
                 <col style="width:110px;">
                 <col style="width:280px;">
-                <col style="width:130px;">
             </colgroup>
             <thead>
                 <tr>
@@ -204,7 +267,6 @@
                     <th rowspan="2">% of Time Elapsed</th>
                     <th rowspan="2">Slippage (+) (-) %</th>
                     <th rowspan="2">Remarks</th>
-                    <th rowspan="2">Action</th>
                 </tr>
                 <tr>
                     <th>Original Expiry Date</th>
@@ -216,7 +278,7 @@
             </thead>
             <tbody class="js-construction-table-body">
                 <tr class="construction-empty-row">
-                    <td colspan="20">No construction records available yet.</td>
+                    <td colspan="19">No construction records available yet.</td>
                 </tr>
             </tbody>
         </table>
