@@ -287,6 +287,20 @@ def construction_division_dashboard(request):
 
 
 @login_required
+def construction_project_dashboard(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        _build_dashboard_context(
+            request,
+            current_section='construction',
+            page_heading='Construction Project Dashboard',
+            construction_template='construction/construction_project_dashboard.html',
+        ),
+    )
+
+
+@login_required
 def planning_division_dashboard(request):
     return render(
         request,

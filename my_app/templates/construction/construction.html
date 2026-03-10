@@ -142,7 +142,7 @@
     </div>
 </div>
 
-<section class="road-filter-panel js-construction-dashboard" aria-label="Construction project register">
+<section class="road-filter-panel js-construction-dashboard" aria-label="Construction project register" data-current-user="{{ dashboard_user_name|default:request.user.username }}" data-project-dashboard-url="{% url 'construction_project_dashboard' %}">
     <div class="schedule-toolbar-row">
         <h2 style="margin:0; font-size:1.2rem; color:#112e4d;">Physical Accomplishment Status Report</h2>
         <div class="schedule-toolbar-actions">
@@ -153,7 +153,6 @@
             <input id="construction-upload-input" class="road-upload-input" type="file" accept=".xlsx,.xls,.csv" multiple>
             <label for="construction-upload-input" class="road-upload-btn">Upload Excel</label>
             <button type="button" class="pa-bulk-delete js-construction-delete-selected" disabled>Delete Selected</button>
-            <button type="button" class="pa-bulk-delete js-construction-delete-all">Delete All</button>
         </div>
     </div>
 
