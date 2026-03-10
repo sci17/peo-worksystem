@@ -538,6 +538,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const billingBulkDeleteButton = billingPanel?.querySelector('[data-admin-bulk-delete="billing"]');
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const ADMIN_DIVISION_RECORD_ID_PREFIX = "admin_record_";
+    const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
     let editingRecordId = null;
     let editingTableType = null;
     let adminStatusToastElement = null;
@@ -1107,6 +1108,155 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const normalizeDivisionKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const getLocalIsoDate = (date = new Date()) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
+    const readMaintenanceState = () => {
+        if (!isLocalStorageAvailable()) return null;
+        try {
+            return JSON.parse(window.localStorage.getItem(MAINTENANCE_STORAGE_KEY) || "null");
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const writeMaintenanceState = (state) => {
+        if (!isLocalStorageAvailable()) return;
+        try {
+            window.localStorage.setItem(MAINTENANCE_STORAGE_KEY, JSON.stringify(state));
+        } catch (error) {
+            // Ignore storage write failures (quota/private mode).
+        }
+    };
+
+    const buildMaintenanceStateBase = (state) => {
+        const base = {
+            version: 1,
+            roadRecords: [],
+            equipmentRows: [],
+            scheduleRows: [],
+            taskRows: [],
+            personnelRecords: [],
+        };
+
+        if (!state || typeof state !== "object") {
+            return { ...base };
+        }
+
+        return {
+            ...base,
+            ...state,
+            taskRows: Array.isArray(state.taskRows) ? state.taskRows : [],
+        };
+    };
+
+    const buildMaintenanceTaskFromAdminRecord = (record) => {
+        const adminRecordId = String(record?.__record_id || "").trim();
+        const slipNo = String(record?.slip_no || "-").trim() || "-";
+        const documentName = String(record?.document_name || "-").trim() || "-";
+        const location = String(record?.location || "-").trim() || "-";
+        const contractor = String(record?.contractor || "").trim();
+        const allocation = String(record?.division || "-").trim() || "-";
+        const billingType = getBillingTypeDisplay(record);
+        const amount = String(record?.revised_contract_amount || record?.contract_amount || "").trim() || "-";
+        const dateReceivedIso = String(
+            record?.maintenance_sent_date
+            || record?.date_released_admin
+            || record?.date_received_admin
+            || record?.date_received_peo
+            || record?.date_received
+            || getLocalIsoDate()
+        ).trim();
+
+        return {
+            adminRecordId,
+            slipNo,
+            title: documentName,
+            location,
+            assignedTo: contractor,
+            division: allocation,
+            allocation,
+            priority: billingType,
+            amount,
+            receiveFrom: "Admin",
+            dueDateIso: dateReceivedIso,
+            dueDateDisplay: formatDate(dateReceivedIso),
+            status: "Incoming",
+            notes: String(record?.description || "").trim(),
+        };
+    };
+
+    const upsertMaintenanceTaskRow = (taskRow) => {
+        const adminRecordId = String(taskRow?.adminRecordId || "").trim();
+        if (!adminRecordId) {
+            return;
+        }
+
+        const currentState = buildMaintenanceStateBase(readMaintenanceState());
+        const rows = [...currentState.taskRows];
+        const existingIndex = rows.findIndex((row) => String(row?.adminRecordId || "").trim() === adminRecordId);
+        if (existingIndex >= 0) {
+            rows[existingIndex] = { ...rows[existingIndex], ...taskRow };
+        } else {
+            rows.unshift(taskRow);
+        }
+        currentState.taskRows = rows;
+        writeMaintenanceState(currentState);
+    };
+
+    const removeMaintenanceTaskRowByAdminRecordId = (adminRecordId) => {
+        const normalizedId = String(adminRecordId || "").trim();
+        if (!normalizedId) {
+            return;
+        }
+
+        const currentState = buildMaintenanceStateBase(readMaintenanceState());
+        const rows = currentState.taskRows.filter((row) => String(row?.adminRecordId || "").trim() !== normalizedId);
+        if (rows.length === currentState.taskRows.length) {
+            return;
+        }
+        currentState.taskRows = rows;
+        writeMaintenanceState(currentState);
+    };
+
+    const syncAdminRecordToMaintenanceDivision = (record) => {
+        const adminRecordId = String(record?.__record_id || "").trim();
+        if (!adminRecordId) {
+            return;
+        }
+
+        const divisionKey = normalizeDivisionKey(record?.division);
+        if (divisionKey !== "maintenance") {
+            removeMaintenanceTaskRowByAdminRecordId(adminRecordId);
+            return;
+        }
+
+        let recordWithSentDate = record;
+        const hasSentDate = Boolean(String(record?.maintenance_sent_date || "").trim());
+        if (!hasSentDate) {
+            const sentDateIso = getLocalIsoDate();
+            recordWithSentDate = { ...(record || {}), maintenance_sent_date: sentDateIso };
+
+            const records = readAdminDivisionRecords();
+            const recordIndex = records.findIndex((candidate) => String(candidate?.__record_id || "").trim() === adminRecordId);
+            if (recordIndex >= 0) {
+                records[recordIndex] = normalizeRecord({
+                    ...records[recordIndex],
+                    maintenance_sent_date: sentDateIso,
+                });
+                writeAdminDivisionRecords(records);
+                renderAdminDivisionRecords(records);
+            }
+        }
+
+        upsertMaintenanceTaskRow(buildMaintenanceTaskFromAdminRecord(recordWithSentDate));
+    };
+
     const refreshDocumentCounters = () => {
         if (!documentsTableBody) return;
 
@@ -1253,6 +1403,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const deleteRecordsByIds = (recordIds) => {
         if (!recordIds.length) return;
         const deleteSet = new Set(recordIds);
+        recordIds.forEach((recordId) => {
+            removeMaintenanceTaskRowByAdminRecordId(recordId);
+        });
         const remainingRecords = readAdminDivisionRecords().filter((record) => !deleteSet.has(record.__record_id));
         writeAdminDivisionRecords(remainingRecords);
         renderAdminDivisionRecords(remainingRecords);
@@ -1582,6 +1735,8 @@ document.addEventListener("DOMContentLoaded", () => {
             existingRecords.unshift(normalized);
             writeAdminDivisionRecords(existingRecords);
         }
+
+        syncAdminRecordToMaintenanceDivision(normalized);
     };
 
     const renderAdminDivisionRecords = (records) => {
@@ -1609,6 +1764,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!savedRecords.length) return;
         writeAdminDivisionRecords(savedRecords);
         renderAdminDivisionRecords(savedRecords);
+        savedRecords.forEach((record) => {
+            syncAdminRecordToMaintenanceDivision(record);
+        });
     };
 
     const createRecordsFromForm = async (form, options = {}) => {
@@ -1681,6 +1839,7 @@ document.addEventListener("DOMContentLoaded", () => {
             records[recordIndex] = updatedRecord;
             writeAdminDivisionRecords(records);
             renderAdminDivisionRecords(records);
+            syncAdminRecordToMaintenanceDivision(updatedRecord);
             return true;
         }
 
@@ -2283,10 +2442,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const taskResultsSummary = document.querySelector(".js-task-results-summary");
     const taskTableTotal = document.querySelector(".js-task-table-total");
     const taskStatTotal = document.querySelector(".js-task-stat-total");
+    const taskStatIncoming = document.querySelector(".js-task-stat-incoming");
     const taskStatPending = document.querySelector(".js-task-stat-pending");
     const taskStatProgress = document.querySelector(".js-task-stat-progress");
     const taskStatCompleted = document.querySelector(".js-task-stat-completed");
-    const taskStatOverdue = document.querySelector(".js-task-stat-overdue");
+    const taskStatCancelled = document.querySelector(".js-task-stat-cancelled");
+    const taskAnalysisCard = document.querySelector(".js-task-analysis-card");
+    const openTaskAnalysisButtons = document.querySelectorAll(".js-open-task-analysis");
+    const closeTaskAnalysisButtons = document.querySelectorAll(".js-close-task-analysis");
+    const taskAnalysisVisible = document.querySelector(".js-task-analysis-visible");
+    const taskAnalysisTotal = document.querySelector(".js-task-analysis-total");
+    const taskAnalysisAmount = document.querySelector(".js-task-analysis-amount");
+    const taskAnalysisStatus = document.querySelector(".js-task-analysis-status");
+    const taskAnalysisAllocation = document.querySelector(".js-task-analysis-allocation");
+    const taskAnalysisContractor = document.querySelector(".js-task-analysis-contractor");
+    const taskAnalysisBilling = document.querySelector(".js-task-analysis-billing");
     const taskModal = document.querySelector(".js-task-modal");
     const openTaskModalButtons = document.querySelectorAll(".js-open-task-modal");
     const closeTaskModalButtons = document.querySelectorAll(".js-close-task-modal");
@@ -2301,6 +2471,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const openTaskPersonnelButtons = document.querySelectorAll(".js-open-task-personnel-modal");
     const closeTaskPersonnelButtons = document.querySelectorAll(".js-close-task-personnel-modal");
     const taskPersonnelForm = document.querySelector(".js-task-personnel-form");
+    const maintenanceTaskTracker = document.querySelector(".js-maintenance-task-tracker");
+    const maintenanceDocTableBody = maintenanceTaskTracker?.querySelector(".js-maintenance-doc-table-body") ?? null;
+    const maintenanceDocTotal = maintenanceTaskTracker?.querySelector(".js-maintenance-doc-total") ?? null;
+    const maintenanceDocTotalInline = maintenanceTaskTracker?.querySelector(".js-maintenance-doc-total-inline") ?? null;
+    const maintenanceDocReceived = maintenanceTaskTracker?.querySelector(".js-maintenance-doc-received") ?? null;
+    const maintenanceDocProcess = maintenanceTaskTracker?.querySelector(".js-maintenance-doc-process") ?? null;
+    const maintenanceDocPending = maintenanceTaskTracker?.querySelector(".js-maintenance-doc-pending") ?? null;
+    const maintenanceDocRemarksTotal = maintenanceTaskTracker?.querySelector(".js-maintenance-doc-remarks-total") ?? null;
+    const maintenanceTaskCards = maintenanceTaskTracker
+        ? Array.from(maintenanceTaskTracker.querySelectorAll(".js-maintenance-task-card"))
+        : [];
     const contractorAddOpenButton = document.querySelector(".js-open-contractor-add");
     const contractorAddModal = document.querySelector(".js-contractor-add-modal");
     const closeContractorAddButtons = document.querySelectorAll(".js-close-contractor-add");
@@ -2361,6 +2542,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const roadMunicipalityToastTimers = new Map();
     const roadRowsPerMunicipalityPage = 15;
     const maintenanceStorageKey = "peo_maintenance_state_v1";
+    const adminDivisionStorageKey = "peo_admin_division_records_v1";
     const roadAcceptedUploadTypes = ".xlsx,.xls,.csv,.txt,.json";
     let editingMunicipalityKey = "";
     let editingMunicipalityName = "";
@@ -2382,7 +2564,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let personnelRecords = [];
 
     const setBodyScrollLock = () => {
-        const isAnyModalOpen = [equipmentModal, scheduleModal, roadEditModal, roadAddModal, roadDeleteModal, taskPersonnelModal, taskModal, contractorAddModal, contractorFloatCard, contractorEditModal, contractorEvalModal].some((modal) => modal && !modal.hidden);
+        const isAnyModalOpen = [equipmentModal, scheduleModal, roadEditModal, roadAddModal, roadDeleteModal, taskPersonnelModal, taskModal, taskAnalysisCard, contractorAddModal, contractorFloatCard, contractorEditModal, contractorEvalModal].some((modal) => modal && !modal.hidden);
         document.body.style.overflow = isAnyModalOpen ? "hidden" : "";
     };
 
@@ -2501,6 +2683,13 @@ document.addEventListener("DOMContentLoaded", () => {
             return "south";
         }
         return "";
+    };
+
+    const getLocalIsoDate = (date = new Date()) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
     };
 
     const parseNumber = (value) => {
@@ -5830,6 +6019,108 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const buildTaskAnalysisBreakdownMarkup = (breakdownMap, maxItems = 6) => {
+        const entries = Array.from(breakdownMap.entries())
+            .map(([label, count]) => [String(label || "").trim() || "Unknown", count])
+            .filter(([, count]) => Number.isFinite(count) && count > 0)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, maxItems);
+
+        if (!entries.length) {
+            return '<p class="task-analysis-muted">No data available.</p>';
+        }
+
+        return entries
+            .map(([label, count]) => `
+                <div class="task-analysis-breakdown-row">
+                    <span>${escapeHtml(label)}</span>
+                    <strong>${escapeHtml(count)}</strong>
+                </div>
+            `)
+            .join("");
+    };
+
+    const syncTaskAnalysisSummary = () => {
+        if (!taskTableBody) {
+            return;
+        }
+
+        const rows = getTaskRows();
+        const visibleRows = rows.filter((row) => !row.hidden);
+
+        const statusBreakdown = new Map();
+        const allocationBreakdown = new Map();
+        const contractorBreakdown = new Map();
+        const billingBreakdown = new Map();
+        let visibleAmountTotal = 0;
+
+        const increment = (map, label) => {
+            const normalizedLabel = String(label || "").trim() || "Unknown";
+            map.set(normalizedLabel, (map.get(normalizedLabel) || 0) + 1);
+        };
+
+        visibleRows.forEach((row) => {
+            if (!(row instanceof HTMLTableRowElement) || row.cells.length < 10) {
+                return;
+            }
+
+            const billingType = (row.cells[4]?.textContent || "").trim();
+            const amountValue = (row.cells[5]?.textContent || "").trim();
+            const contractor = (row.cells[3]?.textContent || "").trim();
+            const status = (row.cells[8]?.textContent || "").trim();
+            const allocation = (row.cells[9]?.textContent || "").trim();
+
+            increment(statusBreakdown, status);
+            increment(allocationBreakdown, allocation);
+            increment(contractorBreakdown, contractor);
+            increment(billingBreakdown, billingType);
+            visibleAmountTotal += parseCurrencyValue(amountValue);
+        });
+
+        if (taskAnalysisVisible) {
+            taskAnalysisVisible.textContent = String(visibleRows.length);
+        }
+        if (taskAnalysisTotal) {
+            taskAnalysisTotal.textContent = String(rows.length);
+        }
+        if (taskAnalysisAmount) {
+            taskAnalysisAmount.textContent = formatCurrency(visibleAmountTotal);
+        }
+        if (taskAnalysisStatus) {
+            taskAnalysisStatus.innerHTML = buildTaskAnalysisBreakdownMarkup(statusBreakdown);
+        }
+        if (taskAnalysisAllocation) {
+            taskAnalysisAllocation.innerHTML = buildTaskAnalysisBreakdownMarkup(allocationBreakdown);
+        }
+        if (taskAnalysisContractor) {
+            taskAnalysisContractor.innerHTML = buildTaskAnalysisBreakdownMarkup(contractorBreakdown);
+        }
+        if (taskAnalysisBilling) {
+            taskAnalysisBilling.innerHTML = buildTaskAnalysisBreakdownMarkup(billingBreakdown);
+        }
+    };
+
+    const closeTaskAnalysisCard = () => {
+        if (!taskAnalysisCard) {
+            return;
+        }
+        taskAnalysisCard.hidden = true;
+        setBodyScrollLock();
+    };
+
+    const openTaskAnalysisCard = () => {
+        if (!taskAnalysisCard) {
+            return;
+        }
+        syncTaskAnalysisSummary();
+        taskAnalysisCard.hidden = false;
+        setBodyScrollLock();
+        const closeButton = taskAnalysisCard.querySelector(".task-analysis-close");
+        if (closeButton instanceof HTMLButtonElement) {
+            closeButton.focus();
+        }
+    };
+
     openTaskPersonnelButtons.forEach((button) => {
         button.addEventListener("click", openTaskPersonnelModal);
     });
@@ -5844,6 +6135,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     closeTaskModalButtons.forEach((button) => {
         button.addEventListener("click", closeTaskModal);
+    });
+
+    openTaskAnalysisButtons.forEach((button) => {
+        button.addEventListener("click", openTaskAnalysisCard);
+    });
+
+    closeTaskAnalysisButtons.forEach((button) => {
+        button.addEventListener("click", closeTaskAnalysisCard);
     });
 
     if (taskPersonnelForm) {
@@ -6178,7 +6477,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         taskTableBody.innerHTML = `
             <tr class="task-empty-row js-task-empty-row">
-                <td colspan="6">
+                <td colspan="12">
                     <div class="task-empty-state">
                         <svg viewBox="0 0 64 64" aria-hidden="true">
                             <rect x="18" y="14" width="12" height="12" rx="2"></rect>
@@ -6189,8 +6488,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             <path d="M38 44h12"></path>
                         </svg>
                         <div class="task-empty-copy">
-                            <strong>No tasks yet</strong>
-                            <p>New tasks will appear here once you start assigning work.</p>
+                            <strong>No records yet</strong>
+                            <p>New entries will appear here once they are added.</p>
                         </div>
                     </div>
                 </td>
@@ -6221,7 +6520,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!label) {
             return `
                 <div class="task-assignee task-assignee--empty">
-                    <span class="task-avatar task-avatar--empty">NA</span>
                     <span class="task-assignee-name">Unassigned</span>
                 </div>
             `;
@@ -6229,7 +6527,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         return `
             <div class="task-assignee">
-                <span class="task-avatar">${escapeHtml(getTaskInitials(label))}</span>
                 <span class="task-assignee-name">${escapeHtml(label)}</span>
             </div>
         `;
@@ -6259,48 +6556,60 @@ document.addEventListener("DOMContentLoaded", () => {
         const normalizedPriority = normalizeStatus(record.priority || "medium");
         const normalizedStatus = normalizeStatus(record.status || "pending");
         const overdue = isTaskOverdue(record);
+        const locationLabel = String(record.location || record.division || "").trim();
+        const allocationLabel = String(record.allocation || record.division || "").trim();
 
         row.dataset.search = [
+            record.slipNo,
             record.title,
-            record.division,
+            locationLabel,
             record.assignedTo,
             record.priority,
+            record.amount,
+            record.receiveFrom,
             record.status,
+            allocationLabel,
             record.notes,
         ].filter(Boolean).join(" ").toLowerCase();
-        row.dataset.division = normalizeKey(record.division || "");
-        row.dataset.divisionLabel = String(record.division || "").trim();
+        row.dataset.division = normalizeKey(allocationLabel);
+        row.dataset.divisionLabel = allocationLabel;
         row.dataset.priority = normalizedPriority;
         row.dataset.status = normalizedStatus;
         row.dataset.dueDateIso = String(record.dueDateIso || "").trim();
         row.dataset.overdue = overdue ? "true" : "false";
         row.dataset.title = String(record.title || "").trim();
         row.dataset.assignedTo = String(record.assignedTo || "").trim();
+        row.dataset.slipNo = String(record.slipNo || "").trim();
+        row.dataset.location = locationLabel;
+        row.dataset.amount = String(record.amount || "").trim();
+        row.dataset.receiveFrom = String(record.receiveFrom || "").trim();
+        row.dataset.allocation = allocationLabel;
+        row.dataset.adminRecordId = String(record.adminRecordId || "").trim();
         row.dataset.notes = String(record.notes || "").trim();
 
         row.innerHTML = `
+            <td>${escapeHtml(record.slipNo || "-")}</td>
             <td>
                 <div class="task-title-cell">
-                    <span class="task-row-dot${overdue ? " task-row-dot--alert" : ""}" aria-hidden="true"></span>
                     <div class="task-title-copy">
                         <strong>${escapeHtml(record.title || "-")}</strong>
-                        <span>Div: ${escapeHtml(record.division || "-")}</span>
                     </div>
                 </div>
             </td>
+            <td>${escapeHtml(locationLabel || "-")}</td>
             <td>${buildTaskAssignedMarkup(record.assignedTo)}</td>
+            <td>
+                ${buildTaskPriorityPill(record.priority)}
+            </td>
+            <td class="task-amount-cell">${escapeHtml(record.amount || "-")}</td>
+            <td>${escapeHtml(record.receiveFrom || "-")}</td>
             <td>
                 <span class="task-due-date${overdue ? " task-due-date--overdue" : ""}">${escapeHtml(record.dueDateDisplay || "-")}</span>
             </td>
-            <td>${buildTaskPriorityPill(record.priority)}</td>
             <td>${buildTaskStatusPill(record.status)}</td>
-            <td>
-                <button type="button" class="task-row-action" aria-label="Task actions" title="Task actions">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </button>
-            </td>
+            <td>${escapeHtml(allocationLabel || "-")}</td>
+            <td>${escapeHtml(record.notes || "-")}</td>
+            ${buildTableActionButtonsHtml("task")}
         `;
 
         return row;
@@ -6308,13 +6617,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function serializeTaskRows() {
         return getTaskRows().map((row) => ({
+            adminRecordId: String(row.dataset.adminRecordId || "").trim(),
+            slipNo: String(row.dataset.slipNo || "").trim() || (row.cells[0]?.textContent || "").trim(),
             title: String(row.dataset.title || "").trim(),
             division: String(row.dataset.divisionLabel || "").trim(),
+            location: String(row.dataset.location || "").trim() || (row.cells[2]?.textContent || "").trim(),
             assignedTo: String(row.dataset.assignedTo || "").trim(),
             dueDateIso: String(row.dataset.dueDateIso || "").trim(),
             dueDateDisplay: (row.querySelector(".task-due-date")?.textContent || "").trim(),
             priority: (row.querySelector(".task-table-pill--priority")?.textContent || "").trim(),
             status: (row.querySelector(".task-table-pill--status")?.textContent || "").trim(),
+            amount: String(row.dataset.amount || "").trim() || (row.querySelector(".task-amount-cell")?.textContent || "").trim(),
+            receiveFrom: String(row.dataset.receiveFrom || "").trim() || (row.cells[6]?.textContent || "").trim(),
+            allocation: String(row.dataset.allocation || "").trim() || (row.cells[9]?.textContent || "").trim(),
             notes: String(row.dataset.notes || "").trim(),
         }));
     }
@@ -6366,25 +6681,48 @@ document.addEventListener("DOMContentLoaded", () => {
         const rows = getTaskRows();
         const totalCount = rows.length;
         const visibleRows = rows.filter((row) => !row.hidden);
-        const pendingCount = rows.filter((row) => row.dataset.status === "pending").length;
-        const progressCount = rows.filter((row) => row.dataset.status === "in_progress").length;
-        const completedCount = rows.filter((row) => row.dataset.status === "completed").length;
-        const overdueCount = rows.filter((row) => row.dataset.overdue === "true").length;
+        let incomingCount = 0;
+        let pendingCount = 0;
+        let processCount = 0;
+        let cancelledCount = 0;
+        let completedCount = 0;
+
+        rows.forEach((row) => {
+            if (!(row instanceof HTMLTableRowElement)) {
+                return;
+            }
+
+            const statusValue = normalizeStatus(row.cells[8]?.textContent || row.dataset.status || "");
+            if (statusValue === "incoming") {
+                incomingCount += 1;
+            } else if (statusValue === "pending") {
+                pendingCount += 1;
+            } else if (["in_progress", "on_process", "in_process", "processing"].includes(statusValue)) {
+                processCount += 1;
+            } else if (["cancelled", "canceled"].includes(statusValue)) {
+                cancelledCount += 1;
+            } else if (["completed", "received", "done"].includes(statusValue)) {
+                completedCount += 1;
+            }
+        });
 
         if (taskStatTotal) {
             taskStatTotal.textContent = String(totalCount);
+        }
+        if (taskStatIncoming) {
+            taskStatIncoming.textContent = String(incomingCount);
         }
         if (taskStatPending) {
             taskStatPending.textContent = String(pendingCount);
         }
         if (taskStatProgress) {
-            taskStatProgress.textContent = String(progressCount);
+            taskStatProgress.textContent = String(processCount);
         }
         if (taskStatCompleted) {
             taskStatCompleted.textContent = String(completedCount);
         }
-        if (taskStatOverdue) {
-            taskStatOverdue.textContent = String(overdueCount);
+        if (taskStatCancelled) {
+            taskStatCancelled.textContent = String(cancelledCount);
         }
         if (taskTableTotal) {
             taskTableTotal.textContent = `${totalCount} Total`;
@@ -6393,8 +6731,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const visibleCount = visibleRows.length;
             const startCount = visibleCount ? 1 : 0;
             taskResultsSummary.textContent = totalCount
-                ? `Showing ${startCount} to ${visibleCount} of ${totalCount} tasks`
-                : "Showing 0 to 0 of 0 tasks";
+                ? `Showing ${startCount} to ${visibleCount} of ${totalCount} records`
+                : "Showing 0 to 0 of 0 records";
         }
     };
 
@@ -6418,6 +6756,148 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         updateTaskSummary();
+    };
+
+    const getMaintenanceDocRows = () => {
+        if (!(maintenanceDocTableBody instanceof HTMLElement)) {
+            return [];
+        }
+
+        return Array.from(maintenanceDocTableBody.querySelectorAll("tr"));
+    };
+
+    const getMaintenanceDocStatus = (row) => {
+        if (!(row instanceof HTMLTableRowElement)) {
+            return "";
+        }
+
+        const rawStatus = String(
+            row.dataset.docStatus
+            || row.querySelector("[data-maintenance-doc-status-cell]")?.textContent
+            || ""
+        ).trim();
+
+        return normalizeStatus(rawStatus);
+    };
+
+    const getMaintenanceDocRemarks = (row) => {
+        if (!(row instanceof HTMLTableRowElement)) {
+            return "";
+        }
+
+        const rawRemarks = String(
+            row.dataset.docRemarks
+            || row.querySelector(".js-maintenance-doc-remarks")?.textContent
+            || ""
+        ).trim();
+
+        if (!rawRemarks || rawRemarks === "-" || rawRemarks.toLowerCase() === "none") {
+            return "";
+        }
+
+        return rawRemarks;
+    };
+
+    const syncMaintenanceTaskTrackerSummary = () => {
+        if (!(maintenanceTaskTracker instanceof HTMLElement)) {
+            return;
+        }
+
+        const rows = getMaintenanceDocRows();
+        const totalDocuments = rows.length;
+        const receivedDocuments = rows.filter((row) => {
+            const status = getMaintenanceDocStatus(row);
+            return status === "received" || status === "receive_document" || status === "receive";
+        }).length;
+        const onProcessDocuments = rows.filter((row) => {
+            const status = getMaintenanceDocStatus(row);
+            return status === "on_process" || status === "in_process" || status === "in_progress";
+        }).length;
+        const pendingDocuments = rows.filter((row) => getMaintenanceDocStatus(row) === "pending").length;
+        const totalRemarks = rows.filter((row) => Boolean(getMaintenanceDocRemarks(row))).length;
+
+        if (maintenanceDocTotal instanceof HTMLElement) {
+            maintenanceDocTotal.textContent = String(totalDocuments);
+        }
+        if (maintenanceDocTotalInline instanceof HTMLElement) {
+            maintenanceDocTotalInline.textContent = String(totalDocuments);
+        }
+        if (maintenanceDocReceived instanceof HTMLElement) {
+            maintenanceDocReceived.textContent = String(receivedDocuments);
+        }
+        if (maintenanceDocProcess instanceof HTMLElement) {
+            maintenanceDocProcess.textContent = String(onProcessDocuments);
+        }
+        if (maintenanceDocPending instanceof HTMLElement) {
+            maintenanceDocPending.textContent = String(pendingDocuments);
+        }
+        if (maintenanceDocRemarksTotal instanceof HTMLElement) {
+            maintenanceDocRemarksTotal.textContent = String(totalRemarks);
+        }
+    };
+
+    const enableMaintenanceTaskCardFloat = () => {
+        if (!maintenanceTaskCards.length) {
+            return;
+        }
+
+        if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+            return;
+        }
+
+        maintenanceTaskCards.forEach((card) => {
+            if (!(card instanceof HTMLElement)) {
+                return;
+            }
+
+            card.addEventListener("pointermove", (event) => {
+                const bounds = card.getBoundingClientRect();
+                const relativeX = (event.clientX - bounds.left) / bounds.width;
+                const relativeY = (event.clientY - bounds.top) / bounds.height;
+                const rotateY = (relativeX - 0.5) * 9;
+                const rotateX = (0.5 - relativeY) * 9;
+                const shiftX = (relativeX - 0.5) * 8;
+                const shiftY = (relativeY - 0.5) * 8;
+
+                card.style.setProperty("--maintenance-doc-rotate-x", `${rotateX.toFixed(2)}deg`);
+                card.style.setProperty("--maintenance-doc-rotate-y", `${rotateY.toFixed(2)}deg`);
+                card.style.setProperty("--maintenance-doc-shift-x", `${shiftX.toFixed(2)}px`);
+                card.style.setProperty("--maintenance-doc-shift-y", `${shiftY.toFixed(2)}px`);
+            });
+
+            const resetFloat = () => {
+                card.style.setProperty("--maintenance-doc-rotate-x", "0deg");
+                card.style.setProperty("--maintenance-doc-rotate-y", "0deg");
+                card.style.setProperty("--maintenance-doc-shift-x", "0px");
+                card.style.setProperty("--maintenance-doc-shift-y", "0px");
+            };
+
+            card.addEventListener("pointerleave", resetFloat);
+            card.addEventListener("pointercancel", resetFloat);
+        });
+    };
+
+    const initMaintenanceTaskTracker = () => {
+        if (!(maintenanceTaskTracker instanceof HTMLElement) || !(maintenanceDocTableBody instanceof HTMLElement)) {
+            return;
+        }
+
+        syncMaintenanceTaskTrackerSummary();
+        enableMaintenanceTaskCardFloat();
+
+        if (typeof MutationObserver === "function") {
+            const trackerObserver = new MutationObserver(() => {
+                syncMaintenanceTaskTrackerSummary();
+            });
+
+            trackerObserver.observe(maintenanceDocTableBody, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true,
+                attributeFilter: ["data-doc-status", "data-doc-remarks"],
+            });
+        }
     };
 
     const buildTableActionButtonsHtml = (recordType) => {
@@ -6543,6 +7023,25 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        const adminRecordById = new Map();
+        try {
+            const rawAdmin = window.localStorage.getItem(adminDivisionStorageKey);
+            const parsedAdmin = rawAdmin ? JSON.parse(rawAdmin) : [];
+            if (Array.isArray(parsedAdmin)) {
+                parsedAdmin.forEach((record) => {
+                    if (!record || typeof record !== "object") {
+                        return;
+                    }
+                    const recordId = String(record.__record_id || "").trim();
+                    if (recordId) {
+                        adminRecordById.set(recordId, record);
+                    }
+                });
+            }
+        } catch (error) {
+            // Ignore admin storage parsing errors.
+        }
+
         if (Array.isArray(savedState.roadRecords) && savedState.roadRecords.length) {
             const restoredRoads = savedState.roadRecords
                 .map((rawRecord) => {
@@ -6643,14 +7142,37 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!String(record.title || "").trim()) {
                     return;
                 }
+
+                const adminRecordId = String(record.adminRecordId || "").trim();
+                let dueDateIso = String(record.dueDateIso || "").trim();
+                if (!dueDateIso && adminRecordId && adminRecordById.has(adminRecordId)) {
+                    const adminRecord = adminRecordById.get(adminRecordId);
+                    dueDateIso = String(
+                        adminRecord?.maintenance_sent_date
+                        || adminRecord?.date_released_admin
+                        || adminRecord?.date_received_admin
+                        || adminRecord?.date_received_peo
+                        || adminRecord?.date_received
+                        || ""
+                    ).trim();
+                }
+                if (!dueDateIso && adminRecordId) {
+                    dueDateIso = getLocalIsoDate();
+                }
                 taskTableBody.append(createTaskRowElement({
+                    adminRecordId,
+                    slipNo: String(record.slipNo || "").trim(),
                     title: String(record.title || "").trim(),
                     division: String(record.division || "").trim() || "-",
+                    location: String(record.location || "").trim(),
                     assignedTo: String(record.assignedTo || "").trim(),
-                    dueDateIso: String(record.dueDateIso || "").trim(),
-                    dueDateDisplay: String(record.dueDateDisplay || "").trim() || formatTaskDateValue(record.dueDateIso),
+                    dueDateIso,
+                    dueDateDisplay: String(record.dueDateDisplay || "").trim() || formatTaskDateValue(dueDateIso),
                     priority: String(record.priority || "").trim() || "Medium",
                     status: String(record.status || "").trim() || "Pending",
+                    amount: String(record.amount || "").trim(),
+                    receiveFrom: String(record.receiveFrom || "").trim(),
+                    allocation: String(record.allocation || "").trim(),
                     notes: String(record.notes || "").trim(),
                 }));
             });
@@ -6822,6 +7344,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateScheduleSummary();
     updateTaskSummary();
     applyTaskFilters();
+    initMaintenanceTaskTracker();
     refreshRoadMunicipalityOptions();
     if (typeof refreshRoadRegister === "function") {
         refreshRoadRegister();
