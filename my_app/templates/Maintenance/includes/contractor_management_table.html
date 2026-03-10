@@ -107,6 +107,7 @@
                 data-status="active"
                 data-contracts="7"
                 data-value="P 45,200,000"
+                data-value-raw="45200000"
                 data-rating="4.8"
                 data-classification="General Engineering"
                 data-license-expiry="December 31, 2027"
@@ -153,6 +154,7 @@
                 data-status="active"
                 data-contracts="4"
                 data-value="P 21,400,000"
+                data-value-raw="21400000"
                 data-rating="4.3"
                 data-classification="Building Works"
                 data-license-expiry="September 30, 2026"
@@ -199,6 +201,7 @@
                 data-status="pending"
                 data-contracts="2"
                 data-value="P 8,900,000"
+                data-value-raw="8900000"
                 data-rating="3.9"
                 data-classification="Road Maintenance"
                 data-license-expiry="June 30, 2026"
@@ -245,6 +248,7 @@
                 data-status="blacklisted"
                 data-contracts="1"
                 data-value="P 1,950,000"
+                data-value-raw="1950000"
                 data-rating="2.4"
                 data-classification="Specialty Civil Works"
                 data-license-expiry="Expired"
@@ -288,8 +292,8 @@
         </div>
     </section>
 
-    <div class="contractor-delete-toast js-contractor-delete-toast" role="alertdialog" aria-live="polite" aria-atomic="true" hidden>
-        <p class="contractor-delete-toast-message js-contractor-delete-message">Are you sure to delete data?</p>
+    <div class="contractor-delete-toast js-contractor-delete-toast" role="alertdialog" aria-live="polite" aria-atomic="true" aria-modal="true" aria-label="Confirm delete" aria-describedby="contractor-delete-message" hidden>
+        <p id="contractor-delete-message" class="contractor-delete-toast-message js-contractor-delete-message">Are you sure to delete data?</p>
         <div class="contractor-delete-toast-actions">
             <button type="button" class="contractor-delete-toast-btn contractor-delete-toast-btn-secondary js-contractor-delete-cancel">Cancel</button>
             <button type="button" class="contractor-delete-toast-btn contractor-delete-toast-btn-danger js-contractor-delete-confirm">Delete</button>
@@ -435,13 +439,13 @@
             </div>
 
             <div class="contractor-float-tabs" role="tablist" aria-label="Contractor details tabs">
-                <button type="button" class="contractor-float-tab is-active js-contractor-float-tab" data-contractor-panel="info" role="tab" aria-selected="true">Information</button>
-                <button type="button" class="contractor-float-tab js-contractor-float-tab" data-contractor-panel="contracts" role="tab" aria-selected="false">
+                <button type="button" id="contractor-tab-info" class="contractor-float-tab is-active js-contractor-float-tab" data-contractor-panel="info" role="tab" aria-selected="true" aria-controls="contractor-panel-info">Information</button>
+                <button type="button" id="contractor-tab-contracts" class="contractor-float-tab js-contractor-float-tab" data-contractor-panel="contracts" role="tab" aria-selected="false" aria-controls="contractor-panel-contracts">
                     Contracts (<span class="js-contractor-float-contract-count">0</span>)
                 </button>
             </div>
 
-            <section class="contractor-float-panel is-active js-contractor-float-panel" data-contractor-panel="info" role="tabpanel">
+            <section id="contractor-panel-info" class="contractor-float-panel is-active js-contractor-float-panel" data-contractor-panel="info" role="tabpanel" aria-labelledby="contractor-tab-info">
                 <span class="contractor-status-badge contractor-float-status-pill js-contractor-float-status-pill">Active</span>
 
                 <div class="contractor-float-grid">
@@ -486,7 +490,7 @@
                 </div>
             </section>
 
-            <section class="contractor-float-panel js-contractor-float-panel" data-contractor-panel="contracts" role="tabpanel" hidden>
+            <section id="contractor-panel-contracts" class="contractor-float-panel js-contractor-float-panel" data-contractor-panel="contracts" role="tabpanel" aria-labelledby="contractor-tab-contracts" hidden>
                 <div class="contractor-float-contract-head">
                     <h5>Contract History</h5>
                     <p>Total Cost: <strong class="js-contractor-float-total-cost">P 0</strong></p>
