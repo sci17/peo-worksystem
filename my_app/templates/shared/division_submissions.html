@@ -48,15 +48,21 @@
             <table class="project-table submissions-table">
                 <thead>
                     <tr>
-                        <th>From</th>
-                        <th>Project / Document</th>
+                        <th>Slip No</th>
+                        <th>Document Name</th>
                         <th>Location</th>
+                        <th>Type</th>
                         <th>Contractor</th>
+                        <th>Division</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Scanned File</th>
+                        <th class="submissions-actions-header">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="js-division-submissions-tbody">
                     <tr class="project-empty-row js-division-submissions-empty">
-                        <td colspan="4">
+                        <td colspan="10">
                             <div class="project-empty-state">
                                 <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
                                 <div>
@@ -79,4 +85,156 @@
             </div>
         </footer>
     </section>
+
+    <div class="submissions-modal js-submissions-view-modal" hidden>
+        <div class="submissions-modal-backdrop js-submissions-close"></div>
+        <div class="submissions-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="submissions-view-title">
+            <header class="submissions-modal-header">
+                <div>
+                    <span class="submissions-modal-kicker">Submission Details</span>
+                    <h3 id="submissions-view-title">Submission Details</h3>
+                    <p class="js-submissions-view-subtitle">Review the incoming submission details.</p>
+                </div>
+                <button type="button" class="submissions-modal-close js-submissions-close" aria-label="Close submission details">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </header>
+
+            <div class="submissions-detail-grid">
+                <div class="submissions-detail-item">
+                    <span>Slip No</span>
+                    <strong class="js-submissions-view-slip">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>From</span>
+                    <strong class="js-submissions-view-from">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Project / Document</span>
+                    <strong class="js-submissions-view-name">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Location</span>
+                    <strong class="js-submissions-view-location">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Contractor</span>
+                    <strong class="js-submissions-view-contractor">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Type</span>
+                    <strong class="js-submissions-view-type">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Division</span>
+                    <strong class="js-submissions-view-division">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Status</span>
+                    <strong class="js-submissions-view-status">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Contract Amount</span>
+                    <strong class="js-submissions-view-amount">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Date</span>
+                    <strong class="js-submissions-view-date">-</strong>
+                </div>
+                <div class="submissions-detail-item">
+                    <span>Scanned File</span>
+                    <strong class="js-submissions-view-file">-</strong>
+                </div>
+                <div class="submissions-detail-item submissions-detail-item--full">
+                    <span>Remarks</span>
+                    <strong class="js-submissions-view-remarks">-</strong>
+                </div>
+            </div>
+
+            <div class="submissions-modal-actions">
+                <button type="button" class="submissions-btn submissions-btn--secondary js-submissions-close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="submissions-modal js-submissions-edit-modal" hidden>
+        <div class="submissions-modal-backdrop js-submissions-edit-close"></div>
+        <div class="submissions-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="submissions-edit-title">
+            <header class="submissions-modal-header">
+                <div>
+                    <span class="submissions-modal-kicker">Edit Submission</span>
+                    <h3 id="submissions-edit-title">Update Submission</h3>
+                    <p class="js-submissions-edit-subtitle">Update the submission details for this record.</p>
+                </div>
+                <button type="button" class="submissions-modal-close js-submissions-edit-close" aria-label="Close edit submission form">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </header>
+
+            <form class="submissions-edit-form js-submissions-edit-form">
+                <div class="submissions-edit-grid">
+                    <label class="submissions-edit-field submissions-edit-field--full">
+                        <span>Project / Document Name *</span>
+                        <input type="text" class="js-submissions-edit-name" placeholder="Project or document name" required readonly>
+                    </label>
+
+                    <label class="submissions-edit-field">
+                        <span>Location</span>
+                        <input type="text" class="js-submissions-edit-location" placeholder="Location" readonly>
+                    </label>
+
+                    <label class="submissions-edit-field">
+                        <span>Contractor</span>
+                        <input type="text" class="js-submissions-edit-contractor" placeholder="Contractor name" readonly>
+                    </label>
+
+                    <label class="submissions-edit-field">
+                        <span>Contract Amount</span>
+                        <input type="text" class="js-submissions-edit-amount" placeholder="PHP 0.00" readonly>
+                    </label>
+
+                    <label class="submissions-edit-field">
+                        <span>Submitted Date</span>
+                        <input type="date" class="js-submissions-edit-submitted">
+                    </label>
+
+                    <label class="submissions-edit-field submissions-edit-field--full">
+                        <span>Status</span>
+                        <select class="js-submissions-edit-status">
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                            <option value="For Review">For Review</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </label>
+                </div>
+
+                <label class="submissions-edit-field submissions-edit-field--full">
+                    <span>Remarks</span>
+                    <textarea class="js-submissions-edit-remarks" rows="3" placeholder="Notes about this submission"></textarea>
+                </label>
+
+                <div class="submissions-route-panel" aria-label="Submit to division">
+                    <span class="submissions-route-kicker">Submit to Division</span>
+                    <div class="submissions-route-controls">
+                        <select class="submissions-route-select js-submissions-route-division" aria-label="Select division to submit">
+                            <option value="" selected>Select division</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Planning Division">Planning Division</option>
+                            <option value="Construction">Construction</option>
+                            <option value="Quality">Quality</option>
+                            <option value="Maintenance">Maintenance</option>
+                        </select>
+                        <button type="button" class="submissions-route-submit js-submissions-route-submit" disabled>Submit</button>
+                    </div>
+                </div>
+
+                <div class="submissions-modal-actions">
+                    <button type="button" class="submissions-btn submissions-btn--secondary js-submissions-edit-close">Cancel</button>
+                    <button type="submit" class="submissions-btn submissions-btn--primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </section>
