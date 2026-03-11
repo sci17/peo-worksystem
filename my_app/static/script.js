@@ -9325,7 +9325,13 @@ document.addEventListener("DOMContentLoaded", () => {
         adminAssignedTableBody.addEventListener("click", (event) => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
-            if (target.closest('a[href]')) return;
+
+            const link = target.closest('a[href]');
+            if (link) {
+                if (!(link instanceof HTMLElement) || !link.classList.contains("construction-project-link")) return;
+                if (event.ctrlKey || event.metaKey) return;
+                event.preventDefault();
+            }
 
             const row = target.closest("tr");
             if (!(row instanceof HTMLTableRowElement)) return;
@@ -9960,6 +9966,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const ppaProjectTitleInput = planningPpaModal instanceof HTMLElement
         ? planningPpaModal.querySelector('input[name="project_title"]')
         : null;
+    const ppaBudgetAllocationSelect = planningPpaModal instanceof HTMLElement
+        ? planningPpaModal.querySelector(".js-planning-ppa-budget-select")
+        : null;
     const closeEditPpaModalButtons = planningEditPpaModal instanceof HTMLElement
         ? planningEditPpaModal.querySelectorAll(".js-close-planning-edit-ppa-modal")
         : [];
@@ -10171,6 +10180,27 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             // Ignore storage failures.
         }
+    };
+
+    const syncPlanningDocumentStatusToAdmin = (planningDocRecord) => {
+        const record = planningDocRecord && typeof planningDocRecord === "object" ? planningDocRecord : {};
+        const sourceId = String(record.__admin_source_id || "").trim();
+        if (!sourceId) return false;
+
+        const nextStatus = normalizePlanningDocStatus(record.status || "For Review");
+        if (!nextStatus) return false;
+
+        const adminRecords = readAdminDivisionRecords();
+        const idx = adminRecords.findIndex((item) => String(item?.__record_id || "").trim() === sourceId);
+        if (idx < 0) return false;
+
+        const existing = adminRecords[idx] || {};
+        const updated = { ...existing };
+        updated.doc_status = nextStatus;
+        updated.status = nextStatus;
+        adminRecords[idx] = updated;
+        writeAdminDivisionRecords(adminRecords);
+        return true;
     };
 
     const readStoredPlanningDocuments = () => {
@@ -10601,6 +10631,149 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const mapPlanningDocStatusToPpaStatus = (value) => {
+        const normalized = normalizePlanningDocStatus(value);
+        if (normalized === "Approved") return "Approved";
+        if (normalized === "For Review") return "For Review";
+        if (normalized === "Draft") return "Draft";
+        if (normalized === "Rejected") return "Cancelled";
+        return "Draft";
+    };
+
+    const ensurePlanningPpaLocationColumn = () => {
+        if (!(planningPpaTableBody instanceof HTMLTableSectionElement)) return;
+        const table = planningPpaTableBody.closest("table");
+        const headRow = table?.querySelector("thead tr");
+        if (headRow instanceof HTMLTableRowElement) {
+            const headers = Array.from(headRow.querySelectorAll("th"));
+            const hasLocation = headers.some((th) => String(th.textContent || "").trim().toLowerCase() === "location");
+            if (!hasLocation) {
+                const locationTh = document.createElement("th");
+                locationTh.textContent = "Location";
+                headRow.insertBefore(locationTh, headers[1] || null);
+            }
+        }
+
+        planningPpaTableBody.querySelectorAll("tr").forEach((row) => {
+            if (!(row instanceof HTMLTableRowElement)) return;
+            if (row.dataset.ppaEmptyRow === "true") return;
+            if (row.cells.length === 5) {
+                const locationTd = document.createElement("td");
+                locationTd.textContent = "-";
+                row.insertBefore(locationTd, row.cells[1] || null);
+            }
+        });
+    };
+
+    const syncPpaFromPlanningDocuments = (records) => {
+        if (!(planningPpaTableBody instanceof HTMLTableSectionElement)) return;
+        ensurePlanningPpaLocationColumn();
+        const docs = Array.isArray(records) ? records : [];
+
+        const existingRows = Array.from(
+            planningPpaTableBody.querySelectorAll('tr[data-ppa-source="planning_doc"]')
+        ).filter((row) => row instanceof HTMLTableRowElement);
+
+        const rowByDocId = new Map(
+            existingRows.map((row) => [String(row.dataset.planningDocId || "").trim(), row])
+        );
+
+        const keepDocIds = new Set();
+        const incoming = docs
+            .map((doc) => {
+                const id = String(doc?.id || "").trim();
+                if (!id) return null;
+                keepDocIds.add(id);
+
+                const name = String(doc?.document_name || "").trim() || "(Untitled Project)";
+                const displayId = String(doc?.slip_no || id).trim();
+                const location = String(doc?.location || "").trim() || "-";
+                const fundSource = String(
+                    resolvePlanningBudgetAllocationValue(doc?.budget_allocation)
+                    || doc?.budget_allocation
+                    || "-"
+                ).trim() || "-";
+                const status = mapPlanningDocStatusToPpaStatus(doc?.status);
+                const amountNumber = parsePlanningDocAmount(doc?.amount);
+                const amountText = String(doc?.amount || "").trim();
+                const amountDisplay = amountText ? formatPhp(amountNumber) : "-";
+
+                return { id, name, displayId, location, fundSource, status, amountDisplay };
+            })
+            .filter(Boolean)
+            .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+        incoming.forEach((doc) => {
+            const existingRow = rowByDocId.get(doc.id);
+            const row = existingRow || document.createElement("tr");
+            row.dataset.ppaSource = "planning_doc";
+            row.dataset.planningDocId = doc.id;
+
+            if (!existingRow) {
+                row.innerHTML = `
+                    <td>
+                        <strong></strong>
+                        <small></small>
+                    </td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="planning-ppa-amount"></td>
+                    <td class="planning-ppa-actions"></td>
+                `;
+            }
+
+            const firstCell = row.cells[0];
+            const locationCell = row.cells[1];
+            const fundCell = row.cells[2];
+            const statusCell = row.cells[3];
+            const amountCell = row.cells[4];
+            const actionsCell = row.cells[5];
+
+            const titleEl = firstCell?.querySelector("strong");
+            if (titleEl instanceof HTMLElement) {
+                titleEl.textContent = doc.name;
+            }
+            const idEl = firstCell?.querySelector("small");
+            if (idEl instanceof HTMLElement) {
+                idEl.textContent = `ID: ${doc.displayId}`;
+            }
+            if (locationCell) {
+                locationCell.textContent = doc.location;
+            }
+            if (fundCell) {
+                fundCell.textContent = doc.fundSource;
+            }
+
+            if (statusCell) {
+                const statusSpan = document.createElement("span");
+                statusSpan.className = `planning-ppa-status ${getPpaStatusClassName(doc.status)}`;
+                statusSpan.textContent = doc.status;
+                statusCell.textContent = "";
+                statusCell.appendChild(statusSpan);
+            }
+
+            if (amountCell) {
+                amountCell.textContent = doc.amountDisplay;
+            }
+
+            if (actionsCell) {
+                actionsCell.textContent = "-";
+            }
+
+            if (!existingRow) {
+                planningPpaTableBody.appendChild(row);
+            }
+        });
+
+        existingRows.forEach((row) => {
+            const docId = String(row.dataset.planningDocId || "").trim();
+            if (!docId || !keepDocIds.has(docId)) {
+                row.remove();
+            }
+        });
+    };
+
     const getPlanningPpaStatusCounts = () => {
         const counts = {
             total: 0,
@@ -10613,7 +10786,7 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         getPlanningPpaDataRows().forEach((row) => {
-            const statusCell = row.cells[2];
+            const statusCell = row.cells[3];
             const statusValue = normalizePpaStatus(
                 statusCell?.querySelector(".planning-ppa-status")?.textContent
                 || statusCell?.textContent
@@ -10660,6 +10833,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const syncPpaTableState = () => {
         if (!(planningPpaTableBody instanceof HTMLTableSectionElement)) return;
+        ensurePlanningPpaLocationColumn();
 
         const dataRows = getPlanningPpaDataRows();
 
@@ -10670,7 +10844,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const row = document.createElement("tr");
             row.dataset.ppaEmptyRow = "true";
             row.className = "planning-ppa-empty-row";
-            row.innerHTML = '<td colspan="5">No PPA records available.</td>';
+            row.innerHTML = '<td colspan="6">No PPA records available.</td>';
             planningPpaTableBody.appendChild(row);
         }
 
@@ -11061,6 +11235,64 @@ document.addEventListener("DOMContentLoaded", () => {
     let planningToastTimer = null;
     let planningConfirmOverlay = null;
 
+    const getPlanningPpaBudgetAllocationOptions = () => {
+        if (!Array.isArray(planningBudgetRecords) || !planningBudgetRecords.length) return [];
+
+        return planningBudgetRecords
+            .filter((record) => normalizeStatus(record?.status) === "Approved")
+            .map((record) => {
+                const budgetName = String(record?.budgetName || "").trim();
+                if (!budgetName) return null;
+                const usedAllocation = getUsedAllocationTotalForBudget(budgetName);
+                const metrics = getBudgetMetrics(record, usedAllocation);
+                return {
+                    budgetName,
+                    remainingBudget: Number(metrics?.remainingBudget ?? 0),
+                    createdAt: Number(record?.createdAt || 0),
+                };
+            })
+            .filter((item) => item && item.budgetName && item.remainingBudget > 0)
+            .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+            .map((item) => item.budgetName);
+    };
+
+    const refreshPlanningPpaBudgetAllocationSelect = (preferredValue = "") => {
+        if (!(ppaBudgetAllocationSelect instanceof HTMLElement)) return;
+
+        const menu = ppaBudgetAllocationSelect.querySelector(".js-planning-ppa-form-menu");
+        const input = ppaBudgetAllocationSelect.querySelector(".js-planning-ppa-form-input");
+        if (!(menu instanceof HTMLElement) || !(input instanceof HTMLInputElement)) return;
+
+        const placeholder = "Select approved budget with remaining balance";
+        const options = getPlanningPpaBudgetAllocationOptions();
+        const current = String(preferredValue || input.value || "").trim();
+        const nextValue = options.includes(current) ? current : "";
+
+        const buildOption = ({ value, label, selected, disabled }) => {
+            const isSelected = selected ? " is-selected" : "";
+            const isDisabled = disabled ? " disabled" : "";
+            return `
+                <li>
+                    <button type="button" class="planning-ppa-form-option${isSelected}" data-value="${escapeHtml(value)}"${isDisabled}>
+                        <span>${escapeHtml(label)}</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">check</span>
+                    </button>
+                </li>
+            `;
+        };
+
+        const rows = [
+            buildOption({ value: "", label: placeholder, selected: nextValue === "", disabled: false }),
+            ...(options.length
+                ? options.map((value) => buildOption({ value, label: value, selected: value === nextValue, disabled: false }))
+                : [buildOption({ value: "", label: "No approved budgets available.", selected: false, disabled: true })]
+            ),
+        ];
+
+        menu.innerHTML = rows.join("");
+        setPpaFormSelectValue(ppaBudgetAllocationSelect, nextValue);
+    };
+
     const syncPlanningModalBodyState = () => {
         const createVisible = planningBudgetModal instanceof HTMLElement && !planningBudgetModal.hidden;
         const editVisible = planningEditBudgetModal instanceof HTMLElement && !planningEditBudgetModal.hidden;
@@ -11346,6 +11578,7 @@ document.addEventListener("DOMContentLoaded", () => {
         planningPpaModal.style.display = "flex";
         syncPlanningModalBodyState();
         closePpaFormSelectMenus();
+        refreshPlanningPpaBudgetAllocationSelect("");
         window.requestAnimationFrame(() => {
             if (ppaProjectTitleInput instanceof HTMLInputElement) {
                 ppaProjectTitleInput.focus();
@@ -11365,10 +11598,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const openEditPpaModal = (row) => {
         if (!(planningEditPpaModal instanceof HTMLElement) || !(row instanceof HTMLTableRowElement)) return;
+        ensurePlanningPpaLocationColumn();
         const firstCell = row.cells[0];
-        const fundCell = row.cells[1];
-        const statusCell = row.cells[2];
-        const amountCell = row.cells[3];
+        const fundCell = row.cells[2];
+        const statusCell = row.cells[3];
+        const amountCell = row.cells[4];
 
         if (!firstCell || !fundCell || !statusCell || !amountCell) return;
 
@@ -11584,7 +11818,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!(selectRoot instanceof HTMLElement)) return;
             const trigger = selectRoot.querySelector(".js-planning-ppa-form-trigger");
             const menu = selectRoot.querySelector(".js-planning-ppa-form-menu");
-            const options = selectRoot.querySelectorAll(".planning-ppa-form-option");
             const initialOption = selectRoot.querySelector(".planning-ppa-form-option.is-selected");
 
             if (initialOption instanceof HTMLElement) {
@@ -11605,13 +11838,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             }
 
-            options.forEach((option) => {
-                option.addEventListener("click", () => {
+            if (menu instanceof HTMLElement) {
+                menu.addEventListener("click", (event) => {
+                    const target = event.target;
+                    if (!(target instanceof HTMLElement)) return;
+                    const option = target.closest(".planning-ppa-form-option");
                     if (!(option instanceof HTMLElement)) return;
+                    if (option.hasAttribute("disabled")) return;
                     setPpaFormSelectValue(selectRoot, option.dataset.value || "");
                     closePpaFormSelectMenus();
                 });
-            });
+            }
         });
     }
 
@@ -11713,6 +11950,7 @@ document.addEventListener("DOMContentLoaded", () => {
             planningBudgetRecords = planningBudgetRecords.filter((record) => record.id !== recordId);
             writeStoredBudgets(planningBudgetRecords);
             renderPlanningBudgets(planningBudgetRecords);
+            refreshPlanningPpaBudgetAllocationSelect();
             showPlanningToast("Budget record deleted successfully.", "info");
             return;
         }
@@ -11843,6 +12081,9 @@ document.addEventListener("DOMContentLoaded", () => {
             planningDocumentRecords[recordIndex] = updatedRecord;
             writeStoredPlanningDocuments(planningDocumentRecords);
             renderPlanningDocumentsTable(planningDocumentRecords);
+            syncPpaFromPlanningDocuments(planningDocumentRecords);
+            syncPpaTableState();
+            syncPlanningDocumentStatusToAdmin(updatedRecord);
             closePlanningDocModal();
             showPlanningToast("Planning document updated successfully.", "success");
         });
@@ -12022,6 +12263,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             writeStoredBudgets(planningBudgetRecords);
             renderPlanningBudgets(planningBudgetRecords);
+            refreshPlanningPpaBudgetAllocationSelect();
             budgetForm.reset();
             setStatusValue("Draft");
             setYearValue("2026");
@@ -12062,6 +12304,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             writeStoredBudgets(planningBudgetRecords);
             renderPlanningBudgets(planningBudgetRecords);
+            refreshPlanningPpaBudgetAllocationSelect();
             closeEditModal();
             showPlanningToast("Budget data updated successfully.", "success");
         });
@@ -12089,10 +12332,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
+            ensurePlanningPpaLocationColumn();
             const firstCell = editingPpaRow.cells[0];
-            const fundCell = editingPpaRow.cells[1];
-            const statusCell = editingPpaRow.cells[2];
-            const amountCell = editingPpaRow.cells[3];
+            const fundCell = editingPpaRow.cells[2];
+            const statusCell = editingPpaRow.cells[3];
+            const amountCell = editingPpaRow.cells[4];
 
             if (!firstCell || !fundCell || !statusCell || !amountCell) {
                 closeEditPpaModal();
@@ -12172,6 +12416,8 @@ document.addEventListener("DOMContentLoaded", () => {
             writeStoredPlanningDocuments(planningDocumentRecords);
             renderPlanningDocumentsTable(planningDocumentRecords);
             renderPlanningBudgets(planningBudgetRecords);
+            syncPpaFromPlanningDocuments(planningDocumentRecords);
+            syncPpaTableState();
             showPlanningToast("Planning document deleted.", "info");
         });
     }
@@ -12213,7 +12459,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         renderPlanningBudgets(planningBudgetRecords);
         renderPlanningDocumentsTable(planningDocumentRecords);
+        ensurePlanningPpaLocationColumn();
         removePlanningPpaSampleRows();
+        syncPpaFromPlanningDocuments(planningDocumentRecords);
         syncPpaTableState();
         enablePlanningPpaCardFloat();
     }
