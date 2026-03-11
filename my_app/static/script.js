@@ -253,6 +253,7 @@ window.togglePassword = togglePassword;
             await window.fetch(`${API_BASE}${encodeURIComponent(storeKey)}/`, {
                 method: "POST",
                 credentials: "same-origin",
+                keepalive: true,
                 headers: {
                     "Content-Type": "application/json",
                     "X-CSRFToken": csrfToken,
@@ -281,6 +282,16 @@ window.togglePassword = togglePassword;
 
     const latestPayloads = new Map();
     const timers = new Map();
+    const flushSync = () => {
+        timers.forEach((timerId) => {
+            window.clearTimeout(timerId);
+        });
+        timers.clear();
+
+        latestPayloads.forEach((payload, storeKey) => {
+            postStore(storeKey, payload);
+        });
+    };
     const queueSync = (storeKey, payload, delayMs = 400) => {
         const normalizedKey = String(storeKey || "").trim();
         if (!normalizedKey) return;
@@ -325,9 +336,17 @@ window.togglePassword = togglePassword;
 
     window.peoDivisionStore = {
         queueSync,
+        flushSync,
         fetchStore,
         hydrateLocalStorageIfEmpty,
     };
+
+    window.addEventListener("pagehide", flushSync);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+            flushSync();
+        }
+    });
 })();
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -492,7 +511,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const setMaintenanceOpen = (open) => {
             maintenanceToggle.setAttribute("aria-expanded", String(open));
-            maintenanceMenu.hidden = !open;
             if (maintenanceContainer) {
                 maintenanceContainer.classList.toggle("is-open", open);
             }
@@ -2686,6 +2704,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const roadRowsPerMunicipalityPage = 15;
     const maintenanceStorageKey = "peo_maintenance_state_v1";
     const adminDivisionStorageKey = "peo_admin_division_records_v1";
+    const constructionStorageKey = "peo_construction_records_v1";
     const roadAcceptedUploadTypes = ".xlsx,.xls,.csv,.txt,.json";
     let editingMunicipalityKey = "";
     let editingMunicipalityName = "";
@@ -2696,6 +2715,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let editingScheduleRow = null;
     let editingContractorRow = null;
     let deletingContractorRow = null;
+    let evaluatingContractorRow = null;
     let contractorSuccessToastTimer = null;
     let xlsxLibraryPromise = null;
     let refreshRoadRegister = null;
@@ -4975,6 +4995,23 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const buildContractorRatingHtml = (rawRating) => {
+        const parsed = Number.parseFloat(String(rawRating ?? "").trim());
+        const rating = Number.isFinite(parsed) ? Math.max(0, Math.min(5, parsed)) : 0;
+        const ratingLabel = rating ? rating.toFixed(1) : "0.0";
+        const fill = `${(rating / 5) * 100}%`;
+
+        return `
+            <span class="contractor-rating" aria-label="Rating ${escapeHtml(ratingLabel)} out of 5">
+                <span class="contractor-rating-stars" style="--rating-fill:${fill}" aria-hidden="true">
+                    <span class="contractor-rating-stars-base">★★★★★</span>
+                    <span class="contractor-rating-stars-fill">★★★★★</span>
+                </span>
+                <span class="contractor-rating-value">${escapeHtml(ratingLabel)}</span>
+            </span>
+        `;
+    };
+
     const createContractorRowElement = (record) => {
         const name = String(record.name || "").trim() || "Contractor";
         const tradeName = String(record.tradeName || "").trim();
@@ -4984,7 +5021,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const status = String(record.status || "active").trim().toLowerCase();
         const contracts = String(record.contracts || "0").trim() || "0";
         const value = String(record.value || "P 0").trim() || "P 0";
-        const rating = String(record.rating || "").trim();
+        const ratingRaw = String(record.rating || "").trim();
+        const ratingParsed = Number.parseFloat(ratingRaw);
+        const rating = Number.isFinite(ratingParsed) ? Math.max(0, Math.min(5, ratingParsed)) : 0;
         const classification = String(record.classification || "").trim();
         const licenseExpiry = String(record.licenseExpiry || "").trim();
         const contactPerson = String(record.contactPerson || "").trim();
@@ -5029,7 +5068,7 @@ document.addEventListener("DOMContentLoaded", () => {
         rowElement.dataset.status = status;
         rowElement.dataset.contracts = contracts;
         rowElement.dataset.value = value;
-        rowElement.dataset.rating = rating;
+        rowElement.dataset.rating = String(rating);
         rowElement.dataset.classification = classification;
         rowElement.dataset.licenseExpiry = licenseExpiry;
         rowElement.dataset.contactPerson = contactPerson;
@@ -5042,6 +5081,7 @@ document.addEventListener("DOMContentLoaded", () => {
         rowElement.dataset.contactProvince = contactProvince;
         rowElement.dataset.contactMobile = contactMobile;
         rowElement.dataset.remarks = remarks;
+        rowElement.dataset.derived = record && record.derived ? "1" : "0";
         rowElement.dataset.search = searchText;
 
         rowElement.innerHTML = `
@@ -5051,9 +5091,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     <span class="contractor-status-badge ${escapeHtml(statusClassName)}">${escapeHtml(statusLabel)}</span>
                 </div>
                 <p class="contractor-list-line contractor-list-line--muted">TIN: ${escapeHtml(tin || "-")} | PhilGEPS: ${escapeHtml(philgeps || "-")} | PCAB ${escapeHtml(pcabSummary)}</p>
-                <p class="contractor-list-line">
+                <p class="contractor-list-line contractor-list-line--summary">
                     <span><span class="material-symbols-outlined" aria-hidden="true">description</span> ${escapeHtml(contracts)} contracts</span>
                     <span>Value: <strong>${escapeHtml(value)}</strong></span>
+                </p>
+                <p class="contractor-list-line contractor-list-line--rating">
+                    <span>Rating</span>
+                    <span class="contractor-rating-wrap" data-contractor-rating-wrap>${buildContractorRatingHtml(rating)}</span>
                 </p>
             </div>
 
@@ -5503,9 +5547,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return "Not Rated";
     };
 
-    const refreshContractorEvaluationSummary = () => {
+    const computeContractorEvaluationSummary = () => {
         if (!contractorEvalRatings.length) {
-            return;
+            return {
+                totalPercent: 0,
+                overallScore: 0,
+                overallLabel: "Not Rated",
+            };
         }
 
         let weightedScore = 0;
@@ -5525,6 +5573,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const totalPercent = totalWeight ? (weightedScore / totalWeight) * 100 : 0;
         const overallScore = totalPercent / 20;
         const overallLabel = getContractorEvaluationLabel(overallScore);
+
+        return {
+            totalPercent,
+            overallScore,
+            overallLabel,
+        };
+    };
+
+    const refreshContractorEvaluationSummary = () => {
+        const { totalPercent, overallScore, overallLabel } = computeContractorEvaluationSummary();
 
         if (contractorEvalTotal) {
             contractorEvalTotal.textContent = `${totalPercent.toFixed(1)}%`;
@@ -5586,6 +5644,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         contractorEvalModal.hidden = true;
+        evaluatingContractorRow = null;
         setBodyScrollLock();
     };
 
@@ -5612,6 +5671,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         closeContractorDeleteToast();
+        evaluatingContractorRow = row;
 
         const companyName = String(row.dataset.name || "").trim()
             || row.querySelector(".contractor-name")?.textContent.trim()
@@ -5677,6 +5737,25 @@ document.addEventListener("DOMContentLoaded", () => {
         contractorEvalForm.addEventListener("submit", (event) => {
             event.preventDefault();
             refreshContractorEvaluationSummary();
+
+            if (evaluatingContractorRow) {
+                const { overallScore } = computeContractorEvaluationSummary();
+                const normalizedScore = Math.max(0, Math.min(5, Number.isFinite(overallScore) ? overallScore : 0));
+                const roundedScore = Math.round(normalizedScore * 10) / 10;
+
+                evaluatingContractorRow.dataset.rating = String(roundedScore);
+                evaluatingContractorRow.dataset.derived = "0";
+
+                const ratingWrap = evaluatingContractorRow.querySelector("[data-contractor-rating-wrap]");
+                if (ratingWrap instanceof HTMLElement) {
+                    ratingWrap.innerHTML = buildContractorRatingHtml(roundedScore);
+                }
+
+                refreshContractorSummary();
+                refreshContractorTable();
+                persistMaintenanceState();
+            }
+
             closeContractorEvalModal();
             showContractorSuccessToast("Evaluation rating is submitted.");
         });
@@ -5703,78 +5782,243 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const formatCurrency = (amount) => `P ${Math.round(amount).toLocaleString("en-US")}`;
 
-    const contractorContractHistory = {
-        northshorecivilworks: [
-            {
-                title: "Provincial Road Drainage Rehabilitation",
-                code: "PEO-PR-26-011",
-                location: "Quezon, Palawan",
-                cost: 15200000,
-                fy: "FY 2026",
-                progress: "100%",
-                status: "Completed",
-            },
-            {
-                title: "Bridge Shoulder Widening Package",
-                code: "PEO-BR-25-104",
-                location: "Narra, Palawan",
-                cost: 9800000,
-                fy: "FY 2025",
-                progress: "100%",
-                status: "Completed",
-            },
-            {
-                title: "Slope Protection and Guardrail Works",
-                code: "PEO-SP-26-032",
-                location: "Aborlan, Palawan",
-                cost: 7200000,
-                fy: "FY 2026",
-                progress: "42%",
-                status: "Ongoing",
-            },
-        ],
-        harborlinebuilders: [
-            {
-                title: "Coastal Access Road Patching Program",
-                code: "PEO-CA-25-077",
-                location: "Roxas, Palawan",
-                cost: 6400000,
-                fy: "FY 2025",
-                progress: "100%",
-                status: "Completed",
-            },
-            {
-                title: "Asphalt Overlay - Section B",
-                code: "PEO-AO-26-003",
-                location: "Taytay, Palawan",
-                cost: 8300000,
-                fy: "FY 2026",
-                progress: "68%",
-                status: "Ongoing",
-            },
-        ],
-        summitridgeinfra: [
-            {
-                title: "Roadside Drainage Cleaning",
-                code: "PEO-DC-26-018",
-                location: "Narra, Palawan",
-                cost: 2500000,
-                fy: "FY 2026",
-                progress: "55%",
-                status: "Ongoing",
-            },
-        ],
-        redcliffengineering: [
-            {
-                title: "Culvert Repair Assistance",
-                code: "PEO-CR-24-009",
-                location: "Bataraza, Palawan",
-                cost: 1950000,
-                fy: "FY 2024",
-                progress: "100%",
-                status: "Completed",
-            },
-        ],
+    let contractorContractsIndexSignature = null;
+    let contractorContractsIndex = new Map();
+
+    const readStorageArray = (storageKey) => {
+        try {
+            const raw = window.localStorage.getItem(storageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const pickFirstNonDash = (...values) => {
+        return values.find((value) => String(value || "").trim() && String(value).trim() !== "-") || "-";
+    };
+
+    const formatProgressLabel = (value) => {
+        const raw = String(value ?? "").trim();
+        if (!raw) return "-";
+        const numeric = Number.parseFloat(raw.replace(/[^0-9.-]/g, ""));
+        if (Number.isFinite(numeric)) {
+            const clamped = Math.max(0, Math.min(100, numeric));
+            return `${clamped}%`;
+        }
+        return raw.includes("%") ? raw : `${raw}%`;
+    };
+
+    const formatFyLabel = (value) => {
+        const raw = String(value ?? "").trim();
+        if (!raw) return "-";
+        const dmyMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        const parsed = dmyMatch
+            ? new Date(Number(dmyMatch[3]), Number(dmyMatch[2]) - 1, Number(dmyMatch[1]))
+            : new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return "-";
+        return `FY ${parsed.getFullYear()}`;
+    };
+
+    const normalizeContractLocation = (record) => {
+        const mun = String(record?.mun || "").trim();
+        const locationRaw = String(record?.location || "").trim();
+
+        if (locationRaw) {
+            if (mun && !locationRaw.toLowerCase().includes(mun.toLowerCase())) {
+                return `${mun}, ${locationRaw}`;
+            }
+            return locationRaw;
+        }
+
+        if (mun) {
+            return `${mun}, Palawan`;
+        }
+
+        return "-";
+    };
+
+    const mapConstructionRecordToContract = (record) => {
+        const safe = record && typeof record === "object" ? record : {};
+        const title = String(safe.project_name || safe.projectName || safe.title || "").trim() || "Construction Project";
+        const code = String(safe.project_code || safe.projectCode || safe.slip_no || safe.doc_no || safe.__id || "").trim() || "-";
+        const cost = (
+            safe.revised_contract_cost !== undefined && safe.revised_contract_cost !== null && String(safe.revised_contract_cost).trim() !== ""
+                ? safe.revised_contract_cost
+                : safe.contract_cost
+        );
+        const statusCurrentRaw = String(safe.status_current ?? safe.statusCurrent ?? "").trim();
+        const looksCompleted = statusCurrentRaw.toLowerCase().includes("complete");
+        const progress = looksCompleted ? "100%" : formatProgressLabel(statusCurrentRaw);
+        const fy = pickFirstNonDash(
+            formatFyLabel(safe.ntp_date || safe.ntpDate),
+            formatFyLabel(safe.date_completed || safe.dateCompleted)
+        );
+
+        const hasCompletedDate = Boolean(String(safe.date_completed || safe.dateCompleted || "").trim());
+        const progressNumeric = Number.parseFloat(String(progress).replace(/[^0-9.-]/g, ""));
+        const status = looksCompleted || hasCompletedDate || (Number.isFinite(progressNumeric) && progressNumeric >= 100)
+            ? "Completed"
+            : "Ongoing";
+
+        return {
+            title,
+            code,
+            location: normalizeContractLocation(safe),
+            cost,
+            fy,
+            progress,
+            status,
+        };
+    };
+
+    const getContractorContractsIndex = () => {
+        const rawSignature = window.localStorage.getItem(constructionStorageKey) || "[]";
+        if (rawSignature === contractorContractsIndexSignature && contractorContractsIndex instanceof Map) {
+            return contractorContractsIndex;
+        }
+
+        contractorContractsIndexSignature = rawSignature;
+        contractorContractsIndex = new Map();
+
+        let parsed = [];
+        try {
+            parsed = JSON.parse(rawSignature);
+        } catch (error) {
+            parsed = [];
+        }
+        const constructionRecords = Array.isArray(parsed) ? parsed : [];
+
+        constructionRecords.forEach((record) => {
+            if (!record || typeof record !== "object") return;
+            const contractorName = String(record.contractor || "").trim();
+            if (!contractorName) return;
+
+            const contractorKey = normalizeKey(contractorName);
+            if (!contractorKey) return;
+
+            const currentList = contractorContractsIndex.get(contractorKey) || [];
+            currentList.push(mapConstructionRecordToContract(record));
+            contractorContractsIndex.set(contractorKey, currentList);
+        });
+
+        contractorContractsIndex.forEach((list, key) => {
+            if (!Array.isArray(list)) return;
+            list.sort((a, b) => String(b.fy || "").localeCompare(String(a.fy || "")));
+            contractorContractsIndex.set(key, list);
+        });
+
+        return contractorContractsIndex;
+    };
+
+    const getContractHistoryForContractor = (contractorName) => {
+        const contractorKey = normalizeKey(contractorName);
+        if (!contractorKey) return [];
+        const index = getContractorContractsIndex();
+        const list = index.get(contractorKey);
+        return Array.isArray(list) ? list : [];
+    };
+
+    const syncContractorRowContractMetrics = (row) => {
+        if (!row || !row.dataset) return;
+        const name = String(row.dataset.name || row.querySelector(".contractor-name")?.textContent || "").trim();
+        if (!name) return;
+
+        const contractHistory = getContractHistoryForContractor(name);
+
+        const currentRatingParsed = Number.parseFloat(String(row.dataset.rating || "").trim());
+        const hasUserRating = Number.isFinite(currentRatingParsed) && currentRatingParsed > 0;
+
+        let derivedRating = 0;
+        if (contractHistory.length) {
+            const progressPercents = contractHistory.map((contract) => {
+                const progressRaw = String(contract?.progress ?? "").trim();
+                const numeric = Number.parseFloat(progressRaw.replace(/[^0-9.-]/g, ""));
+                if (Number.isFinite(numeric)) {
+                    return Math.max(0, Math.min(100, numeric));
+                }
+                const status = normalizeStatus(contract?.status);
+                return status === "completed" ? 100 : 0;
+            });
+            const avgProgress = progressPercents.reduce((sum, v) => sum + v, 0) / Math.max(1, progressPercents.length);
+            derivedRating = Math.max(0, Math.min(5, (avgProgress / 100) * 5));
+            derivedRating = Math.round(derivedRating * 10) / 10;
+        }
+
+        const effectiveRating = hasUserRating ? Math.max(0, Math.min(5, currentRatingParsed)) : derivedRating;
+        if (!hasUserRating) {
+            row.dataset.rating = String(effectiveRating);
+        }
+
+        const ratingWrap = row.querySelector("[data-contractor-rating-wrap]");
+        if (ratingWrap instanceof HTMLElement) {
+            ratingWrap.innerHTML = buildContractorRatingHtml(effectiveRating);
+        }
+
+        if (contractHistory.length) {
+            const totalCostValue = contractHistory.reduce((sum, item) => sum + parseCurrencyValue(item.cost), 0);
+            const totalContracts = contractHistory.length;
+
+            row.dataset.contracts = String(totalContracts);
+            row.dataset.value = totalCostValue ? formatCurrency(totalCostValue) : (row.dataset.value || "P 0");
+            row.dataset.valueRaw = String(totalCostValue || 0);
+            row.dataset.search = `${String(row.dataset.search || "")} ${contractHistory.map((c) => c.title).join(" ")}`.trim();
+
+            const summaryLine = row.querySelector(".contractor-list-line--summary");
+            if (summaryLine instanceof HTMLElement) {
+                summaryLine.innerHTML = `
+                    <span><span class="material-symbols-outlined" aria-hidden="true">description</span> ${escapeHtml(String(totalContracts))} contracts</span>
+                    <span>Value: <strong>${escapeHtml(row.dataset.value || "P 0")}</strong></span>
+                `;
+            }
+        }
+    };
+
+    const seedDerivedContractorsFromProjectContracts = () => {
+        if (!contractorManagement || !contractorCardList) {
+            return;
+        }
+
+        const index = getContractorContractsIndex();
+        if (!(index instanceof Map) || index.size === 0) {
+            return;
+        }
+
+        const existingKeys = new Set(
+            contractorRows.map((row) => normalizeKey(row?.dataset?.name || row?.querySelector?.(".contractor-name")?.textContent || ""))
+        );
+
+        const constructionRecords = readStorageArray(constructionStorageKey);
+        const displayNameByKey = new Map();
+        constructionRecords.forEach((record) => {
+            const contractorName = String(record?.contractor || "").trim();
+            const contractorKey = normalizeKey(contractorName);
+            if (!contractorKey || !contractorName) return;
+            if (!displayNameByKey.has(contractorKey)) {
+                displayNameByKey.set(contractorKey, contractorName);
+            }
+        });
+
+        Array.from(index.keys()).forEach((contractorKey) => {
+            if (!contractorKey || existingKeys.has(contractorKey)) return;
+
+            const name = String(displayNameByKey.get(contractorKey) || "Contractor").trim() || "Contractor";
+            const derivedRow = createContractorRowElement({
+                name,
+                status: "active",
+                derived: true,
+            });
+
+            contractorRows.push(derivedRow);
+            existingKeys.add(contractorKey);
+
+            if (contractorEmptyRow && contractorEmptyRow.parentElement === contractorCardList) {
+                contractorCardList.insertBefore(derivedRow, contractorEmptyRow);
+            } else {
+                contractorCardList.appendChild(derivedRow);
+            }
+        });
     };
 
     const openContractorFloatCard = (row) => {
@@ -5783,6 +6027,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         closeContractorDeleteToast();
+        syncContractorRowContractMetrics(row);
 
         const detailLines = Array.from(row.querySelectorAll(".contractor-meta, .contractor-list-line--muted"))
             .map((item) => item.textContent.trim())
@@ -5812,8 +6057,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const contactEmail = String(row.dataset.contactEmail || "").trim() || "-";
         const contactPhone = String(row.dataset.contactPhone || "").trim() || "-";
         const contactAddress = String(row.dataset.contactAddress || "").trim() || "-";
-        const contractorKey = normalizeKey(name);
-        const contractHistory = contractorContractHistory[contractorKey] || [];
+        const contractHistory = getContractHistoryForContractor(name);
         const totalContracts = Number.parseInt(contracts, 10) || contractHistory.length || 0;
         const computedCompleted = contractHistory.filter((item) => normalizeStatus(item.status) === "completed").length;
         const computedOngoing = contractHistory.filter((item) => normalizeStatus(item.status) === "ongoing").length;
@@ -7127,8 +7371,41 @@ document.addEventListener("DOMContentLoaded", () => {
         }));
     }
 
+    function serializeContractorRows() {
+        if (!contractorManagement) {
+            return [];
+        }
+
+        return contractorRows
+            .filter((row) => row && typeof row === "object" && row.dataset && row.dataset.derived !== "1")
+            .map((row) => ({
+                name: String(row.dataset.name || "").trim(),
+                tradeName: String(row.dataset.tradeName || "").trim(),
+                tin: String(row.dataset.tin || "").trim(),
+                philgeps: String(row.dataset.philgeps || "").trim(),
+                pcab: String(row.dataset.pcab || "").trim(),
+                status: String(row.dataset.status || "").trim(),
+                contracts: String(row.dataset.contracts || "").trim(),
+                value: String(row.dataset.value || "").trim(),
+                rating: String(row.dataset.rating || "").trim(),
+                classification: String(row.dataset.classification || "").trim(),
+                licenseExpiry: String(row.dataset.licenseExpiry || "").trim(),
+                contactPerson: String(row.dataset.contactPerson || "").trim(),
+                contactEmail: String(row.dataset.contactEmail || "").trim(),
+                contactPhone: String(row.dataset.contactPhone || "").trim(),
+                contactAddress: String(row.dataset.contactAddress || "").trim(),
+                pcabLicense: String(row.dataset.pcabLicense || "").trim(),
+                address: String(row.dataset.address || "").trim(),
+                contactCity: String(row.dataset.contactCity || "").trim(),
+                contactProvince: String(row.dataset.contactProvince || "").trim(),
+                contactMobile: String(row.dataset.contactMobile || "").trim(),
+                remarks: String(row.dataset.remarks || "").trim(),
+            }))
+            .filter((record) => record.name);
+    }
+
     function persistMaintenanceState() {
-        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody || taskTableBody);
+        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody || taskTableBody || contractorManagement);
         if (!hasMaintenanceTargets) {
             return;
         }
@@ -7140,6 +7417,7 @@ document.addEventListener("DOMContentLoaded", () => {
             scheduleRows: serializeScheduleRows(),
             taskRows: serializeTaskRows(),
             personnelRecords,
+            contractorRecords: serializeContractorRows(),
         };
 
         try {
@@ -7154,7 +7432,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function restoreMaintenanceState() {
-        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody || taskTableBody);
+        const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody || taskTableBody || contractorManagement);
         if (!hasMaintenanceTargets) {
             return;
         }
@@ -7329,6 +7607,32 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
+        if (contractorManagement && contractorCardList && Array.isArray(savedState.contractorRecords)) {
+            contractorCardList.querySelectorAll(".js-contractor-row").forEach((row) => row.remove());
+            contractorRows.splice(0, contractorRows.length);
+
+            savedState.contractorRecords.forEach((record) => {
+                if (!record || typeof record !== "object") {
+                    return;
+                }
+                if (!String(record.name || "").trim()) {
+                    return;
+                }
+
+                const rowElement = createContractorRowElement(record);
+                contractorRows.push(rowElement);
+
+                if (contractorEmptyRow && contractorEmptyRow.parentElement === contractorCardList) {
+                    contractorCardList.insertBefore(rowElement, contractorEmptyRow);
+                } else {
+                    contractorCardList.appendChild(rowElement);
+                }
+            });
+
+            refreshContractorSummary();
+            refreshContractorTable();
+        }
+
         syncTaskPersonnelDropdownOptions();
     }
 
@@ -7487,6 +7791,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     restoreMaintenanceState();
+    if (contractorManagement) {
+        seedDerivedContractorsFromProjectContracts();
+        contractorRows.forEach((row) => syncContractorRowContractMetrics(row));
+        refreshContractorSummary();
+        refreshContractorTable();
+    }
     updateEquipmentSummary();
     updateScheduleSummary();
     updateTaskSummary();
@@ -7627,6 +7937,148 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 });
+
+(() => {
+    const spotlightSection = document.querySelector(".spotlight-section");
+    const spotlightScene = document.querySelector(".spotlight-scene");
+    if (!(spotlightSection instanceof HTMLElement) || !(spotlightScene instanceof HTMLElement)) {
+        return;
+    }
+
+    const items = Array.from(spotlightScene.querySelectorAll("[data-spotlight-item]"))
+        .map((node) => {
+            if (!(node instanceof HTMLElement)) return null;
+            return {
+                id: String(node.dataset.projectId || "").trim(),
+                title: String(node.dataset.title || "").trim(),
+                subtitle: String(node.dataset.subtitle || "").trim(),
+                category: String(node.dataset.category || "").trim(),
+            };
+        })
+        .filter((item) => item && (item.id || item.title));
+
+    if (!items.length) {
+        return;
+    }
+
+    const prevButton = spotlightSection.querySelector('[data-spotlight-nav="prev"]');
+    const nextButton = spotlightSection.querySelector('[data-spotlight-nav="next"]');
+    const chipEl = spotlightScene.querySelector(".spotlight-chip");
+    const titleEl = spotlightScene.querySelector(".spotlight-copy h4");
+    const subtitleEl = spotlightScene.querySelector(".spotlight-copy p");
+    const dotEls = Array.from(spotlightScene.querySelectorAll(".spotlight-dots span"));
+
+    const SPOTLIGHT_INDEX_KEY = "peo_overview_spotlight_index_v1";
+    const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+
+    const normalize = (value) => String(value || "").trim().toLowerCase();
+    const clampIndex = (value) => {
+        if (!items.length) return 0;
+        const idx = Number.parseInt(String(value ?? ""), 10);
+        if (!Number.isFinite(idx)) return 0;
+        return Math.min(items.length - 1, Math.max(0, idx));
+    };
+
+    const readSpotlightIndex = () => {
+        try {
+            return clampIndex(window.localStorage.getItem(SPOTLIGHT_INDEX_KEY));
+        } catch (error) {
+            return 0;
+        }
+    };
+
+    const writeSpotlightIndex = (idx) => {
+        try {
+            window.localStorage.setItem(SPOTLIGHT_INDEX_KEY, String(clampIndex(idx)));
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    };
+
+    const readConstructionRecords = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_STORAGE_KEY) || "[]";
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const getSpotlightImageUrl = (item, records) => {
+        const record = records.find((candidate) => {
+            if (!candidate || typeof candidate !== "object") return false;
+            if (item.id && String(candidate.__id || "").trim() === item.id) return true;
+            if (!item.id && item.title && normalize(candidate.project_name) === normalize(item.title)) return true;
+            return false;
+        });
+
+        if (!record || typeof record !== "object") return "";
+        const images = Array.isArray(record.accomplishment_images) ? record.accomplishment_images : [];
+        const fallback = String(record.accomplishment_image || "").trim();
+        const first = String(images[0] || "").trim() || fallback;
+        if (!first) return "";
+        if (!/^data:image\//i.test(first) && !/^https?:\/\//i.test(first)) {
+            // Avoid setting unknown schemes.
+            return "";
+        }
+        return first;
+    };
+
+    const applySpotlight = (idx, options = {}) => {
+        const recordCache = options.records || readConstructionRecords();
+        const nextIndex = clampIndex(idx);
+        const item = items[nextIndex];
+        if (!item) return;
+
+        spotlightScene.dataset.spotlightProjectId = item.id || "";
+        spotlightScene.dataset.spotlightProjectName = item.title || "";
+
+        if (chipEl) chipEl.textContent = item.category || "Spotlight";
+        if (titleEl) titleEl.textContent = item.title || "Accomplished Project";
+        if (subtitleEl) subtitleEl.textContent = item.subtitle || "";
+
+        const imageUrl = getSpotlightImageUrl(item, recordCache);
+        if (imageUrl) {
+            const safeUrl = imageUrl.replace(/\"/g, "%22");
+            spotlightScene.style.setProperty("--spotlight-image", `url("${safeUrl}")`);
+        } else {
+            spotlightScene.style.removeProperty("--spotlight-image");
+        }
+
+        if (dotEls.length) {
+            dotEls.forEach((dot, dotIndex) => {
+                dot.classList.toggle("is-active", dotIndex === nextIndex);
+            });
+        }
+
+        writeSpotlightIndex(nextIndex);
+    };
+
+    // Initial render (keep a cached construction read so we don't parse JSON multiple times).
+    const cachedConstruction = readConstructionRecords();
+    applySpotlight(readSpotlightIndex(), { records: cachedConstruction });
+
+    const go = (delta) => {
+        const current = readSpotlightIndex();
+        const next = (current + delta + items.length) % items.length;
+        applySpotlight(next, { records: cachedConstruction });
+    };
+
+    if (prevButton instanceof HTMLElement) {
+        prevButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            go(-1);
+        });
+    }
+
+    if (nextButton instanceof HTMLElement) {
+        nextButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            go(1);
+        });
+    }
+})();
 
 /* ROAD_MAINTENANCE_SCRIPT_END */
 
@@ -13818,6 +14270,12 @@ document.addEventListener("DOMContentLoaded", () => {
             || fallbackDate
         ).trim();
         const statusValue = String(adminRecord?.doc_status || adminRecord?.status || "").trim();
+        const billingType = String(adminRecord?.billing_type || "").trim();
+        const billingTypeOther = String(adminRecord?.billing_type_other || "").trim();
+        const normalizedBillingType = normalizeText(billingType);
+        const typeOfBilling = normalizedBillingType === "other" && billingTypeOther
+            ? billingTypeOther
+            : (billingType || billingTypeOther);
 
         return {
             __id: `quality_admin_${String(adminRecord?.__record_id || "")}`,
@@ -13827,6 +14285,7 @@ document.addEventListener("DOMContentLoaded", () => {
             doc_date: docDate,
             particulars: mapAdminDocTypeToQualityParticular(adminRecord?.doc_type),
             doc_no: String(adminRecord?.slip_no || "").trim(),
+            billing_type: typeOfBilling,
             project_location: String(adminRecord?.document_name || "").trim(),
             location_detail: String(adminRecord?.location || "").trim(),
             scan_url: String(adminRecord?.scanned_file_data || "").trim(),
@@ -14004,6 +14463,7 @@ document.addEventListener("DOMContentLoaded", () => {
             doc_date: String(formData.get("doc_date") ?? "").trim(),
             particulars: String(formData.get("particulars") ?? "").trim(),
             doc_no: String(formData.get("doc_no") ?? "").trim(),
+            billing_type: String(formData.get("billing_type") ?? "").trim(),
             project_location: String(formData.get("project_location") ?? "").trim(),
             location_detail: String(formData.get("location_detail") ?? "").trim(),
             scan_url: String(formData.get("scan_url") ?? "").trim(),
@@ -14116,6 +14576,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 record.received_from,
                 record.particulars,
                 record.doc_no,
+                record.billing_type,
                 record.project_location,
                 record.location_detail,
                 record.received_by,
@@ -14188,7 +14649,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const createEmptyStateRow = () => {
         qualityTableBody.innerHTML = `
             <tr class="quality-empty-row">
-                <td colspan="12">No quality records match the current filters.</td>
+                <td colspan="13">No quality records match the current filters.</td>
             </tr>
         `;
     };
@@ -14202,6 +14663,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>${escapeHtml(formatDate(record.doc_date))}</td>
             <td><span class="quality-badge ${getParticularBadgeClass(record.particulars)}">${escapeHtml(record.particulars || "Other")}</span></td>
             <td>${escapeHtml(record.doc_no || "-")}</td>
+            <td>${escapeHtml(record.billing_type || "-")}</td>
             <td>${escapeHtml(record.project_location || "-")}</td>
             <td>${escapeHtml(record.location_detail || "-")}</td>
             <td>

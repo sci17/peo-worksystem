@@ -1,0 +1,69 @@
+<section class="road-filter-panel tracking-board" aria-label="Workflow tracking details">
+    <div class="road-table-wrap">
+        <div class="road-table-head">
+            <div>
+                <h2 style="margin:0; font-size:1.2rem; color:#112e4d;">Workflow Tracking</h2>
+                <p style="margin:4px 0 0; color:#617792;">Tracks the current status of records as they move across divisions.</p>
+            </div>
+            <div class="road-table-actions" style="display:flex; gap:12px; align-items:center;">
+                <label class="quality-search" style="max-width:320px;">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <input type="search" class="js-tracking-search" placeholder="Search slip no, project, contractor...">
+                </label>
+            </div>
+        </div>
+
+        <div class="road-table-scroll" role="region" aria-label="Tracking table" tabindex="0">
+            <table class="road-table tracking-table">
+                <colgroup>
+                    <col style="width: 120px;">
+                    <col style="width: 320px;">
+                    <col style="width: 220px;">
+                    <col style="width: 140px;">
+                    <col style="width: 150px;">
+                    <col style="width: 150px;">
+                    <col style="width: 150px;">
+                    <col style="width: 150px;">
+                    <col style="width: 160px;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Slip No.</th>
+                        <th>Project / Document</th>
+                        <th>Contractor</th>
+                        <th>Routed To</th>
+                        <th>Admin</th>
+                        <th>Planning</th>
+                        <th>Construction</th>
+                        <th>Quality</th>
+                        <th>Maintenance</th>
+                    </tr>
+                </thead>
+                <tbody class="js-tracking-table-body">
+                    {% if tracking_rows %}
+                        {% for row in tracking_rows %}
+                            <tr class="js-tracking-row">
+                                <td>{{ row.slip_no|default:"—" }}</td>
+                                <td>
+                                    <strong style="color:#122840;">{{ row.project_name|default:"—" }}</strong>
+                                </td>
+                                <td>{{ row.contractor|default:"—" }}</td>
+                                <td>{{ row.routed_to|default:"—" }}</td>
+                                <td>{{ row.admin_status|default:"—" }}</td>
+                                <td>{{ row.planning_status|default:"—" }}</td>
+                                <td>{{ row.construction_status|default:"—" }}</td>
+                                <td>{{ row.quality_status|default:"—" }}</td>
+                                <td>{{ row.maintenance_status|default:"—" }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr class="construction-empty-row js-tracking-empty-row">
+                            <td colspan="9">No workflow records found yet.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+

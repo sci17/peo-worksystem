@@ -699,9 +699,30 @@ body {
 }
 
 .nav-submenu {
-    margin: 2px 0 6px 28px;
+    margin: 0 0 0 28px;
     display: grid;
     gap: 2px;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: max-height 220ms ease, opacity 160ms ease, transform 220ms ease;
+}
+
+.nav-maintenance.is-open .nav-submenu {
+    margin: 2px 0 6px 28px;
+    max-height: 180px;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-submenu {
+        transition: none;
+        transform: none;
+    }
 }
 
 .nav-subitem {
@@ -1479,7 +1500,11 @@ body {
         radial-gradient(circle at 28% 14%, rgba(255, 255, 255, 0.85) 0 1.6%, transparent 1.7%),
         radial-gradient(circle at 72% 20%, rgba(255, 255, 255, 0.9) 0 1.8%, transparent 1.9%),
         linear-gradient(180deg, rgba(19, 64, 120, 0.04) 0%, rgba(5, 18, 34, 0.1) 58%, rgba(5, 18, 34, 0.82) 100%),
+        var(--spotlight-image, none),
         linear-gradient(180deg, #8dd0ff 0%, #53a9f2 48%, #205b99 100%);
+    background-size: auto, auto, auto, auto, cover, auto;
+    background-position: center, center, center, center, center, center;
+    background-repeat: no-repeat;
 }
 
 .spotlight-scene::before {
@@ -2016,6 +2041,15 @@ body {
 .division-name .material-symbols-outlined {
     font-size: 16px;
     color: #1f7fea;
+}
+
+.division-meta {
+    display: block;
+    margin-top: 4px;
+    margin-left: 24px;
+    font-size: 12px;
+    color: #6b7f97;
+    font-weight: 600;
 }
 
 .completion-wrap {
@@ -9447,6 +9481,52 @@ body.construction-modal-open {
     font-size: 0.95rem;
     vertical-align: middle;
     color: #7388a0;
+}
+
+.contractor-list-line--rating {
+    gap: 10px;
+    font-size: 0.79rem;
+    color: #3a5574;
+}
+
+.contractor-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.contractor-rating-stars {
+    --rating-fill: 0%;
+    position: relative;
+    display: inline-block;
+    line-height: 1;
+    letter-spacing: 1px;
+}
+
+.contractor-rating-stars-base,
+.contractor-rating-stars-fill {
+    font-size: 1rem;
+}
+
+.contractor-rating-stars-base {
+    color: #d4dfec;
+}
+
+.contractor-rating-stars-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    color: #f0a000;
+    width: var(--rating-fill);
+    pointer-events: none;
+}
+
+.contractor-rating-value {
+    color: #2b4b70;
+    font-weight: 800;
+    font-size: 0.78rem;
 }
 
 .contractor-list-card .contractor-actions {
