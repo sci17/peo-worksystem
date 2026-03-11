@@ -9,6 +9,19 @@
                 <p>Independent QA/QC, Testing, NCRs &amp; Final Quality Clearance</p>
             </div>
         </div>
+        <div style="margin-left:auto;">
+            <label class="sr-only" for="quality-division-page-switcher">Quality division page</label>
+            <select
+                id="quality-division-page-switcher"
+                class="pa-select"
+                data-division-page-switcher
+                data-main-url="{% url 'quality_division_dashboard' %}"
+                data-submissions-url="{% url 'quality_division_submissions' %}"
+            >
+                <option value="{% url 'quality_division_dashboard' %}" selected>Main</option>
+                <option value="{% url 'quality_division_submissions' %}">Submitted Projects</option>
+            </select>
+        </div>
     </header>
 
     <div class="quality-tabs" role="tablist" aria-label="Quality workflows">
@@ -332,16 +345,28 @@
                 </label>
             </div>
 
-            <label class="quality-form-field">
-                <span>Remarks</span>
-                <input type="text" name="remarks" placeholder="Optional note">
-            </label>
-
-            <div class="quality-form-actions">
-                <button type="button" class="quality-form-cancel js-quality-close-modal">Cancel</button>
-                <button type="button" class="quality-form-delete js-quality-delete-record" hidden>Delete</button>
-                <button type="submit" class="quality-form-submit">Save Record</button>
-            </div>
-        </form>
-    </div>
-</div>
+	            <label class="quality-form-field">
+	                <span>Remarks</span>
+	                <input type="text" name="remarks" placeholder="Optional note">
+	            </label>
+	
+	            <label class="quality-form-field">
+	                <span>Submit to Division</span>
+	                <select class="js-quality-route-division">
+	                    <option value="">Select division</option>
+	                    <option value="Admin Division">Admin Division</option>
+	                    <option value="Planning Division">Planning Division</option>
+	                    <option value="Construction Division">Construction Division</option>
+	                    <option value="Maintenance Division">Maintenance Division</option>
+	                </select>
+	            </label>
+	
+	            <div class="quality-form-actions">
+	                <button type="button" class="quality-form-cancel js-quality-close-modal">Cancel</button>
+	                <button type="button" class="quality-form-delete js-quality-delete-record" hidden>Delete</button>
+	                <button type="button" class="quality-form-submit js-quality-route-submit" disabled>Submit</button>
+	                <button type="submit" class="quality-form-submit">Save Record</button>
+	            </div>
+	        </form>
+	    </div>
+	</div>

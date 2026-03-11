@@ -3,7 +3,20 @@
         <h1>Maintenance Division</h1>
         <p>Provincial roads, equipment, and maintenance scheduling</p>
     </div>
-    <span class="road-dashboard-chip">Maintenance</span>
+    <div style="display:flex; gap:0.75rem; align-items:center;">
+        <span class="road-dashboard-chip">Maintenance</span>
+        <label class="sr-only" for="maintenance-division-page-switcher-road">Maintenance division page</label>
+        <select
+            id="maintenance-division-page-switcher-road"
+            class="pa-select"
+            data-division-page-switcher
+            data-main-url="{% url 'road_management' %}"
+            data-submissions-url="{% url 'maintenance_division_submissions' %}"
+        >
+            <option value="{% url 'road_management' %}" selected>Main</option>
+            <option value="{% url 'maintenance_division_submissions' %}">Submitted Projects</option>
+        </select>
+    </div>
 </section>
 
 <section class="road-stats-grid" aria-label="Road management summary">

@@ -5,6 +5,19 @@
             <span class="planning-pill">Planning Division</span>
             <span>Budget Allocation &amp; Program of Works Management</span>
         </div>
+        <div class="planning-header-meta" style="justify-content: flex-end;">
+            <label class="sr-only" for="planning-division-page-switcher">Planning division page</label>
+            <select
+                id="planning-division-page-switcher"
+                class="pa-select"
+                data-division-page-switcher
+                data-main-url="{% url 'planning_division_dashboard' %}"
+                data-submissions-url="{% url 'planning_division_submissions' %}"
+            >
+                <option value="{% url 'planning_division_dashboard' %}" selected>Main</option>
+                <option value="{% url 'planning_division_submissions' %}">Submitted Projects</option>
+            </select>
+        </div>
     </header>
 
     <div class="planning-tabs">
@@ -192,19 +205,31 @@
                             <input type="text" name="budget_allocation_other" class="planning-form-input js-planning-doc-budget-other" placeholder="Enter budget allocation">
                         </label>
 
-                        <label class="planning-form-field planning-doc-edit-field--full">
-                            <span>Remarks</span>
-                            <textarea name="remarks" class="planning-form-input planning-form-textarea" placeholder="Optional remarks..."></textarea>
-                        </label>
-                    </div>
-
-                    <div class="planning-form-actions planning-doc-edit-actions">
-                        <button type="button" class="planning-btn-cancel js-close-planning-doc-modal">Cancel</button>
-                        <button type="submit" class="planning-btn-submit">Save Changes</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+	                        <label class="planning-form-field planning-doc-edit-field--full">
+	                            <span>Remarks</span>
+	                            <textarea name="remarks" class="planning-form-input planning-form-textarea" placeholder="Optional remarks..."></textarea>
+	                        </label>
+	
+	                        <label class="planning-form-field planning-doc-edit-field--full">
+	                            <span>Submit to Division</span>
+	                            <select class="planning-form-input js-planning-route-division">
+	                                <option value="">Select division</option>
+	                                <option value="Admin Division">Admin Division</option>
+	                                <option value="Construction Division">Construction Division</option>
+	                                <option value="Quality Division">Quality Division</option>
+	                                <option value="Maintenance Division">Maintenance Division</option>
+	                            </select>
+	                        </label>
+	                    </div>
+	
+	                    <div class="planning-form-actions planning-doc-edit-actions">
+	                        <button type="button" class="planning-btn-cancel js-close-planning-doc-modal">Cancel</button>
+	                        <button type="button" class="planning-btn-submit js-planning-route-submit" disabled>Submit</button>
+	                        <button type="submit" class="planning-btn-submit">Save Changes</button>
+	                    </div>
+	                </form>
+	            </div>
+	        </div>
 
         <div class="planning-empty-state">
             <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>

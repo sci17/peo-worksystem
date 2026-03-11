@@ -1,0 +1,61 @@
+<section class="pa-panel division-submissions js-division-submissions" data-division-key="{{ submissions_division_key|default:current_section }}">
+    <header class="admin-division-header">
+        <div>
+            <h2>Submitted Projects</h2>
+            <p>Incoming submissions routed from other divisions.</p>
+        </div>
+
+        <div class="admin-division-toolbar__filters" style="gap: 0.75rem; align-items: center;">
+            <label class="sr-only" for="division-page-switcher">Division page</label>
+            <select
+                id="division-page-switcher"
+                class="pa-select"
+                data-division-page-switcher
+                data-main-url="{{ submissions_main_url|default:'' }}"
+                data-submissions-url="{{ submissions_url|default:'' }}"
+            >
+                <option value="{{ submissions_main_url|default:'' }}">Main</option>
+                <option value="{{ submissions_url|default:'' }}" selected>Submitted Projects</option>
+            </select>
+        </div>
+    </header>
+
+    <div class="pa-table-wrap admin-division-table-shell">
+        <div class="pa-table-title admin-division-table-title">
+            <div>
+                <h3>Submissions</h3>
+                <small class="js-division-submissions-meta">0 submissions</small>
+            </div>
+            <div class="admin-division-toolbar__filters">
+                <input type="search" class="pa-doc-search js-division-submissions-search" placeholder="Search submissions...">
+                <select class="pa-select js-division-submissions-filter">
+                    <option value="all" selected>All sources</option>
+                    <option value="planning">Planning</option>
+                    <option value="construction">Construction</option>
+                    <option value="quality">Quality</option>
+                    <option value="maintenance">Maintenance</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="admin-division-table-scroll">
+            <table class="pa-table">
+                <thead>
+                    <tr>
+                        <th>From</th>
+                        <th>Project / Document</th>
+                        <th>Location</th>
+                        <th>Contractor</th>
+                        <th>Amount</th>
+                        <th>Submitted</th>
+                    </tr>
+                </thead>
+                <tbody class="js-division-submissions-tbody">
+                    <tr class="pa-empty-documents admin-division-empty-state js-division-submissions-empty">
+                        <td colspan="6">No submitted projects yet.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

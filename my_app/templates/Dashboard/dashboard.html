@@ -271,21 +271,21 @@
                 </div>
             </header>
 
-            <section class="portal-content">
-                {% if current_section == 'admin' %}
-                    {% include 'admin/admin_division.html' %}
-                {% elif current_section == 'planning' %}
-                    {% include 'Planning/planning_division_table.html' %}
-                {% elif current_section == 'project' %}
-                    {% include 'Project/project_table.html' %}
-                {% elif current_section == 'construction' %}
-                    {% include construction_template|default:'construction/construction.html' %}
-                {% elif current_section == 'quality' %}
-                    {% include 'Quality/quality_division_table.html' %}
-                {% elif current_section == 'settings' %}
-                    {% include 'account/settings_panel.html' %}
-                {% elif current_section == 'maintenance' %}
-                    {% include maintenance_template %}
+	            <section class="portal-content">
+	                {% if current_section == 'admin' %}
+	                    {% include admin_template|default:'admin/admin_division.html' %}
+	                {% elif current_section == 'planning' %}
+	                    {% include planning_template|default:'Planning/planning_division_table.html' %}
+	                {% elif current_section == 'project' %}
+	                    {% include 'Project/project_table.html' %}
+	                {% elif current_section == 'construction' %}
+	                    {% include construction_template|default:'construction/construction.html' %}
+	                {% elif current_section == 'quality' %}
+	                    {% include quality_template|default:'Quality/quality_division_table.html' %}
+	                {% elif current_section == 'settings' %}
+	                    {% include 'account/settings_panel.html' %}
+	                {% elif current_section == 'maintenance' %}
+	                    {% include maintenance_template %}
                 {% elif current_section == 'tracking' %}
                     {% include 'tracking_details.html' %}
                 {% else %}

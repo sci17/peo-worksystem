@@ -349,6 +349,492 @@ window.togglePassword = togglePassword;
     });
 })();
 
+(() => {
+    const ADMIN_STORAGE_KEY = "peo_admin_division_records_v1";
+    const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
+
+    const DIVISION_LABELS = {
+        admin: "Admin Division",
+        planning: "Planning Division",
+        construction: "Construction Division",
+        quality: "Quality Division",
+        maintenance: "Maintenance Division",
+    };
+
+    const resolveDivisionKey = (value) => {
+        const normalized = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!normalized) return "";
+        if (normalized.includes("planning")) return "planning";
+        if (normalized.includes("construction")) return "construction";
+        if (normalized.includes("quality")) return "quality";
+        if (normalized.includes("maintenance")) return "maintenance";
+        if (normalized.includes("admin")) return "admin";
+        return "";
+    };
+
+    const labelForDivisionKey = (key) => DIVISION_LABELS[String(key || "")] || "";
+
+    const getLocalIsoDate = (date = new Date()) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
+    const readJson = (storageKey, fallback) => {
+        try {
+            const raw = window.localStorage.getItem(storageKey);
+            return raw ? JSON.parse(raw) : fallback;
+        } catch (error) {
+            return fallback;
+        }
+    };
+
+    const writeJson = (storageKey, value) => {
+        try {
+            window.localStorage.setItem(storageKey, JSON.stringify(value));
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    };
+
+    const readAdminRecords = () => {
+        const parsed = readJson(ADMIN_STORAGE_KEY, []);
+        return Array.isArray(parsed) ? parsed : [];
+    };
+
+    const queueAdminSync = (records) => {
+        if (!(window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function")) {
+            return;
+        }
+        const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+            const safe = record && typeof record === "object" ? { ...record } : {};
+            delete safe.scanned_file_data;
+            return safe;
+        });
+        window.peoDivisionStore.queueSync("admin", safeRecords);
+    };
+
+    const writeAdminRecords = (records) => {
+        writeJson(ADMIN_STORAGE_KEY, records);
+        queueAdminSync(records);
+    };
+
+    const normalizeMaintenanceState = (state) => {
+        const base = {
+            version: 1,
+            roadRecords: [],
+            equipmentRows: [],
+            scheduleRows: [],
+            taskRows: [],
+            personnelRecords: [],
+            contractorRecords: [],
+        };
+
+        if (!state || typeof state !== "object") {
+            return { ...base };
+        }
+
+        return {
+            ...base,
+            ...state,
+            taskRows: Array.isArray(state.taskRows) ? state.taskRows : [],
+        };
+    };
+
+    const readMaintenanceState = () => normalizeMaintenanceState(readJson(MAINTENANCE_STORAGE_KEY, null));
+
+    const writeMaintenanceState = (state) => {
+        const normalized = normalizeMaintenanceState(state);
+        writeJson(MAINTENANCE_STORAGE_KEY, normalized);
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            window.peoDivisionStore.queueSync("maintenance", normalized);
+        }
+    };
+
+    const removeMaintenanceTaskByAdminRecordId = (adminRecordId) => {
+        const id = String(adminRecordId || "").trim();
+        if (!id) return;
+        const state = readMaintenanceState();
+        const nextRows = state.taskRows.filter((row) => String(row?.adminRecordId || "").trim() !== id);
+        if (nextRows.length === state.taskRows.length) return;
+        writeMaintenanceState({ ...state, taskRows: nextRows });
+    };
+
+    const upsertMaintenanceTaskFromAdminRecord = (adminRecord, sourceDivisionKey = "") => {
+        const record = adminRecord && typeof adminRecord === "object" ? adminRecord : {};
+        const adminRecordId = String(record.__record_id || "").trim();
+        if (!adminRecordId) return;
+
+        const slipNo = String(record.slip_no || "-").trim() || "-";
+        const title = String(record.document_name || record.project_name || "-").trim() || "-";
+        const location = String(record.location || "").trim();
+        const contractor = String(record.contractor || "").trim();
+        const divisionLabel = String(record.division || "-").trim() || "-";
+        const billingType = String(record.billing_type || record.doc_type || "").trim();
+        const amount = String(record.revised_contract_amount || record.contract_amount || "").trim();
+        const dueDateIso = String(
+            record.maintenance_sent_date
+            || record.date_released_admin
+            || record.date_received_admin
+            || record.date_received_peo
+            || record.date_received
+            || getLocalIsoDate()
+        ).trim();
+
+        const state = readMaintenanceState();
+        const nextRow = {
+            adminRecordId,
+            slipNo,
+            title,
+            division: divisionLabel,
+            location,
+            assignedTo: contractor,
+            dueDateIso,
+            dueDateDisplay: dueDateIso,
+            priority: billingType || "Medium",
+            status: "Incoming",
+            amount,
+            receiveFrom: labelForDivisionKey(resolveDivisionKey(sourceDivisionKey)) || String(sourceDivisionKey || "").trim() || "Submission",
+            allocation: divisionLabel,
+            notes: String(record.description || "").trim(),
+        };
+
+        const existingIndex = state.taskRows.findIndex((row) => String(row?.adminRecordId || "").trim() === adminRecordId);
+        const nextRows = [...state.taskRows];
+        if (existingIndex >= 0) {
+            nextRows[existingIndex] = { ...nextRows[existingIndex], ...nextRow };
+        } else {
+            nextRows.unshift(nextRow);
+        }
+
+        writeMaintenanceState({ ...state, taskRows: nextRows });
+    };
+
+    const pickFirst = (...values) => {
+        for (const value of values) {
+            const text = String(value ?? "").trim();
+            if (text) return text;
+        }
+        return "";
+    };
+
+    const createAdminRecordFromSource = ({ sourceDivisionKey, sourceRecord, targetDivisionKey }) => {
+        const record = sourceRecord && typeof sourceRecord === "object" ? sourceRecord : {};
+
+        const projectName = pickFirst(
+            record.project_name,
+            record.document_name,
+            record.project_location,
+            record.title,
+            record.name
+        );
+
+        const slipNo = pickFirst(record.slip_no, record.slipNo, record.doc_no, record.project_id);
+        const location = pickFirst(record.location, record.location_detail);
+        const contractor = pickFirst(record.contractor, record.owner_representative, record.assignedTo, record.assigned_to);
+        const amount = pickFirst(record.revised_contract_cost, record.revised_contract_amount, record.contract_cost, record.contract_amount, record.amount, record.allocated_amount);
+        const description = pickFirst(record.remarks, record.notes, record.description, record.particulars, record.doc_type);
+        const dateReceived = pickFirst(record.date_received, record.date_recv, record.dueDateIso, record.due_date, getLocalIsoDate());
+
+        const nowIso = new Date().toISOString();
+        const id = `admin_submit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+        return {
+            __record_id: id,
+            slip_no: slipNo,
+            document_name: projectName || "Untitled Submission",
+            location,
+            contractor,
+            contract_amount: amount,
+            revised_contract_amount: amount,
+            description,
+            date_received: dateReceived,
+            doc_status: "Routed",
+            billing_status: "Routed",
+            status: "Routed",
+            division: labelForDivisionKey(targetDivisionKey) || "Admin",
+            doc_type: `Submission (${labelForDivisionKey(sourceDivisionKey) || sourceDivisionKey || "Unknown"})`,
+            __submitted_from_division: String(sourceDivisionKey || "").trim(),
+            __submitted_from_source_id: pickFirst(record.__id, record.id, record.adminRecordId),
+            __submitted_at: nowIso,
+        };
+    };
+
+    const ensureAdminRecordForSubmission = ({ sourceDivisionKey, sourceRecord, targetDivisionKey, existingAdminRecordId }) => {
+        const candidateId = String(existingAdminRecordId || "").trim();
+        const adminRecords = readAdminRecords();
+
+        if (candidateId) {
+            const idx = adminRecords.findIndex((item) => String(item?.__record_id || "").trim() === candidateId);
+            if (idx >= 0) {
+                return { adminRecordId: candidateId, adminRecords };
+            }
+        }
+
+        const created = createAdminRecordFromSource({ sourceDivisionKey, sourceRecord, targetDivisionKey });
+        adminRecords.unshift(created);
+        return { adminRecordId: created.__record_id, adminRecords };
+    };
+
+    const submitToDivision = ({ sourceDivisionKey, sourceRecord, targetDivisionKey, existingAdminRecordId }) => {
+        const targetKey = resolveDivisionKey(targetDivisionKey);
+        if (!targetKey) {
+            return { ok: false, error: "Unknown target division." };
+        }
+
+        const { adminRecordId, adminRecords } = ensureAdminRecordForSubmission({
+            sourceDivisionKey,
+            sourceRecord,
+            targetDivisionKey: targetKey,
+            existingAdminRecordId,
+        });
+
+        const idx = adminRecords.findIndex((item) => String(item?.__record_id || "").trim() === adminRecordId);
+        if (idx < 0) {
+            return { ok: false, error: "Admin record not found." };
+        }
+
+        const current = adminRecords[idx] || {};
+        const prevTargetKey = resolveDivisionKey(current.division);
+        const updated = { ...current };
+        updated.division = labelForDivisionKey(targetKey) || updated.division;
+        if (!String(updated.doc_status || "").trim()) {
+            updated.doc_status = "Routed";
+            updated.status = "Routed";
+        }
+        const sourceKey = resolveDivisionKey(sourceDivisionKey);
+        if (sourceKey && sourceKey !== "admin") {
+            const nowIso = new Date().toISOString();
+            updated.__submitted_from_division = sourceKey;
+            updated.__submitted_from_source_id = pickFirst(sourceRecord?.__id, sourceRecord?.id, sourceRecord?.adminRecordId);
+            updated.__submitted_at = nowIso;
+        }
+
+        adminRecords[idx] = updated;
+        writeAdminRecords(adminRecords);
+
+        if (prevTargetKey === "maintenance" && targetKey !== "maintenance") {
+            removeMaintenanceTaskByAdminRecordId(adminRecordId);
+        }
+        if (targetKey === "maintenance") {
+            upsertMaintenanceTaskFromAdminRecord(updated, sourceDivisionKey);
+        }
+
+        return { ok: true, adminRecordId };
+    };
+
+    window.peoProjectRouter = {
+        resolveDivisionKey,
+        labelForDivisionKey,
+        submitToDivision,
+    };
+})();
+
+document.addEventListener("DOMContentLoaded", () => {
+    const switchers = Array.from(document.querySelectorAll("[data-division-page-switcher]"));
+    switchers.forEach((select) => {
+        if (!(select instanceof HTMLSelectElement)) return;
+        const mainUrl = String(select.dataset.mainUrl || "").trim();
+        const submissionsUrl = String(select.dataset.submissionsUrl || "").trim();
+        if (!mainUrl && !submissionsUrl) return;
+
+        const current = window.location.pathname;
+        const normalizedCurrent = current.endsWith("/") ? current : `${current}/`;
+        const normalizedSubmissions = submissionsUrl && (submissionsUrl.endsWith("/") ? submissionsUrl : `${submissionsUrl}/`);
+        const normalizedMain = mainUrl && (mainUrl.endsWith("/") ? mainUrl : `${mainUrl}/`);
+
+        if (normalizedSubmissions && normalizedCurrent === normalizedSubmissions) {
+            select.value = submissionsUrl;
+        } else if (normalizedMain && normalizedCurrent === normalizedMain) {
+            select.value = mainUrl;
+        }
+
+        select.addEventListener("change", () => {
+            const nextUrl = String(select.value || "").trim();
+            if (!nextUrl) return;
+            window.location.href = nextUrl;
+        });
+    });
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    const roots = Array.from(document.querySelectorAll(".js-division-submissions"));
+    if (!roots.length) return;
+
+    const toast = (message, options = {}) => {
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast(message, options);
+        }
+    };
+
+    const normalizeKey = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    const formatMoney = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+        const numeric = Number(String(text).replace(/[^0-9.-]+/g, ""));
+        if (!Number.isFinite(numeric)) return text;
+        return `PHP ${numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const formatDate = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return text;
+        return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    };
+
+    const escapeHtml = (value) => {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    };
+
+    const readAdminStore = () => {
+        try {
+            const raw = window.localStorage.getItem("peo_admin_division_records_v1");
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeAdminStore = (records) => {
+        try {
+            window.localStorage.setItem("peo_admin_division_records_v1", JSON.stringify(records));
+        } catch (error) {
+            // ignore
+        }
+    };
+
+    const ensureAdminStore = async () => {
+        const local = readAdminStore();
+        if (local.length) return local;
+        if (!(window.peoDivisionStore && typeof window.peoDivisionStore.fetchStore === "function")) {
+            return local;
+        }
+        const server = await window.peoDivisionStore.fetchStore("admin");
+        const serverData = server && typeof server === "object" ? server.data : null;
+        const records = Array.isArray(serverData) ? serverData : [];
+        if (records.length) {
+            writeAdminStore(records);
+        }
+        return records;
+    };
+
+    const normalizeDivisionKeyFromAdmin = (value) => {
+        const raw = String(value || "").trim();
+        return window.peoProjectRouter && typeof window.peoProjectRouter.resolveDivisionKey === "function"
+            ? window.peoProjectRouter.resolveDivisionKey(raw)
+            : normalizeKey(raw);
+    };
+
+    const getSubmissionsForDivision = (adminRecords, divisionKey) => {
+        const targetKey = normalizeKey(divisionKey);
+        return (Array.isArray(adminRecords) ? adminRecords : [])
+            .filter((record) => record && typeof record === "object")
+            .filter((record) => normalizeDivisionKeyFromAdmin(record.division) === targetKey)
+            .filter((record) => String(record.__submitted_from_division || "").trim())
+            .map((record) => ({
+                id: String(record.__record_id || "").trim(),
+                from: String(record.__submitted_from_division || "").trim(),
+                name: String(record.document_name || record.project_name || "").trim() || "-",
+                location: String(record.location || "").trim() || "-",
+                contractor: String(record.contractor || "").trim() || "-",
+                amount: String(record.revised_contract_amount || record.contract_amount || "").trim(),
+                submittedAt: String(record.__submitted_at || "").trim(),
+            }));
+    };
+
+    const renderRoot = async (root) => {
+        if (!(root instanceof HTMLElement)) return;
+        const divisionKey = String(root.dataset.divisionKey || "").trim();
+        const tbody = root.querySelector(".js-division-submissions-tbody");
+        const emptyRow = root.querySelector(".js-division-submissions-empty");
+        const meta = root.querySelector(".js-division-submissions-meta");
+        const search = root.querySelector(".js-division-submissions-search");
+        const filter = root.querySelector(".js-division-submissions-filter");
+
+        if (!(tbody instanceof HTMLElement)) return;
+
+        const adminRecords = await ensureAdminStore();
+        const allRows = getSubmissionsForDivision(adminRecords, divisionKey);
+
+        const apply = () => {
+            const q = String(search instanceof HTMLInputElement ? search.value : "").trim().toLowerCase();
+            const sourceFilter = String(filter instanceof HTMLSelectElement ? filter.value : "all").trim().toLowerCase();
+
+            const filtered = allRows.filter((row) => {
+                const fromKey = normalizeKey(row.from);
+                const matchesSource = sourceFilter === "all" || fromKey.includes(sourceFilter);
+                if (!matchesSource) return false;
+                if (!q) return true;
+                const haystack = [
+                    row.from,
+                    row.name,
+                    row.location,
+                    row.contractor,
+                    row.amount,
+                    row.submittedAt,
+                ].join(" ").toLowerCase();
+                return haystack.includes(q);
+            });
+
+            tbody.innerHTML = "";
+            if (!filtered.length) {
+                if (emptyRow) {
+                    tbody.appendChild(emptyRow);
+                    emptyRow.hidden = false;
+                } else {
+                    const tr = document.createElement("tr");
+                    tr.className = "admin-division-empty-state";
+                    tr.innerHTML = '<td colspan="6">No submitted projects yet.</td>';
+                    tbody.appendChild(tr);
+                }
+            } else {
+                filtered.forEach((row) => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>${escapeHtml(row.from)}</td>
+                        <td>${escapeHtml(row.name)}</td>
+                        <td>${escapeHtml(row.location)}</td>
+                        <td>${escapeHtml(row.contractor)}</td>
+                        <td>${escapeHtml(formatMoney(row.amount))}</td>
+                        <td>${escapeHtml(formatDate(row.submittedAt))}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            if (meta instanceof HTMLElement) {
+                meta.textContent = `${filtered.length} submission${filtered.length === 1 ? "" : "s"}`;
+            }
+        };
+
+        if (search instanceof HTMLInputElement) {
+            search.addEventListener("input", apply);
+        }
+        if (filter instanceof HTMLSelectElement) {
+            filter.addEventListener("change", apply);
+        }
+
+        apply();
+        if (!allRows.length) {
+            toast("No incoming submissions yet for this division.", { title: "Submitted Projects", variant: "info" });
+        }
+    };
+
+    roots.forEach((root) => {
+        renderRoot(root);
+    });
+});
+
 document.addEventListener("DOMContentLoaded", () => {
     const loginCard = document.querySelector(".login-card, .login-container");
     if (loginCard) {
@@ -6565,38 +7051,64 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    if (taskForm && taskTableBody) {
-        taskForm.addEventListener("submit", (event) => {
-            event.preventDefault();
-            const formData = new FormData(taskForm);
-            const title = (formData.get("title") || "").toString().trim();
-            const division = (formData.get("division") || "").toString().trim();
+	    if (taskForm && taskTableBody) {
+	        taskForm.addEventListener("submit", (event) => {
+	            event.preventDefault();
+	            const formData = new FormData(taskForm);
+	            const title = (formData.get("title") || "").toString().trim();
+	            const division = (formData.get("division") || "").toString().trim();
             const dueDateIso = (formData.get("due_date") || "").toString().trim();
             const priority = (formData.get("priority") || "").toString().trim();
             const status = (formData.get("status") || "").toString().trim() || "Pending";
             const assignedTo = (formData.get("assigned_to") || "").toString().trim();
             const notes = (formData.get("notes") || "").toString().trim();
 
-            if (!title || !division || !dueDateIso || !priority) {
-                showRoadUploadStatusToast("Please complete Task Name, Division, Due Date, and Priority.", "warning");
-                return;
-            }
+	            if (!title || !division || !dueDateIso || !priority) {
+	                showRoadUploadStatusToast("Please complete Task Name, Division, Due Date, and Priority.", "warning");
+	                return;
+	            }
 
-            const emptyRow = taskTableBody.querySelector(".js-task-empty-row");
-            if (emptyRow) {
-                emptyRow.remove();
-            }
+	            let adminRecordId = "";
+	            const router = window.peoProjectRouter;
+	            const targetKey = router && typeof router.resolveDivisionKey === "function"
+	                ? router.resolveDivisionKey(division)
+	                : "";
+	            if (router && typeof router.submitToDivision === "function" && targetKey && targetKey !== "maintenance") {
+	                const submission = router.submitToDivision({
+	                    sourceDivisionKey: "maintenance",
+	                    sourceRecord: {
+	                        title,
+	                        division,
+	                        assignedTo,
+	                        dueDateIso,
+	                        priority,
+	                        status,
+	                        notes,
+	                    },
+	                    targetDivisionKey: targetKey,
+	                    existingAdminRecordId: "",
+	                });
+	                if (submission && submission.ok) {
+	                    adminRecordId = String(submission.adminRecordId || "").trim();
+	                }
+	            }
 
-            taskTableBody.prepend(createTaskRowElement({
-                title,
-                division,
-                assignedTo,
-                dueDateIso,
-                dueDateDisplay: formatTaskDateValue(dueDateIso),
-                priority,
-                status,
-                notes,
-            }));
+	            const emptyRow = taskTableBody.querySelector(".js-task-empty-row");
+	            if (emptyRow) {
+	                emptyRow.remove();
+	            }
+
+	            taskTableBody.prepend(createTaskRowElement({
+	                adminRecordId,
+	                title,
+	                division,
+	                assignedTo,
+	                dueDateIso,
+	                dueDateDisplay: formatTaskDateValue(dueDateIso),
+	                priority,
+	                status,
+	                notes,
+	            }));
 
             updateTaskSummary();
             applyTaskFilters();
@@ -8104,12 +8616,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectAllCheckbox = constructionDashboard.querySelector(".js-construction-select-all");
     const prevPageButton = constructionDashboard.querySelector(".js-construction-prev-page");
     const nextPageButton = constructionDashboard.querySelector(".js-construction-next-page");
-    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
-    const constructionModal = document.querySelector(".js-construction-modal");
-    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
-    const closeConstructionModalButtons = constructionModal
-        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
-        : [];
+	    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
+	    const constructionModal = document.querySelector(".js-construction-modal");
+	    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
+	    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
+	    const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
+	    const closeConstructionModalButtons = constructionModal
+	        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
+	        : [];
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
@@ -9124,38 +9638,46 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    const openConstructionModal = (mode = "create", record = null) => {
-        if (!constructionModal) return;
-        editingRecordId = mode === "edit" ? record?.__id || null : null;
-        setConstructionFormMode(mode);
-        if (constructionForm) {
-            constructionForm.reset();
-            if (mode === "edit" && record) {
-                fillConstructionForm(record);
-            }
-        }
-        constructionModal.hidden = false;
-        document.body.classList.add("construction-modal-open");
-        requestAnimationFrame(() => {
-            const firstField = constructionForm?.querySelector('[name="project_name"]');
-            if (firstField) firstField.focus();
-        });
-    };
+	    const openConstructionModal = (mode = "create", record = null) => {
+	        if (!constructionModal) return;
+	        editingRecordId = mode === "edit" ? record?.__id || null : null;
+	        setConstructionFormMode(mode);
+	        if (constructionForm) {
+	            constructionForm.reset();
+	            if (mode === "edit" && record) {
+	                fillConstructionForm(record);
+	            }
+	        }
+	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+	            constructionRouteDivisionSelect.value = "";
+	        }
+	        constructionModal.hidden = false;
+	        document.body.classList.add("construction-modal-open");
+	        requestAnimationFrame(() => {
+	            const firstField = constructionForm?.querySelector('[name="project_name"]');
+	            if (firstField) firstField.focus();
+	        });
+	        syncConstructionRouteControls();
+	    };
 
-    const closeConstructionModal = () => {
-        if (!constructionModal) return;
-        constructionModal.hidden = true;
-        document.body.classList.remove("construction-modal-open");
-        editingRecordId = null;
-        setConstructionFormMode("create");
-        if (constructionForm) constructionForm.reset();
-    };
+	    const closeConstructionModal = () => {
+	        if (!constructionModal) return;
+	        constructionModal.hidden = true;
+	        document.body.classList.remove("construction-modal-open");
+	        editingRecordId = null;
+	        setConstructionFormMode("create");
+	        if (constructionForm) constructionForm.reset();
+	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+	            constructionRouteDivisionSelect.value = "";
+	        }
+	        syncConstructionRouteControls();
+	    };
 
-    const buildRecordFromForm = () => {
-        if (!constructionForm) return null;
-        const formData = new FormData(constructionForm);
-        const projectName = getTrimmedFormValue(formData, "project_name");
-        if (!projectName) return null;
+	    const buildRecordFromForm = () => {
+	        if (!constructionForm) return null;
+	        const formData = new FormData(constructionForm);
+	        const projectName = getTrimmedFormValue(formData, "project_name");
+	        if (!projectName) return null;
 
         return {
             __id: createRecordId(),
@@ -9175,13 +9697,112 @@ document.addEventListener("DOMContentLoaded", () => {
             status_current: getTrimmedFormValue(formData, "status_current"),
             time_elapsed: getTrimmedFormValue(formData, "time_elapsed"),
             slippage: getTrimmedFormValue(formData, "slippage"),
-            remarks: getTrimmedFormValue(formData, "remarks"),
-        };
-    };
+	            remarks: getTrimmedFormValue(formData, "remarks"),
+	        };
+	    };
 
-    const parseCsvText = (text) => {
-        const lines = String(text || "")
-            .split(/\r?\n/)
+	    const getConstructionRouteSourceRecord = () => {
+	        const base = buildRecordFromForm();
+	        if (!base) return null;
+	        if (editingRecordId) {
+	            const existing = records.find((record) => record.__id === editingRecordId);
+	            return existing
+	                ? { ...existing, ...base, __id: editingRecordId }
+	                : { ...base, __id: editingRecordId };
+	        }
+	        return base;
+	    };
+
+	    const syncConstructionRouteControls = () => {
+	        if (!(constructionRouteSubmitButton instanceof HTMLButtonElement)) return;
+	        const router = window.peoProjectRouter;
+	        const targetKey = router && typeof router.resolveDivisionKey === "function"
+	            ? router.resolveDivisionKey(constructionRouteDivisionSelect?.value)
+	            : "";
+	        const hasSource = Boolean(getConstructionRouteSourceRecord());
+	        constructionRouteSubmitButton.disabled = !targetKey || !hasSource;
+	    };
+
+	    if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+	        constructionRouteDivisionSelect.addEventListener("change", syncConstructionRouteControls);
+	    }
+	    if (constructionForm instanceof HTMLFormElement) {
+	        constructionForm.addEventListener("input", syncConstructionRouteControls);
+	    }
+	    if (constructionRouteSubmitButton instanceof HTMLButtonElement) {
+	        constructionRouteSubmitButton.addEventListener("click", () => {
+	            const router = window.peoProjectRouter;
+	            if (!router || typeof router.submitToDivision !== "function") {
+	                showPeoGeneralToast("Project submission is not available right now.", {
+	                    title: "Construction Division",
+	                    variant: "warning",
+	                });
+	                return;
+	            }
+
+	            const targetKey = router.resolveDivisionKey(constructionRouteDivisionSelect?.value);
+	            if (!targetKey) {
+	                showPeoGeneralToast("Please select a division to submit this project to.", {
+	                    title: "Construction Division",
+	                    variant: "warning",
+	                });
+	                return;
+	            }
+
+	            const sourceRecord = getConstructionRouteSourceRecord();
+	            if (!sourceRecord) {
+	                showPeoGeneralToast("Please enter a valid project name before submitting.", {
+	                    title: "Construction Division",
+	                    variant: "warning",
+	                });
+	                return;
+	            }
+
+	            const existingAdminRecordId = String(
+	                sourceRecord.__admin_source_id || sourceRecord.__admin_submission_id || ""
+	            ).trim();
+	            const result = router.submitToDivision({
+	                sourceDivisionKey: "construction",
+	                sourceRecord,
+	                targetDivisionKey: targetKey,
+	                existingAdminRecordId,
+	            });
+
+	            if (!result?.ok) {
+	                showPeoGeneralToast(String(result?.error || "Unable to submit project."), {
+	                    title: "Construction Division",
+	                    variant: "danger",
+	                });
+	                return;
+	            }
+
+	            const adminRecordId = String(result.adminRecordId || "").trim();
+	            if (adminRecordId && editingRecordId) {
+	                const idx = records.findIndex((record) => record.__id === editingRecordId);
+	                if (idx >= 0 && !String(records[idx]?.__admin_source_id || "").trim()) {
+	                    records[idx] = { ...records[idx], __admin_submission_id: adminRecordId };
+	                }
+	            }
+
+	            records = syncAdminRoutedConstructionRecords(records);
+	            writeStoredRecords(records);
+	            renderTable();
+
+	            if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+	                constructionRouteDivisionSelect.value = "";
+	            }
+	            syncConstructionRouteControls();
+
+	            showPeoGeneralToast("Project submitted successfully.", {
+	                title: "Construction Division",
+	                variant: "success",
+	            });
+	        });
+	    }
+
+	    const parseCsvText = (text) => {
+	        const lines = String(text || "")
+	            .split(/\r?\n/)
             .map((line) => line.trim())
             .filter(Boolean);
         if (!lines.length) return [];
@@ -10362,12 +10983,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const planningDocBudgetOtherWrap = planningDocEditForm instanceof HTMLFormElement
         ? planningDocEditForm.querySelector(".js-planning-doc-budget-other-wrap")
         : null;
-    const planningDocBudgetOtherInput = planningDocEditForm instanceof HTMLFormElement
-        ? planningDocEditForm.querySelector(".js-planning-doc-budget-other")
-        : null;
-    const planningDocCloseButtons = planningDocModal instanceof HTMLElement
-        ? Array.from(planningDocModal.querySelectorAll(".js-close-planning-doc-modal"))
-        : [];
+	    const planningDocBudgetOtherInput = planningDocEditForm instanceof HTMLFormElement
+	        ? planningDocEditForm.querySelector(".js-planning-doc-budget-other")
+	        : null;
+	    const planningRouteDivisionSelect = planningDocEditForm instanceof HTMLFormElement
+	        ? planningDocEditForm.querySelector(".js-planning-route-division")
+	        : null;
+	    const planningRouteSubmitButton = planningDocEditForm instanceof HTMLFormElement
+	        ? planningDocEditForm.querySelector(".js-planning-route-submit")
+	        : null;
+	    const planningDocCloseButtons = planningDocModal instanceof HTMLElement
+	        ? Array.from(planningDocModal.querySelectorAll(".js-close-planning-doc-modal"))
+	        : [];
     const PLANNING_BUDGET_STORAGE_KEY = "peo_planning_budget_records_v1";
     const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
     const PLANNING_DOCUMENT_DELETED_ADMIN_IDS_KEY = "peo_planning_deleted_admin_ids_v1";
@@ -11675,17 +12302,26 @@ document.addEventListener("DOMContentLoaded", () => {
         planningBudgetDetailSection.scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
-    let planningBudgetRecords = readStoredBudgets();
-    let planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
-    writeStoredPlanningDocuments(planningDocumentRecords);
-    let editingBudgetRecordId = null;
-    let editingPpaRow = null;
-    let editingPlanningDocumentId = null;
+	    let planningBudgetRecords = readStoredBudgets();
+	    let planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
+	    writeStoredPlanningDocuments(planningDocumentRecords);
+	    let editingBudgetRecordId = null;
+	    let editingPpaRow = null;
+	    let editingPlanningDocumentId = null;
     let activePlanningBudgetDetailRecordId = null;
     let pendingPlanningBudgetDetailRecordId = null;
     let planningToastElement = null;
     let planningToastTimer = null;
-    let planningConfirmOverlay = null;
+	    let planningConfirmOverlay = null;
+
+	    const syncPlanningRouteControls = () => {
+	        if (!(planningRouteSubmitButton instanceof HTMLButtonElement)) return;
+	        const router = window.peoProjectRouter;
+	        const targetKey = router && typeof router.resolveDivisionKey === "function"
+	            ? router.resolveDivisionKey(planningRouteDivisionSelect?.value)
+	            : "";
+	        planningRouteSubmitButton.disabled = !editingPlanningDocumentId || !targetKey;
+	    };
 
     const getPlanningPpaBudgetAllocationOptions = () => {
         if (!Array.isArray(planningBudgetRecords) || !planningBudgetRecords.length) return [];
@@ -12150,21 +12786,25 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const closePlanningDocModal = () => {
-        if (!(planningDocModal instanceof HTMLElement)) return;
-        planningDocModal.classList.remove("is-open");
-        planningDocModal.hidden = true;
-        planningDocModal.setAttribute("hidden", "");
-        planningDocModal.style.display = "none";
-        editingPlanningDocumentId = null;
-        pendingPlanningBudgetDetailRecordId = null;
-        syncPlanningModalBodyState();
-    };
+	    const closePlanningDocModal = () => {
+	        if (!(planningDocModal instanceof HTMLElement)) return;
+	        planningDocModal.classList.remove("is-open");
+	        planningDocModal.hidden = true;
+	        planningDocModal.setAttribute("hidden", "");
+	        planningDocModal.style.display = "none";
+	        editingPlanningDocumentId = null;
+	        pendingPlanningBudgetDetailRecordId = null;
+	        if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
+	            planningRouteDivisionSelect.value = "";
+	        }
+	        syncPlanningRouteControls();
+	        syncPlanningModalBodyState();
+	    };
 
-    const openPlanningDocModal = (recordId) => {
-        if (!(planningDocModal instanceof HTMLElement) || !(planningDocEditForm instanceof HTMLFormElement)) return;
-        const record = planningDocumentRecords.find((item) => String(item?.id || "") === String(recordId || ""));
-        if (!record) return;
+	    const openPlanningDocModal = (recordId) => {
+	        if (!(planningDocModal instanceof HTMLElement) || !(planningDocEditForm instanceof HTMLFormElement)) return;
+	        const record = planningDocumentRecords.find((item) => String(item?.id || "") === String(recordId || ""));
+	        if (!record) return;
 
         closeModal();
         closeEditModal();
@@ -12195,13 +12835,17 @@ document.addEventListener("DOMContentLoaded", () => {
             || String(record.budget_allocation || "").trim();
         refreshPlanningDocBudgetAllocationSelect(normalizedBudget);
         setValue("budget_allocation", normalizedBudget);
-        setValue("budget_allocation_other", record.budget_allocation_other || "");
-        setValue("remarks", record.remarks || "");
-        syncPlanningDocBudgetOtherField();
+	        setValue("budget_allocation_other", record.budget_allocation_other || "");
+	        setValue("remarks", record.remarks || "");
+	        syncPlanningDocBudgetOtherField();
+	        if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
+	            planningRouteDivisionSelect.value = "";
+	        }
+	        syncPlanningRouteControls();
 
-        planningDocModal.classList.add("is-open");
-        planningDocModal.hidden = false;
-        planningDocModal.removeAttribute("hidden");
+	        planningDocModal.classList.add("is-open");
+	        planningDocModal.hidden = false;
+	        planningDocModal.removeAttribute("hidden");
         planningDocModal.style.display = "flex";
         syncPlanningModalBodyState();
 
@@ -12456,11 +13100,81 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    if (planningDocBudgetAllocationSelect instanceof HTMLSelectElement) {
-        planningDocBudgetAllocationSelect.addEventListener("change", () => {
-            syncPlanningDocBudgetOtherField();
-        });
-    }
+	    if (planningDocBudgetAllocationSelect instanceof HTMLSelectElement) {
+	        planningDocBudgetAllocationSelect.addEventListener("change", () => {
+	            syncPlanningDocBudgetOtherField();
+	        });
+	    }
+
+	    if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
+	        planningRouteDivisionSelect.addEventListener("change", () => {
+	            syncPlanningRouteControls();
+	        });
+	    }
+
+	    if (planningRouteSubmitButton instanceof HTMLButtonElement) {
+	        planningRouteSubmitButton.addEventListener("click", () => {
+	            const router = window.peoProjectRouter;
+	            if (!router || typeof router.submitToDivision !== "function") {
+	                showPeoGeneralToast("Project submission is not available right now.", {
+	                    title: "Planning Division",
+	                    variant: "warning",
+	                });
+	                return;
+	            }
+
+	            const targetKey = router.resolveDivisionKey(planningRouteDivisionSelect?.value);
+	            if (!editingPlanningDocumentId || !targetKey) {
+	                syncPlanningRouteControls();
+	                showPeoGeneralToast("Select a division to submit this record.", {
+	                    title: "Planning Division",
+	                    variant: "warning",
+	                });
+	                return;
+	            }
+
+	            const recordIndex = planningDocumentRecords.findIndex((record) => {
+	                return String(record?.id || "") === editingPlanningDocumentId;
+	            });
+	            if (recordIndex < 0) {
+	                closePlanningDocModal();
+	                return;
+	            }
+
+	            const record = planningDocumentRecords[recordIndex] || {};
+	            const existingAdminRecordId = String(record.__admin_source_id || record.__admin_submission_id || "").trim();
+	            const result = router.submitToDivision({
+	                sourceDivisionKey: "planning",
+	                sourceRecord: record,
+	                targetDivisionKey: targetKey,
+	                existingAdminRecordId,
+	            });
+
+	            if (!result?.ok) {
+	                showPeoGeneralToast(String(result?.error || "Unable to submit record."), {
+	                    title: "Planning Division",
+	                    variant: "danger",
+	                });
+	                return;
+	            }
+
+	            const adminRecordId = String(result.adminRecordId || "").trim();
+	            if (adminRecordId && !String(record.__admin_source_id || "").trim()) {
+	                planningDocumentRecords[recordIndex] = { ...record, __admin_submission_id: adminRecordId };
+	                writeStoredPlanningDocuments(planningDocumentRecords);
+	            }
+
+	            planningDocumentRecords = syncAdminToPlanningDocuments(planningDocumentRecords);
+	            writeStoredPlanningDocuments(planningDocumentRecords);
+	            renderPlanningDocumentsTable(planningDocumentRecords);
+	            closePlanningDocModal();
+
+	            showPeoGeneralToast("Record submitted successfully.", {
+	                title: "Planning Division",
+	                variant: "success",
+	            });
+	        });
+	    }
 
     if (planningDocEditForm instanceof HTMLFormElement) {
         planningDocEditForm.addEventListener("submit", (event) => {
@@ -14411,13 +15125,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const qualityTabs = Array.from(qualityDashboard.querySelectorAll("[data-quality-tab]"));
     const routeFilterButton = qualityDashboard.querySelector(".js-quality-route-filter");
     const openModalButton = qualityDashboard.querySelector(".js-quality-open-modal");
-    const qualityModal = document.querySelector(".js-quality-modal");
-    const qualityForm = qualityModal ? qualityModal.querySelector(".js-quality-form") : null;
-    const qualityModalTitle = qualityModal ? qualityModal.querySelector("#quality-modal-title") : null;
-    const qualityModalSubtitle = qualityModal ? qualityModal.querySelector(".js-quality-modal-subtitle") : null;
-    const closeQualityButtons = qualityModal
-        ? Array.from(qualityModal.querySelectorAll(".js-quality-close-modal"))
-        : [];
+	    const qualityModal = document.querySelector(".js-quality-modal");
+	    const qualityForm = qualityModal ? qualityModal.querySelector(".js-quality-form") : null;
+	    const qualityModalTitle = qualityModal ? qualityModal.querySelector("#quality-modal-title") : null;
+	    const qualityModalSubtitle = qualityModal ? qualityModal.querySelector(".js-quality-modal-subtitle") : null;
+	    const qualityRouteDivisionSelect = qualityModal ? qualityModal.querySelector(".js-quality-route-division") : null;
+	    const qualityRouteSubmitButton = qualityModal ? qualityModal.querySelector(".js-quality-route-submit") : null;
+	    const closeQualityButtons = qualityModal
+	        ? Array.from(qualityModal.querySelectorAll(".js-quality-close-modal"))
+	        : [];
     const deleteQualityButton = qualityModal ? qualityModal.querySelector(".js-quality-delete-record") : null;
 
     if (!(qualityTableWrap instanceof HTMLElement) || !(qualityTableBody instanceof HTMLElement) || !(qualityPagination instanceof HTMLElement)) {
@@ -15101,13 +15817,23 @@ document.addEventListener("DOMContentLoaded", () => {
         window.requestAnimationFrame(syncHorizontalScrollState);
     };
 
-    const syncModalState = () => {
-        const isOpen = qualityModal instanceof HTMLElement && !qualityModal.hidden;
-        document.body.classList.toggle("quality-modal-open", isOpen);
-    };
+	    const syncModalState = () => {
+	        const isOpen = qualityModal instanceof HTMLElement && !qualityModal.hidden;
+	        document.body.classList.toggle("quality-modal-open", isOpen);
+	    };
 
-    const openQualityModal = (mode = "create", record = null) => {
-        if (!(qualityModal instanceof HTMLElement) || !(qualityForm instanceof HTMLFormElement)) return;
+	    const syncQualityRouteControls = () => {
+	        if (!(qualityRouteSubmitButton instanceof HTMLButtonElement)) return;
+	        const router = window.peoProjectRouter;
+	        const targetKey = router && typeof router.resolveDivisionKey === "function"
+	            ? router.resolveDivisionKey(qualityRouteDivisionSelect?.value)
+	            : "";
+	        const hasSource = Boolean(editingRecordId || buildRecordFromForm());
+	        qualityRouteSubmitButton.disabled = !targetKey || !hasSource;
+	    };
+
+	    const openQualityModal = (mode = "create", record = null) => {
+	        if (!(qualityModal instanceof HTMLElement) || !(qualityForm instanceof HTMLFormElement)) return;
 
         qualityForm.reset();
         editingRecordId = mode === "edit" ? record?.__id || null : null;
@@ -15123,24 +15849,32 @@ document.addEventListener("DOMContentLoaded", () => {
         if (deleteQualityButton instanceof HTMLElement) {
             deleteQualityButton.hidden = mode !== "edit";
         }
-        if (mode === "edit" && record) {
-            fillQualityForm(record);
-        }
+	        if (mode === "edit" && record) {
+	            fillQualityForm(record);
+	        }
+	        if (qualityRouteDivisionSelect instanceof HTMLSelectElement) {
+	            qualityRouteDivisionSelect.value = "";
+	        }
+	        syncQualityRouteControls();
 
-        qualityModal.hidden = false;
-        syncModalState();
+	        qualityModal.hidden = false;
+	        syncModalState();
         const firstField = qualityForm.elements.namedItem("received_from");
         if (firstField instanceof HTMLElement) {
             window.setTimeout(() => firstField.focus(), 0);
         }
     };
 
-    const closeQualityModal = () => {
-        if (!(qualityModal instanceof HTMLElement)) return;
-        qualityModal.hidden = true;
-        editingRecordId = null;
-        syncModalState();
-    };
+	    const closeQualityModal = () => {
+	        if (!(qualityModal instanceof HTMLElement)) return;
+	        qualityModal.hidden = true;
+	        editingRecordId = null;
+	        if (qualityRouteDivisionSelect instanceof HTMLSelectElement) {
+	            qualityRouteDivisionSelect.value = "";
+	        }
+	        syncQualityRouteControls();
+	        syncModalState();
+	    };
 
     if (openModalButton instanceof HTMLElement) {
         openModalButton.addEventListener("click", () => {
@@ -15148,15 +15882,91 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    closeQualityButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-            closeQualityModal();
-        });
-    });
+	    closeQualityButtons.forEach((button) => {
+	        button.addEventListener("click", () => {
+	            closeQualityModal();
+	        });
+	    });
 
-    if (qualityModal instanceof HTMLElement) {
-        qualityModal.addEventListener("click", (event) => {
-            if (event.target === qualityModal) {
+	    if (qualityRouteDivisionSelect instanceof HTMLSelectElement) {
+	        qualityRouteDivisionSelect.addEventListener("change", () => {
+	            syncQualityRouteControls();
+	        });
+	    }
+
+	    if (qualityRouteSubmitButton instanceof HTMLButtonElement) {
+	        qualityRouteSubmitButton.addEventListener("click", () => {
+	            const router = window.peoProjectRouter;
+	            if (!router || typeof router.submitToDivision !== "function") {
+	                showPeoGeneralToast("Project submission is not available right now.", {
+	                    title: "Quality Division",
+	                    variant: "warning",
+	                });
+	                return;
+	            }
+
+	            const targetKey = router.resolveDivisionKey(qualityRouteDivisionSelect?.value);
+	            if (!targetKey) {
+	                syncQualityRouteControls();
+	                showPeoGeneralToast("Select a division to submit this record.", {
+	                    title: "Quality Division",
+	                    variant: "warning",
+	                });
+	                return;
+	            }
+
+	            const sourceRecord = editingRecordId
+	                ? (records.find((record) => record.__id === editingRecordId) || buildRecordFromForm())
+	                : buildRecordFromForm();
+	            if (!sourceRecord) {
+	                showPeoGeneralToast("Please complete the required fields before submitting.", {
+	                    title: "Quality Division",
+	                    variant: "warning",
+	                });
+	                return;
+	            }
+
+	            const existingAdminRecordId = String(
+	                sourceRecord.__admin_source_id || sourceRecord.__admin_submission_id || ""
+	            ).trim();
+	            const result = router.submitToDivision({
+	                sourceDivisionKey: "quality",
+	                sourceRecord,
+	                targetDivisionKey: targetKey,
+	                existingAdminRecordId,
+	            });
+
+	            if (!result?.ok) {
+	                showPeoGeneralToast(String(result?.error || "Unable to submit record."), {
+	                    title: "Quality Division",
+	                    variant: "danger",
+	                });
+	                return;
+	            }
+
+	            const adminRecordId = String(result.adminRecordId || "").trim();
+	            if (adminRecordId && editingRecordId) {
+	                const idx = records.findIndex((record) => record.__id === editingRecordId);
+	                if (idx >= 0 && !String(records[idx]?.__admin_source_id || "").trim()) {
+	                    records[idx] = { ...records[idx], __admin_submission_id: adminRecordId };
+	                }
+	            }
+
+	            records = dedupeQualityRecords(syncAdminRoutedQualityRecords(records));
+	            writeStoredRecords(records);
+	            renderTable();
+	            closeQualityModal();
+
+	            showPeoGeneralToast("Record submitted successfully.", {
+	                title: "Quality Division",
+	                variant: "success",
+	            });
+	        });
+	    }
+
+	    if (qualityModal instanceof HTMLElement) {
+	        qualityModal.addEventListener("click", (event) => {
+	            if (event.target === qualityModal) {
                 closeQualityModal();
             }
         });
