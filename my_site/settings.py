@@ -22,7 +22,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Read secret key from environment for security; fall back to dev key for local use
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-!ie5b*!2jn@yofg53$t2hedk=+0qud+enpcj@ayk!%yk!1##yz')
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    # Dev-only fallback (do not use in production)
+    'dev-secret-key-change-me-3V3d3QhVYq9X1pZk8nT2mR6sL0aC4uF7gJ5wH9eK1rP6xS2dN8bQ',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Toggle DEBUG via environment (default True for local dev)
@@ -30,7 +34,11 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
 # Comma-separated list in DJANGO_ALLOWED_HOSTS (e.g., "example.com,localhost,127.0.0.1")
 _allowed_hosts_env = os.environ.get('DJANGO_ALLOWED_HOSTS', '')
-ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()] if _allowed_hosts_env else []
+ALLOWED_HOSTS = (
+    [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()]
+    if _allowed_hosts_env
+    else ['localhost', '127.0.0.1', '[::1]']
+)
 
 
 # Application definition

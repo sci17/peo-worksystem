@@ -29,3 +29,36 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f'{self.user.get_username()} profile'
+
+
+class DivisionStore(models.Model):
+    KEY_ADMIN = 'admin'
+    KEY_PLANNING = 'planning'
+    KEY_CONSTRUCTION = 'construction'
+    KEY_QUALITY = 'quality'
+    KEY_MAINTENANCE = 'maintenance'
+    KEY_CHOICES = [
+        (KEY_ADMIN, 'Admin Division'),
+        (KEY_PLANNING, 'Planning Division'),
+        (KEY_CONSTRUCTION, 'Construction Division'),
+        (KEY_QUALITY, 'Quality Division'),
+        (KEY_MAINTENANCE, 'Maintenance Division'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='division_stores',
+    )
+    key = models.CharField(max_length=20, choices=KEY_CHOICES)
+    data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'key'], name='unique_division_store_per_user'),
+        ]
+
+    def __str__(self):
+        return f'{self.user.get_username()} {self.key} store'

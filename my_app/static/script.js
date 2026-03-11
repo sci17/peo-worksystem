@@ -196,6 +196,140 @@ function togglePassword() {
 
 window.togglePassword = togglePassword;
 
+(() => {
+    const API_BASE = "/api/division-store/";
+
+    const getCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getCsrfToken = () => {
+        const tokenFromCookie = getCookie("csrftoken");
+        if (tokenFromCookie) return tokenFromCookie;
+        const tokenFromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenFromDom instanceof HTMLInputElement ? String(tokenFromDom.value || "").trim() : "";
+    };
+
+    const safeJsonParse = (value, fallback) => {
+        try {
+            return JSON.parse(value);
+        } catch (error) {
+            return fallback;
+        }
+    };
+
+    const safeLocalStorageGet = (key) => {
+        try {
+            return window.localStorage.getItem(key);
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const safeLocalStorageSet = (key, value) => {
+        try {
+            window.localStorage.setItem(key, value);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const postStore = async (storeKey, payload) => {
+        if (typeof window.fetch !== "function") return;
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) return;
+
+        try {
+            await window.fetch(`${API_BASE}${encodeURIComponent(storeKey)}/`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken,
+                },
+                body: JSON.stringify(payload ?? null),
+            });
+        } catch (error) {
+            // Ignore network failures.
+        }
+    };
+
+    const fetchStore = async (storeKey) => {
+        if (typeof window.fetch !== "function") return null;
+        try {
+            const response = await window.fetch(`${API_BASE}${encodeURIComponent(storeKey)}/`, {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" },
+            });
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const latestPayloads = new Map();
+    const timers = new Map();
+    const queueSync = (storeKey, payload, delayMs = 400) => {
+        const normalizedKey = String(storeKey || "").trim();
+        if (!normalizedKey) return;
+
+        latestPayloads.set(normalizedKey, payload);
+        const existing = timers.get(normalizedKey);
+        if (existing) window.clearTimeout(existing);
+
+        timers.set(normalizedKey, window.setTimeout(() => {
+            const latest = latestPayloads.get(normalizedKey);
+            postStore(normalizedKey, latest);
+        }, Math.max(0, Number(delayMs) || 0)));
+    };
+
+    const hydrateLocalStorageIfEmpty = async (definitions) => {
+        const list = Array.isArray(definitions) ? definitions : [];
+        if (!list.length) return;
+
+        for (const def of list) {
+            const storeKey = String(def?.storeKey || "").trim();
+            const localKey = String(def?.localStorageKey || "").trim();
+            const type = String(def?.type || "array").trim();
+            if (!storeKey || !localKey) continue;
+
+            const localRaw = safeLocalStorageGet(localKey);
+            const localParsed = localRaw ? safeJsonParse(localRaw, null) : null;
+            const isEmpty = type === "object"
+                ? (!localParsed || typeof localParsed !== "object" || Array.isArray(localParsed) || Object.keys(localParsed).length === 0)
+                : (!Array.isArray(localParsed) || localParsed.length === 0);
+            if (!isEmpty) continue;
+
+            const server = await fetchStore(storeKey);
+            const serverData = server && typeof server === "object" ? server.data : null;
+            const hasServerData = type === "object"
+                ? (serverData && typeof serverData === "object" && !Array.isArray(serverData) && Object.keys(serverData).length > 0)
+                : (Array.isArray(serverData) && serverData.length > 0);
+            if (!hasServerData) continue;
+
+            safeLocalStorageSet(localKey, JSON.stringify(serverData));
+        }
+    };
+
+    window.peoDivisionStore = {
+        queueSync,
+        fetchStore,
+        hydrateLocalStorageIfEmpty,
+    };
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
     const loginCard = document.querySelector(".login-card, .login-container");
     if (loginCard) {
@@ -1100,6 +1234,15 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const writeAdminDivisionRecords = (records) => {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+                const safe = record && typeof record === "object" ? { ...record } : {};
+                delete safe.scanned_file_data;
+                return safe;
+            });
+            window.peoDivisionStore.queueSync("admin", safeRecords);
+        }
+
         if (!isLocalStorageAvailable()) return;
         try {
             window.localStorage.setItem(ADMIN_DIVISION_STORAGE_KEY, JSON.stringify(records));
@@ -7004,6 +7147,10 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             // Ignore storage errors (quota/private mode).
         }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            window.peoDivisionStore.queueSync("maintenance", payload);
+        }
     }
 
     function restoreMaintenanceState() {
@@ -7349,6 +7496,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof refreshRoadRegister === "function") {
         refreshRoadRegister();
     }
+    persistMaintenanceState();
 
     const tabs = document.querySelectorAll(".road-tab[data-road-tab]");
     const panels = document.querySelectorAll(".road-tab-panel[data-road-panel]");
@@ -8035,6 +8183,18 @@ document.addEventListener("DOMContentLoaded", () => {
             window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage errors.
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+                const safe = record && typeof record === "object" ? { ...record } : {};
+                delete safe.accomplishment_images;
+                delete safe.accomplishment_history;
+                delete safe.accomplishment_image;
+                delete safe.accomplishment_image_name;
+                return safe;
+            });
+            window.peoDivisionStore.queueSync("construction", safeRecords);
         }
     };
 
@@ -9104,12 +9264,15 @@ document.addEventListener("DOMContentLoaded", () => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
 
-            // Keep existing behaviors:
-            // - Checkbox selection remains clickable without opening the edit modal.
-            // - Project name links still navigate to the project dashboard.
-            if (target.closest('a[href]')) return;
-            if (target.classList.contains("js-construction-row-select") || target.closest(".js-construction-row-select")) return;
             if (target.closest(".pa-select-col")) return;
+            if (target.closest('input[type="checkbox"]')) return;
+
+            const link = target.closest('a[href]');
+            if (link) {
+                if (!(link instanceof HTMLElement) || !link.classList.contains("construction-project-link")) return;
+                if (event.ctrlKey || event.metaKey) return;
+                event.preventDefault();
+            }
 
             const row = target.closest("tr");
             if (!(row instanceof HTMLTableRowElement)) return;
@@ -9242,13 +9405,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const writeStoredRecords = (items) => {
         const safeItems = Array.isArray(items) ? items : [];
+        let wrote = false;
         try {
             localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(safeItems));
-            return true;
+            wrote = true;
         } catch (error) {
             // Ignore storage errors.
-            return false;
         }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeForSync = safeItems.map((record) => {
+                const safe = record && typeof record === "object" ? { ...record } : {};
+                delete safe.accomplishment_images;
+                delete safe.accomplishment_history;
+                delete safe.accomplishment_image;
+                delete safe.accomplishment_image_name;
+                return safe;
+            });
+            window.peoDivisionStore.queueSync("construction", safeForSync);
+        }
+
+        return wrote;
     };
 
     const toast = (message, options = {}) => {
@@ -10011,6 +10188,10 @@ document.addEventListener("DOMContentLoaded", () => {
             window.localStorage.setItem(PLANNING_DOCUMENT_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage failures.
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            window.peoDivisionStore.queueSync("planning", records);
         }
     };
 
@@ -10870,6 +11051,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let planningBudgetRecords = readStoredBudgets();
     let planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
+    writeStoredPlanningDocuments(planningDocumentRecords);
     let editingBudgetRecordId = null;
     let editingPpaRow = null;
     let editingPlanningDocumentId = null;
@@ -12077,6 +12259,126 @@ document.addEventListener("DOMContentLoaded", () => {
         const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
         const QUALITY_STORAGE_KEY = "peo_quality_records_v1";
         const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
+        const PROJECT_UI_STATE_STORAGE_KEY = "peo_project_registry_ui_state_v1";
+
+        const seedProjectRegistryStores = () => {
+            const seedNode = document.getElementById("peo-project-store-seed");
+            if (!seedNode) return;
+
+            let seed = null;
+            try {
+                seed = JSON.parse(seedNode.textContent || "null");
+            } catch (error) {
+                seed = null;
+            }
+
+            if (!seed || typeof seed !== "object") return;
+
+            const defs = [
+                { storeKey: "admin", storageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
+                { storeKey: "planning", storageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
+                { storeKey: "construction", storageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+                { storeKey: "quality", storageKey: QUALITY_STORAGE_KEY, type: "array" },
+                { storeKey: "maintenance", storageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
+            ];
+
+            const safeLocalStorageGet = (key) => {
+                try {
+                    return window.localStorage.getItem(key);
+                } catch (error) {
+                    return null;
+                }
+            };
+
+            const safeLocalStorageSet = (key, value) => {
+                try {
+                    window.localStorage.setItem(key, value);
+                    return true;
+                } catch (error) {
+                    return false;
+                }
+            };
+
+            const safeJsonParse = (value) => {
+                try {
+                    return JSON.parse(value);
+                } catch (error) {
+                    return null;
+                }
+            };
+
+            defs.forEach((def) => {
+                const serverData = seed[def.storeKey];
+                const localRaw = safeLocalStorageGet(def.storageKey);
+                const localParsed = localRaw ? safeJsonParse(localRaw) : null;
+
+                if (def.type === "object") {
+                    const localCount = localParsed && typeof localParsed === "object" && !Array.isArray(localParsed)
+                        ? Object.keys(localParsed).length
+                        : 0;
+                    const serverCount = serverData && typeof serverData === "object" && !Array.isArray(serverData)
+                        ? Object.keys(serverData).length
+                        : 0;
+
+                    if (serverCount > localCount) {
+                        safeLocalStorageSet(def.storageKey, JSON.stringify(serverData));
+                    }
+                    return;
+                }
+
+                const localCount = Array.isArray(localParsed) ? localParsed.length : 0;
+                const serverCount = Array.isArray(serverData) ? serverData.length : 0;
+
+                if (serverCount > localCount) {
+                    safeLocalStorageSet(def.storageKey, JSON.stringify(serverData));
+                }
+            });
+        };
+
+        seedProjectRegistryStores();
+
+        const readProjectUiState = () => {
+            try {
+                const raw = window.localStorage.getItem(PROJECT_UI_STATE_STORAGE_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === "object" ? parsed : {};
+            } catch (error) {
+                return {};
+            }
+        };
+
+        const writeProjectUiState = (nextState) => {
+            try {
+                window.localStorage.setItem(PROJECT_UI_STATE_STORAGE_KEY, JSON.stringify(nextState || {}));
+                return true;
+            } catch (error) {
+                return false;
+            }
+        };
+
+        const setSelectValueIfExists = (select, value) => {
+            if (!(select instanceof HTMLSelectElement)) return;
+            const desired = String(value ?? "").trim();
+            if (!desired) return;
+            const hasOption = Array.from(select.options).some((opt) => opt.value === desired);
+            if (!hasOption) return;
+            select.value = desired;
+        };
+
+        const persistCurrentProjectUiState = (partial = {}) => {
+            const state = Object.assign({}, readProjectUiState());
+            const divisionValue = divisionFilter instanceof HTMLSelectElement ? String(divisionFilter.value || "all").trim() : "all";
+            const statusValue = statusFilter instanceof HTMLSelectElement ? String(statusFilter.value || "all").trim() : "all";
+            const sortValue = sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest";
+            const queryValue = projectSearchInput instanceof HTMLInputElement ? String(projectSearchInput.value || "") : "";
+            state.division = divisionValue || "all";
+            state.status = statusValue || "all";
+            state.sort = sortValue || "newest";
+            state.query = queryValue;
+            Object.assign(state, partial || {});
+            writeProjectUiState(state);
+        };
 
         const formatProjectCurrency = (amount) => {
             const numericAmount = Number.isFinite(amount) ? amount : 0;
@@ -12351,9 +12653,10 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         const syncActiveProjectDivision = (divisionName) => {
-            const normalizedDivision = String(divisionName || "").trim();
-            const effectiveDivision = normalizedDivision || "Admin Division";
-            const isAllDivisions = effectiveDivision.toLowerCase() === "all divisions" || effectiveDivision.toLowerCase() === "all";
+            const selection = String(divisionName || "").trim();
+            const selectionLower = selection.toLowerCase();
+            const isAllDivisions = !selection || selectionLower === "all divisions" || selectionLower === "all";
+            const effectiveDivision = isAllDivisions ? "all" : normalizeDivisionName(selection);
 
             if (projectPanelTitle instanceof HTMLElement) {
                 projectPanelTitle.textContent = isAllDivisions
@@ -12377,6 +12680,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 divisionFilter.value = effectiveDivision;
             }
             projectFilterDropdownSyncers.forEach((syncDropdown) => syncDropdown());
+            persistCurrentProjectUiState({ division: isAllDivisions ? "all" : effectiveDivision });
             refreshProjectBoard();
         };
 
@@ -12396,12 +12700,20 @@ document.addEventListener("DOMContentLoaded", () => {
             let completedCount = 0;
             let onHoldCount = 0;
 
+            const isActiveProjectStatus = (rawStatus) => {
+                const status = String(rawStatus || "").trim().toLowerCase();
+                if (!status) return true;
+                if (status.includes("completed")) return false;
+                if (status.includes("on hold")) return false;
+                return true;
+            };
+
             projectRecordsList.forEach((record) => {
                 const divisionValue = String(record.division || "").trim();
                 const amountValue = Number(record.allocatedAmount) || 0;
                 const statusValue = String(record.status || "").trim().toLowerCase();
 
-                if (divisionValue in divisionCounts) {
+                if (divisionValue in divisionCounts && isActiveProjectStatus(statusValue)) {
                     divisionCounts[divisionValue] += 1;
                 }
                 totalBudget += amountValue;
@@ -12744,12 +13056,15 @@ document.addEventListener("DOMContentLoaded", () => {
             syncProjectModalState();
         };
 
-        const closeConstructionHistoryModal = () => {
+        const closeConstructionHistoryModal = (persistState = true) => {
             if (constructionHistoryModal instanceof HTMLElement) {
                 constructionHistoryModal.hidden = true;
             }
             if (constructionHistoryCards instanceof HTMLElement) {
                 constructionHistoryCards.innerHTML = "";
+            }
+            if (persistState) {
+                persistCurrentProjectUiState({ openModal: "", constructionSourceId: "" });
             }
             syncProjectModalState();
         };
@@ -12855,6 +13170,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (deleteModal instanceof HTMLElement) deleteModal.hidden = true;
 
             const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
+            const recordId = String(record.__id || "").trim();
             const projectName = String(record.project_name || "Construction Project").trim();
 
             if (constructionHistoryTitle instanceof HTMLElement) {
@@ -12868,12 +13184,29 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             constructionHistoryModal.hidden = false;
+            if (recordId) {
+                persistCurrentProjectUiState({ openModal: "construction_history", constructionSourceId: recordId });
+            }
             syncProjectModalState();
         };
 
         closeProjectModal();
         closeDeleteModal();
-        closeConstructionHistoryModal();
+        closeConstructionHistoryModal(false);
+
+        const tryRestoreConstructionHistoryModal = () => {
+            const saved = readProjectUiState();
+            if (!saved || saved.openModal !== "construction_history") return false;
+            const sourceId = String(saved.constructionSourceId || "").trim();
+            if (!sourceId) return false;
+
+            const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+            const record = constructionRecords.find((item) => String(item?.__id || "").trim() === sourceId);
+            if (!record) return false;
+
+            openConstructionHistoryModal(record);
+            return true;
+        };
 
         openProjectButtons.forEach((button) => {
             button.addEventListener("click", () => {
@@ -12974,24 +13307,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (statusFilter instanceof HTMLSelectElement) {
             statusFilter.addEventListener("change", () => {
+                persistCurrentProjectUiState();
                 refreshProjectBoard();
             });
         }
 
         if (sortFilter instanceof HTMLSelectElement) {
             sortFilter.addEventListener("change", () => {
+                persistCurrentProjectUiState();
                 refreshProjectBoard();
             });
         }
 
         if (projectSearchInput instanceof HTMLInputElement) {
             projectSearchInput.addEventListener("input", () => {
+                persistCurrentProjectUiState();
                 refreshProjectBoard();
             });
         }
 
         if (projectSearchButton instanceof HTMLButtonElement) {
             projectSearchButton.addEventListener("click", () => {
+                persistCurrentProjectUiState();
                 refreshProjectBoard();
             });
         }
@@ -13002,35 +13339,141 @@ document.addEventListener("DOMContentLoaded", () => {
 
         enhanceAdminFormSelects(projectForm);
 
-        refreshProjectBoard();
-        syncActiveProjectDivision("all");
-        enableProjectCardFloat();
+        const bindProjectBoardListeners = () => {
+            if (projectTableBody instanceof HTMLElement && typeof MutationObserver !== "undefined") {
+                const projectSummaryObserver = new MutationObserver(() => {
+                    syncProjectRegistrySummary(projectRecords);
+                });
+                projectSummaryObserver.observe(projectTableBody, {
+                    childList: true,
+                    subtree: true,
+                    characterData: true,
+                });
+            }
 
-        if (projectTableBody instanceof HTMLElement && typeof MutationObserver !== "undefined") {
-            const projectSummaryObserver = new MutationObserver(() => {
-                syncProjectRegistrySummary(projectRecords);
+            window.addEventListener("focus", refreshProjectBoard);
+            window.addEventListener("storage", (event) => {
+                const key = String(event.key || "");
+                if (![
+                    ADMIN_DIVISION_STORAGE_KEY,
+                    PLANNING_DOCUMENT_STORAGE_KEY,
+                    CONSTRUCTION_STORAGE_KEY,
+                    QUALITY_STORAGE_KEY,
+                    MAINTENANCE_STORAGE_KEY,
+                ].includes(key)) {
+                    return;
+                }
+                refreshProjectBoard();
             });
-            projectSummaryObserver.observe(projectTableBody, {
-                childList: true,
-                subtree: true,
-                characterData: true,
-            });
-        }
+        };
 
-        window.addEventListener("focus", refreshProjectBoard);
-        window.addEventListener("storage", (event) => {
-            const key = String(event.key || "");
-            if (![
-                ADMIN_DIVISION_STORAGE_KEY,
-                PLANNING_DOCUMENT_STORAGE_KEY,
-                CONSTRUCTION_STORAGE_KEY,
-                QUALITY_STORAGE_KEY,
-                MAINTENANCE_STORAGE_KEY,
-            ].includes(key)) {
+        let projectBoardBootstrapped = false;
+
+        const bootstrapProjectBoard = () => {
+            if (projectBoardBootstrapped) return;
+            projectBoardBootstrapped = true;
+
+            const saved = readProjectUiState();
+            setSelectValueIfExists(statusFilter, saved.status);
+            setSelectValueIfExists(sortFilter, saved.sort);
+            if (projectSearchInput instanceof HTMLInputElement) {
+                projectSearchInput.value = typeof saved.query === "string" ? saved.query : "";
+            }
+            setSelectValueIfExists(divisionFilter, saved.division);
+            syncActiveProjectDivision(typeof saved.division === "string" ? saved.division : "all");
+            enableProjectCardFloat();
+            bindProjectBoardListeners();
+            tryRestoreConstructionHistoryModal();
+        };
+
+        const safeLocalStorageSet = (key, value) => {
+            try {
+                window.localStorage.setItem(key, value);
+                return true;
+            } catch (error) {
+                return false;
+            }
+        };
+
+        const syncProjectStoresFromServer = async () => {
+            if (!window.peoDivisionStore || typeof window.peoDivisionStore.fetchStore !== "function") {
                 return;
             }
-            refreshProjectBoard();
-        });
+
+            const initialLocalProjectCount = buildProjectRecords().length;
+
+            const definitions = [
+                { storeKey: "admin", localStorageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
+                { storeKey: "planning", localStorageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
+                { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+                { storeKey: "quality", localStorageKey: QUALITY_STORAGE_KEY, type: "array" },
+                { storeKey: "maintenance", localStorageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
+            ];
+
+            const results = await Promise.all(definitions.map(async (def) => {
+                const payload = await window.peoDivisionStore.fetchStore(def.storeKey);
+                const serverData = payload && typeof payload === "object" ? payload.data : null;
+                return { def, serverData };
+            }));
+
+            const serverTotalCount = results.reduce((total, { def, serverData }) => {
+                if (def.type === "object") {
+                    if (serverData && typeof serverData === "object" && !Array.isArray(serverData)) {
+                        return total + Object.keys(serverData).length;
+                    }
+                    return total;
+                }
+                return total + (Array.isArray(serverData) ? serverData.length : 0);
+            }, 0);
+
+            const shouldForceServerSync = initialLocalProjectCount === 0 && serverTotalCount > 0;
+
+            results.forEach(({ def, serverData }) => {
+                if (def.type === "object") {
+                    const localObject = readJsonObject(def.localStorageKey);
+                    const localCount = Object.keys(localObject || {}).length;
+                    const serverCount = serverData && typeof serverData === "object" && !Array.isArray(serverData)
+                        ? Object.keys(serverData).length
+                        : 0;
+
+                    if (shouldForceServerSync ? serverCount > 0 : serverCount > localCount) {
+                        safeLocalStorageSet(def.localStorageKey, JSON.stringify(serverData));
+                    }
+                    return;
+                }
+
+                const localArray = readJsonArray(def.localStorageKey);
+                const localCount = Array.isArray(localArray) ? localArray.length : 0;
+                const serverCount = Array.isArray(serverData) ? serverData.length : 0;
+
+                if (shouldForceServerSync ? serverCount > 0 : serverCount > localCount) {
+                    safeLocalStorageSet(def.localStorageKey, JSON.stringify(serverData));
+                }
+            });
+        };
+
+        const hydrateAndBootstrap = () => {
+            // Bootstrap immediately so the sidebar "Projects" click shows something right away.
+            bootstrapProjectBoard();
+
+            // Then fetch the latest server copies and refresh once they land in localStorage.
+            Promise.resolve(syncProjectStoresFromServer())
+                .then(() => {
+                    refreshProjectBoard();
+                    const restored = tryRestoreConstructionHistoryModal();
+                    if (!restored) {
+                        const saved = readProjectUiState();
+                        if (saved && saved.openModal === "construction_history") {
+                            persistCurrentProjectUiState({ openModal: "", constructionSourceId: "" });
+                        }
+                    }
+                })
+                .catch(() => {
+                    // Ignore network failures; local storage state remains the source of truth.
+                });
+        };
+
+        hydrateAndBootstrap();
     }
 
 });
@@ -13511,6 +13954,16 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             // Ignore storage errors.
         }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+                const safe = record && typeof record === "object" ? { ...record } : {};
+                delete safe.scan_url;
+                delete safe.scanned_file_data;
+                return safe;
+            });
+            window.peoDivisionStore.queueSync("quality", safeRecords);
+        }
     };
 
     const getParticularBadgeClass = (value) => {
@@ -13616,6 +14069,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     let records = dedupeQualityRecords(syncAdminRoutedQualityRecords(readStoredRecords()));
+    writeStoredRecords(records);
     let currentPage = 1;
     let activeTab = "all";
     let activeCardFilter = "all";

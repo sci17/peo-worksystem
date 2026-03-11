@@ -14,4 +14,5 @@ urlpatterns = [
     path('maintenance/road-management/', views.road_management, name='road_management'),
     path('maintenance/contractor-management/', views.contractor_management, name='contractor_management'),
     path('maintenance/task-management/', views.task_management, name='task_management'),
+    path('api/division-store/<slug:key>/', views.division_store_api, name='division_store_api'),
 ]

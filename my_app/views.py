@@ -1,15 +1,20 @@
+import json
+
 from django.contrib.auth import login
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.forms import UserCreationForm
+from django.http import JsonResponse
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_http_methods
 
 from .forms import AccountSettingsForm
+from .models import DivisionStore
 from .models import UserProfile
 
 
@@ -348,6 +353,21 @@ def quality_division_dashboard(request):
 
 @login_required
 def project_dashboard(request):
+    store_defaults = {
+        DivisionStore.KEY_ADMIN: [],
+        DivisionStore.KEY_PLANNING: [],
+        DivisionStore.KEY_CONSTRUCTION: [],
+        DivisionStore.KEY_QUALITY: [],
+        DivisionStore.KEY_MAINTENANCE: {},
+    }
+    project_store_seed = dict(store_defaults)
+
+    for store in DivisionStore.objects.filter(user=request.user, key__in=store_defaults.keys()):
+        if store.key == DivisionStore.KEY_MAINTENANCE:
+            project_store_seed[store.key] = store.data if isinstance(store.data, dict) else {}
+        else:
+            project_store_seed[store.key] = store.data if isinstance(store.data, list) else []
+
     return render(
         request,
         'Dashboard/dashboard.html',
@@ -355,7 +375,42 @@ def project_dashboard(request):
             request,
             current_section='project',
             page_heading='Project Database',
+            project_store_seed=project_store_seed,
         ),
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def division_store_api(request, key):
+    allowed_keys = {choice[0] for choice in DivisionStore.KEY_CHOICES}
+    if key not in allowed_keys:
+        return JsonResponse({"error": "Unknown store key."}, status=404)
+
+    store, _ = DivisionStore.objects.get_or_create(user=request.user, key=key)
+
+    if request.method == "GET":
+        return JsonResponse(
+            {
+                "key": key,
+                "data": store.data,
+                "updated_at": store.updated_at.isoformat() if store.updated_at else None,
+            }
+        )
+
+    try:
+        payload = json.loads((request.body or b"").decode("utf-8") or "null")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+    store.data = payload
+    store.save()
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "updated_at": store.updated_at.isoformat() if store.updated_at else None,
+        }
     )
 
 
