@@ -1,14 +1,25 @@
 <section class="task-dashboard" aria-label="Task management dashboard">
-    <div class="task-dashboard-head">
-        <div class="task-dashboard-copy">
-            <h1>Task Management</h1>
-        </div>
+	    <div class="task-dashboard-head">
+	        <div class="task-dashboard-copy">
+	            <h1>Task Management</h1>
+	        </div>
 
-        <div class="task-dashboard-actions">
-            <button type="button" class="task-secondary-btn js-open-task-personnel-modal">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"></path>
-                    <circle cx="10" cy="7" r="3"></circle>
+	        <div class="task-dashboard-actions">
+	            <label class="sr-only" for="maintenance-division-page-switcher-task">Maintenance division page</label>
+	            <select
+	                id="maintenance-division-page-switcher-task"
+	                class="pa-select"
+	                data-division-page-switcher
+	                data-main-url="{% url 'task_management' %}"
+	                data-submissions-url="{% url 'maintenance_division_submissions' %}"
+	            >
+	                <option value="{% url 'task_management' %}" selected>Main</option>
+	                <option value="{% url 'maintenance_division_submissions' %}">Submitted Projects</option>
+	            </select>
+	            <button type="button" class="task-secondary-btn js-open-task-personnel-modal">
+	                <svg viewBox="0 0 24 24" aria-hidden="true">
+	                    <path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"></path>
+	                    <circle cx="10" cy="7" r="3"></circle>
                     <path d="M20 8v6M23 11h-6"></path>
                 </svg>
                 <span>Add Personnel</span>

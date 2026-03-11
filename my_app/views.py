@@ -1005,6 +1005,91 @@ def project_dashboard(request):
 
 
 @login_required
+def admin_division_submissions(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        _build_dashboard_context(
+            request,
+            current_section='admin',
+            page_heading='Admin Division Submissions',
+            admin_template='shared/division_submissions.html',
+            submissions_division_key='admin',
+            submissions_main_url=reverse('admin_division_dashboard'),
+            submissions_url=reverse('admin_division_submissions'),
+        ),
+    )
+
+
+@login_required
+def planning_division_submissions(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        _build_dashboard_context(
+            request,
+            current_section='planning',
+            page_heading='Planning Division Submissions',
+            planning_template='shared/division_submissions.html',
+            submissions_division_key='planning',
+            submissions_main_url=reverse('planning_division_dashboard'),
+            submissions_url=reverse('planning_division_submissions'),
+        ),
+    )
+
+
+@login_required
+def construction_division_submissions(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        _build_dashboard_context(
+            request,
+            current_section='construction',
+            page_heading='Construction Division Submissions',
+            construction_template='shared/division_submissions.html',
+            submissions_division_key='construction',
+            submissions_main_url=reverse('construction_division_dashboard'),
+            submissions_url=reverse('construction_division_submissions'),
+        ),
+    )
+
+
+@login_required
+def quality_division_submissions(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        _build_dashboard_context(
+            request,
+            current_section='quality',
+            page_heading='Quality Division Submissions',
+            quality_template='shared/division_submissions.html',
+            submissions_division_key='quality',
+            submissions_main_url=reverse('quality_division_dashboard'),
+            submissions_url=reverse('quality_division_submissions'),
+        ),
+    )
+
+
+@login_required
+def maintenance_division_submissions(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        _build_dashboard_context(
+            request,
+            current_section='maintenance',
+            page_heading='Maintenance Division Submissions',
+            maintenance_template='shared/division_submissions.html',
+            submissions_division_key='maintenance',
+            submissions_main_url=reverse('road_management'),
+            submissions_url=reverse('maintenance_division_submissions'),
+        ),
+    )
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def division_store_api(request, key):
     allowed_keys = {choice[0] for choice in DivisionStore.KEY_CHOICES}

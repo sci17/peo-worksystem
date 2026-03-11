@@ -3,7 +3,20 @@
         <h1>Construction Division</h1>
         <p>Project implementation and supervision dashboard</p>
     </div>
-    <span class="road-dashboard-chip">Construction Division</span>
+    <div style="display:flex; gap:0.75rem; align-items:center;">
+        <span class="road-dashboard-chip">Construction Division</span>
+        <label class="sr-only" for="construction-division-page-switcher">Construction division page</label>
+        <select
+            id="construction-division-page-switcher"
+            class="pa-select"
+            data-division-page-switcher
+            data-main-url="{% url 'construction_division_dashboard' %}"
+            data-submissions-url="{% url 'construction_division_submissions' %}"
+        >
+            <option value="{% url 'construction_division_dashboard' %}" selected>Main</option>
+            <option value="{% url 'construction_division_submissions' %}">Submitted Projects</option>
+        </select>
+    </div>
 </section>
 
 <section class="road-filter-panel js-construction-admin-assigned" aria-label="Admin assigned construction projects" hidden>
@@ -199,6 +212,17 @@
             </div>
 
             <div class="construction-form-actions">
+                <label class="construction-field construction-field--wide" style="margin:0;">
+                    <span>Submit to Division</span>
+                    <select class="js-construction-route-division">
+                        <option value="">Select division</option>
+                        <option value="Admin Division">Admin Division</option>
+                        <option value="Planning Division">Planning Division</option>
+                        <option value="Quality Division">Quality Division</option>
+                        <option value="Maintenance Division">Maintenance Division</option>
+                    </select>
+                </label>
+                <button type="button" class="construction-btn construction-btn-secondary js-construction-route-submit" disabled>Submit</button>
                 <button type="button" class="construction-btn construction-btn-secondary js-close-construction-modal">Cancel</button>
                 <button type="submit" class="construction-btn construction-btn-primary">Create</button>
             </div>
