@@ -110,7 +110,7 @@
                         </span>
                         <span class="material-symbols-outlined nav-caret">expand_more</span>
                     </button>
-                    <div class="nav-submenu js-maintenance-menu" {% if current_section != 'maintenance' %}hidden{% endif %}>
+                    <div class="nav-submenu js-maintenance-menu">
                         <a
                             href="{% url 'road_management' %}"
                             class="nav-subitem {% if current_maintenance == 'road' %}nav-subitem-active{% endif %}"
@@ -146,13 +146,15 @@
 
                 <p class="nav-group nav-group-secondary">System</p>
                 <a
-                    href="#"
-                    class="nav-item"
-                    data-peo-toast-message="History tracking will appear here once workflow records are available."
+                    href="{% url 'tracking_details' %}"
+                    class="nav-item {% if current_section == 'tracking' %}nav-item-active{% endif %}"
+                    data-peo-toast-message="Tracking Details opened from the sidebar."
+                    data-peo-toast-title="Sidebar Navigation"
                     data-peo-toast-variant="info"
+                    data-peo-toast-persist="navigation"
                 >
-                    <span class="material-symbols-outlined">history</span>
-                    <span>History</span>
+                    <span class="material-symbols-outlined">Tracking Details</span>
+                    <span>Tracking Details</span>
                 </a>
             </nav>
 
@@ -284,6 +286,8 @@
                     {% include 'account/settings_panel.html' %}
                 {% elif current_section == 'maintenance' %}
                     {% include maintenance_template %}
+                {% elif current_section == 'tracking' %}
+                    {% include 'tracking_details.html' %}
                 {% else %}
                 <section class="overview">
                     <h3>Dashboard Overview</h3>
@@ -357,8 +361,7 @@
                                     type="button"
                                     class="circle-action"
                                     aria-label="Previous accomplished project"
-                                    data-peo-toast-message="Previous project spotlight is not connected yet."
-                                    data-peo-toast-variant="info"
+                                    data-spotlight-nav="prev"
                                 >
                                     <span class="material-symbols-outlined">chevron_left</span>
                                 </button>
@@ -366,8 +369,7 @@
                                     type="button"
                                     class="circle-action"
                                     aria-label="Next accomplished project"
-                                    data-peo-toast-message="Next project spotlight is not connected yet."
-                                    data-peo-toast-variant="info"
+                                    data-spotlight-nav="next"
                                 >
                                     <span class="material-symbols-outlined">chevron_right</span>
                                 </button>
@@ -378,7 +380,18 @@
                     {% if overview_spotlight_projects %}
                         {% with spotlight=overview_spotlight_projects.0 %}
                             <article class="spotlight-card">
-                                <div class="spotlight-scene">
+                                <div class="spotlight-scene" data-spotlight-project-id="{{ spotlight.id|default:'' }}" data-spotlight-project-name="{{ spotlight.title|default:'' }}">
+                                    <div hidden>
+                                        {% for item in overview_spotlight_projects %}
+                                            <span
+                                                data-spotlight-item
+                                                data-project-id="{{ item.id|default:'' }}"
+                                                data-title="{{ item.title|default:'' }}"
+                                                data-subtitle="{{ item.subtitle|default:'' }}"
+                                                data-category="{{ item.category|default:'' }}"
+                                            ></span>
+                                        {% endfor %}
+                                    </div>
                                     <span class="spotlight-chip">{{ spotlight.category|default:"Spotlight" }}</span>
                                     <div class="spotlight-copy">
                                         <h4>{{ spotlight.title|default:"Accomplished Project" }}</h4>
@@ -455,8 +468,28 @@
                             {% else %}
                                 <article class="leader-card">
                                     <div class="leader-avatar leader-avatar-admin">--</div>
-                                    <h4>No division leads</h4>
-                                    <span class="leader-dept">Add leaders to list here</span>
+                                    <h4>Not assigned</h4>
+                                    <span class="leader-dept">Admin Division</span>
+                                </article>
+                                <article class="leader-card">
+                                    <div class="leader-avatar leader-avatar-planning">--</div>
+                                    <h4>Not assigned</h4>
+                                    <span class="leader-dept">Planning Division</span>
+                                </article>
+                                <article class="leader-card">
+                                    <div class="leader-avatar leader-avatar-construction">--</div>
+                                    <h4>Not assigned</h4>
+                                    <span class="leader-dept">Construction Division</span>
+                                </article>
+                                <article class="leader-card">
+                                    <div class="leader-avatar leader-avatar-quality">--</div>
+                                    <h4>Not assigned</h4>
+                                    <span class="leader-dept">Quality Division</span>
+                                </article>
+                                <article class="leader-card">
+                                    <div class="leader-avatar leader-avatar-maintenance">--</div>
+                                    <h4>Not assigned</h4>
+                                    <span class="leader-dept">Maintenance Division</span>
                                 </article>
                             {% endif %}
                         </div>
@@ -577,6 +610,11 @@
                                                     <span class="material-symbols-outlined">{{ row.icon|default:"dashboard" }}</span>
                                                     {{ row.division|default:"" }}
                                                 </span>
+                                                {% if row.meta or row.last_synced %}
+                                                    <small class="division-meta">
+                                                        {{ row.meta|default:"" }}{% if row.meta and row.last_synced %} &middot; {% endif %}{{ row.last_synced|default:"" }}
+                                                    </small>
+                                                {% endif %}
                                             </td>
                                             <td>{{ row.manager|default:"—" }}</td>
                                             <td>
