@@ -16081,6 +16081,7 @@ body.quality-modal-open {
     overflow-x: auto;
 }
 
+
 .admin-division-table {
     min-width: 1260px;
     background: #ffffff;
@@ -18586,30 +18587,145 @@ body.quality-modal-open {
 
 .admin-division-panel[data-admin-panel="billing"] .admin-division-metrics,
 .admin-division-panel[data-admin-panel="billing"] .admin-division-status-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    justify-items: start;
     align-content: start;
-    gap: 14px;
+    gap: 16px;
 }
 
 .admin-division-panel[data-admin-panel="billing"] .admin-division-metric-card {
-    min-height: 88px;
-    padding: 10px 10px 9px;
+    min-height: 92px;
+    padding: 12px 12px 10px;
     width: 100%;
-    max-width: 200px;
+    border-radius: 14px;
+    box-shadow: 0 8px 18px rgba(26, 43, 67, 0.08);
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-metrics {
+    grid-template-columns: repeat(4, minmax(180px, 1fr));
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-metric-card span {
+    letter-spacing: 0.12em;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-metric-card strong {
+    font-size: clamp(1.6rem, 2.2vw, 2rem);
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-metric-note {
+    font-size: 0.72rem;
+    color: #7a889b;
 }
 
 .admin-division-panel[data-admin-panel="billing"] .admin-division-status-card {
-    min-height: 96px;
-    padding: 10px 10px 9px;
+    min-height: 108px;
+    padding: 14px 14px 12px;
     width: 100%;
-    max-width: 200px;
+    border-radius: 14px;
+    box-shadow: 0 8px 18px rgba(26, 43, 67, 0.08);
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-status-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-status-card__head {
+    gap: 10px;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-status-card__icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    font-size: 1.05rem;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-status-card__label {
+    letter-spacing: 0.08em;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-status-card strong {
+    font-size: clamp(1.6rem, 2.2vw, 2rem);
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-status-card small {
+    font-size: 0.76rem;
+    color: #6f7f96;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table-shell {
+    border-radius: 14px;
+    box-shadow: 0 10px 26px rgba(26, 43, 67, 0.08);
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table-title {
+    background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table-scroll {
+    max-height: 520px;
+    overflow: auto;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table {
+    min-width: 1200px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f7f9fc;
+    border-bottom: 1px solid #e0e7f1;
+    box-shadow: 0 1px 0 rgba(24, 36, 56, 0.06);
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table tbody tr:nth-child(even) td {
+    background: #fbfdff;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table tbody tr:hover td {
+    background: #f3f7ff;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table td {
+    font-size: 0.9rem;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table td:nth-child(6),
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table td:nth-child(7) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table td:nth-child(8),
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table td:nth-child(9) {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table td:nth-child(11) {
+    min-width: 220px;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table .pa-row-actions {
+    min-width: 92px;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table .pa-action-icon {
+    background: #f2f6fb;
+    border: 1px solid #e1e8f2;
+}
+
+.admin-division-panel[data-admin-panel="billing"] .admin-division-table .pa-action-icon:hover {
+    box-shadow: 0 6px 14px rgba(31, 74, 168, 0.12);
 }
 
 @media (max-width: 900px) {
     .admin-division-panel[data-admin-panel="billing"] .admin-division-metrics,
     .admin-division-panel[data-admin-panel="billing"] .admin-division-status-grid {
-        grid-template-columns: repeat(2, minmax(160px, 1fr));
+        grid-template-columns: repeat(2, minmax(180px, 1fr));
         justify-content: stretch;
         gap: 12px;
     }
