@@ -3,12 +3,11 @@
         <h1>Construction Division</h1>
         <p>Project implementation and supervision dashboard</p>
     </div>
-    <div style="display:flex; gap:0.75rem; align-items:center;">
-        <span class="road-dashboard-chip">Construction Division</span>
-        <label class="sr-only" for="construction-division-page-switcher">Construction division page</label>
+    <div class="division-page-switcher" aria-label="Construction division page switcher">
+        <span class="division-page-switcher__label">Construction division page</span>
         <select
             id="construction-division-page-switcher"
-            class="pa-select"
+            class="pa-select division-page-switcher__select"
             data-division-page-switcher
             data-main-url="{% url 'construction_division_dashboard' %}"
             data-submissions-url="{% url 'construction_division_submissions' %}"

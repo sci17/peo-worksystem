@@ -1,34 +1,40 @@
-<section class="pa-panel division-submissions js-division-submissions" data-division-key="{{ submissions_division_key|default:current_section }}">
-    <header class="admin-division-header">
-        <div>
+<section class="project-board submissions-board js-division-submissions" data-division-key="{{ submissions_division_key|default:current_section }}">
+    <header class="project-header">
+        <div class="project-header-copy">
             <h2>Submitted Projects</h2>
             <p>Incoming submissions routed from other divisions.</p>
         </div>
 
-        <div class="admin-division-toolbar__filters" style="gap: 0.75rem; align-items: center;">
-            <label class="sr-only" for="division-page-switcher">Division page</label>
-            <select
-                id="division-page-switcher"
-                class="pa-select"
-                data-division-page-switcher
-                data-main-url="{{ submissions_main_url|default:'' }}"
-                data-submissions-url="{{ submissions_url|default:'' }}"
-            >
-                <option value="{{ submissions_main_url|default:'' }}">Main</option>
-                <option value="{{ submissions_url|default:'' }}" selected>Submitted Projects</option>
-            </select>
+        <div class="project-header-actions submissions-header-actions">
+            <div class="division-page-switcher" aria-label="Division page switcher">
+                <span class="division-page-switcher__label">Division page</span>
+                <select
+                    class="pa-select division-page-switcher__select"
+                    data-division-page-switcher
+                    data-main-url="{{ submissions_main_url|default:'' }}"
+                    data-submissions-url="{{ submissions_url|default:'' }}"
+                >
+                    <option value="{{ submissions_main_url|default:'' }}">Main</option>
+                    <option value="{{ submissions_url|default:'' }}" selected>Submitted Projects</option>
+                </select>
+            </div>
         </div>
     </header>
 
-    <div class="pa-table-wrap admin-division-table-shell">
-        <div class="pa-table-title admin-division-table-title">
-            <div>
-                <h3>Submissions</h3>
-                <small class="js-division-submissions-meta">0 submissions</small>
+    <section class="submissions-panel" aria-label="Submitted projects table">
+        <div class="submissions-panel-head">
+            <div class="submissions-panel-stat" aria-label="Submission count">
+                <p class="submissions-panel-kicker">Submissions</p>
+                <p class="submissions-panel-count js-division-submissions-meta">0 submissions</p>
             </div>
-            <div class="admin-division-toolbar__filters">
-                <input type="search" class="pa-doc-search js-division-submissions-search" placeholder="Search submissions...">
-                <select class="pa-select js-division-submissions-filter">
+
+            <div class="submissions-panel-tools" aria-label="Submission filters">
+                <label class="project-search-strip-field submissions-search-field">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <input type="search" class="js-division-submissions-search" placeholder="Search submissions...">
+                </label>
+
+                <select class="pa-select js-division-submissions-filter" aria-label="Filter by source division">
                     <option value="all" selected>All sources</option>
                     <option value="planning">Planning</option>
                     <option value="construction">Construction</option>
@@ -38,24 +44,39 @@
             </div>
         </div>
 
-        <div class="admin-division-table-scroll">
-            <table class="pa-table">
+        <div class="project-table-wrap submissions-table-wrap">
+            <table class="project-table submissions-table">
                 <thead>
                     <tr>
                         <th>From</th>
                         <th>Project / Document</th>
                         <th>Location</th>
                         <th>Contractor</th>
-                        <th>Amount</th>
-                        <th>Submitted</th>
                     </tr>
                 </thead>
                 <tbody class="js-division-submissions-tbody">
-                    <tr class="pa-empty-documents admin-division-empty-state js-division-submissions-empty">
-                        <td colspan="6">No submitted projects yet.</td>
+                    <tr class="project-empty-row js-division-submissions-empty">
+                        <td colspan="4">
+                            <div class="project-empty-state">
+                                <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
+                                <div>
+                                    <strong>No submitted projects yet</strong>
+                                    <p>Submissions routed to this division will appear here.</p>
+                                </div>
+                            </div>
+                        </td>
                     </tr>
                 </tbody>
             </table>
         </div>
-    </div>
+
+        <footer class="project-table-footer submissions-footer" aria-label="Submission pagination">
+            <span class="js-division-submissions-range">Showing 0 to 0 of 0 results</span>
+            <div class="project-pagination">
+                <button type="button" class="js-division-submissions-prev" aria-label="Previous page">&lsaquo;</button>
+                <button type="button" class="js-division-submissions-page" aria-label="Current page" disabled>1</button>
+                <button type="button" class="js-division-submissions-next" aria-label="Next page">&rsaquo;</button>
+            </div>
+        </footer>
+    </section>
 </section>

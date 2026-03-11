@@ -25,6 +25,7 @@
                     <col style="width: 150px;">
                     <col style="width: 150px;">
                     <col style="width: 160px;">
+                    <col style="width: 140px;">
                 </colgroup>
                 <thead>
                     <tr>
@@ -37,12 +38,13 @@
                         <th>Construction</th>
                         <th>Quality</th>
                         <th>Maintenance</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody class="js-tracking-table-body">
                     {% if tracking_rows %}
                         {% for row in tracking_rows %}
-                            <tr class="js-tracking-row">
+                            <tr class="js-tracking-row" data-admin-id="{{ row.admin_record_id }}">
                                 <td>{{ row.slip_no|default:"—" }}</td>
                                 <td>
                                     <strong style="color:#122840;">{{ row.project_name|default:"—" }}</strong>
@@ -54,11 +56,19 @@
                                 <td>{{ row.construction_status|default:"—" }}</td>
                                 <td>{{ row.quality_status|default:"—" }}</td>
                                 <td>{{ row.maintenance_status|default:"—" }}</td>
+                                <td>
+                                    <button type="button" class="project-secondary-btn tracking-details-btn js-tracking-show-details" data-admin-id="{{ row.admin_record_id }}">
+                                        Show details
+                                    </button>
+                                </td>
                             </tr>
                         {% endfor %}
+                        <tr class="construction-empty-row js-tracking-empty-row" hidden>
+                            <td colspan="10">No matching workflow records.</td>
+                        </tr>
                     {% else %}
                         <tr class="construction-empty-row js-tracking-empty-row">
-                            <td colspan="9">No workflow records found yet.</td>
+                            <td colspan="10">No workflow records found yet.</td>
                         </tr>
                     {% endif %}
                 </tbody>
@@ -66,4 +76,53 @@
         </div>
     </div>
 </section>
+
+{{ tracking_payload|json_script:"tracking-details-payload" }}
+
+<div class="project-modal-overlay js-tracking-details-modal" hidden>
+    <div class="project-modal project-history-modal tracking-details-modal" role="dialog" aria-modal="true" aria-labelledby="tracking-details-modal-title">
+        <div class="project-modal-head">
+            <div>
+                <h4 id="tracking-details-modal-title" class="js-tracking-details-title">Tracking Details</h4>
+                <p class="js-tracking-details-subtitle">Review where this record has been and the latest document information.</p>
+            </div>
+            <button type="button" class="project-modal-close js-tracking-close-modal" aria-label="Close tracking details">x</button>
+        </div>
+
+        <div class="project-history-body tracking-details-body">
+            <div class="tracking-details-layout">
+                <section class="tracking-detail-card" aria-label="Tracking information">
+                    <div class="tracking-detail-card__head">
+                        <h5>Tracking information</h5>
+                        <span class="tracking-detail-meta js-tracking-detail-meta"></span>
+                    </div>
+
+                    <div class="tracking-steps-table-wrap" role="region" aria-label="Division steps" tabindex="0">
+                        <table class="tracking-steps-table">
+                            <thead>
+                                <tr>
+                                    <th>Division</th>
+                                    <th>Status</th>
+                                    <th>Last Update</th>
+                                </tr>
+                            </thead>
+                            <tbody class="js-tracking-steps-body"></tbody>
+                        </table>
+                    </div>
+
+                    <h6 class="tracking-subhead">History</h6>
+                    <ol class="tracking-timeline js-tracking-timeline"></ol>
+                </section>
+
+                <section class="tracking-detail-card" aria-label="Document information">
+                    <div class="tracking-detail-card__head">
+                        <h5>Document information</h5>
+                        <span class="tracking-detail-meta js-tracking-doc-meta"></span>
+                    </div>
+                    <div class="tracking-doc-grid js-tracking-doc-grid"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
 

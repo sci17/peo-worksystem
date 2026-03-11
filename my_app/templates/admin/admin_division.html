@@ -1,30 +1,32 @@
 <section class="pa-panel pa-admin-division-page">
-    <div class="admin-division-dashboard">
-        <header class="admin-division-header">
-            <div>
-                <h2>Admin Division</h2>
-                <p>People, finance, procurement support, and records management.</p>
-            </div>
-
-            <div class="admin-division-toolbar__filters" style="gap: 0.75rem; align-items: center;">
-                <label class="sr-only" for="admin-division-page-switcher">Admin division page</label>
-                <select
-                    id="admin-division-page-switcher"
-                    class="pa-select"
-                    data-division-page-switcher
-                    data-main-url="{% url 'admin_division_dashboard' %}"
-                    data-submissions-url="{% url 'admin_division_submissions' %}"
-                >
-                    <option value="{% url 'admin_division_dashboard' %}" selected>Main</option>
-                    <option value="{% url 'admin_division_submissions' %}">Submitted Projects</option>
-                </select>
-            </div>
-
-            <div class="pa-tabs admin-division-tabs">
-                <button type="button" class="pa-tab active" data-admin-tab="documents" aria-selected="true">Documents</button>
-                <button type="button" class="pa-tab" data-admin-tab="billing" aria-selected="false">Billing</button>
-            </div>
-        </header>
+	    <div class="admin-division-dashboard">
+	        <header class="admin-division-header">
+	            <div class="division-header-row">
+	                <div>
+	                    <h2>Admin Division</h2>
+	                    <p>People, finance, procurement support, and records management.</p>
+	                </div>
+	
+	                <div class="division-page-switcher" aria-label="Admin division page switcher">
+	                    <span class="division-page-switcher__label">Admin division page</span>
+	                    <select
+	                        id="admin-division-page-switcher"
+	                        class="pa-select division-page-switcher__select"
+	                        data-division-page-switcher
+	                        data-main-url="{% url 'admin_division_dashboard' %}"
+	                        data-submissions-url="{% url 'admin_division_submissions' %}"
+	                    >
+	                        <option value="{% url 'admin_division_dashboard' %}" selected>Main</option>
+	                        <option value="{% url 'admin_division_submissions' %}">Submitted Projects</option>
+	                    </select>
+	                </div>
+	            </div>
+	
+	            <div class="pa-tabs admin-division-tabs">
+	                <button type="button" class="pa-tab active" data-admin-tab="documents" aria-selected="true">Documents</button>
+	                <button type="button" class="pa-tab" data-admin-tab="billing" aria-selected="false">Billing</button>
+	            </div>
+	        </header>
 
         <section class="pa-tab-panel admin-division-panel" data-admin-panel="documents">
             <div class="pa-metrics admin-division-metrics">

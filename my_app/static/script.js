@@ -558,6 +558,17 @@ window.togglePassword = togglePassword;
             __submitted_from_division: String(sourceDivisionKey || "").trim(),
             __submitted_from_source_id: pickFirst(record.__id, record.id, record.adminRecordId),
             __submitted_at: nowIso,
+            __tracking_events: [
+                {
+                    at: nowIso,
+                    action: "Submitted",
+                    from: labelForDivisionKey(sourceDivisionKey) || String(sourceDivisionKey || "").trim(),
+                    to: labelForDivisionKey(targetDivisionKey) || String(targetDivisionKey || "").trim(),
+                    by: labelForDivisionKey(sourceDivisionKey) || String(sourceDivisionKey || "").trim(),
+                    source_division: String(sourceDivisionKey || "").trim(),
+                    source_id: pickFirst(record.__id, record.id, record.adminRecordId),
+                },
+            ],
         };
     };
 
@@ -604,12 +615,29 @@ window.togglePassword = togglePassword;
             updated.status = "Routed";
         }
         const sourceKey = resolveDivisionKey(sourceDivisionKey);
+        const nowIso = new Date().toISOString();
         if (sourceKey && sourceKey !== "admin") {
-            const nowIso = new Date().toISOString();
             updated.__submitted_from_division = sourceKey;
             updated.__submitted_from_source_id = pickFirst(sourceRecord?.__id, sourceRecord?.id, sourceRecord?.adminRecordId);
             updated.__submitted_at = nowIso;
         }
+
+        const existingEvents = Array.isArray(updated.__tracking_events) ? updated.__tracking_events.filter((ev) => ev && typeof ev === "object") : [];
+        const fromLabel = labelForDivisionKey(prevTargetKey) || String(current.division || "").trim();
+        const toLabel = labelForDivisionKey(targetKey) || String(updated.division || "").trim();
+        const byLabel = labelForDivisionKey(sourceKey) || String(sourceDivisionKey || "").trim();
+        if (prevTargetKey !== targetKey || !existingEvents.length) {
+            existingEvents.push({
+                at: nowIso,
+                action: "Routed",
+                from: fromLabel,
+                to: toLabel,
+                by: byLabel,
+                source_division: String(sourceKey || "").trim(),
+                source_id: pickFirst(sourceRecord?.__id, sourceRecord?.id, sourceRecord?.adminRecordId),
+            });
+        }
+        updated.__tracking_events = existingEvents;
 
         adminRecords[idx] = updated;
         writeAdminRecords(adminRecords);
@@ -656,6 +684,198 @@ document.addEventListener("DOMContentLoaded", () => {
             window.location.href = nextUrl;
         });
     });
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    const payloadScript = document.getElementById("tracking-details-payload");
+    if (!payloadScript) return;
+
+    let payload = {};
+    try {
+        payload = JSON.parse(payloadScript.textContent || "{}") || {};
+    } catch (error) {
+        payload = {};
+    }
+
+    const toast = (message, options = {}) => {
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast(message, options);
+        }
+    };
+
+    const formatDate = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "—";
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return text;
+        return parsed.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    };
+
+    const escapeHtml = (value) => {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    };
+
+    const overlay = document.querySelector(".js-tracking-details-modal");
+    const closeButton = overlay ? overlay.querySelector(".js-tracking-close-modal") : null;
+    const titleEl = overlay ? overlay.querySelector(".js-tracking-details-title") : null;
+    const subtitleEl = overlay ? overlay.querySelector(".js-tracking-details-subtitle") : null;
+    const metaEl = overlay ? overlay.querySelector(".js-tracking-detail-meta") : null;
+    const docMetaEl = overlay ? overlay.querySelector(".js-tracking-doc-meta") : null;
+    const stepsBody = overlay ? overlay.querySelector(".js-tracking-steps-body") : null;
+    const timelineEl = overlay ? overlay.querySelector(".js-tracking-timeline") : null;
+    const docGrid = overlay ? overlay.querySelector(".js-tracking-doc-grid") : null;
+
+    const openModal = (data) => {
+        if (!overlay || !data) return;
+        overlay.hidden = false;
+        document.body.classList.add("project-modal-open");
+
+        if (titleEl) {
+            titleEl.textContent = data.title || "Tracking Details";
+        }
+        if (subtitleEl) {
+            subtitleEl.textContent = data.routed_to ? `Currently routed to ${data.routed_to}.` : "Review record workflow details.";
+        }
+        if (metaEl) {
+            metaEl.textContent = data.last_update ? `Last update: ${formatDate(data.last_update)}` : "";
+        }
+        if (docMetaEl) {
+            docMetaEl.textContent = data.admin_id ? `Record ID: ${data.admin_id}` : "";
+        }
+
+        if (stepsBody) {
+            stepsBody.innerHTML = "";
+            const steps = Array.isArray(data.steps) ? data.steps : [];
+            steps.forEach((step) => {
+                const division = String(step?.division || "").trim() || "—";
+                const status = String(step?.status || "").trim() || "—";
+                const lastUpdate = String(step?.last_update || "").trim();
+                const hasRecord = Boolean(step?.has_record);
+
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${escapeHtml(division)}${hasRecord ? "" : " <span style=\"color:#8aa0b6; font-size:0.78rem;\">(no record)</span>"}</td>
+                    <td>${escapeHtml(status)}</td>
+                    <td>${escapeHtml(lastUpdate ? formatDate(lastUpdate) : "—")}</td>
+                `;
+                stepsBody.appendChild(tr);
+            });
+        }
+
+        if (timelineEl) {
+            timelineEl.innerHTML = "";
+            const events = Array.isArray(data.timeline) ? data.timeline : [];
+            if (!events.length) {
+                const li = document.createElement("li");
+                li.className = "tracking-timeline-item";
+                li.innerHTML = `
+                    <div class="tracking-timeline-item__title">No history recorded yet</div>
+                    <div class="tracking-timeline-item__note">Routing events will appear here after submissions between divisions.</div>
+                `;
+                timelineEl.appendChild(li);
+            } else {
+                events.forEach((event) => {
+                    const at = String(event?.at || "").trim();
+                    const action = String(event?.action || "").trim() || "Update";
+                    const from = String(event?.from || "").trim();
+                    const to = String(event?.to || "").trim();
+                    const by = String(event?.by || "").trim();
+                    const note = String(event?.note || "").trim();
+
+                    const path = [from && `From ${from}`, to && `To ${to}`].filter(Boolean).join(" • ");
+                    const meta = [at && formatDate(at), by && `By ${by}`].filter(Boolean).join(" • ");
+
+                    const li = document.createElement("li");
+                    li.className = "tracking-timeline-item";
+                    li.innerHTML = `
+                        <div class="tracking-timeline-item__meta">
+                            <span>${escapeHtml(meta || "—")}</span>
+                            <span>${escapeHtml(path || "—")}</span>
+                        </div>
+                        <div class="tracking-timeline-item__title">${escapeHtml(action)}</div>
+                        ${note ? `<div class="tracking-timeline-item__note">${escapeHtml(note)}</div>` : ""}
+                    `;
+                    timelineEl.appendChild(li);
+                });
+            }
+        }
+
+        if (docGrid) {
+            docGrid.innerHTML = "";
+            const doc = data.document && typeof data.document === "object" ? data.document : {};
+            Object.entries(doc).forEach(([label, value]) => {
+                const card = document.createElement("div");
+                card.className = "tracking-kv";
+                card.innerHTML = `<small>${escapeHtml(label)}</small><strong>${escapeHtml(String(value ?? "").trim() || "—")}</strong>`;
+                docGrid.appendChild(card);
+            });
+        }
+    };
+
+    const closeModal = () => {
+        if (!overlay) return;
+        overlay.hidden = true;
+        document.body.classList.remove("project-modal-open");
+    };
+
+    if (closeButton) {
+        closeButton.addEventListener("click", closeModal);
+    }
+
+    if (overlay) {
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) closeModal();
+        });
+    }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && overlay && !overlay.hidden) {
+            closeModal();
+        }
+    });
+
+    document.addEventListener("click", (event) => {
+        const button = event.target instanceof Element ? event.target.closest(".js-tracking-show-details") : null;
+        if (!button) return;
+        const adminId = String(button.getAttribute("data-admin-id") || "").trim();
+        if (!adminId) return;
+        const data = payload[adminId];
+        if (!data) {
+            toast("Tracking details are not available for this record yet.", { type: "warning" });
+            return;
+        }
+        openModal(data);
+    });
+
+    const searchInput = document.querySelector(".js-tracking-search");
+    const allRows = Array.from(document.querySelectorAll(".js-tracking-row"));
+    const emptyRow = document.querySelector(".js-tracking-empty-row");
+
+    const applySearch = () => {
+        if (!(searchInput instanceof HTMLInputElement)) return;
+        const q = String(searchInput.value || "").trim().toLowerCase();
+        if (!allRows.length || !emptyRow) return;
+
+        let visibleCount = 0;
+        allRows.forEach((row) => {
+            const haystack = String(row.textContent || "").toLowerCase();
+            const match = !q || haystack.includes(q);
+            row.hidden = !match;
+            if (match) visibleCount += 1;
+        });
+
+        emptyRow.hidden = visibleCount > 0;
+    };
+
+    if (searchInput instanceof HTMLInputElement) {
+        searchInput.addEventListener("input", applySearch);
+        applySearch();
+    }
 });
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -760,13 +980,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const meta = root.querySelector(".js-division-submissions-meta");
         const search = root.querySelector(".js-division-submissions-search");
         const filter = root.querySelector(".js-division-submissions-filter");
+        const range = root.querySelector(".js-division-submissions-range");
+        const prevButton = root.querySelector(".js-division-submissions-prev");
+        const nextButton = root.querySelector(".js-division-submissions-next");
+        const pageButton = root.querySelector(".js-division-submissions-page");
+        const PAGE_SIZE = 10;
+        let currentPage = 1;
 
         if (!(tbody instanceof HTMLElement)) return;
 
         const adminRecords = await ensureAdminStore();
         const allRows = getSubmissionsForDivision(adminRecords, divisionKey);
 
-        const apply = () => {
+        const render = () => {
             const q = String(search instanceof HTMLInputElement ? search.value : "").trim().toLowerCase();
             const sourceFilter = String(filter instanceof HTMLSelectElement ? filter.value : "all").trim().toLowerCase();
 
@@ -786,27 +1012,33 @@ document.addEventListener("DOMContentLoaded", () => {
                 return haystack.includes(q);
             });
 
+            const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+            currentPage = Math.min(Math.max(1, currentPage), totalPages);
+            const startIndex = filtered.length ? (currentPage - 1) * PAGE_SIZE : 0;
+            const endIndex = filtered.length ? Math.min(filtered.length, startIndex + PAGE_SIZE) : 0;
+            const paged = filtered.slice(startIndex, endIndex);
+
             tbody.innerHTML = "";
-            if (!filtered.length) {
+            if (!paged.length) {
                 if (emptyRow) {
                     tbody.appendChild(emptyRow);
                     emptyRow.hidden = false;
                 } else {
                     const tr = document.createElement("tr");
                     tr.className = "admin-division-empty-state";
-                    tr.innerHTML = '<td colspan="6">No submitted projects yet.</td>';
+                    tr.innerHTML = '<td colspan="4">No submitted projects yet.</td>';
                     tbody.appendChild(tr);
                 }
             } else {
-                filtered.forEach((row) => {
+                paged.forEach((row) => {
+                    const fromKey = normalizeKey(row.from);
+                    const badgeClass = fromKey ? `submissions-source-badge is-${escapeHtml(fromKey)}` : "submissions-source-badge";
                     const tr = document.createElement("tr");
                     tr.innerHTML = `
-                        <td>${escapeHtml(row.from)}</td>
-                        <td>${escapeHtml(row.name)}</td>
+                        <td><span class="${badgeClass}">${escapeHtml(fromKey || row.from || "-")}</span></td>
+                        <td class="project-project-cell"><strong>${escapeHtml(row.name)}</strong></td>
                         <td>${escapeHtml(row.location)}</td>
                         <td>${escapeHtml(row.contractor)}</td>
-                        <td>${escapeHtml(formatMoney(row.amount))}</td>
-                        <td>${escapeHtml(formatDate(row.submittedAt))}</td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -815,16 +1047,51 @@ document.addEventListener("DOMContentLoaded", () => {
             if (meta instanceof HTMLElement) {
                 meta.textContent = `${filtered.length} submission${filtered.length === 1 ? "" : "s"}`;
             }
+
+            if (range instanceof HTMLElement) {
+                const from = filtered.length ? startIndex + 1 : 0;
+                const to = filtered.length ? endIndex : 0;
+                range.textContent = `Showing ${from} to ${to} of ${filtered.length} results`;
+            }
+
+            if (pageButton instanceof HTMLButtonElement) {
+                pageButton.textContent = String(currentPage);
+            }
+            if (prevButton instanceof HTMLButtonElement) {
+                prevButton.disabled = currentPage <= 1;
+            }
+            if (nextButton instanceof HTMLButtonElement) {
+                nextButton.disabled = currentPage >= totalPages;
+            }
         };
 
         if (search instanceof HTMLInputElement) {
-            search.addEventListener("input", apply);
+            search.addEventListener("input", () => {
+                currentPage = 1;
+                render();
+            });
         }
         if (filter instanceof HTMLSelectElement) {
-            filter.addEventListener("change", apply);
+            filter.addEventListener("change", () => {
+                currentPage = 1;
+                render();
+            });
         }
 
-        apply();
+        if (prevButton instanceof HTMLButtonElement) {
+            prevButton.addEventListener("click", () => {
+                currentPage = Math.max(1, currentPage - 1);
+                render();
+            });
+        }
+        if (nextButton instanceof HTMLButtonElement) {
+            nextButton.addEventListener("click", () => {
+                currentPage = currentPage + 1;
+                render();
+            });
+        }
+
+        render();
         if (!allRows.length) {
             toast("No incoming submissions yet for this division.", { title: "Submitted Projects", variant: "info" });
         }

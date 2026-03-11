@@ -542,26 +542,34 @@ def _build_overview_context(user):
 
 
 def _build_tracking_rows(user):
-    stores = {
-        store.key: store
-        for store in DivisionStore.objects.filter(
-            user=user,
-            key__in=(
-                DivisionStore.KEY_ADMIN,
-                DivisionStore.KEY_PLANNING,
-                DivisionStore.KEY_CONSTRUCTION,
-                DivisionStore.KEY_QUALITY,
-                DivisionStore.KEY_MAINTENANCE,
-            ),
-        )
-    }
+    def load_stores():
+        stores = {
+            store.key: store
+            for store in DivisionStore.objects.filter(
+                user=user,
+                key__in=(
+                    DivisionStore.KEY_ADMIN,
+                    DivisionStore.KEY_PLANNING,
+                    DivisionStore.KEY_CONSTRUCTION,
+                    DivisionStore.KEY_QUALITY,
+                    DivisionStore.KEY_MAINTENANCE,
+                ),
+            )
+        }
 
-    admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
-    planning_records = _safe_list(stores.get(DivisionStore.KEY_PLANNING).data if stores.get(DivisionStore.KEY_PLANNING) else [])
-    construction_records = _safe_list(stores.get(DivisionStore.KEY_CONSTRUCTION).data if stores.get(DivisionStore.KEY_CONSTRUCTION) else [])
-    quality_records = _safe_list(stores.get(DivisionStore.KEY_QUALITY).data if stores.get(DivisionStore.KEY_QUALITY) else [])
-    maintenance_payload = stores.get(DivisionStore.KEY_MAINTENANCE).data if stores.get(DivisionStore.KEY_MAINTENANCE) else {}
-    maintenance_payload = maintenance_payload if isinstance(maintenance_payload, dict) else {}
+        admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
+        planning_records = _safe_list(
+            stores.get(DivisionStore.KEY_PLANNING).data if stores.get(DivisionStore.KEY_PLANNING) else []
+        )
+        construction_records = _safe_list(
+            stores.get(DivisionStore.KEY_CONSTRUCTION).data if stores.get(DivisionStore.KEY_CONSTRUCTION) else []
+        )
+        quality_records = _safe_list(stores.get(DivisionStore.KEY_QUALITY).data if stores.get(DivisionStore.KEY_QUALITY) else [])
+        maintenance_payload = stores.get(DivisionStore.KEY_MAINTENANCE).data if stores.get(DivisionStore.KEY_MAINTENANCE) else {}
+        maintenance_payload = maintenance_payload if isinstance(maintenance_payload, dict) else {}
+        return admin_records, planning_records, construction_records, quality_records, maintenance_payload
+
+    admin_records, planning_records, construction_records, quality_records, maintenance_payload = load_stores()
 
     def normalize_label(value, fallback='—'):
         text = str(value or '').strip()
@@ -681,6 +689,7 @@ def _build_tracking_rows(user):
         routed_to = normalize_division(record.get('division'))
         rows.append(
             {
+                'admin_record_id': admin_id,
                 'slip_no': normalize_label(record.get('slip_no')),
                 'project_name': normalize_label(record.get('document_name') or record.get('project_name')),
                 'contractor': normalize_label(record.get('contractor')),
@@ -696,6 +705,288 @@ def _build_tracking_rows(user):
     # Sort by slip no (numeric-aware), fallback to project name.
     rows.sort(key=lambda item: (str(item.get('slip_no') or ''), str(item.get('project_name') or '')))
     return rows
+
+
+def _build_tracking_payload(user):
+    stores = {
+        store.key: store
+        for store in DivisionStore.objects.filter(
+            user=user,
+            key__in=(
+                DivisionStore.KEY_ADMIN,
+                DivisionStore.KEY_PLANNING,
+                DivisionStore.KEY_CONSTRUCTION,
+                DivisionStore.KEY_QUALITY,
+                DivisionStore.KEY_MAINTENANCE,
+            ),
+        )
+    }
+
+    admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
+    planning_records = _safe_list(stores.get(DivisionStore.KEY_PLANNING).data if stores.get(DivisionStore.KEY_PLANNING) else [])
+    construction_records = _safe_list(stores.get(DivisionStore.KEY_CONSTRUCTION).data if stores.get(DivisionStore.KEY_CONSTRUCTION) else [])
+    quality_records = _safe_list(stores.get(DivisionStore.KEY_QUALITY).data if stores.get(DivisionStore.KEY_QUALITY) else [])
+    maintenance_payload = stores.get(DivisionStore.KEY_MAINTENANCE).data if stores.get(DivisionStore.KEY_MAINTENANCE) else {}
+    maintenance_payload = maintenance_payload if isinstance(maintenance_payload, dict) else {}
+
+    def normalize_label(value, fallback='—'):
+        text = str(value or '').strip()
+        return text if text else fallback
+
+    def normalize_division(value):
+        raw = str(value or '').strip()
+        key = _normalize_status_key(raw).replace('_', ' ')
+        if not key:
+            return '—'
+        if 'admin' in key:
+            return 'Admin'
+        if 'planning' in key:
+            return 'Planning'
+        if 'construction' in key:
+            return 'Construction'
+        if 'quality' in key:
+            return 'Quality'
+        if 'maintenance' in key:
+            return 'Maintenance'
+        return raw
+
+    def pick_first(obj, *keys):
+        if not isinstance(obj, dict):
+            return ''
+        for key in keys:
+            value = obj.get(key)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                return text
+        return ''
+
+    def normalize_event(ev):
+        if not isinstance(ev, dict):
+            return None
+        at = str(ev.get('at') or ev.get('timestamp') or ev.get('date') or '').strip()
+        action = str(ev.get('action') or '').strip() or 'Update'
+        from_div = str(ev.get('from') or ev.get('from_division') or '').strip()
+        to_div = str(ev.get('to') or ev.get('to_division') or '').strip()
+        by_div = str(ev.get('by') or ev.get('submitted_by') or '').strip()
+        note = str(ev.get('note') or ev.get('message') or '').strip()
+        return {
+            'at': at,
+            'action': action,
+            'from': from_div,
+            'to': to_div,
+            'by': by_div,
+            'note': note,
+        }
+
+    planning_by_admin_id = {}
+    for record in planning_records:
+        if not isinstance(record, dict):
+            continue
+        source_id = str(record.get('__admin_source_id') or '').strip()
+        if not source_id:
+            continue
+        planning_by_admin_id[source_id] = record
+
+    construction_by_admin_id = {}
+    for record in construction_records:
+        if not isinstance(record, dict):
+            continue
+        source_id = str(record.get('__admin_source_id') or '').strip()
+        if not source_id:
+            continue
+        construction_by_admin_id[source_id] = record
+
+    quality_by_admin_id = {}
+    for record in quality_records:
+        if not isinstance(record, dict):
+            continue
+        source_id = str(record.get('__admin_source_id') or '').strip()
+        if not source_id:
+            continue
+        quality_by_admin_id[source_id] = record
+
+    maintenance_tasks = maintenance_payload.get('taskRows') if isinstance(maintenance_payload.get('taskRows'), list) else []
+    maintenance_by_admin_id = {}
+    for task in maintenance_tasks:
+        if not isinstance(task, dict):
+            continue
+        source_id = str(task.get('adminRecordId') or '').strip()
+        if not source_id:
+            continue
+        maintenance_by_admin_id.setdefault(source_id, []).append(task)
+
+    def admin_status(record):
+        if not isinstance(record, dict):
+            return '—'
+        return normalize_label(record.get('doc_status') or record.get('status'))
+
+    def planning_status(record):
+        if not isinstance(record, dict):
+            return '—'
+        return normalize_label(record.get('status'))
+
+    def quality_status(record):
+        if not isinstance(record, dict):
+            return '—'
+        return normalize_label(record.get('status'))
+
+    def construction_status(record):
+        if not isinstance(record, dict):
+            return '—'
+        if str(record.get('date_completed') or '').strip():
+            return 'Completed'
+        percent = _parse_percent(record.get('status_current'))
+        if percent is not None:
+            if percent >= 99.5:
+                return 'Completed'
+            return f'{int(round(percent))}%'
+        status_text = str(record.get('status_current') or '').strip()
+        if 'complete' in status_text.lower():
+            return 'Completed'
+        return normalize_label(status_text)
+
+    def maintenance_status(tasks):
+        if not tasks:
+            return '—'
+        normalized = [_normalize_status_key(t.get('status')) for t in tasks if isinstance(t, dict)]
+        if any(value in {'completed', 'closed', 'done', 'approved'} for value in normalized):
+            return 'Completed'
+        if any(value in {'in_progress', 'processing', 'ongoing', 'active'} for value in normalized):
+            return 'In Progress'
+        if any(value in {'pending', 'incoming', 'scheduled'} for value in normalized):
+            return 'Pending'
+        first = next((t for t in tasks if isinstance(t, dict) and str(t.get('status') or '').strip()), None)
+        return normalize_label(first.get('status') if first else '—')
+
+    def last_event_time(events):
+        if not events:
+            return ''
+        for ev in reversed(events):
+            if isinstance(ev, dict):
+                at = str(ev.get('at') or '').strip()
+                if at:
+                    return at
+        return ''
+
+    payload = {}
+    for record in admin_records:
+        if not isinstance(record, dict):
+            continue
+        admin_id = str(record.get('__record_id') or '').strip()
+        if not admin_id:
+            continue
+
+        planning_record = planning_by_admin_id.get(admin_id)
+        construction_record = construction_by_admin_id.get(admin_id)
+        quality_record = quality_by_admin_id.get(admin_id)
+        maintenance_tasks_for_record = maintenance_by_admin_id.get(admin_id, [])
+
+        routed_to = normalize_division(record.get('division'))
+        title = normalize_label(record.get('document_name') or record.get('project_name'))
+
+        raw_events = record.get('__tracking_events')
+        events = []
+        if isinstance(raw_events, list):
+            for ev in raw_events:
+                normalized = normalize_event(ev)
+                if normalized:
+                    events.append(normalized)
+
+        if not events and str(record.get('__submitted_at') or '').strip():
+            events.append(
+                {
+                    'at': str(record.get('__submitted_at') or '').strip(),
+                    'action': 'Submitted',
+                    'from': normalize_division(record.get('__submitted_from_division')),
+                    'to': routed_to,
+                    'by': normalize_division(record.get('__submitted_from_division')),
+                    'note': '',
+                }
+            )
+
+        steps = [
+            {
+                'division': 'Admin',
+                'status': admin_status(record),
+                'last_update': pick_first(record, '__submitted_at', '__updated_at', 'date_received', 'date'),
+                'has_record': True,
+            },
+            {
+                'division': 'Planning',
+                'status': planning_status(planning_record),
+                'last_update': pick_first(planning_record, '__updated_at', 'date_received', 'date', 'date_received_admin'),
+                'has_record': bool(planning_record),
+            },
+            {
+                'division': 'Construction',
+                'status': construction_status(construction_record),
+                'last_update': pick_first(construction_record, '__updated_at', 'date_received', 'date_started', 'date_completed'),
+                'has_record': bool(construction_record),
+            },
+            {
+                'division': 'Quality',
+                'status': quality_status(quality_record),
+                'last_update': pick_first(quality_record, '__updated_at', 'date_received', 'date', 'date_checked'),
+                'has_record': bool(quality_record),
+            },
+            {
+                'division': 'Maintenance',
+                'status': maintenance_status(maintenance_tasks_for_record),
+                'last_update': pick_first(
+                    (maintenance_tasks_for_record[0] if maintenance_tasks_for_record else {}),
+                    'updatedAt',
+                    'createdAt',
+                    'date',
+                ),
+                'has_record': bool(maintenance_tasks_for_record),
+            },
+        ]
+
+        document = {
+            'Slip No': normalize_label(record.get('slip_no')),
+            'Project / Document': title,
+            'Location': normalize_label(record.get('location')),
+            'Type': normalize_label(record.get('doc_type') or record.get('document_type')),
+            'Contractor': normalize_label(record.get('contractor')),
+            'Contract Amount': normalize_label(record.get('revised_contract_amount') or record.get('contract_amount')),
+            'Status': normalize_label(record.get('doc_status') or record.get('status')),
+            'Routed To': routed_to,
+            'Date Received': normalize_label(record.get('date_received')),
+            'Description': normalize_label(record.get('description') or record.get('remarks')),
+        }
+
+        payload[admin_id] = {
+            'admin_id': admin_id,
+            'title': title,
+            'contractor': normalize_label(record.get('contractor')),
+            'routed_to': routed_to,
+            'last_update': last_event_time(events) or pick_first(record, '__submitted_at', '__updated_at', 'date_received', 'date'),
+            'steps': steps,
+            'timeline': events,
+            'document': document,
+            'related': {
+                'planning': {
+                    'status': planning_status(planning_record),
+                    'reference': normalize_label(pick_first(planning_record, 'doc_no', 'reference_no', 'document_no', 'ppa_no')),
+                },
+                'construction': {
+                    'status': construction_status(construction_record),
+                    'progress': normalize_label(pick_first(construction_record, 'status_current', 'progress')),
+                },
+                'quality': {
+                    'status': quality_status(quality_record),
+                    'remarks': normalize_label(pick_first(quality_record, 'remarks', 'notes', 'comment')),
+                },
+                'maintenance': {
+                    'status': maintenance_status(maintenance_tasks_for_record),
+                    'task_count': len(maintenance_tasks_for_record),
+                },
+            },
+        }
+
+    return payload
 
 
 def _build_dashboard_notifications(request, profile, current_section='', page_heading='', current_maintenance=''):
@@ -856,6 +1147,7 @@ def tracking_details(request):
             current_section='tracking',
             page_heading='Tracking Details',
             tracking_rows=_build_tracking_rows(request.user),
+            tracking_payload=_build_tracking_payload(request.user),
         ),
     )
 
