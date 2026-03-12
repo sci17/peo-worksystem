@@ -9651,7 +9651,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!record || typeof record !== "object") return "";
         const images = Array.isArray(record.accomplishment_images) ? record.accomplishment_images : [];
         const fallback = String(record.accomplishment_image || "").trim();
-        const first = String(images[0] || "").trim() || fallback;
+        const firstImage = images[0];
+        const first = (typeof firstImage === "string"
+            ? firstImage
+            : String(firstImage?.dataUrl || firstImage?.url || ""))
+            .trim() || fallback;
         if (!first) return "";
         if (!/^data:image\//i.test(first) && !/^https?:\/\//i.test(first)) {
             // Avoid setting unknown schemes.
@@ -9742,14 +9746,17 @@ document.addEventListener("DOMContentLoaded", () => {
 	    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
 	    const constructionModal = document.querySelector(".js-construction-modal");
 	    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
+        const constructionPhotoInput = constructionModal ? constructionModal.querySelector(".js-construction-photo-input") : null;
 	    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
 	    const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
 	    const closeConstructionModalButtons = constructionModal
 	        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
 	        : [];
+    const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
+    const CONSTRUCTION_MAX_IMAGE_COUNT = 10;
     const CONSTRUCTION_FIELDS = [
         "project_name",
         "location",
@@ -9824,6 +9831,107 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const normalizeHeader = (value) => {
         return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    };
+
+    const getCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getCsrfToken = () => {
+        const tokenFromCookie = getCookie("csrftoken");
+        if (tokenFromCookie) return tokenFromCookie;
+        const tokenFromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenFromDom instanceof HTMLInputElement ? String(tokenFromDom.value || "").trim() : "";
+    };
+
+    const normalizeAccomplishmentImages = (value) => {
+        const list = Array.isArray(value) ? value : [];
+        return list
+            .map((img) => {
+                if (typeof img === "string") {
+                    const dataUrl = img.trim();
+                    return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                }
+                if (!img || typeof img !== "object") return null;
+                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                if (!dataUrl) return null;
+                return {
+                    dataUrl,
+                    name: String(img.name || "").trim(),
+                    uploaded_at: String(img.uploaded_at || "").trim(),
+                };
+            })
+            .filter(Boolean);
+    };
+
+    const mergeAccomplishmentImages = (existing, incoming) => {
+        const seen = new Set();
+        const merged = [];
+        [...normalizeAccomplishmentImages(incoming), ...normalizeAccomplishmentImages(existing)].forEach((img) => {
+            const key = String(img.dataUrl || "").trim();
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            merged.push(img);
+        });
+        return merged.slice(0, CONSTRUCTION_MAX_IMAGE_COUNT);
+    };
+
+    const uploadConstructionPhotos = async (files) => {
+        const list = Array.isArray(files) ? files : [];
+        if (!list.length) return { ok: true, images: [] };
+        if (!constructionPhotoUploadUrl) {
+            return { ok: false, error: "Photo upload URL is not configured." };
+        }
+
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
+        }
+
+        const payload = new FormData();
+        list.forEach((file) => {
+            payload.append("photos", file, file?.name || "photo");
+        });
+
+        try {
+            const response = await window.fetch(constructionPhotoUploadUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Accept": "application/json",
+                },
+                body: payload,
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data || data.ok !== true) {
+                return { ok: false, error: String(data?.error || "Photo upload failed.") };
+            }
+
+            const nowIso = new Date().toISOString();
+            const uploaded = Array.isArray(data.files) ? data.files : [];
+            const images = uploaded
+                .map((item) => ({
+                    dataUrl: String(item?.url || "").trim(),
+                    name: String(item?.original_name || item?.name || "").trim(),
+                    uploaded_at: nowIso,
+                }))
+                .filter((img) => img.dataUrl);
+
+            return { ok: true, images: images.slice(0, CONSTRUCTION_MAX_IMAGE_COUNT) };
+        } catch (error) {
+            return { ok: false, error: "Unable to upload photos right now." };
+        }
     };
 
     let constructionXlsxPromise = null;
@@ -9941,6 +10049,7 @@ document.addEventListener("DOMContentLoaded", () => {
         time_elapsed: "% of Time Elapsed",
         slippage: "Slippage (+) (-) %",
         remarks: "Remarks",
+        accomplishment_images: "Accomplishment Photos",
     };
 
     const normalizeStringValue = (value) => {
@@ -10120,9 +10229,25 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const getConstructionChangedFields = (previousRecord, nextRecord) => {
-        return CONSTRUCTION_FIELDS.filter((field) => {
+        const changed = CONSTRUCTION_FIELDS.filter((field) => {
             return normalizeStringValue(previousRecord?.[field]) !== normalizeStringValue(nextRecord?.[field]);
         });
+
+        const normalizeImagesForCompare = (value) => {
+            const list = Array.isArray(value) ? value : [];
+            return list
+                .map((img) => (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim())
+                .filter(Boolean)
+                .sort();
+        };
+
+        const prevImages = normalizeImagesForCompare(previousRecord?.accomplishment_images);
+        const nextImages = normalizeImagesForCompare(nextRecord?.accomplishment_images);
+        if (prevImages.join("|") !== nextImages.join("|")) {
+            changed.push("accomplishment_images");
+        }
+
+        return changed;
     };
 
     const getConstructionFieldLabel = (field) => {
@@ -10771,6 +10896,9 @@ document.addEventListener("DOMContentLoaded", () => {
 	                fillConstructionForm(record);
 	            }
 	        }
+            if (constructionPhotoInput instanceof HTMLInputElement) {
+                constructionPhotoInput.value = "";
+            }
 	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
 	            constructionRouteDivisionSelect.value = "";
 	        }
@@ -10790,6 +10918,9 @@ document.addEventListener("DOMContentLoaded", () => {
 	        editingRecordId = null;
 	        setConstructionFormMode("create");
 	        if (constructionForm) constructionForm.reset();
+            if (constructionPhotoInput instanceof HTMLInputElement) {
+                constructionPhotoInput.value = "";
+            }
 	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
 	            constructionRouteDivisionSelect.value = "";
 	        }
@@ -11269,8 +11400,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return images
             .slice(0, 10)
             .map((img) => ({
-                dataUrl: String(img?.dataUrl || "").trim(),
-                name: String(img?.name || "").trim(),
+                dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
+                name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
             }))
             .filter((img) => img.dataUrl);
     };
@@ -11299,7 +11430,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (constructionForm) {
-        constructionForm.addEventListener("submit", (event) => {
+        constructionForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             if (!constructionForm.checkValidity()) {
                 constructionForm.reportValidity();
@@ -11309,6 +11440,57 @@ document.addEventListener("DOMContentLoaded", () => {
             const formRecord = buildRecordFromForm();
             if (!formRecord) return;
             const isEditingRecord = Boolean(editingRecordId);
+            const submitButton = constructionForm.querySelector('button[type="submit"]');
+
+            const existingRecord = isEditingRecord
+                ? records.find((record) => record && typeof record === "object" && record.__id === editingRecordId)
+                : null;
+            const existingImages = normalizeAccomplishmentImages(existingRecord?.accomplishment_images);
+            const pickedFiles = constructionPhotoInput instanceof HTMLInputElement && constructionPhotoInput.files
+                ? Array.from(constructionPhotoInput.files)
+                : [];
+
+            let mergedImages = existingImages;
+            if (pickedFiles.length) {
+                const remaining = Math.max(0, CONSTRUCTION_MAX_IMAGE_COUNT - existingImages.length);
+                const toUpload = pickedFiles.slice(0, remaining);
+                if (!toUpload.length) {
+                    showPeoGeneralToast(`You can upload up to ${CONSTRUCTION_MAX_IMAGE_COUNT} photos per record.`, {
+                        title: "Construction Division",
+                        variant: "warning",
+                    });
+                    return;
+                }
+
+                if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = true;
+                }
+
+                const uploadResult = await uploadConstructionPhotos(toUpload);
+                if (!uploadResult?.ok) {
+                    if (submitButton instanceof HTMLButtonElement) {
+                        submitButton.disabled = false;
+                    }
+                    showPeoGeneralToast(String(uploadResult?.error || "Unable to upload photos."), {
+                        title: "Construction Division",
+                        variant: "danger",
+                    });
+                    return;
+                }
+
+                mergedImages = mergeAccomplishmentImages(existingImages, uploadResult.images);
+                if (constructionPhotoInput instanceof HTMLInputElement) {
+                    constructionPhotoInput.value = "";
+                }
+
+                if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = false;
+                }
+            }
+
+            const nextFormRecord = (pickedFiles.length && mergedImages.length)
+                ? { ...formRecord, accomplishment_images: mergedImages }
+                : formRecord;
 
             if (editingRecordId) {
                 const index = records.findIndex((record) => record.__id === editingRecordId);
@@ -11316,7 +11498,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const previousRecord = records[index];
                     const nextRecord = applyConstructionRecordUpdate(
                         previousRecord,
-                        { ...formRecord, __id: editingRecordId },
+                        { ...nextFormRecord, __id: editingRecordId },
                         {
                             updateType: "edited",
                             changedBy: getConstructionCurrentUser(),
@@ -11338,7 +11520,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     syncConstructionStatusToAdmin(updatedRecord);
                 }
             } else {
-                const created = initializeConstructionRecord(formRecord, {
+                const created = initializeConstructionRecord(nextFormRecord, {
                     updateType: "created",
                     changedBy: getConstructionCurrentUser(),
                 });
@@ -15614,8 +15796,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 const images = Array.isArray(record.accomplishment_images)
                     ? record.accomplishment_images
                         .map((img) => ({
-                            dataUrl: String(img?.dataUrl || "").trim(),
-                            name: String(img?.name || "").trim(),
+                            dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
+                            name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
                         }))
                         .filter((img) => img.dataUrl)
                     : [];

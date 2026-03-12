@@ -96,7 +96,7 @@
             </button>
         </div>
 
-        <form class="construction-form js-construction-form">
+        <form class="construction-form js-construction-form" enctype="multipart/form-data">
             <div class="construction-form-section">
                 <div class="construction-form-section-head">
                     <div class="construction-form-section-icon" aria-hidden="true">
@@ -210,6 +210,25 @@
                 </div>
             </div>
 
+            <div class="construction-form-section">
+                <div class="construction-form-section-head">
+                    <div class="construction-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">photo_camera</span>
+                    </div>
+                    <div>
+                        <h4>Upload Photos</h4>
+                        <p>Attach accomplishment photos for this construction record.</p>
+                    </div>
+                </div>
+
+                <div class="construction-form-grid">
+                    <label class="construction-field construction-field--wide">
+                        <span>Photos</span>
+                        <input type="file" name="accomplishment_photos" class="js-construction-photo-input" accept="image/*" multiple>
+                    </label>
+                </div>
+            </div>
+
             <div class="construction-form-actions">
                 <label class="construction-field construction-field--wide" style="margin:0;">
                     <span>Submit to Division</span>
@@ -229,7 +248,7 @@
     </div>
 </div>
 
-<section class="road-filter-panel js-construction-dashboard" aria-label="Construction project register" data-current-user="{{ dashboard_user_name|default:request.user.username }}" data-project-dashboard-url="{% url 'construction_project_dashboard' %}">
+<section class="road-filter-panel js-construction-dashboard" aria-label="Construction project register" data-current-user="{{ dashboard_user_name|default:request.user.username }}" data-project-dashboard-url="{% url 'construction_project_dashboard' %}" data-photo-upload-url="{% url 'construction_photo_upload' %}">
     <div class="schedule-toolbar-row">
         <h2 style="margin:0; font-size:1.2rem; color:#112e4d;">Physical Accomplishment Status Report</h2>
         <div class="schedule-toolbar-actions">

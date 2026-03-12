@@ -21,4 +21,5 @@ urlpatterns = [
     path('maintenance/task-management/', views.task_management, name='task_management'),
     path('maintenance/submissions/', views.maintenance_division_submissions, name='maintenance_division_submissions'),
     path('api/division-store/<slug:key>/', views.division_store_api, name='division_store_api'),
+    path('api/uploads/construction/', views.construction_photo_upload, name='construction_photo_upload'),
 ]

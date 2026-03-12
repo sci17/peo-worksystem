@@ -392,7 +392,6 @@
                                             ></span>
                                         {% endfor %}
                                     </div>
-                                    <span class="spotlight-chip">{{ spotlight.category|default:"Spotlight" }}</span>
                                     <div class="spotlight-copy">
                                         <h4>{{ spotlight.title|default:"Accomplished Project" }}</h4>
                                         <p>{{ spotlight.subtitle|default:"" }}</p>
@@ -408,7 +407,6 @@
                     {% else %}
                         <article class="spotlight-card">
                             <div class="spotlight-scene">
-                                <span class="spotlight-chip">Spotlight</span>
                                 <div class="spotlight-copy">
                                     <h4>No accomplished projects yet</h4>
                                     <p>Add projects to highlight progress here.</p>
