@@ -10137,13 +10137,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const normalize = (value) => String(value || "").trim().toLowerCase();
     // Only allow construction uploads from the static uploads folder. This prevents the spotlight from
     // accidentally showing user profile images or other unrelated assets.
-    const isConstructionSpotlightUrl = (value) => {
-        const url = String(value || "").trim();
-        if (!url.startsWith("/static/uploads/")) return false;
+    const normalizeConstructionSpotlightUrl = (value) => {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+
+        let url = raw;
+        if (url.startsWith("static/uploads/")) {
+            url = `/${url}`;
+        } else if (url.startsWith("./static/uploads/")) {
+            url = url.slice(1);
+        }
+
+        if (!url.startsWith("/static/uploads/")) return "";
         const filename = url.slice("/static/uploads/".length).split("?")[0];
-        if (!filename) return false;
-        if (filename.startsWith("profile_")) return false;
-        return true;
+        if (!filename) return "";
+        if (filename.startsWith("profile_")) return "";
+        return url;
     };
     const clampIndex = (value) => {
         if (!slides.length) return 0;
@@ -10207,11 +10216,13 @@ document.addEventListener("DOMContentLoaded", () => {
                         ? img
                         : String(img?.dataUrl || img?.url || ""))
                         .trim();
-                    if (isConstructionSpotlightUrl(url)) imagePool.push(url);
+                    const normalizedUrl = normalizeConstructionSpotlightUrl(url);
+                    if (normalizedUrl) imagePool.push(normalizedUrl);
                 });
 
                 const legacy = String(record.accomplishment_image || "").trim();
-                if (isConstructionSpotlightUrl(legacy)) imagePool.push(legacy);
+                const normalizedLegacy = normalizeConstructionSpotlightUrl(legacy);
+                if (normalizedLegacy) imagePool.push(normalizedLegacy);
 
                 const uniq = Array.from(new Set(imagePool));
                 return {
@@ -10332,9 +10343,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? img
                 : String(img?.dataUrl || img?.url || ""))
                 .trim();
-            if (isConstructionSpotlightUrl(url)) pool.push(url);
+            const normalizedUrl = normalizeConstructionSpotlightUrl(url);
+            if (normalizedUrl) pool.push(normalizedUrl);
         });
-        if (isConstructionSpotlightUrl(fallback)) pool.push(fallback);
+        const normalizedFallback = normalizeConstructionSpotlightUrl(fallback);
+        if (normalizedFallback) pool.push(normalizedFallback);
         return pickRandomValue(Array.from(new Set(pool)), lastImageUrl);
     };
 
@@ -10501,6 +10514,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectAllCheckbox = constructionDashboard.querySelector(".js-construction-select-all");
     const prevPageButton = constructionDashboard.querySelector(".js-construction-prev-page");
     const nextPageButton = constructionDashboard.querySelector(".js-construction-next-page");
+<<<<<<< HEAD
 	    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
 <<<<<<< HEAD
  	    const constructionModal = document.querySelector(".js-construction-modal");
@@ -10523,6 +10537,20 @@ document.addEventListener("DOMContentLoaded", () => {
 	        : [];
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
 >>>>>>> 884bff9d07a2b0531ef2ed5db597882b5dd621a0
+=======
+    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
+    const constructionModal = document.querySelector(".js-construction-modal");
+    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
+    const constructionPhotoInput = constructionModal ? constructionModal.querySelector(".js-construction-photo-input") : null;
+    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
+    const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
+    const constructionRouteFileInput = constructionModal ? constructionModal.querySelector(".js-construction-route-file") : null;
+    const constructionRouteFiles = constructionModal ? constructionModal.querySelector(".js-construction-route-files") : null;
+    const closeConstructionModalButtons = constructionModal
+        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
+        : [];
+    const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
@@ -11695,6 +11723,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const openConstructionModal = (mode = "create", record = null) => {
         if (!constructionModal) return;
+<<<<<<< HEAD
 	        editingRecordId = mode === "edit" ? record?.__id || null : null;
 	        setConstructionFormMode(mode);
 	        if (constructionForm) {
@@ -11704,15 +11733,29 @@ document.addEventListener("DOMContentLoaded", () => {
 	            }
 	        }
 <<<<<<< HEAD
+=======
+        editingRecordId = mode === "edit" ? record?.__id || null : null;
+        setConstructionFormMode(mode);
+        if (constructionForm) {
+            constructionForm.reset();
+            if (mode === "edit" && record) {
+                fillConstructionForm(record);
+            }
+        }
+        if (constructionPhotoInput instanceof HTMLInputElement) {
+            constructionPhotoInput.value = "";
+        }
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
         if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
             constructionRouteDivisionSelect.value = "";
         }
         if (constructionRouteFileInput instanceof HTMLInputElement) {
             constructionRouteFileInput.value = "";
         }
-        renderConstructionRouteFiles(mode === "edit" ? record : null);
+
         constructionModal.hidden = false;
         document.body.classList.add("construction-modal-open");
+<<<<<<< HEAD
 =======
             if (constructionPhotoInput instanceof HTMLInputElement) {
                 constructionPhotoInput.value = "";
@@ -11727,10 +11770,24 @@ document.addEventListener("DOMContentLoaded", () => {
 	            const firstField = constructionForm?.querySelector('[name="project_name"]');
 	            if (firstField) firstField.focus();
 	        });
+=======
+        requestAnimationFrame(() => {
+            const firstField = constructionForm?.querySelector('[name="project_name"]');
+            if (firstField) firstField.focus();
+        });
+
+        // Show routed files (when present) for the record currently being viewed.
+        try {
+            renderConstructionRouteFiles(record);
+        } catch (error) {
+            // Ignore missing renderer during early initialization.
+        }
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
         syncConstructionRouteControls();
     };
 
     const closeConstructionModal = () => {
+<<<<<<< HEAD
 	        if (!constructionModal) return;
 	        constructionModal.hidden = true;
 	        document.body.classList.remove("construction-modal-open");
@@ -11738,15 +11795,31 @@ document.addEventListener("DOMContentLoaded", () => {
 	        setConstructionFormMode("create");
 	        if (constructionForm) constructionForm.reset();
 <<<<<<< HEAD
+=======
+        if (!constructionModal) return;
+        constructionModal.hidden = true;
+        document.body.classList.remove("construction-modal-open");
+        editingRecordId = null;
+        setConstructionFormMode("create");
+        if (constructionForm) constructionForm.reset();
+        if (constructionPhotoInput instanceof HTMLInputElement) {
+            constructionPhotoInput.value = "";
+        }
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
         if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
             constructionRouteDivisionSelect.value = "";
         }
         if (constructionRouteFileInput instanceof HTMLInputElement) {
             constructionRouteFileInput.value = "";
         }
-        renderConstructionRouteFiles(null);
+        try {
+            renderConstructionRouteFiles(null);
+        } catch (error) {
+            // Ignore missing renderer during early initialization.
+        }
         syncConstructionRouteControls();
     };
+<<<<<<< HEAD
 =======
             if (constructionPhotoInput instanceof HTMLInputElement) {
                 constructionPhotoInput.value = "";
@@ -11757,12 +11830,14 @@ document.addEventListener("DOMContentLoaded", () => {
 	        syncConstructionRouteControls();
 	    };
 >>>>>>> 884bff9d07a2b0531ef2ed5db597882b5dd621a0
+=======
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
 
-	    const buildRecordFromForm = () => {
-	        if (!constructionForm) return null;
-	        const formData = new FormData(constructionForm);
-	        const projectName = getTrimmedFormValue(formData, "project_name");
-	        if (!projectName) return null;
+    const buildRecordFromForm = () => {
+        if (!constructionForm) return null;
+        const formData = new FormData(constructionForm);
+        const projectName = getTrimmedFormValue(formData, "project_name");
+        if (!projectName) return null;
 
         return {
             __id: createRecordId(),
@@ -11782,9 +11857,9 @@ document.addEventListener("DOMContentLoaded", () => {
             status_current: getTrimmedFormValue(formData, "status_current"),
             time_elapsed: getTrimmedFormValue(formData, "time_elapsed"),
             slippage: getTrimmedFormValue(formData, "slippage"),
-	            remarks: getTrimmedFormValue(formData, "remarks"),
-	        };
-	    };
+            remarks: getTrimmedFormValue(formData, "remarks"),
+        };
+    };
 
  	    const getConstructionRouteSourceRecord = () => {
  	        const base = buildRecordFromForm();
