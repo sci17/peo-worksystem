@@ -5,19 +5,6 @@
 	                <h2>Contractor Management</h2>
 	                <p>Track bidders, performance ratings, and contract history.</p>
 	            </div>
-	            <div class="division-page-switcher" aria-label="Maintenance division page switcher">
-	                <span class="division-page-switcher__label">Maintenance division page</span>
-	                <select
-	                    id="maintenance-division-page-switcher-contractor"
-	                    class="pa-select division-page-switcher__select"
-	                    data-division-page-switcher
-	                    data-main-url="{% url 'contractor_management' %}"
-	                    data-submissions-url="{% url 'maintenance_division_submissions' %}"
-	                >
-	                    <option value="{% url 'contractor_management' %}" selected>Main</option>
-	                    <option value="{% url 'maintenance_division_submissions' %}">Submitted Projects</option>
-	                </select>
-	            </div>
 	        </div>
 	    </header>
 

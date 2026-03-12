@@ -9874,8 +9874,11 @@ body.construction-modal-open {
 .contractor-float-contract-list {
     display: grid;
     gap: 10px;
+    max-height: 440px; /* Fallback for browsers that don't support min(). */
     max-height: min(52vh, 440px);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     padding-right: 2px;
 }
 
