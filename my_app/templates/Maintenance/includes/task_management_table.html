@@ -173,6 +173,7 @@
                     <li><button type="button" class="dropdown-option is-selected" data-value="all">All Statuses</button></li>
                     <li><button type="button" class="dropdown-option" data-value="incoming">Incoming</button></li>
                     <li><button type="button" class="dropdown-option" data-value="pending">Pending</button></li>
+                    <li><button type="button" class="dropdown-option" data-value="for_review">For Review</button></li>
                     <li><button type="button" class="dropdown-option" data-value="in_progress">In Progress</button></li>
                     <li><button type="button" class="dropdown-option" data-value="completed">Completed</button></li>
                     <li><button type="button" class="dropdown-option" data-value="cancelled">Cancelled</button></li>
@@ -510,6 +511,7 @@
                             </button>
                             <ul class="dropdown-menu">
                                 <li><button type="button" class="dropdown-option is-selected" data-value="Pending">Pending</button></li>
+                                <li><button type="button" class="dropdown-option" data-value="For Review">For Review</button></li>
                                 <li><button type="button" class="dropdown-option" data-value="In Progress">In Progress</button></li>
                                 <li><button type="button" class="dropdown-option" data-value="Completed">Completed</button></li>
                                 <li><button type="button" class="dropdown-option" data-value="Cancelled">Cancelled</button></li>
@@ -521,6 +523,21 @@
                         <span>Description</span>
                         <textarea name="notes" rows="4" placeholder="Add instructions, deliverables, or context for this task."></textarea>
                     </label>
+                </div>
+
+                <div class="task-route-panel" aria-label="Submit task to another division">
+                    <span class="task-route-kicker">Submit to Division</span>
+                    <div class="task-route-controls">
+                        <select class="task-route-select js-task-route-division" aria-label="Select division to submit" disabled>
+                            <option value="" selected>Select division</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Planning Division">Planning Division</option>
+                            <option value="Construction">Construction</option>
+                            <option value="Quality">Quality</option>
+                            <option value="Maintenance">Maintenance</option>
+                        </select>
+                        <button type="button" class="task-route-submit js-task-route-submit" disabled>Submit</button>
+                    </div>
                 </div>
             </section>
 

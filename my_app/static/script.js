@@ -616,10 +616,13 @@ window.togglePassword = togglePassword;
         }
         const sourceKey = resolveDivisionKey(sourceDivisionKey);
         const nowIso = new Date().toISOString();
-        if (sourceKey && sourceKey !== "admin") {
-            updated.__submitted_from_division = sourceKey;
-            updated.__submitted_from_source_id = pickFirst(sourceRecord?.__id, sourceRecord?.id, sourceRecord?.adminRecordId);
-            updated.__submitted_at = nowIso;
+        if (sourceKey) {
+            const hasSubmittedFrom = String(updated.__submitted_from_division || "").trim();
+            if (sourceKey !== "admin" || !hasSubmittedFrom) {
+                updated.__submitted_from_division = sourceKey;
+                updated.__submitted_from_source_id = pickFirst(sourceRecord?.__id, sourceRecord?.id, sourceRecord?.adminRecordId);
+                updated.__submitted_at = nowIso;
+            }
         }
 
         const existingEvents = Array.isArray(updated.__tracking_events) ? updated.__tracking_events.filter((ev) => ev && typeof ev === "object") : [];
@@ -906,6 +909,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     };
 
+    const toInputDate = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "";
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return "";
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, "0");
+        const day = String(parsed.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
     const escapeHtml = (value) => {
         return String(value ?? "")
             .replace(/&/g, "&amp;")
@@ -925,12 +939,26 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const queueAdminSync = (records) => {
+        if (!(window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function")) {
+            return;
+        }
+        const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+            if (!record || typeof record !== "object") return record;
+            const safe = { ...record };
+            delete safe.scanned_file_data;
+            return safe;
+        });
+        window.peoDivisionStore.queueSync("admin", safeRecords);
+    };
+
     const writeAdminStore = (records) => {
         try {
             window.localStorage.setItem("peo_admin_division_records_v1", JSON.stringify(records));
         } catch (error) {
             // ignore
         }
+        queueAdminSync(records);
     };
 
     const ensureAdminStore = async () => {
@@ -955,6 +983,19 @@ document.addEventListener("DOMContentLoaded", () => {
             : normalizeKey(raw);
     };
 
+    const labelFromDivisionValue = (value) => {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        if (window.peoProjectRouter && typeof window.peoProjectRouter.labelForDivisionKey === "function") {
+            const key = window.peoProjectRouter.resolveDivisionKey
+                ? window.peoProjectRouter.resolveDivisionKey(raw)
+                : normalizeKey(raw);
+            const label = window.peoProjectRouter.labelForDivisionKey(key);
+            if (label) return label;
+        }
+        return raw;
+    };
+
     const getSubmissionsForDivision = (adminRecords, divisionKey) => {
         const targetKey = normalizeKey(divisionKey);
         return (Array.isArray(adminRecords) ? adminRecords : [])
@@ -962,13 +1003,28 @@ document.addEventListener("DOMContentLoaded", () => {
             .filter((record) => normalizeDivisionKeyFromAdmin(record.division) === targetKey)
             .filter((record) => String(record.__submitted_from_division || "").trim())
             .map((record) => ({
-                id: String(record.__record_id || "").trim(),
+                id: String(record.__record_id || record.__id || "").trim(),
                 from: String(record.__submitted_from_division || "").trim(),
+                fromLabel: labelFromDivisionValue(record.__submitted_from_division || ""),
+                slipNo: String(record.slip_no || record.slipNo || record.doc_no || record.project_id || "").trim() || "-",
                 name: String(record.document_name || record.project_name || "").trim() || "-",
                 location: String(record.location || "").trim() || "-",
+                docType: String(record.doc_type || record.billing_type || "").trim() || "-",
                 contractor: String(record.contractor || "").trim() || "-",
+                division: String(record.division || "").trim() || "-",
+                status: String(record.doc_status || record.status || record.billing_status || "").trim() || "-",
                 amount: String(record.revised_contract_amount || record.contract_amount || "").trim(),
-                submittedAt: String(record.__submitted_at || "").trim(),
+                submittedAt: String(
+                    record.__submitted_at
+                    || record.date_received_admin
+                    || record.date_received_peo
+                    || record.date_received
+                    || record.date_released_admin
+                    || ""
+                ).trim(),
+                scannedFileName: String(record.scanned_file_name || "").trim(),
+                scannedFileData: String(record.scanned_file_data || "").trim(),
+                remarks: String(record.description || record.remarks || "").trim() || "-",
             }));
     };
 
@@ -984,13 +1040,351 @@ document.addEventListener("DOMContentLoaded", () => {
         const prevButton = root.querySelector(".js-division-submissions-prev");
         const nextButton = root.querySelector(".js-division-submissions-next");
         const pageButton = root.querySelector(".js-division-submissions-page");
+        const viewModal = root.querySelector(".js-submissions-view-modal");
+        const viewSlip = root.querySelector(".js-submissions-view-slip");
+        const viewFrom = root.querySelector(".js-submissions-view-from");
+        const viewName = root.querySelector(".js-submissions-view-name");
+        const viewLocation = root.querySelector(".js-submissions-view-location");
+        const viewContractor = root.querySelector(".js-submissions-view-contractor");
+        const viewType = root.querySelector(".js-submissions-view-type");
+        const viewDivision = root.querySelector(".js-submissions-view-division");
+        const viewStatus = root.querySelector(".js-submissions-view-status");
+        const viewAmount = root.querySelector(".js-submissions-view-amount");
+        const viewDate = root.querySelector(".js-submissions-view-date");
+        const viewFile = root.querySelector(".js-submissions-view-file");
+        const viewRemarks = root.querySelector(".js-submissions-view-remarks");
+        const editModal = root.querySelector(".js-submissions-edit-modal");
+        const editForm = root.querySelector(".js-submissions-edit-form");
+        const editNameInput = root.querySelector(".js-submissions-edit-name");
+        const editLocationInput = root.querySelector(".js-submissions-edit-location");
+        const editContractorInput = root.querySelector(".js-submissions-edit-contractor");
+        const editAmountInput = root.querySelector(".js-submissions-edit-amount");
+        const editSubmittedInput = root.querySelector(".js-submissions-edit-submitted");
+        const editRemarksInput = root.querySelector(".js-submissions-edit-remarks");
+        const editStatusSelect = root.querySelector(".js-submissions-edit-status");
+        const routeDivisionSelect = root.querySelector(".js-submissions-route-division");
+        const routeSubmitButton = root.querySelector(".js-submissions-route-submit");
         const PAGE_SIZE = 10;
         let currentPage = 1;
+        let editingRecordId = "";
 
         if (!(tbody instanceof HTMLElement)) return;
 
-        const adminRecords = await ensureAdminStore();
-        const allRows = getSubmissionsForDivision(adminRecords, divisionKey);
+        let adminRecords = await ensureAdminStore();
+        let allRows = getSubmissionsForDivision(adminRecords, divisionKey);
+
+        const syncModalState = () => {
+            const viewOpen = viewModal instanceof HTMLElement && !viewModal.hidden;
+            const editOpen = editModal instanceof HTMLElement && !editModal.hidden;
+            document.body.classList.toggle("submissions-modal-open", viewOpen || editOpen);
+        };
+
+        const openModal = (modal) => {
+            if (!(modal instanceof HTMLElement)) return;
+            modal.hidden = false;
+            syncModalState();
+        };
+
+        const closeModal = (modal) => {
+            if (!(modal instanceof HTMLElement)) return;
+            modal.hidden = true;
+            syncModalState();
+        };
+
+        const closeViewModal = () => {
+            closeModal(viewModal);
+        };
+
+        const closeEditModal = () => {
+            closeModal(editModal);
+            editingRecordId = "";
+            if (routeDivisionSelect instanceof HTMLSelectElement) {
+                routeDivisionSelect.value = "";
+                routeDivisionSelect.disabled = true;
+            }
+            if (routeSubmitButton instanceof HTMLButtonElement) {
+                routeSubmitButton.disabled = true;
+            }
+            if (editForm instanceof HTMLFormElement) {
+                editForm.reset();
+            }
+        };
+
+        const refreshRows = () => {
+            allRows = getSubmissionsForDivision(adminRecords, divisionKey);
+        };
+
+        const setViewContent = (row) => {
+            if (!row) return;
+            if (viewSlip) viewSlip.textContent = row.slipNo || "-";
+            if (viewFrom) {
+                viewFrom.textContent = row.fromLabel ? `From ${row.fromLabel}` : (row.from || "-");
+            }
+            if (viewName) viewName.textContent = row.name || "-";
+            if (viewLocation) viewLocation.textContent = row.location || "-";
+            if (viewContractor) viewContractor.textContent = row.contractor || "-";
+            if (viewType) viewType.textContent = row.docType || "-";
+            if (viewDivision) viewDivision.textContent = row.division || "-";
+            if (viewStatus) viewStatus.textContent = row.status || "-";
+            if (viewAmount) viewAmount.textContent = formatMoney(row.amount);
+            if (viewDate) viewDate.textContent = formatDate(row.submittedAt);
+            if (viewFile) viewFile.textContent = row.scannedFileName || (row.scannedFileData ? "Scanned file available" : "No file uploaded");
+            if (viewRemarks) viewRemarks.textContent = row.remarks || "-";
+        };
+
+        const setEditFormValues = (row) => {
+            if (!row) return;
+            if (editNameInput instanceof HTMLInputElement) {
+                editNameInput.value = row.name && row.name !== "-" ? row.name : "";
+            }
+            if (editLocationInput instanceof HTMLInputElement) {
+                editLocationInput.value = row.location && row.location !== "-" ? row.location : "";
+            }
+            if (editContractorInput instanceof HTMLInputElement) {
+                editContractorInput.value = row.contractor && row.contractor !== "-" ? row.contractor : "";
+            }
+            if (editAmountInput instanceof HTMLInputElement) {
+                editAmountInput.value = row.amount || "";
+            }
+            if (editSubmittedInput instanceof HTMLInputElement) {
+                editSubmittedInput.value = toInputDate(row.submittedAt);
+            }
+            if (editRemarksInput instanceof HTMLTextAreaElement) {
+                editRemarksInput.value = row.remarks && row.remarks !== "-" ? row.remarks : "";
+            }
+            if (editStatusSelect instanceof HTMLSelectElement) {
+                const nextStatus = row.status || "Pending";
+                const options = Array.from(editStatusSelect.options || []);
+                const hasOption = options.some((option) => option.value === nextStatus);
+                options
+                    .filter((option) => option.dataset.dynamic === "true")
+                    .forEach((option) => option.remove());
+                if (!hasOption && nextStatus) {
+                    const dynamicOption = document.createElement("option");
+                    dynamicOption.value = nextStatus;
+                    dynamicOption.textContent = nextStatus;
+                    dynamicOption.dataset.dynamic = "true";
+                    editStatusSelect.prepend(dynamicOption);
+                }
+                editStatusSelect.value = hasOption ? nextStatus : (nextStatus || "Pending");
+            }
+        };
+
+        const updateAdminRecord = (recordId, updates) => {
+            const index = adminRecords.findIndex(
+                (record) => String(record?.__record_id || record?.__id || "").trim() === recordId
+            );
+            if (index < 0) return false;
+            const current = adminRecords[index] && typeof adminRecords[index] === "object" ? adminRecords[index] : {};
+            const next = { ...current, ...updates };
+            adminRecords = [...adminRecords];
+            adminRecords[index] = next;
+            writeAdminStore(adminRecords);
+            refreshRows();
+            return true;
+        };
+
+        const syncRouteControls = () => {
+            if (!(routeDivisionSelect instanceof HTMLSelectElement) || !(routeSubmitButton instanceof HTMLButtonElement)) {
+                return;
+            }
+            if (!editingRecordId) {
+                routeDivisionSelect.disabled = true;
+                routeSubmitButton.disabled = true;
+                return;
+            }
+            routeDivisionSelect.disabled = false;
+            const selected = String(routeDivisionSelect.value || "").trim();
+            const router = window.peoProjectRouter;
+            const targetKey = router && typeof router.resolveDivisionKey === "function"
+                ? router.resolveDivisionKey(selected)
+                : normalizeKey(selected);
+            routeSubmitButton.disabled = !selected || !targetKey;
+        };
+
+        root.querySelectorAll(".js-submissions-close").forEach((button) => {
+            button.addEventListener("click", closeViewModal);
+        });
+        root.querySelectorAll(".js-submissions-edit-close").forEach((button) => {
+            button.addEventListener("click", closeEditModal);
+        });
+
+        root.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const actionButton = target.closest("[data-submissions-action]");
+            if (!actionButton) return;
+            const action = String(actionButton.dataset.submissionsAction || "").trim();
+            const recordId = String(actionButton.dataset.recordId || "").trim();
+            if (!action || !recordId) return;
+            const row = allRows.find((item) => item.id === recordId);
+            if (!row) {
+                toast("Unable to locate this submission record.", { title: "Submitted Projects", variant: "warning" });
+                return;
+            }
+            if (action === "view") {
+                setViewContent(row);
+                openModal(viewModal);
+                return;
+            }
+            if (action === "view-file") {
+                if (!row.scannedFileData) {
+                    toast("No scanned file is available for this submission.", { title: "Submitted Projects", variant: "warning" });
+                    return;
+                }
+                const openedWindow = window.open(row.scannedFileData, "_blank", "noopener");
+                if (!openedWindow) {
+                    window.location.href = row.scannedFileData;
+                }
+                return;
+            }
+            if (action === "edit") {
+                editingRecordId = recordId;
+                if (editForm instanceof HTMLFormElement) {
+                    editForm.reset();
+                }
+                setEditFormValues(row);
+                if (routeDivisionSelect instanceof HTMLSelectElement) {
+                    routeDivisionSelect.value = "";
+                }
+                syncRouteControls();
+                openModal(editModal);
+            }
+        });
+
+        if (routeDivisionSelect instanceof HTMLSelectElement) {
+            routeDivisionSelect.addEventListener("change", syncRouteControls);
+        }
+
+        if (routeSubmitButton instanceof HTMLButtonElement) {
+            routeSubmitButton.addEventListener("click", () => {
+                if (!editingRecordId) {
+                    toast("Please select a submission to edit before routing.", { title: "Submitted Projects", variant: "warning" });
+                    return;
+                }
+
+                const router = window.peoProjectRouter;
+                if (!router || typeof router.submitToDivision !== "function") {
+                    toast("Division submission is not available right now.", { title: "Submitted Projects", variant: "warning" });
+                    return;
+                }
+
+                const targetDivision = String(routeDivisionSelect?.value || "").trim();
+                const targetKey = router.resolveDivisionKey ? router.resolveDivisionKey(targetDivision) : normalizeKey(targetDivision);
+                if (!targetKey) {
+                    toast("Please select a division to submit this project to.", { title: "Submitted Projects", variant: "warning" });
+                    return;
+                }
+
+                const row = allRows.find((item) => item.id === editingRecordId);
+                if (!row) {
+                    toast("Unable to locate this submission record.", { title: "Submitted Projects", variant: "warning" });
+                    return;
+                }
+
+                const statusValue = editStatusSelect instanceof HTMLSelectElement
+                    ? String(editStatusSelect.value || "").trim()
+                    : row.status;
+                const nameValue = editNameInput instanceof HTMLInputElement ? editNameInput.value.trim() : row.name;
+                const locationValue = editLocationInput instanceof HTMLInputElement ? editLocationInput.value.trim() : row.location;
+                const contractorValue = editContractorInput instanceof HTMLInputElement ? editContractorInput.value.trim() : row.contractor;
+                const amountValue = editAmountInput instanceof HTMLInputElement ? editAmountInput.value.trim() : row.amount;
+                const remarksValue = editRemarksInput instanceof HTMLTextAreaElement ? editRemarksInput.value.trim() : row.remarks;
+                const submittedDateValue = editSubmittedInput instanceof HTMLInputElement ? editSubmittedInput.value.trim() : "";
+
+                const submission = router.submitToDivision({
+                    sourceDivisionKey: divisionKey,
+                    sourceRecord: {
+                        __id: row.id,
+                        document_name: nameValue || row.name,
+                        project_name: nameValue || row.name,
+                        location: locationValue || row.location,
+                        contractor: contractorValue || row.contractor,
+                        revised_contract_amount: amountValue || row.amount,
+                        contract_amount: amountValue || row.amount,
+                        doc_type: row.docType,
+                        slip_no: row.slipNo,
+                        status: statusValue || row.status,
+                        description: remarksValue || row.remarks,
+                        date_received: submittedDateValue || row.submittedAt,
+                    },
+                    targetDivisionKey: targetKey,
+                    existingAdminRecordId: row.id,
+                });
+
+                if (submission && submission.ok) {
+                    const divisionLabel = router.labelForDivisionKey
+                        ? router.labelForDivisionKey(targetKey)
+                        : (targetDivision || row.division);
+                    if (divisionLabel) {
+                        updateAdminRecord(editingRecordId, { division: divisionLabel });
+                    }
+                    adminRecords = readAdminStore();
+                    refreshRows();
+                    render();
+                    if (routeDivisionSelect instanceof HTMLSelectElement) {
+                        routeDivisionSelect.value = "";
+                    }
+                    syncRouteControls();
+                    toast("Submission routed successfully.", { title: "Submitted Projects", variant: "success" });
+                    return;
+                }
+
+                toast(String(submission?.error || "Unable to submit this project."), { title: "Submitted Projects", variant: "danger" });
+            });
+        }
+
+        syncRouteControls();
+
+        if (editForm instanceof HTMLFormElement) {
+            editForm.addEventListener("submit", (event) => {
+                event.preventDefault();
+                if (!editingRecordId) return;
+
+                const status = editStatusSelect instanceof HTMLSelectElement
+                    ? String(editStatusSelect.value || "").trim()
+                    : "";
+                const remarks = editRemarksInput instanceof HTMLTextAreaElement
+                    ? editRemarksInput.value.trim()
+                    : "";
+                const submittedDate = editSubmittedInput instanceof HTMLInputElement
+                    ? editSubmittedInput.value.trim()
+                    : "";
+                const updates = {
+                    status: status || "Pending",
+                    doc_status: status || "Pending",
+                    billing_status: status || "Pending",
+                    description: remarks,
+                };
+                if (submittedDate) {
+                    updates.__submitted_at = new Date(`${submittedDate}T00:00:00`).toISOString();
+                    updates.date_received = submittedDate;
+                }
+
+                const didUpdate = updateAdminRecord(editingRecordId, updates);
+                if (!didUpdate) {
+                    toast("Unable to update this submission right now.", { title: "Submitted Projects", variant: "danger" });
+                    return;
+                }
+
+                closeEditModal();
+                render();
+                toast("Submission updated successfully.", { title: "Submitted Projects", variant: "success" });
+            });
+        }
+
+        if (!document.body.dataset.submissionsEscBound) {
+            document.body.dataset.submissionsEscBound = "true";
+            document.addEventListener("keydown", (event) => {
+                if (event.key !== "Escape") return;
+                if (viewModal instanceof HTMLElement && !viewModal.hidden) {
+                    closeViewModal();
+                }
+                if (editModal instanceof HTMLElement && !editModal.hidden) {
+                    closeEditModal();
+                }
+            });
+        }
 
         const render = () => {
             const q = String(search instanceof HTMLInputElement ? search.value : "").trim().toLowerCase();
@@ -1002,12 +1396,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!matchesSource) return false;
                 if (!q) return true;
                 const haystack = [
+                    row.slipNo,
                     row.from,
+                    row.fromLabel,
                     row.name,
                     row.location,
+                    row.docType,
                     row.contractor,
+                    row.division,
+                    row.status,
                     row.amount,
                     row.submittedAt,
+                    row.scannedFileName,
                 ].join(" ").toLowerCase();
                 return haystack.includes(q);
             });
@@ -1026,19 +1426,38 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else {
                     const tr = document.createElement("tr");
                     tr.className = "admin-division-empty-state";
-                    tr.innerHTML = '<td colspan="4">No submitted projects yet.</td>';
+                    tr.innerHTML = '<td colspan="10">No submitted projects yet.</td>';
                     tbody.appendChild(tr);
                 }
             } else {
                 paged.forEach((row) => {
-                    const fromKey = normalizeKey(row.from);
-                    const badgeClass = fromKey ? `submissions-source-badge is-${escapeHtml(fromKey)}` : "submissions-source-badge";
+                    const statusKey = normalizeKey(row.status);
+                    const statusClass = statusKey ? `submissions-status-badge is-${escapeHtml(statusKey)}` : "submissions-status-badge";
                     const tr = document.createElement("tr");
+                    const scannedFileCell = row.scannedFileData
+                        ? `<button type="button" class="submissions-file-btn" data-submissions-action="view-file" data-record-id="${escapeHtml(row.id)}">View File</button>`
+                        : '<span class="submissions-file-muted">No file</span>';
+                    const fromLabel = row.fromLabel || row.from || "-";
                     tr.innerHTML = `
-                        <td><span class="${badgeClass}">${escapeHtml(fromKey || row.from || "-")}</span></td>
+                        <td>${escapeHtml(row.slipNo)}</td>
                         <td class="project-project-cell"><strong>${escapeHtml(row.name)}</strong></td>
                         <td>${escapeHtml(row.location)}</td>
+                        <td>${escapeHtml(row.docType)}</td>
                         <td>${escapeHtml(row.contractor)}</td>
+                        <td>${escapeHtml(`From ${fromLabel}`)}</td>
+                        <td><span class="${statusClass}">${escapeHtml(row.status)}</span></td>
+                        <td>${escapeHtml(formatDate(row.submittedAt))}</td>
+                        <td class="submissions-file-cell">${scannedFileCell}</td>
+                        <td class="submissions-action-cell">
+                            <div class="submissions-action-group">
+                                <button type="button" class="table-icon-btn table-icon-btn--view submissions-action-btn" data-submissions-action="view" data-record-id="${escapeHtml(row.id)}" aria-label="View submission" title="View">
+                                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                                </button>
+                                <button type="button" class="table-icon-btn table-icon-btn--edit submissions-action-btn" data-submissions-action="edit" data-record-id="${escapeHtml(row.id)}" aria-label="Edit submission" title="Edit">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit_square</span>
+                                </button>
+                            </div>
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -2070,6 +2489,13 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const buildMaintenanceTaskFromAdminRecord = (record) => {
+        const sourceDivisionRaw = String(record?.__submitted_from_division || "").trim();
+        const sourceDivisionKey = sourceDivisionRaw
+            ? normalizeDivisionKey(sourceDivisionRaw)
+            : "";
+        const sourceDivisionLabel = sourceDivisionRaw && window.peoProjectRouter?.labelForDivisionKey
+            ? (window.peoProjectRouter.labelForDivisionKey(sourceDivisionKey) || sourceDivisionRaw)
+            : sourceDivisionRaw;
         const adminRecordId = String(record?.__record_id || "").trim();
         const slipNo = String(record?.slip_no || "-").trim() || "-";
         const documentName = String(record?.document_name || "-").trim() || "-";
@@ -2097,7 +2523,7 @@ document.addEventListener("DOMContentLoaded", () => {
             allocation,
             priority: billingType,
             amount,
-            receiveFrom: "Admin",
+            receiveFrom: sourceDivisionLabel || "Admin",
             dueDateIso: dateReceivedIso,
             dueDateDisplay: formatDate(dateReceivedIso),
             status: "Incoming",
@@ -3375,6 +3801,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const openTaskModalButtons = document.querySelectorAll(".js-open-task-modal");
     const closeTaskModalButtons = document.querySelectorAll(".js-close-task-modal");
     const taskForm = document.querySelector(".js-task-form");
+    const taskRouteSelect = document.querySelector(".js-task-route-division");
+    const taskRouteSubmit = document.querySelector(".js-task-route-submit");
     const taskAssignedInput = document.querySelector(".js-task-assigned-input");
     const taskAssignedList = document.querySelector(".js-task-assigned-list");
     const contractorManagement = document.querySelector(".js-contractor-management");
@@ -3466,6 +3894,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let deletingMunicipalityName = "";
     let editingEquipmentRow = null;
     let editingScheduleRow = null;
+    let editingTaskRow = null;
     let editingContractorRow = null;
     let deletingContractorRow = null;
     let evaluatingContractorRow = null;
@@ -7112,12 +7541,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const setTaskModalMode = (mode = "create") => {
+        if (!taskModal) {
+            return;
+        }
+        const title = taskModal.querySelector("#task-modal-title");
+        const submitButton = taskForm?.querySelector('button[type="submit"]');
+        if (title) {
+            title.textContent = mode === "edit" ? "Edit Task" : "New Task";
+        }
+        if (submitButton) {
+            submitButton.textContent = mode === "edit" ? "Save Changes" : "Create Task";
+        }
+    };
+
     const resetTaskModal = () => {
         if (!taskForm) {
             return;
         }
 
         taskForm.reset();
+        setTaskModalMode("create");
         resetTaskFormDropdown(".task-personnel-dropdown[data-input-target='division']", "Select division", "division");
         resetTaskFormDropdown(".task-personnel-dropdown[data-input-target='priority']", "Select priority", "priority");
 
@@ -7134,7 +7578,58 @@ document.addEventListener("DOMContentLoaded", () => {
             statusInput.value = "Pending";
         }
 
+        if (taskRouteSelect instanceof HTMLSelectElement) {
+            taskRouteSelect.value = "";
+            taskRouteSelect.disabled = true;
+        }
+        if (taskRouteSubmit instanceof HTMLButtonElement) {
+            taskRouteSubmit.disabled = true;
+        }
+
         syncTaskPersonnelDropdownOptions();
+    };
+
+    const setTaskDropdownValue = (target, value, fallbackLabel) => {
+        if (!taskForm) {
+            return;
+        }
+
+        const dropdown = taskForm.querySelector(`.task-personnel-dropdown[data-input-target="${target}"]`);
+        const label = dropdown?.querySelector(".dropdown-label");
+        const input = taskForm.elements.namedItem(target);
+        const normalizedValue = String(value || "").trim();
+
+        dropdown?.querySelectorAll(".dropdown-option").forEach((option) => {
+            option.classList.toggle("is-selected", String(option.dataset.value || "") === normalizedValue);
+        });
+
+        if (label) {
+            label.textContent = normalizedValue || fallbackLabel;
+        }
+        if (input instanceof HTMLInputElement) {
+            input.value = normalizedValue;
+        }
+    };
+
+    const syncTaskRouteControls = () => {
+        if (!(taskRouteSelect instanceof HTMLSelectElement) || !(taskRouteSubmit instanceof HTMLButtonElement)) {
+            return;
+        }
+
+        if (!editingTaskRow) {
+            taskRouteSelect.disabled = true;
+            taskRouteSubmit.disabled = true;
+            return;
+        }
+
+        taskRouteSelect.disabled = false;
+        const selected = String(taskRouteSelect.value || "").trim();
+        const router = window.peoProjectRouter;
+        const targetKey = router && typeof router.resolveDivisionKey === "function"
+            ? router.resolveDivisionKey(selected)
+            : normalizeKey(selected);
+
+        taskRouteSubmit.disabled = !selected || !targetKey;
     };
 
     const closeTaskModal = () => {
@@ -7142,6 +7637,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         taskModal.hidden = true;
+        editingTaskRow = null;
         resetTaskModal();
         setBodyScrollLock();
     };
@@ -7150,12 +7646,59 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!taskModal) {
             return;
         }
+        editingTaskRow = null;
         resetTaskModal();
+        setTaskModalMode("create");
         taskModal.hidden = false;
         setBodyScrollLock();
         const firstInput = taskModal.querySelector("input[name='title']");
         if (firstInput instanceof HTMLInputElement) {
             firstInput.focus();
+        }
+    };
+
+    const openTaskModalForEdit = (row) => {
+        if (!taskModal || !taskForm || !(row instanceof HTMLTableRowElement)) {
+            return;
+        }
+
+        editingTaskRow = row;
+        resetTaskModal();
+        setTaskModalMode("edit");
+
+        const titleInput = taskForm.elements.namedItem("title");
+        const assignedInput = taskForm.elements.namedItem("assigned_to");
+        const dueDateInput = taskForm.elements.namedItem("due_date");
+        const notesInput = taskForm.elements.namedItem("notes");
+        const divisionValue = row.dataset.divisionLabel || row.dataset.division || "";
+        const priorityValue = row.dataset.priorityLabel || row.querySelector(".task-table-pill--priority")?.textContent || "";
+        const statusValue = row.dataset.statusLabel || row.querySelector(".task-table-pill--status")?.textContent || "";
+
+        if (titleInput instanceof HTMLInputElement) {
+            titleInput.value = row.dataset.title || "";
+        }
+        if (assignedInput instanceof HTMLInputElement) {
+            assignedInput.value = row.dataset.assignedTo || "";
+        }
+        if (dueDateInput instanceof HTMLInputElement) {
+            dueDateInput.value = row.dataset.dueDateIso || "";
+        }
+        if (notesInput instanceof HTMLTextAreaElement) {
+            notesInput.value = row.dataset.notes || "";
+        }
+
+        setTaskDropdownValue("division", divisionValue, "Select division");
+        setTaskDropdownValue("priority", priorityValue, "Select priority");
+        setTaskDropdownValue("status", statusValue || "Pending", "Pending");
+        if (taskRouteSelect instanceof HTMLSelectElement) {
+            taskRouteSelect.value = "";
+        }
+        syncTaskRouteControls();
+
+        taskModal.hidden = false;
+        setBodyScrollLock();
+        if (titleInput instanceof HTMLInputElement) {
+            titleInput.focus();
         }
     };
 
@@ -7277,6 +7820,77 @@ document.addEventListener("DOMContentLoaded", () => {
         button.addEventListener("click", closeTaskModal);
     });
 
+    if (taskRouteSelect instanceof HTMLSelectElement) {
+        taskRouteSelect.addEventListener("change", syncTaskRouteControls);
+    }
+
+    if (taskRouteSubmit instanceof HTMLButtonElement) {
+        taskRouteSubmit.addEventListener("click", () => {
+            if (!editingTaskRow) {
+                showRoadUploadStatusToast("Select a task to edit before submitting.", "warning");
+                return;
+            }
+
+            const router = window.peoProjectRouter;
+            if (!router || typeof router.submitToDivision !== "function") {
+                showRoadUploadStatusToast("Division submission is not available right now.", "warning");
+                return;
+            }
+
+            const targetDivision = String(taskRouteSelect?.value || "").trim();
+            const targetKey = router.resolveDivisionKey ? router.resolveDivisionKey(targetDivision) : normalizeKey(targetDivision);
+            if (!targetKey) {
+                showRoadUploadStatusToast("Please select a division to submit this task to.", "warning");
+                return;
+            }
+
+            const formData = taskForm ? new FormData(taskForm) : null;
+            const title = (formData?.get("title") || editingTaskRow.dataset.title || "").toString().trim();
+            const division = (formData?.get("division") || editingTaskRow.dataset.divisionLabel || "").toString().trim();
+            const dueDateIso = (formData?.get("due_date") || editingTaskRow.dataset.dueDateIso || "").toString().trim();
+            const priority = (formData?.get("priority") || editingTaskRow.dataset.priorityLabel || "").toString().trim();
+            const status = (formData?.get("status") || editingTaskRow.dataset.statusLabel || "Pending").toString().trim();
+            const assignedTo = (formData?.get("assigned_to") || editingTaskRow.dataset.assignedTo || "").toString().trim();
+            const notes = (formData?.get("notes") || editingTaskRow.dataset.notes || "").toString().trim();
+
+            if (!title || !division || !dueDateIso || !priority) {
+                showRoadUploadStatusToast("Please complete Task Name, Division, Due Date, and Priority before submitting.", "warning");
+                return;
+            }
+
+            const existingAdminRecordId = String(editingTaskRow.dataset.adminRecordId || "").trim();
+            const submission = router.submitToDivision({
+                sourceDivisionKey: "maintenance",
+                sourceRecord: {
+                    title,
+                    division,
+                    assignedTo,
+                    dueDateIso,
+                    priority,
+                    status,
+                    notes,
+                    slip_no: editingTaskRow.dataset.slipNo || "",
+                    location: editingTaskRow.dataset.location || "",
+                    amount: editingTaskRow.dataset.amount || "",
+                },
+                targetDivisionKey: targetKey,
+                existingAdminRecordId,
+            });
+
+            if (submission && submission.ok) {
+                if (submission.adminRecordId) {
+                    editingTaskRow.dataset.adminRecordId = String(submission.adminRecordId);
+                }
+                taskRouteSelect.value = "";
+                syncTaskRouteControls();
+                showRoadUploadStatusToast("Task submitted successfully.", "success");
+                return;
+            }
+
+            showRoadUploadStatusToast(String(submission?.error || "Unable to submit task."), "danger");
+        });
+    }
+
     openTaskAnalysisButtons.forEach((button) => {
         button.addEventListener("click", openTaskAnalysisCard);
     });
@@ -7318,6 +7932,48 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    const updateAdminRecordStatus = (recordId, statusLabel) => {
+        const normalizedId = String(recordId || "").trim();
+        if (!normalizedId) {
+            return;
+        }
+        try {
+            const raw = window.localStorage.getItem(adminDivisionStorageKey);
+            const records = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(records)) {
+                return;
+            }
+
+            const index = records.findIndex(
+                (record) => String(record?.__record_id || "").trim() === normalizedId
+            );
+            if (index < 0) {
+                return;
+            }
+
+            const nextStatus = String(statusLabel || "").trim() || "Pending";
+            const nextRecord = {
+                ...(records[index] || {}),
+                doc_status: nextStatus,
+                billing_status: nextStatus,
+                status: nextStatus,
+            };
+            records[index] = nextRecord;
+            window.localStorage.setItem(adminDivisionStorageKey, JSON.stringify(records));
+
+            if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+                const safeRecords = records.map((record) => {
+                    const safe = record && typeof record === "object" ? { ...record } : {};
+                    delete safe.scanned_file_data;
+                    return safe;
+                });
+                window.peoDivisionStore.queueSync("admin", safeRecords);
+            }
+        } catch (error) {
+            // Ignore storage errors.
+        }
+    };
+
 	    if (taskForm && taskTableBody) {
 	        taskForm.addEventListener("submit", (event) => {
 	            event.preventDefault();
@@ -7335,53 +7991,78 @@ document.addEventListener("DOMContentLoaded", () => {
 	                return;
 	            }
 
-	            let adminRecordId = "";
-	            const router = window.peoProjectRouter;
-	            const targetKey = router && typeof router.resolveDivisionKey === "function"
-	                ? router.resolveDivisionKey(division)
+	            const isEditingTask = Boolean(editingTaskRow);
+	            let adminRecordId = isEditingTask
+	                ? String(editingTaskRow?.dataset.adminRecordId || "").trim()
 	                : "";
-	            if (router && typeof router.submitToDivision === "function" && targetKey && targetKey !== "maintenance") {
-	                const submission = router.submitToDivision({
-	                    sourceDivisionKey: "maintenance",
-	                    sourceRecord: {
-	                        title,
-	                        division,
-	                        assignedTo,
-	                        dueDateIso,
-	                        priority,
-	                        status,
-	                        notes,
-	                    },
-	                    targetDivisionKey: targetKey,
-	                    existingAdminRecordId: "",
-	                });
-	                if (submission && submission.ok) {
-	                    adminRecordId = String(submission.adminRecordId || "").trim();
+	            const slipNo = String(editingTaskRow?.dataset.slipNo || "").trim();
+	            const location = String(editingTaskRow?.dataset.location || "").trim();
+	            const amount = String(editingTaskRow?.dataset.amount || "").trim();
+	            const receiveFrom = String(editingTaskRow?.dataset.receiveFrom || "").trim();
+	            const allocationValue = String(editingTaskRow?.dataset.allocation || "").trim();
+
+	            if (!isEditingTask) {
+	                const router = window.peoProjectRouter;
+	                const targetKey = router && typeof router.resolveDivisionKey === "function"
+	                    ? router.resolveDivisionKey(division)
+	                    : "";
+	                if (router && typeof router.submitToDivision === "function" && targetKey && targetKey !== "maintenance") {
+	                    const submission = router.submitToDivision({
+	                        sourceDivisionKey: "maintenance",
+	                        sourceRecord: {
+	                            title,
+	                            division,
+	                            assignedTo,
+	                            dueDateIso,
+	                            priority,
+	                            status,
+	                            notes,
+	                        },
+	                        targetDivisionKey: targetKey,
+	                        existingAdminRecordId: "",
+	                    });
+	                    if (submission && submission.ok) {
+	                        adminRecordId = String(submission.adminRecordId || "").trim();
+	                    }
 	                }
 	            }
 
-	            const emptyRow = taskTableBody.querySelector(".js-task-empty-row");
-	            if (emptyRow) {
-	                emptyRow.remove();
-	            }
-
-	            taskTableBody.prepend(createTaskRowElement({
+	            const taskPayload = {
 	                adminRecordId,
+	                slipNo,
 	                title,
 	                division,
+	                location,
 	                assignedTo,
 	                dueDateIso,
 	                dueDateDisplay: formatTaskDateValue(dueDateIso),
 	                priority,
 	                status,
+	                amount,
+	                receiveFrom,
+	                allocation: allocationValue || division,
 	                notes,
-	            }));
+	            };
+
+	            if (isEditingTask && editingTaskRow) {
+	                const updatedRow = createTaskRowElement(taskPayload);
+	                editingTaskRow.replaceWith(updatedRow);
+	                editingTaskRow = null;
+	                updateAdminRecordStatus(adminRecordId, status);
+	            } else {
+	                const emptyRow = taskTableBody.querySelector(".js-task-empty-row");
+	                if (emptyRow) {
+	                    emptyRow.remove();
+	                }
+
+	                taskTableBody.prepend(createTaskRowElement(taskPayload));
+	            }
 
             updateTaskSummary();
             applyTaskFilters();
             persistMaintenanceState();
             closeTaskModal();
-            showRoadUploadStatusToast("Task created successfully.", "success");
+            showRoadUploadStatusToast(isEditingTask ? "Task updated successfully." : "Task created successfully.", "success");
         });
     }
 
@@ -7740,7 +8421,9 @@ document.addEventListener("DOMContentLoaded", () => {
         row.dataset.division = normalizeKey(allocationLabel);
         row.dataset.divisionLabel = allocationLabel;
         row.dataset.priority = normalizedPriority;
+        row.dataset.priorityLabel = String(record.priority || "Medium").trim();
         row.dataset.status = normalizedStatus;
+        row.dataset.statusLabel = String(record.status || "Pending").trim();
         row.dataset.dueDateIso = String(record.dueDateIso || "").trim();
         row.dataset.overdue = overdue ? "true" : "false";
         row.dataset.title = String(record.title || "").trim();
@@ -7862,6 +8545,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (statusValue === "incoming") {
                 incomingCount += 1;
             } else if (statusValue === "pending") {
+                pendingCount += 1;
+            } else if (statusValue === "for_review" || statusValue === "review") {
                 pendingCount += 1;
             } else if (["in_progress", "on_process", "in_process", "processing"].includes(statusValue)) {
                 processCount += 1;
@@ -8246,6 +8931,39 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore admin storage parsing errors.
         }
 
+        if (adminRecordById.size) {
+            const currentTaskRows = Array.isArray(savedState.taskRows) ? savedState.taskRows : [];
+            const nextTaskRowsById = new Map();
+            currentTaskRows.forEach((row) => {
+                const rowId = String(row?.adminRecordId || "").trim();
+                if (rowId) {
+                    nextTaskRowsById.set(rowId, row);
+                }
+            });
+
+            adminRecordById.forEach((record) => {
+                const divisionKey = normalizeDivisionKey(record?.division);
+                const sourceDivision = String(record?.__submitted_from_division || "").trim();
+                if (divisionKey !== "maintenance" || !sourceDivision) {
+                    return;
+                }
+                const taskRow = buildMaintenanceTaskFromAdminRecord(record);
+                const taskId = String(taskRow?.adminRecordId || "").trim();
+                if (taskId && !nextTaskRowsById.has(taskId)) {
+                    nextTaskRowsById.set(taskId, taskRow);
+                }
+            });
+
+            const mergedTaskRows = Array.from(nextTaskRowsById.values());
+            if (mergedTaskRows.length !== currentTaskRows.length) {
+                savedState.taskRows = mergedTaskRows;
+                writeMaintenanceState({
+                    ...savedState,
+                    taskRows: mergedTaskRows,
+                });
+            }
+        }
+
         if (Array.isArray(savedState.roadRecords) && savedState.roadRecords.length) {
             const restoredRoads = savedState.roadRecords
                 .map((rawRecord) => {
@@ -8562,6 +9280,51 @@ document.addEventListener("DOMContentLoaded", () => {
             updateScheduleSummary();
             persistMaintenanceState();
             showRoadUploadStatusToast("Schedule data deleted successfully.", "success");
+        });
+    }
+
+    if (taskTableBody) {
+        taskTableBody.addEventListener("click", async (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+
+            const row = target.closest("tr");
+            if (!row || row.classList.contains("js-task-empty-row")) {
+                return;
+            }
+
+            const editButton = target.closest('.js-table-action-edit[data-record-type="task"]');
+            if (editButton) {
+                openTaskModalForEdit(row);
+                return;
+            }
+
+            const deleteButton = target.closest('.js-table-action-delete[data-record-type="task"]');
+            if (!deleteButton) {
+                return;
+            }
+
+            const taskLabel = row.dataset.title || row.cells[1]?.textContent || "Task";
+            const shouldDelete = await showRoadDeleteConfirmToast(taskLabel, {
+                title: "Delete Task",
+                copy: "Are you sure you want to delete this task?",
+                confirmLabel: "Yes, Delete",
+                cancelLabel: "Cancel",
+                variant: "danger",
+            });
+            if (!shouldDelete) {
+                return;
+            }
+
+            row.remove();
+            if (!getTaskRows().length) {
+                restoreTaskEmptyRow();
+            }
+            updateTaskSummary();
+            persistMaintenanceState();
+            showRoadUploadStatusToast("Task deleted successfully.", "success");
         });
     }
 
