@@ -592,11 +592,22 @@ def _build_tracking_rows(user):
             return 'Maintenance'
         return raw
 
+    def linked_admin_id(source_record):
+        if not isinstance(source_record, dict):
+            return ''
+        return str(
+            source_record.get('__admin_source_id')
+            or source_record.get('__admin_submission_id')
+            or source_record.get('__admin_record_id')
+            or source_record.get('adminRecordId')
+            or ''
+        ).strip()
+
     planning_by_admin_id = {}
     for record in planning_records:
         if not isinstance(record, dict):
             continue
-        source_id = str(record.get('__admin_source_id') or '').strip()
+        source_id = linked_admin_id(record)
         if not source_id:
             continue
         planning_by_admin_id[source_id] = record
@@ -605,7 +616,7 @@ def _build_tracking_rows(user):
     for record in construction_records:
         if not isinstance(record, dict):
             continue
-        source_id = str(record.get('__admin_source_id') or '').strip()
+        source_id = linked_admin_id(record)
         if not source_id:
             continue
         construction_by_admin_id[source_id] = record
@@ -614,7 +625,7 @@ def _build_tracking_rows(user):
     for record in quality_records:
         if not isinstance(record, dict):
             continue
-        source_id = str(record.get('__admin_source_id') or '').strip()
+        source_id = linked_admin_id(record)
         if not source_id:
             continue
         quality_by_admin_id[source_id] = record
@@ -692,6 +703,7 @@ def _build_tracking_rows(user):
                 'admin_record_id': admin_id,
                 'slip_no': normalize_label(record.get('slip_no')),
                 'project_name': normalize_label(record.get('document_name') or record.get('project_name')),
+                'location': normalize_label(record.get('location')),
                 'contractor': normalize_label(record.get('contractor')),
                 'routed_to': routed_to,
                 'admin_status': admin_status(record),
@@ -780,11 +792,22 @@ def _build_tracking_payload(user):
             'note': note,
         }
 
+    def linked_admin_id(source_record):
+        if not isinstance(source_record, dict):
+            return ''
+        return str(
+            source_record.get('__admin_source_id')
+            or source_record.get('__admin_submission_id')
+            or source_record.get('__admin_record_id')
+            or source_record.get('adminRecordId')
+            or ''
+        ).strip()
+
     planning_by_admin_id = {}
     for record in planning_records:
         if not isinstance(record, dict):
             continue
-        source_id = str(record.get('__admin_source_id') or '').strip()
+        source_id = linked_admin_id(record)
         if not source_id:
             continue
         planning_by_admin_id[source_id] = record
@@ -793,7 +816,7 @@ def _build_tracking_payload(user):
     for record in construction_records:
         if not isinstance(record, dict):
             continue
-        source_id = str(record.get('__admin_source_id') or '').strip()
+        source_id = linked_admin_id(record)
         if not source_id:
             continue
         construction_by_admin_id[source_id] = record
@@ -802,7 +825,7 @@ def _build_tracking_payload(user):
     for record in quality_records:
         if not isinstance(record, dict):
             continue
-        source_id = str(record.get('__admin_source_id') or '').strip()
+        source_id = linked_admin_id(record)
         if not source_id:
             continue
         quality_by_admin_id[source_id] = record

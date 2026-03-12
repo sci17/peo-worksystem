@@ -362,7 +362,14 @@
 	                    <option value="Maintenance Division">Maintenance Division</option>
 	                </select>
 	            </label>
-	
+
+                <label class="quality-form-field">
+                    <span>Attach file (optional)</span>
+                    <input type="file" class="js-quality-route-file" accept=".pdf,image/*">
+                    <small class="peo-route-file-help">Add a PDF or image scan to forward with this submission.</small>
+                </label>
+                <div class="peo-route-files js-quality-route-files" aria-label="Files received for this project"></div>
+ 	
 	            <div class="quality-form-actions">
 	                <button type="button" class="quality-form-cancel js-quality-close-modal">Cancel</button>
 	                <button type="button" class="quality-form-delete js-quality-delete-record" hidden>Delete</button>
