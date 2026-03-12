@@ -59,14 +59,15 @@
 
     function setPosition(el, position) {
         // Reset position
-        el.style.top = '';
-        el.style.right = '';
-        el.style.bottom = '';
-        el.style.left = '';
+        // Use "auto" to override the base CSS (which defaults to bottom/right).
+        el.style.top = 'auto';
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+        el.style.left = 'auto';
         el.style.transform = '';
         const pos = String(position || 'bottom-right').toLowerCase();
-        if (pos === 'top-right') { el.style.top = '22px'; el.style.right = '22px'; }
-        else if (pos === 'top-left') { el.style.top = '22px'; el.style.left = '22px'; }
+        if (pos === 'top-right') { el.style.top = '12px'; el.style.right = '22px'; }
+        else if (pos === 'top-left') { el.style.top = '12px'; el.style.left = '22px'; }
         else if (pos === 'bottom-left') { el.style.bottom = '22px'; el.style.left = '22px'; }
         else if (pos === 'center') { el.style.top = '50%'; el.style.left = '50%'; el.style.transform = 'translate(-50%, -50%)'; }
         else { /* bottom-right default */ el.style.right = '22px'; el.style.bottom = '22px'; }
@@ -176,6 +177,199 @@
     } else {
         bindDataAttributes();
     }
+})();
+
+// Incoming document toast notifier (per-division).
+// Uses Admin store routing metadata (__tracking_events / __submitted_at) to notify when a record is routed
+// to the current division again (e.g., Maintenance -> Admin) without spamming older items.
+(function () {
+    const STORAGE_PREFIX = "peo_incoming_doc_toast_state_v1:";
+    const MAX_TRACKED = 500;
+
+    const safeParseJson = (raw, fallback) => {
+        try {
+            return raw ? JSON.parse(raw) : fallback;
+        } catch (error) {
+            return fallback;
+        }
+    };
+
+    const safeStorageGet = (key) => {
+        try {
+            return window.localStorage.getItem(key);
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const safeStorageSet = (key, value) => {
+        try {
+            window.localStorage.setItem(key, value);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const normalizeKey = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    const resolveDivisionKey = (value) => {
+        const raw = String(value || "").trim();
+        const router = window.peoProjectRouter;
+        if (router && typeof router.resolveDivisionKey === "function") {
+            return router.resolveDivisionKey(raw);
+        }
+        return normalizeKey(raw);
+    };
+
+    const labelForDivisionKey = (key) => {
+        const router = window.peoProjectRouter;
+        if (router && typeof router.labelForDivisionKey === "function") {
+            const label = router.labelForDivisionKey(String(key || "").trim());
+            if (label) return label;
+        }
+        const fallback = {
+            admin: "Admin Division",
+            planning: "Planning Division",
+            construction: "Construction Division",
+            quality: "Quality Division",
+            maintenance: "Maintenance Division",
+        };
+        return fallback[String(key || "")] || "";
+    };
+
+    const getLatestRouteEventToDivision = (record, divisionKey) => {
+        const targetKey = resolveDivisionKey(divisionKey);
+        const events = Array.isArray(record?.__tracking_events) ? record.__tracking_events : [];
+        for (let i = events.length - 1; i >= 0; i--) {
+            const ev = events[i];
+            if (!ev || typeof ev !== "object") continue;
+            const toKey = resolveDivisionKey(ev.to || "");
+            if (toKey && toKey === targetKey) {
+                return ev;
+            }
+        }
+        return null;
+    };
+
+    const toEpochMs = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return 0;
+        const ms = Date.parse(text);
+        return Number.isFinite(ms) ? ms : 0;
+    };
+
+    const buildIncomingAdminRows = (divisionKey, adminRecords) => {
+        const targetKey = resolveDivisionKey(divisionKey);
+        return (Array.isArray(adminRecords) ? adminRecords : [])
+            .filter((record) => record && typeof record === "object")
+            .filter((record) => resolveDivisionKey(record.division) === targetKey)
+            .filter((record) => {
+                // Admin division "inbox" notifications should be for routed-in submissions,
+                // not for records originally created by Admin without a sender/history.
+                if (targetKey !== "admin") return true;
+                const hasSender = String(record.__submitted_from_division || "").trim().length > 0;
+                const hasEvents = Array.isArray(record.__tracking_events) && record.__tracking_events.length > 0;
+                return hasSender || hasEvents;
+            })
+            .map((record) => {
+                const id = String(record.__record_id || record.__id || "").trim();
+                const ev = getLatestRouteEventToDivision(record, targetKey);
+                const receivedAtCandidate = String(ev?.at || record.__submitted_at || record.date_received_admin || record.date_received_peo || record.date_received || "").trim();
+                const receivedMs = toEpochMs(receivedAtCandidate) || Date.now();
+
+                const senderCandidate = String(ev?.by || ev?.from || record.__submitted_from_division || "").trim();
+                const senderKey = resolveDivisionKey(senderCandidate) || resolveDivisionKey(record.__submitted_from_division);
+                const senderLabel = labelForDivisionKey(senderKey) || senderCandidate || "Another division";
+
+                const name = String(record.document_name || record.project_name || record.title || "Untitled Document").trim() || "Untitled Document";
+                const slip = String(record.slip_no || record.doc_no || record.slipNo || "").trim();
+
+                return { id, receivedMs, senderLabel, name, slip };
+            })
+            .filter((row) => row.id)
+            .sort((a, b) => b.receivedMs - a.receivedMs);
+    };
+
+    const getStateKey = (divisionKey) => `${STORAGE_PREFIX}${resolveDivisionKey(divisionKey)}`;
+
+    const readState = (divisionKey) => {
+        const raw = safeStorageGet(getStateKey(divisionKey));
+        const parsed = safeParseJson(raw, null);
+        if (!parsed || typeof parsed !== "object") return null;
+        const seen = parsed.seen && typeof parsed.seen === "object" ? parsed.seen : {};
+        return { v: 1, seen };
+    };
+
+    const writeState = (divisionKey, state) => {
+        const payload = state && typeof state === "object" ? state : { v: 1, seen: {} };
+        safeStorageSet(getStateKey(divisionKey), JSON.stringify(payload));
+    };
+
+    const showToast = (message, options) => {
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast(message, options || {});
+            return;
+        }
+        if (window.PEOToast && typeof window.PEOToast.show === "function") {
+            window.PEOToast.show({
+                message: String(message || ""),
+                title: String(options?.title || ""),
+                variant: String(options?.variant || "info"),
+                duration: typeof options?.duration === "number" ? options.duration : 3200,
+                persist: !!options?.persist,
+                position: options?.position,
+                style: options?.style,
+            });
+        }
+    };
+
+    const check = (divisionKey, adminRecords) => {
+        const key = resolveDivisionKey(divisionKey);
+        if (!key) return { ok: false, reason: "missing_division" };
+
+        const incoming = buildIncomingAdminRows(key, adminRecords);
+        const existing = readState(key);
+
+        if (!existing) {
+            // First run for this division on this device: mark current inbox as seen to avoid spam.
+            const seed = incoming.reduce((acc, row) => {
+                acc[row.id] = row.receivedMs;
+                return acc;
+            }, {});
+            writeState(key, { v: 1, seen: seed });
+            return { ok: true, initialized: true, newCount: 0 };
+        }
+
+        const seen = existing.seen || {};
+        const newRows = incoming.filter((row) => {
+            const prev = Number(seen[row.id] || 0);
+            return !prev || row.receivedMs > prev;
+        });
+
+        // Update seen state for all current inbox rows (bounded).
+        const nextSeen = { ...seen };
+        incoming.slice(0, MAX_TRACKED).forEach((row) => {
+            nextSeen[row.id] = row.receivedMs;
+        });
+        writeState(key, { v: 1, seen: nextSeen });
+
+        if (!newRows.length) {
+            return { ok: true, initialized: false, newCount: 0 };
+        }
+
+        const divisionLabel = labelForDivisionKey(key) || "Division";
+        const latest = newRows[0];
+        const title = "New Document Received";
+        const message = newRows.length === 1
+            ? `New document received in ${divisionLabel} from ${latest.senderLabel}: ${latest.name}${latest.slip ? ` (Slip ${latest.slip})` : ""}`
+            : `${newRows.length} new documents received in ${divisionLabel}. Latest from ${latest.senderLabel}: ${latest.name}`;
+
+        showToast(message, { title, variant: "info" });
+        return { ok: true, initialized: false, newCount: newRows.length };
+    };
+
+    window.peoIncomingDocToast = { check };
 })();
 
 function togglePassword() {
@@ -1480,6 +1674,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let adminRecords = await ensureAdminStore();
         adminRecords = reconcileMaintenanceOutgoingSubmissions(adminRecords);
+        if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+            window.peoIncomingDocToast.check(divisionKey, adminRecords);
+        }
         let allRows = getSubmissionsForDivision(adminRecords, divisionKey);
 
         const syncModalState = () => {
@@ -4315,6 +4512,9 @@ document.addEventListener("DOMContentLoaded", () => {
     applyDocumentFilters();
     applyBillingFilters();
     restoreAdminDivisionRecords();
+    if ((documentsTableBody || billingTableBody) && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+        window.peoIncomingDocToast.check("admin", readAdminDivisionRecords());
+    }
     syncSelectionControls();
     enableAdminDivisionCardFloat();
 });
@@ -4504,6 +4704,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const adminDivisionStorageKey = "peo_admin_division_records_v1";
     const constructionStorageKey = "peo_construction_records_v1";
     const roadAcceptedUploadTypes = ".xlsx,.xls,.csv,.txt,.json";
+
+    if (maintenanceTaskTracker && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+        let adminRecordsForToast = [];
+        try {
+            const raw = window.localStorage.getItem(adminDivisionStorageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            adminRecordsForToast = Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            adminRecordsForToast = [];
+        }
+        window.peoIncomingDocToast.check("maintenance", adminRecordsForToast);
+    }
     let editingMunicipalityKey = "";
     let editingMunicipalityName = "";
     let editingMunicipalityRecordIndexes = [];
@@ -11632,6 +11844,9 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     let records = syncAdminRoutedConstructionRecords(readStoredRecords());
+    if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+        window.peoIncomingDocToast.check("construction", readAdminDivisionRecords());
+    }
     let currentPage = 1;
     let editingRecordId = null;
 
@@ -14752,6 +14967,9 @@ document.addEventListener("DOMContentLoaded", () => {
 	    let planningBudgetRecords = readStoredBudgets();
 	    let planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
 	    writeStoredPlanningDocuments(planningDocumentRecords);
+        if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+            window.peoIncomingDocToast.check("planning", readAdminDivisionRecords());
+        }
 	    let editingBudgetRecordId = null;
 	    let editingPpaRow = null;
 	    let editingPlanningDocumentId = null;
@@ -17413,6 +17631,53 @@ let peoGeneralToastTimer = null;
 let peoGeneralConfirmElement = null;
 const PEO_PERSISTED_TOAST_KEY = "peo_persisted_system_toast_v1";
 
+const applyPeoGeneralToastPosition = (el, position) => {
+    if (!(el instanceof HTMLElement)) return;
+
+    // Reset position before applying.
+    // Use "auto" to override the base CSS (which defaults to bottom/right).
+    el.style.top = "auto";
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+    el.style.left = "auto";
+    el.style.transform = "";
+
+    const pos = String(position || "").trim().toLowerCase();
+    if (!pos) return;
+
+    const edge = "22px";
+    const topEdge = "12px";
+
+    if (pos === "top-right") {
+        el.style.top = `calc(env(safe-area-inset-top, 0px) + ${topEdge})`;
+        el.style.right = `calc(env(safe-area-inset-right, 0px) + ${edge})`;
+        return;
+    }
+
+    if (pos === "top-left") {
+        el.style.top = `calc(env(safe-area-inset-top, 0px) + ${topEdge})`;
+        el.style.left = `calc(env(safe-area-inset-left, 0px) + ${edge})`;
+        return;
+    }
+
+    if (pos === "bottom-left") {
+        el.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${edge})`;
+        el.style.left = `calc(env(safe-area-inset-left, 0px) + ${edge})`;
+        return;
+    }
+
+    if (pos === "center") {
+        el.style.top = "50%";
+        el.style.left = "50%";
+        el.style.transform = "translate(-50%, -50%)";
+        return;
+    }
+
+    // bottom-right (default)
+    el.style.right = `calc(env(safe-area-inset-right, 0px) + ${edge})`;
+    el.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${edge})`;
+};
+
 const closePeoGeneralToast = () => {
     if (!(peoGeneralToastElement instanceof HTMLElement)) return;
     peoGeneralToastElement.classList.remove("is-visible");
@@ -17433,6 +17698,7 @@ const showPeoGeneralToast = (message, options = {}) => {
         ? String(options.variant).trim()
         : "success";
     const title = String(options.title || "").trim();
+    const position = String(options.position || "").trim();
     const iconMap = {
         success: "check_circle",
         info: "info",
@@ -17456,6 +17722,7 @@ const showPeoGeneralToast = (message, options = {}) => {
 
     document.body.appendChild(toast);
     peoGeneralToastElement = toast;
+    applyPeoGeneralToastPosition(toast, position);
     window.requestAnimationFrame(() => {
         toast.classList.add("is-visible");
     });
@@ -17567,6 +17834,7 @@ document.addEventListener("DOMContentLoaded", () => {
             showPeoGeneralToast(parsedToast.message, {
                 title: parsedToast.title,
                 variant: parsedToast.variant,
+                position: parsedToast.position,
             });
         }
     } catch (error) {
@@ -17585,6 +17853,7 @@ document.addEventListener("DOMContentLoaded", () => {
             message: trigger.getAttribute("data-peo-toast-message") || "",
             title: trigger.getAttribute("data-peo-toast-title") || "",
             variant: trigger.getAttribute("data-peo-toast-variant") || "info",
+            position: trigger.getAttribute("data-peo-toast-position") || "",
         };
 
         if (trigger instanceof HTMLAnchorElement) {
@@ -17594,6 +17863,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (shouldPersistToNextPage && isRealNavigation) {
                 try {
+                    if (!toastPayload.position && toastPayload.title === "Sidebar Navigation") {
+                        toastPayload.position = "top-right";
+                    }
                     window.sessionStorage.setItem(PEO_PERSISTED_TOAST_KEY, JSON.stringify(toastPayload));
                 } catch (error) {
                     // Ignore storage failures and allow navigation to continue.
@@ -17604,9 +17876,11 @@ document.addEventListener("DOMContentLoaded", () => {
             event.preventDefault();
         }
 
+        const resolvedPosition = toastPayload.position || (toastPayload.title === "Sidebar Navigation" ? "top-right" : "");
         showPeoGeneralToast(toastPayload.message, {
             title: toastPayload.title,
             variant: toastPayload.variant,
+            position: resolvedPosition,
         });
     });
 });
@@ -18114,6 +18388,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let records = dedupeQualityRecords(syncAdminRoutedQualityRecords(readStoredRecords()));
     writeStoredRecords(records);
+    if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+        window.peoIncomingDocToast.check("quality", readAdminDivisionRecords());
+    }
     let currentPage = 1;
     let activeTab = "all";
     let activeCardFilter = "all";
