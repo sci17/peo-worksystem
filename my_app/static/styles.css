@@ -1584,6 +1584,23 @@ body {
     font-size: 0.82rem;
 }
 
+.spotlight-copy h4,
+.spotlight-copy p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+}
+
+.spotlight-copy h4 {
+    -webkit-line-clamp: 2;
+}
+
+.spotlight-copy p {
+    -webkit-line-clamp: 2;
+}
+
 .spotlight-dots {
     right: 22px;
     bottom: 20px;

@@ -9332,6 +9332,127 @@ document.addEventListener("DOMContentLoaded", () => {
         taskSearchInput.addEventListener("input", applyTaskFilters);
     }
 
+    // Road Management tabs (Provincial Roads / Equipment / Maintenance Schedules).
+    // Set this up early so it still works even if later maintenance init code errors out.
+    const resolveRoadPanelsContainer = (tabsContainer) => {
+        if (!(tabsContainer instanceof HTMLElement)) {
+            return null;
+        }
+
+        const sibling = tabsContainer.nextElementSibling;
+        if (sibling instanceof HTMLElement && sibling.classList.contains("road-tab-panels")) {
+            return sibling;
+        }
+
+        const parent = tabsContainer.parentElement;
+        if (!parent) {
+            return null;
+        }
+
+        const fallback = parent.querySelector(".road-tab-panels");
+        return fallback instanceof HTMLElement ? fallback : null;
+    };
+
+    const setActiveRoadTab = (tabsContainer, tabKey) => {
+        const safeKey = String(tabKey || "").trim();
+        if (!safeKey) {
+            return;
+        }
+        if (!(tabsContainer instanceof HTMLElement)) {
+            return;
+        }
+
+        const panelsContainer = resolveRoadPanelsContainer(tabsContainer);
+        if (!panelsContainer) {
+            return;
+        }
+
+        const tabsToUpdate = Array.from(tabsContainer.querySelectorAll(".road-tab[data-road-tab]"));
+        const panelsToUpdate = Array.from(panelsContainer.querySelectorAll(".road-tab-panel[data-road-panel]"));
+        if (!tabsToUpdate.length || !panelsToUpdate.length) {
+            return;
+        }
+
+        tabsToUpdate.forEach((tab) => {
+            const isActive = tab.dataset.roadTab === safeKey;
+            tab.classList.toggle("is-active", isActive);
+            tab.setAttribute("aria-selected", String(isActive));
+        });
+
+        panelsToUpdate.forEach((panel) => {
+            const isActive = panel.dataset.roadPanel === safeKey;
+            panel.classList.toggle("is-active", isActive);
+            panel.hidden = !isActive;
+        });
+    };
+
+    const initRoadTabs = (tabsContainer) => {
+        if (!(tabsContainer instanceof HTMLElement)) {
+            return;
+        }
+        if (tabsContainer.dataset.roadTabsInit === "1") {
+            return;
+        }
+
+        const defaultTab = tabsContainer.querySelector(".road-tab.is-active[data-road-tab]")
+            || tabsContainer.querySelector(".road-tab[data-road-tab]");
+        if (!(defaultTab instanceof HTMLElement)) {
+            return;
+        }
+
+        tabsContainer.dataset.roadTabsInit = "1";
+        setActiveRoadTab(tabsContainer, defaultTab.dataset.roadTab);
+    };
+
+    // Use event delegation so tabs keep working when the dashboard swaps the maintenance HTML dynamically.
+    document.addEventListener("click", (event) => {
+        // `event.target` can be a Text node when clicking on button text in some browsers.
+        const rawTarget = event.target;
+        const target = rawTarget instanceof Element ? rawTarget : rawTarget?.parentElement;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        const clickedTab = target.closest(".road-tab[data-road-tab]");
+        if (!clickedTab) {
+            return;
+        }
+
+        const tabsContainer = clickedTab.closest(".road-tabs");
+        if (!tabsContainer) {
+            return;
+        }
+
+        initRoadTabs(tabsContainer);
+        setActiveRoadTab(tabsContainer, clickedTab.dataset.roadTab);
+    }, true);
+
+    // Initialize any tabs already in the DOM.
+    document.querySelectorAll(".road-tabs").forEach((tabsContainer) => initRoadTabs(tabsContainer));
+
+    // Initialize tabs that appear later (e.g., dynamic dashboard content swap).
+    if (typeof MutationObserver === "function") {
+        const roadTabsObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (!(node instanceof HTMLElement)) {
+                        return;
+                    }
+                    if (node.matches(".road-tabs")) {
+                        initRoadTabs(node);
+                        return;
+                    }
+                    const nested = node.querySelector(".road-tabs");
+                    if (nested instanceof HTMLElement) {
+                        initRoadTabs(nested);
+                    }
+                });
+            });
+        });
+
+        roadTabsObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
     restoreMaintenanceState();
     if (contractorManagement) {
         seedDerivedContractorsFromProjectContracts();
@@ -9349,34 +9470,6 @@ document.addEventListener("DOMContentLoaded", () => {
         refreshRoadRegister();
     }
     persistMaintenanceState();
-
-    const tabs = document.querySelectorAll(".road-tab[data-road-tab]");
-    const panels = document.querySelectorAll(".road-tab-panel[data-road-panel]");
-
-    if (tabs.length) {
-        const setActiveTab = (tabKey) => {
-            tabs.forEach((tab) => {
-                const isActive = tab.dataset.roadTab === tabKey;
-                tab.classList.toggle("is-active", isActive);
-                tab.setAttribute("aria-selected", String(isActive));
-            });
-
-            panels.forEach((panel) => {
-                const isActive = panel.dataset.roadPanel === tabKey;
-                panel.classList.toggle("is-active", isActive);
-                panel.hidden = !isActive;
-            });
-        };
-
-        tabs.forEach((tab) => {
-            tab.addEventListener("click", () => {
-                setActiveTab(tab.dataset.roadTab);
-            });
-        });
-
-        const activeTab = document.querySelector(".road-tab.is-active[data-road-tab]");
-        setActiveTab(activeTab ? activeTab.dataset.roadTab : tabs[0].dataset.roadTab);
-    }
 
     const dropdowns = document.querySelectorAll(".js-road-dropdown");
     const closeDropdowns = (current = null) => {
