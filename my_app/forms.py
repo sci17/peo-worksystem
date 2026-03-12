@@ -1,5 +1,8 @@
 from django import forms
 from django.core.validators import FileExtensionValidator
+from django.utils.text import get_valid_filename
+
+from pathlib import Path
 
 from .models import UserProfile
 
@@ -54,14 +57,43 @@ class AccountSettingsForm(forms.Form):
         remove_picture = self.cleaned_data.get('remove_profile_picture')
         new_picture = self.cleaned_data.get('profile_picture')
 
-        if remove_picture and self.profile.profile_picture:
-            self.profile.profile_picture.delete(save=False)
-            self.profile.profile_picture = None
+        profile_dir = Path(__file__).resolve().parent / 'static' / 'profile'
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        legacy_uploads_dir = Path(__file__).resolve().parent / 'static' / 'uploads'
 
-        if new_picture:
+        def remove_static_profile_picture():
+            for base_dir in (profile_dir, legacy_uploads_dir):
+                if not base_dir.exists():
+                    continue
+                for candidate in base_dir.glob(f'profile_{self.user.id}.*'):
+                    try:
+                        candidate.unlink()
+                    except OSError:
+                        # Ignore filesystem errors so settings save still succeeds.
+                        pass
+
+        if remove_picture:
+            remove_static_profile_picture()
             if self.profile.profile_picture:
                 self.profile.profile_picture.delete(save=False)
-            self.profile.profile_picture = new_picture
+                self.profile.profile_picture = None
+
+        if new_picture:
+            remove_static_profile_picture()
+
+            original_name = get_valid_filename(getattr(new_picture, 'name', '') or 'profile.png')
+            ext = Path(original_name).suffix.lower() or '.png'
+            filename = f'profile_{self.user.id}{ext}'
+            destination = profile_dir / filename
+
+            with destination.open('wb') as handle:
+                for chunk in new_picture.chunks():
+                    handle.write(chunk)
+
+            # Keep the media-backed ImageField empty; the UI uses the static upload instead.
+            if self.profile.profile_picture:
+                self.profile.profile_picture.delete(save=False)
+            self.profile.profile_picture = None
 
         self.profile.email_notifications = self.cleaned_data['email_notifications']
         self.profile.portal_notifications = self.cleaned_data['portal_notifications']

@@ -577,15 +577,10 @@
                 <section class="panel panel-progress">
                     <div class="panel-head">
                         <h3>Detailed Division Progress</h3>
-                        <button
-                            type="button"
-                            class="text-action"
-                            data-peo-toast-message="The full progress report will open here once reporting routes are connected."
-                            data-peo-toast-variant="info"
-                        >
+                        <a href="{% url 'tracking_details' %}" class="text-action" aria-label="View full progress report">
                             <span>View Full Report</span>
                             <span class="material-symbols-outlined">arrow_forward</span>
-                        </button>
+                        </a>
                     </div>
 
                     <div class="table-wrap">

@@ -60,6 +60,9 @@
                 <form method="post" enctype="multipart/form-data" class="account-settings-form" novalidate>
                     {% csrf_token %}
                     <input type="hidden" name="settings_form" value="profile">
+                    {{ form.email_notifications.as_hidden }}
+                    {{ form.portal_notifications.as_hidden }}
+                    {{ form.appearance_mode.as_hidden }}
 
                     <div class="account-settings-grid">
                         <div class="account-settings-field">

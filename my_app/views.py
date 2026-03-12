@@ -47,7 +47,26 @@ def _build_user_identity(user, profile=None):
 
     if profile is None:
         profile = _get_user_profile(user)
-    picture_url = profile.profile_picture.url if profile.profile_picture else ''
+
+    profile_dir = Path(__file__).resolve().parent / "static" / "profile"
+    legacy_uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
+    picture_url = ""
+
+    def pick_static_picture(base_dir, url_prefix):
+        if not base_dir.exists():
+            return ""
+        for ext in (".jpg", ".jpeg", ".png", ".webp"):
+            candidate = base_dir / f"profile_{user.id}{ext}"
+            if candidate.exists():
+                # Add a cache buster so updates show immediately after upload.
+                version = int(candidate.stat().st_mtime)
+                return f"{url_prefix}/{candidate.name}?v={version}"
+        return ""
+
+    picture_url = pick_static_picture(profile_dir, "/static/profile") or pick_static_picture(legacy_uploads_dir, "/static/uploads")
+
+    if not picture_url:
+        picture_url = profile.profile_picture.url if profile.profile_picture else ''
 
     return {
         'dashboard_user_profile_picture_url': picture_url,
@@ -1059,7 +1078,17 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
         else 'Review notification preferences'
     )
 
-    if request.user.get_full_name().strip() and profile.profile_picture:
+    profile_dir = Path(__file__).resolve().parent / "static" / "profile"
+    legacy_uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
+
+    def has_static_profile_picture(base_dir):
+        if not base_dir.exists():
+            return False
+        return any((base_dir / f"profile_{request.user.id}{ext}").exists() for ext in (".jpg", ".jpeg", ".png", ".webp"))
+
+    has_static_picture = has_static_profile_picture(profile_dir) or has_static_profile_picture(legacy_uploads_dir)
+
+    if request.user.get_full_name().strip() and (profile.profile_picture or has_static_picture):
         profile_title = 'Profile is fully set up'
         profile_message = 'Your account name and profile picture are ready across the portal.'
         profile_meta = 'Profile complete'

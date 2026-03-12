@@ -1762,6 +1762,122 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Live-update the UI on the Settings > My Profile form so the user sees their new name/photo immediately.
+    const profileSection = document.getElementById("account-settings-profile");
+    if (profileSection instanceof HTMLElement) {
+        const profileForm = profileSection.querySelector("form.account-settings-form");
+        const firstNameInput = profileForm ? profileForm.querySelector("#id_first_name") : null;
+        const lastNameInput = profileForm ? profileForm.querySelector("#id_last_name") : null;
+        const pictureInput = profileForm ? profileForm.querySelector("#id_profile_picture") : null;
+        const removePictureInput = profileForm ? profileForm.querySelector("#id_remove_profile_picture") : null;
+        const sidebarName = document.querySelector(".account-settings-profile-card h2");
+        const sidebarAvatar = document.querySelector(".account-settings-profile-card .account-settings-avatar");
+        const topbarName = document.querySelector(".topbar-user-trigger .user-name");
+        const dropdownName = document.querySelector(".topbar-user-dropdown-name");
+        const topbarAvatar = document.querySelector(".topbar-user-trigger .user-avatar");
+
+        const normalizeNameText = (value) => String(value || "").trim().replace(/\s+/g, " ");
+        const buildDisplayName = () => {
+            const first = normalizeNameText(firstNameInput instanceof HTMLInputElement ? firstNameInput.value : "");
+            const last = normalizeNameText(lastNameInput instanceof HTMLInputElement ? lastNameInput.value : "");
+            return normalizeNameText([first, last].filter(Boolean).join(" "));
+        };
+        const buildInitials = () => {
+            const display = buildDisplayName();
+            const parts = display.split(" ").filter(Boolean);
+            if (parts.length >= 2) {
+                return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+            }
+            if (parts.length === 1) {
+                const alnum = parts[0].replace(/[^a-z0-9]/gi, "");
+                return (alnum.slice(0, 2) || "").toUpperCase();
+            }
+            return "";
+        };
+
+        let previewUrl = "";
+        const setAvatarPreview = (targetRoot, imgUrl, altText) => {
+            if (!(targetRoot instanceof HTMLElement)) return;
+            const existingImg = targetRoot.querySelector("img");
+            const existingText = targetRoot.querySelector("span");
+
+            if (imgUrl) {
+                if (existingText) {
+                    existingText.remove();
+                }
+                const img = existingImg instanceof HTMLImageElement ? existingImg : document.createElement("img");
+                img.src = imgUrl;
+                img.alt = altText || "Profile picture";
+                if (!existingImg) {
+                    targetRoot.innerHTML = "";
+                    targetRoot.appendChild(img);
+                }
+                return;
+            }
+
+            if (existingImg) {
+                existingImg.remove();
+            }
+            const initials = buildInitials();
+            const span = existingText instanceof HTMLSpanElement ? existingText : document.createElement("span");
+            span.textContent = initials || (existingText ? existingText.textContent : "");
+            if (!existingText) {
+                targetRoot.innerHTML = "";
+                targetRoot.appendChild(span);
+            }
+        };
+
+        const syncProfileUi = () => {
+            const displayName = buildDisplayName();
+            if (displayName) {
+                if (sidebarName instanceof HTMLElement) sidebarName.textContent = displayName;
+                if (topbarName instanceof HTMLElement) topbarName.textContent = displayName;
+                if (dropdownName instanceof HTMLElement) dropdownName.textContent = displayName;
+            }
+
+            const shouldRemove = removePictureInput instanceof HTMLInputElement && removePictureInput.checked;
+            if (shouldRemove) {
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = "";
+                }
+                setAvatarPreview(sidebarAvatar, "", displayName);
+                setAvatarPreview(topbarAvatar, "", displayName);
+            } else if (previewUrl) {
+                setAvatarPreview(sidebarAvatar, previewUrl, displayName);
+                setAvatarPreview(topbarAvatar, previewUrl, displayName);
+            }
+        };
+
+        if (firstNameInput instanceof HTMLInputElement) {
+            firstNameInput.addEventListener("input", syncProfileUi);
+        }
+        if (lastNameInput instanceof HTMLInputElement) {
+            lastNameInput.addEventListener("input", syncProfileUi);
+        }
+        if (removePictureInput instanceof HTMLInputElement) {
+            removePictureInput.addEventListener("change", syncProfileUi);
+        }
+        if (pictureInput instanceof HTMLInputElement) {
+            pictureInput.addEventListener("change", () => {
+                const files = pictureInput.files ? Array.from(pictureInput.files) : [];
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = "";
+                }
+                if (files.length) {
+                    previewUrl = URL.createObjectURL(files[0]);
+                    if (removePictureInput instanceof HTMLInputElement) {
+                        removePictureInput.checked = false;
+                    }
+                }
+                syncProfileUi();
+            });
+        }
+
+        syncProfileUi();
+    }
+
     if (accountMenuRoot && accountMenuToggle && accountMenu) {
         setAccountMenuExpanded(false);
         setAccountMenuOpen(false);
@@ -9580,6 +9696,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
+    // Guard against double-initialization if the bundle is included more than once.
+    if (spotlightSection.dataset.spotlightInitialized === "1") {
+        return;
+    }
+    spotlightSection.dataset.spotlightInitialized = "1";
+
     const items = Array.from(spotlightScene.querySelectorAll("[data-spotlight-item]"))
         .map((node) => {
             if (!(node instanceof HTMLElement)) return null;
@@ -9592,26 +9714,41 @@ document.addEventListener("DOMContentLoaded", () => {
         })
         .filter((item) => item && (item.id || item.title));
 
-    if (!items.length) {
-        return;
-    }
-
     const prevButton = spotlightSection.querySelector('[data-spotlight-nav="prev"]');
     const nextButton = spotlightSection.querySelector('[data-spotlight-nav="next"]');
     const chipEl = spotlightScene.querySelector(".spotlight-chip");
     const titleEl = spotlightScene.querySelector(".spotlight-copy h4");
     const subtitleEl = spotlightScene.querySelector(".spotlight-copy p");
-    const dotEls = Array.from(spotlightScene.querySelectorAll(".spotlight-dots span"));
+    const dotsWrap = spotlightScene.querySelector(".spotlight-dots");
+    const dotEls = dotsWrap ? Array.from(dotsWrap.querySelectorAll("span")) : [];
 
     const SPOTLIGHT_INDEX_KEY = "peo_overview_spotlight_index_v1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const SPOTLIGHT_AUTOPLAY_MS = 5000;
+    const prefersReducedMotion = typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        : false;
+    let slides = items.slice();
+    let usesConstructionSlides = false;
+    let lastImageUrl = "";
+    let currentSpotlightBgUrl = "";
 
     const normalize = (value) => String(value || "").trim().toLowerCase();
+    // Only allow construction uploads from the static uploads folder. This prevents the spotlight from
+    // accidentally showing user profile images or other unrelated assets.
+    const isConstructionSpotlightUrl = (value) => {
+        const url = String(value || "").trim();
+        if (!url.startsWith("/static/uploads/")) return false;
+        const filename = url.slice("/static/uploads/".length).split("?")[0];
+        if (!filename) return false;
+        if (filename.startsWith("profile_")) return false;
+        return true;
+    };
     const clampIndex = (value) => {
-        if (!items.length) return 0;
+        if (!slides.length) return 0;
         const idx = Number.parseInt(String(value ?? ""), 10);
         if (!Number.isFinite(idx)) return 0;
-        return Math.min(items.length - 1, Math.max(0, idx));
+        return Math.min(slides.length - 1, Math.max(0, idx));
     };
 
     const readSpotlightIndex = () => {
@@ -9640,6 +9777,143 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const pickRandomValue = (values, excludeValue = "") => {
+        const list = Array.isArray(values) ? values.filter(Boolean) : [];
+        if (!list.length) return "";
+        if (list.length === 1) return String(list[0]);
+        const normalizedExclude = String(excludeValue || "").trim();
+        for (let tries = 0; tries < 6; tries += 1) {
+            const candidate = String(list[Math.floor(Math.random() * list.length)]);
+            if (candidate && candidate !== normalizedExclude) return candidate;
+        }
+        return String(list[Math.floor(Math.random() * list.length)]);
+    };
+
+    const buildConstructionSlides = (records) =>
+        (Array.isArray(records) ? records : [])
+            .filter((record) => record && typeof record === "object")
+            .map((record) => {
+                const id = String(record.__id || "").trim();
+                const title = String(record.project_name || record.project || "").trim() || "Construction Project";
+                const location = String(record.location || "").trim();
+                const contractor = String(record.contractor || "").trim();
+                const subtitle = [location, contractor].filter(Boolean).join(" \u00b7 ");
+
+                const imagePool = [];
+                const images = Array.isArray(record.accomplishment_images) ? record.accomplishment_images : [];
+                images.forEach((img) => {
+                    const url = (typeof img === "string"
+                        ? img
+                        : String(img?.dataUrl || img?.url || ""))
+                        .trim();
+                    if (isConstructionSpotlightUrl(url)) imagePool.push(url);
+                });
+
+                const legacy = String(record.accomplishment_image || "").trim();
+                if (isConstructionSpotlightUrl(legacy)) imagePool.push(legacy);
+
+                const uniq = Array.from(new Set(imagePool));
+                return {
+                    id,
+                    title,
+                    subtitle,
+                    category: "Construction",
+                    imageUrls: uniq,
+                };
+            })
+            .filter((slide) => slide.imageUrls && slide.imageUrls.length);
+
+    const refreshSlides = (records) => {
+        const constructed = buildConstructionSlides(records);
+        if (constructed.length) {
+            slides = constructed;
+            usesConstructionSlides = true;
+        } else {
+            slides = items.slice();
+            usesConstructionSlides = false;
+        }
+
+        // The template only renders dots for the server-provided spotlight items. Hide them when we
+        // switch to construction-driven slides (could be hundreds of records).
+        if (dotsWrap instanceof HTMLElement) {
+            dotsWrap.style.display = usesConstructionSlides ? "none" : "";
+        }
+    };
+
+    const ensureSpotlightLayers = () => {
+        let bgA = spotlightScene.querySelector('.spotlight-bg[data-layer="a"]');
+        if (!(bgA instanceof HTMLElement)) {
+            bgA = document.createElement("div");
+            bgA.className = "spotlight-bg";
+            bgA.dataset.layer = "a";
+            spotlightScene.insertAdjacentElement("afterbegin", bgA);
+        }
+
+        let bgB = spotlightScene.querySelector('.spotlight-bg[data-layer="b"]');
+        if (!(bgB instanceof HTMLElement)) {
+            bgB = document.createElement("div");
+            bgB.className = "spotlight-bg";
+            bgB.dataset.layer = "b";
+            spotlightScene.insertAdjacentElement("afterbegin", bgB);
+        }
+
+        let overlay = spotlightScene.querySelector(".spotlight-overlay");
+        if (!(overlay instanceof HTMLElement)) {
+            overlay = document.createElement("div");
+            overlay.className = "spotlight-overlay";
+            spotlightScene.insertAdjacentElement("afterbegin", overlay);
+        }
+
+        return { bgA, bgB, overlay };
+    };
+
+    const { bgA: spotlightBgA, bgB: spotlightBgB } = ensureSpotlightLayers();
+    let spotlightBgIsA = true;
+    let spotlightBgHasRendered = false;
+
+    const clearSpotlightBackground = () => {
+        [spotlightBgA, spotlightBgB].forEach((el) => {
+            el.style.backgroundImage = "";
+            el.classList.remove("is-visible");
+        });
+        currentSpotlightBgUrl = "";
+        spotlightBgHasRendered = false;
+        spotlightBgIsA = true;
+    };
+
+    const setSpotlightBackground = (url) => {
+        const nextUrl = String(url || "").trim();
+        if (!nextUrl) {
+            clearSpotlightBackground();
+            return;
+        }
+
+        if (nextUrl === currentSpotlightBgUrl && spotlightBgHasRendered) {
+            return;
+        }
+
+        const safeUrl = nextUrl.replace(/\"/g, "%22");
+
+        if (prefersReducedMotion || !spotlightBgHasRendered) {
+            // Render immediately on the primary layer (no crossfade).
+            spotlightBgA.style.backgroundImage = `url("${safeUrl}")`;
+            spotlightBgA.classList.add("is-visible");
+            spotlightBgB.classList.remove("is-visible");
+            spotlightBgB.style.backgroundImage = "";
+            spotlightBgIsA = true;
+        } else {
+            const primaryEl = spotlightBgIsA ? spotlightBgA : spotlightBgB;
+            const secondaryEl = spotlightBgIsA ? spotlightBgB : spotlightBgA;
+            secondaryEl.style.backgroundImage = `url("${safeUrl}")`;
+            secondaryEl.classList.add("is-visible");
+            primaryEl.classList.remove("is-visible");
+            spotlightBgIsA = !spotlightBgIsA;
+        }
+
+        spotlightBgHasRendered = true;
+        currentSpotlightBgUrl = nextUrl;
+    };
+
     const getSpotlightImageUrl = (item, records) => {
         const record = records.find((candidate) => {
             if (!candidate || typeof candidate !== "object") return false;
@@ -9651,24 +9925,24 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!record || typeof record !== "object") return "";
         const images = Array.isArray(record.accomplishment_images) ? record.accomplishment_images : [];
         const fallback = String(record.accomplishment_image || "").trim();
-        const firstImage = images[0];
-        const first = (typeof firstImage === "string"
-            ? firstImage
-            : String(firstImage?.dataUrl || firstImage?.url || ""))
-            .trim() || fallback;
-        if (!first) return "";
-        if (!/^data:image\//i.test(first) && !/^https?:\/\//i.test(first)) {
-            // Avoid setting unknown schemes.
-            return "";
-        }
-        return first;
+        const pool = [];
+        images.forEach((img) => {
+            const url = (typeof img === "string"
+                ? img
+                : String(img?.dataUrl || img?.url || ""))
+                .trim();
+            if (isConstructionSpotlightUrl(url)) pool.push(url);
+        });
+        if (isConstructionSpotlightUrl(fallback)) pool.push(fallback);
+        return pickRandomValue(Array.from(new Set(pool)), lastImageUrl);
     };
 
     const applySpotlight = (idx, options = {}) => {
         const recordCache = options.records || readConstructionRecords();
         const nextIndex = clampIndex(idx);
-        const item = items[nextIndex];
+        const item = slides[nextIndex];
         if (!item) return;
+        activeIndex = nextIndex;
 
         spotlightScene.dataset.spotlightProjectId = item.id || "";
         spotlightScene.dataset.spotlightProjectName = item.title || "";
@@ -9677,15 +9951,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (titleEl) titleEl.textContent = item.title || "Accomplished Project";
         if (subtitleEl) subtitleEl.textContent = item.subtitle || "";
 
-        const imageUrl = getSpotlightImageUrl(item, recordCache);
+        const imageUrl = usesConstructionSlides
+            ? pickRandomValue(item.imageUrls, lastImageUrl)
+            : getSpotlightImageUrl(item, recordCache);
         if (imageUrl) {
-            const safeUrl = imageUrl.replace(/\"/g, "%22");
-            spotlightScene.style.setProperty("--spotlight-image", `url("${safeUrl}")`);
+            setSpotlightBackground(imageUrl);
+            lastImageUrl = imageUrl;
         } else {
-            spotlightScene.style.removeProperty("--spotlight-image");
+            clearSpotlightBackground();
         }
 
-        if (dotEls.length) {
+        if (!usesConstructionSlides && dotEls.length) {
             dotEls.forEach((dot, dotIndex) => {
                 dot.classList.toggle("is-active", dotIndex === nextIndex);
             });
@@ -9694,14 +9970,34 @@ document.addEventListener("DOMContentLoaded", () => {
         writeSpotlightIndex(nextIndex);
     };
 
-    // Initial render (keep a cached construction read so we don't parse JSON multiple times).
-    const cachedConstruction = readConstructionRecords();
-    applySpotlight(readSpotlightIndex(), { records: cachedConstruction });
+    // Initial render.
+    const initialRecords = readConstructionRecords();
+    refreshSlides(initialRecords);
+    if (!slides.length) {
+        return;
+    }
+    let activeIndex = readSpotlightIndex();
+    applySpotlight(activeIndex, { records: initialRecords });
 
     const go = (delta) => {
-        const current = readSpotlightIndex();
-        const next = (current + delta + items.length) % items.length;
-        applySpotlight(next, { records: cachedConstruction });
+        const next = (activeIndex + delta + slides.length) % slides.length;
+        applySpotlight(next);
+    };
+
+    const goRandom = () => {
+        if (slides.length <= 1) {
+            applySpotlight(activeIndex);
+            return;
+        }
+        let next = activeIndex;
+        for (let tries = 0; tries < 8; tries += 1) {
+            const candidate = Math.floor(Math.random() * slides.length);
+            if (candidate !== activeIndex) {
+                next = candidate;
+                break;
+            }
+        }
+        applySpotlight(next);
     };
 
     if (prevButton instanceof HTMLElement) {
@@ -9717,6 +10013,67 @@ document.addEventListener("DOMContentLoaded", () => {
             go(1);
         });
     }
+
+    // Auto-advance the spotlight carousel (skip if only one item or user prefers reduced motion).
+    let autoplayTimer = null;
+
+    const stopAutoplay = () => {
+        if (autoplayTimer) {
+            window.clearInterval(autoplayTimer);
+            autoplayTimer = null;
+        }
+    };
+
+    const startAutoplay = () => {
+        stopAutoplay();
+        if (prefersReducedMotion) return;
+        if (slides.length <= 1) return;
+        autoplayTimer = window.setInterval(() => {
+            if (document.visibilityState === "hidden") return;
+            goRandom();
+        }, SPOTLIGHT_AUTOPLAY_MS);
+    };
+
+    const restartAutoplay = () => {
+        startAutoplay();
+    };
+
+    // Pause on focus so keyboard users can read/click without fighting the timer.
+    spotlightSection.addEventListener("focusin", stopAutoplay);
+    spotlightSection.addEventListener("focusout", startAutoplay);
+
+    if (prevButton instanceof HTMLElement) {
+        prevButton.addEventListener("click", restartAutoplay);
+    }
+    if (nextButton instanceof HTMLElement) {
+        nextButton.addEventListener("click", restartAutoplay);
+    }
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+            stopAutoplay();
+        } else {
+            startAutoplay();
+        }
+    });
+
+    startAutoplay();
+
+    // Keep spotlight in sync when construction records update (e.g., after uploading photos).
+    window.addEventListener("focus", () => {
+        refreshSlides(readConstructionRecords());
+        applySpotlight(activeIndex);
+    });
+    window.addEventListener("storage", (event) => {
+        if (String(event.key || "") === CONSTRUCTION_STORAGE_KEY) {
+            // Records changed elsewhere; keep the current slide but refresh the image.
+            refreshSlides(readConstructionRecords());
+            applySpotlight(activeIndex);
+        }
+        if (String(event.key || "") === SPOTLIGHT_INDEX_KEY) {
+            applySpotlight(readSpotlightIndex());
+        }
+    });
 })();
 
 /* ROAD_MAINTENANCE_SCRIPT_END */

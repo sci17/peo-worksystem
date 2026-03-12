@@ -1495,57 +1495,55 @@ body {
     min-height: 240px;
     overflow: hidden;
     border-radius: 18px;
-    background:
-        radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.92) 0 2.2%, transparent 2.3%),
-        radial-gradient(circle at 28% 14%, rgba(255, 255, 255, 0.85) 0 1.6%, transparent 1.7%),
-        radial-gradient(circle at 72% 20%, rgba(255, 255, 255, 0.9) 0 1.8%, transparent 1.9%),
-        linear-gradient(180deg, rgba(19, 64, 120, 0.04) 0%, rgba(5, 18, 34, 0.1) 58%, rgba(5, 18, 34, 0.82) 100%),
-        var(--spotlight-image, none),
-        linear-gradient(180deg, #8dd0ff 0%, #53a9f2 48%, #205b99 100%);
-    background-size: auto, auto, auto, auto, cover, auto;
-    background-position: center, center, center, center, center, center;
-    background-repeat: no-repeat;
+    background: linear-gradient(180deg, #8dd0ff 0%, #53a9f2 48%, #205b99 100%);
 }
 
 .spotlight-scene::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 45%;
-    background:
-        linear-gradient(180deg, rgba(12, 23, 41, 0) 0%, rgba(8, 18, 31, 0.82) 100%),
-        repeating-linear-gradient(
-            90deg,
-            rgba(27, 43, 65, 0.95) 0 12px,
-            rgba(18, 31, 49, 0.95) 12px 26px,
-            rgba(40, 58, 80, 0.92) 26px 38px
-        );
-    clip-path: polygon(0 44%, 8% 42%, 14% 30%, 18% 34%, 24% 26%, 31% 39%, 37% 22%, 44% 31%, 52% 18%, 60% 24%, 68% 16%, 76% 28%, 84% 14%, 91% 20%, 100% 12%, 100% 100%, 0 100%);
-    opacity: 0.9;
+    content: none;
+    display: none;
 }
 
 .spotlight-scene::after {
-    content: "";
+    content: none;
+    display: none;
+}
+
+.spotlight-bg,
+.spotlight-overlay {
     position: absolute;
-    left: 17%;
-    right: 17%;
-    bottom: 62px;
-    height: 124px;
-    border: 8px solid rgba(7, 20, 36, 0.88);
-    border-bottom: 0;
-    border-radius: 180px 180px 0 0;
-    box-shadow:
-        0 42px 0 -32px rgba(7, 20, 36, 0.88),
-        inset 0 -2px 0 rgba(255, 255, 255, 0.08);
+    inset: 0;
+    border-radius: 18px;
+    pointer-events: none;
+}
+
+.spotlight-bg {
+    z-index: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity 600ms ease;
+}
+
+.spotlight-bg.is-visible {
+    opacity: 1;
+}
+
+.spotlight-overlay {
+    z-index: 1;
+    background: linear-gradient(
+        180deg,
+        rgba(19, 64, 120, 0.04) 0%,
+        rgba(5, 18, 34, 0.1) 58%,
+        rgba(5, 18, 34, 0.82) 100%
+    );
 }
 
 .spotlight-chip,
 .spotlight-copy,
 .spotlight-dots {
     position: absolute;
-    z-index: 1;
+    z-index: 2;
 }
 
 .spotlight-chip {
