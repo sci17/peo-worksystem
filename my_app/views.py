@@ -1,6 +1,8 @@
 import json
 import re
+import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from django.contrib.auth import login
 from django.contrib.auth import update_session_auth_hash
@@ -13,6 +15,7 @@ from django.shortcuts import redirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import get_valid_filename
 from django.views.decorators.http import require_http_methods
 
 from .forms import AccountSettingsForm
@@ -44,7 +47,26 @@ def _build_user_identity(user, profile=None):
 
     if profile is None:
         profile = _get_user_profile(user)
-    picture_url = profile.profile_picture.url if profile.profile_picture else ''
+
+    profile_dir = Path(__file__).resolve().parent / "static" / "profile"
+    legacy_uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
+    picture_url = ""
+
+    def pick_static_picture(base_dir, url_prefix):
+        if not base_dir.exists():
+            return ""
+        for ext in (".jpg", ".jpeg", ".png", ".webp"):
+            candidate = base_dir / f"profile_{user.id}{ext}"
+            if candidate.exists():
+                # Add a cache buster so updates show immediately after upload.
+                version = int(candidate.stat().st_mtime)
+                return f"{url_prefix}/{candidate.name}?v={version}"
+        return ""
+
+    picture_url = pick_static_picture(profile_dir, "/static/profile") or pick_static_picture(legacy_uploads_dir, "/static/uploads")
+
+    if not picture_url:
+        picture_url = profile.profile_picture.url if profile.profile_picture else ''
 
     return {
         'dashboard_user_profile_picture_url': picture_url,
@@ -1079,7 +1101,17 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
         else 'Review notification preferences'
     )
 
-    if request.user.get_full_name().strip() and profile.profile_picture:
+    profile_dir = Path(__file__).resolve().parent / "static" / "profile"
+    legacy_uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
+
+    def has_static_profile_picture(base_dir):
+        if not base_dir.exists():
+            return False
+        return any((base_dir / f"profile_{request.user.id}{ext}").exists() for ext in (".jpg", ".jpeg", ".png", ".webp"))
+
+    has_static_picture = has_static_profile_picture(profile_dir) or has_static_profile_picture(legacy_uploads_dir)
+
+    if request.user.get_full_name().strip() and (profile.profile_picture or has_static_picture):
         profile_title = 'Profile is fully set up'
         profile_message = 'Your account name and profile picture are ready across the portal.'
         profile_meta = 'Profile complete'
@@ -1436,6 +1468,55 @@ def division_store_api(request, key):
             "updated_at": store.updated_at.isoformat() if store.updated_at else None,
         }
     )
+
+
+@login_required
+@require_http_methods(["POST"])
+def construction_photo_upload(request):
+    files = request.FILES.getlist("photos") or request.FILES.getlist("photo") or request.FILES.getlist("accomplishment_photos")
+    if not files:
+        return JsonResponse({"error": "No files uploaded."}, status=400)
+
+    allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+    max_bytes = 8 * 1024 * 1024  # 8MB per image
+
+    uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    stored = []
+    for file in files:
+        if not file:
+            continue
+
+        original_name = get_valid_filename(getattr(file, "name", "") or "image")
+        ext = Path(original_name).suffix.lower()
+        if ext not in allowed_exts:
+            return JsonResponse({"error": f"Unsupported file type: {ext or 'unknown'}."}, status=400)
+
+        size = getattr(file, "size", 0) or 0
+        if size > max_bytes:
+            return JsonResponse({"error": f"File too large (max {max_bytes // (1024 * 1024)}MB)."}, status=400)
+
+        # Keep filenames stable and avoid collisions.
+        filename = f"construction_{uuid.uuid4().hex}{ext}"
+        destination = uploads_dir / filename
+
+        with destination.open("wb") as handle:
+            for chunk in file.chunks():
+                handle.write(chunk)
+
+        stored.append(
+            {
+                "name": filename,
+                "original_name": original_name,
+                "url": f"/static/uploads/{filename}",
+            }
+        )
+
+    if not stored:
+        return JsonResponse({"error": "No valid files uploaded."}, status=400)
+
+    return JsonResponse({"ok": True, "files": stored})
 
 
 @login_required

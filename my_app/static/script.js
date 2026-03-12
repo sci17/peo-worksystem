@@ -2079,6 +2079,122 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Live-update the UI on the Settings > My Profile form so the user sees their new name/photo immediately.
+    const profileSection = document.getElementById("account-settings-profile");
+    if (profileSection instanceof HTMLElement) {
+        const profileForm = profileSection.querySelector("form.account-settings-form");
+        const firstNameInput = profileForm ? profileForm.querySelector("#id_first_name") : null;
+        const lastNameInput = profileForm ? profileForm.querySelector("#id_last_name") : null;
+        const pictureInput = profileForm ? profileForm.querySelector("#id_profile_picture") : null;
+        const removePictureInput = profileForm ? profileForm.querySelector("#id_remove_profile_picture") : null;
+        const sidebarName = document.querySelector(".account-settings-profile-card h2");
+        const sidebarAvatar = document.querySelector(".account-settings-profile-card .account-settings-avatar");
+        const topbarName = document.querySelector(".topbar-user-trigger .user-name");
+        const dropdownName = document.querySelector(".topbar-user-dropdown-name");
+        const topbarAvatar = document.querySelector(".topbar-user-trigger .user-avatar");
+
+        const normalizeNameText = (value) => String(value || "").trim().replace(/\s+/g, " ");
+        const buildDisplayName = () => {
+            const first = normalizeNameText(firstNameInput instanceof HTMLInputElement ? firstNameInput.value : "");
+            const last = normalizeNameText(lastNameInput instanceof HTMLInputElement ? lastNameInput.value : "");
+            return normalizeNameText([first, last].filter(Boolean).join(" "));
+        };
+        const buildInitials = () => {
+            const display = buildDisplayName();
+            const parts = display.split(" ").filter(Boolean);
+            if (parts.length >= 2) {
+                return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+            }
+            if (parts.length === 1) {
+                const alnum = parts[0].replace(/[^a-z0-9]/gi, "");
+                return (alnum.slice(0, 2) || "").toUpperCase();
+            }
+            return "";
+        };
+
+        let previewUrl = "";
+        const setAvatarPreview = (targetRoot, imgUrl, altText) => {
+            if (!(targetRoot instanceof HTMLElement)) return;
+            const existingImg = targetRoot.querySelector("img");
+            const existingText = targetRoot.querySelector("span");
+
+            if (imgUrl) {
+                if (existingText) {
+                    existingText.remove();
+                }
+                const img = existingImg instanceof HTMLImageElement ? existingImg : document.createElement("img");
+                img.src = imgUrl;
+                img.alt = altText || "Profile picture";
+                if (!existingImg) {
+                    targetRoot.innerHTML = "";
+                    targetRoot.appendChild(img);
+                }
+                return;
+            }
+
+            if (existingImg) {
+                existingImg.remove();
+            }
+            const initials = buildInitials();
+            const span = existingText instanceof HTMLSpanElement ? existingText : document.createElement("span");
+            span.textContent = initials || (existingText ? existingText.textContent : "");
+            if (!existingText) {
+                targetRoot.innerHTML = "";
+                targetRoot.appendChild(span);
+            }
+        };
+
+        const syncProfileUi = () => {
+            const displayName = buildDisplayName();
+            if (displayName) {
+                if (sidebarName instanceof HTMLElement) sidebarName.textContent = displayName;
+                if (topbarName instanceof HTMLElement) topbarName.textContent = displayName;
+                if (dropdownName instanceof HTMLElement) dropdownName.textContent = displayName;
+            }
+
+            const shouldRemove = removePictureInput instanceof HTMLInputElement && removePictureInput.checked;
+            if (shouldRemove) {
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = "";
+                }
+                setAvatarPreview(sidebarAvatar, "", displayName);
+                setAvatarPreview(topbarAvatar, "", displayName);
+            } else if (previewUrl) {
+                setAvatarPreview(sidebarAvatar, previewUrl, displayName);
+                setAvatarPreview(topbarAvatar, previewUrl, displayName);
+            }
+        };
+
+        if (firstNameInput instanceof HTMLInputElement) {
+            firstNameInput.addEventListener("input", syncProfileUi);
+        }
+        if (lastNameInput instanceof HTMLInputElement) {
+            lastNameInput.addEventListener("input", syncProfileUi);
+        }
+        if (removePictureInput instanceof HTMLInputElement) {
+            removePictureInput.addEventListener("change", syncProfileUi);
+        }
+        if (pictureInput instanceof HTMLInputElement) {
+            pictureInput.addEventListener("change", () => {
+                const files = pictureInput.files ? Array.from(pictureInput.files) : [];
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = "";
+                }
+                if (files.length) {
+                    previewUrl = URL.createObjectURL(files[0]);
+                    if (removePictureInput instanceof HTMLInputElement) {
+                        removePictureInput.checked = false;
+                    }
+                }
+                syncProfileUi();
+            });
+        }
+
+        syncProfileUi();
+    }
+
     if (accountMenuRoot && accountMenuToggle && accountMenu) {
         setAccountMenuExpanded(false);
         setAccountMenuOpen(false);
@@ -9733,6 +9849,127 @@ document.addEventListener("DOMContentLoaded", () => {
         taskSearchInput.addEventListener("input", applyTaskFilters);
     }
 
+    // Road Management tabs (Provincial Roads / Equipment / Maintenance Schedules).
+    // Set this up early so it still works even if later maintenance init code errors out.
+    const resolveRoadPanelsContainer = (tabsContainer) => {
+        if (!(tabsContainer instanceof HTMLElement)) {
+            return null;
+        }
+
+        const sibling = tabsContainer.nextElementSibling;
+        if (sibling instanceof HTMLElement && sibling.classList.contains("road-tab-panels")) {
+            return sibling;
+        }
+
+        const parent = tabsContainer.parentElement;
+        if (!parent) {
+            return null;
+        }
+
+        const fallback = parent.querySelector(".road-tab-panels");
+        return fallback instanceof HTMLElement ? fallback : null;
+    };
+
+    const setActiveRoadTab = (tabsContainer, tabKey) => {
+        const safeKey = String(tabKey || "").trim();
+        if (!safeKey) {
+            return;
+        }
+        if (!(tabsContainer instanceof HTMLElement)) {
+            return;
+        }
+
+        const panelsContainer = resolveRoadPanelsContainer(tabsContainer);
+        if (!panelsContainer) {
+            return;
+        }
+
+        const tabsToUpdate = Array.from(tabsContainer.querySelectorAll(".road-tab[data-road-tab]"));
+        const panelsToUpdate = Array.from(panelsContainer.querySelectorAll(".road-tab-panel[data-road-panel]"));
+        if (!tabsToUpdate.length || !panelsToUpdate.length) {
+            return;
+        }
+
+        tabsToUpdate.forEach((tab) => {
+            const isActive = tab.dataset.roadTab === safeKey;
+            tab.classList.toggle("is-active", isActive);
+            tab.setAttribute("aria-selected", String(isActive));
+        });
+
+        panelsToUpdate.forEach((panel) => {
+            const isActive = panel.dataset.roadPanel === safeKey;
+            panel.classList.toggle("is-active", isActive);
+            panel.hidden = !isActive;
+        });
+    };
+
+    const initRoadTabs = (tabsContainer) => {
+        if (!(tabsContainer instanceof HTMLElement)) {
+            return;
+        }
+        if (tabsContainer.dataset.roadTabsInit === "1") {
+            return;
+        }
+
+        const defaultTab = tabsContainer.querySelector(".road-tab.is-active[data-road-tab]")
+            || tabsContainer.querySelector(".road-tab[data-road-tab]");
+        if (!(defaultTab instanceof HTMLElement)) {
+            return;
+        }
+
+        tabsContainer.dataset.roadTabsInit = "1";
+        setActiveRoadTab(tabsContainer, defaultTab.dataset.roadTab);
+    };
+
+    // Use event delegation so tabs keep working when the dashboard swaps the maintenance HTML dynamically.
+    document.addEventListener("click", (event) => {
+        // `event.target` can be a Text node when clicking on button text in some browsers.
+        const rawTarget = event.target;
+        const target = rawTarget instanceof Element ? rawTarget : rawTarget?.parentElement;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        const clickedTab = target.closest(".road-tab[data-road-tab]");
+        if (!clickedTab) {
+            return;
+        }
+
+        const tabsContainer = clickedTab.closest(".road-tabs");
+        if (!tabsContainer) {
+            return;
+        }
+
+        initRoadTabs(tabsContainer);
+        setActiveRoadTab(tabsContainer, clickedTab.dataset.roadTab);
+    }, true);
+
+    // Initialize any tabs already in the DOM.
+    document.querySelectorAll(".road-tabs").forEach((tabsContainer) => initRoadTabs(tabsContainer));
+
+    // Initialize tabs that appear later (e.g., dynamic dashboard content swap).
+    if (typeof MutationObserver === "function") {
+        const roadTabsObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (!(node instanceof HTMLElement)) {
+                        return;
+                    }
+                    if (node.matches(".road-tabs")) {
+                        initRoadTabs(node);
+                        return;
+                    }
+                    const nested = node.querySelector(".road-tabs");
+                    if (nested instanceof HTMLElement) {
+                        initRoadTabs(nested);
+                    }
+                });
+            });
+        });
+
+        roadTabsObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
     restoreMaintenanceState();
     if (contractorManagement) {
         seedDerivedContractorsFromProjectContracts();
@@ -9750,34 +9987,6 @@ document.addEventListener("DOMContentLoaded", () => {
         refreshRoadRegister();
     }
     persistMaintenanceState();
-
-    const tabs = document.querySelectorAll(".road-tab[data-road-tab]");
-    const panels = document.querySelectorAll(".road-tab-panel[data-road-panel]");
-
-    if (tabs.length) {
-        const setActiveTab = (tabKey) => {
-            tabs.forEach((tab) => {
-                const isActive = tab.dataset.roadTab === tabKey;
-                tab.classList.toggle("is-active", isActive);
-                tab.setAttribute("aria-selected", String(isActive));
-            });
-
-            panels.forEach((panel) => {
-                const isActive = panel.dataset.roadPanel === tabKey;
-                panel.classList.toggle("is-active", isActive);
-                panel.hidden = !isActive;
-            });
-        };
-
-        tabs.forEach((tab) => {
-            tab.addEventListener("click", () => {
-                setActiveTab(tab.dataset.roadTab);
-            });
-        });
-
-        const activeTab = document.querySelector(".road-tab.is-active[data-road-tab]");
-        setActiveTab(activeTab ? activeTab.dataset.roadTab : tabs[0].dataset.roadTab);
-    }
 
     const dropdowns = document.querySelectorAll(".js-road-dropdown");
     const closeDropdowns = (current = null) => {
@@ -9888,6 +10097,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
+    // Guard against double-initialization if the bundle is included more than once.
+    if (spotlightSection.dataset.spotlightInitialized === "1") {
+        return;
+    }
+    spotlightSection.dataset.spotlightInitialized = "1";
+
     const items = Array.from(spotlightScene.querySelectorAll("[data-spotlight-item]"))
         .map((node) => {
             if (!(node instanceof HTMLElement)) return null;
@@ -9900,26 +10115,41 @@ document.addEventListener("DOMContentLoaded", () => {
         })
         .filter((item) => item && (item.id || item.title));
 
-    if (!items.length) {
-        return;
-    }
-
     const prevButton = spotlightSection.querySelector('[data-spotlight-nav="prev"]');
     const nextButton = spotlightSection.querySelector('[data-spotlight-nav="next"]');
     const chipEl = spotlightScene.querySelector(".spotlight-chip");
     const titleEl = spotlightScene.querySelector(".spotlight-copy h4");
     const subtitleEl = spotlightScene.querySelector(".spotlight-copy p");
-    const dotEls = Array.from(spotlightScene.querySelectorAll(".spotlight-dots span"));
+    const dotsWrap = spotlightScene.querySelector(".spotlight-dots");
+    const dotEls = dotsWrap ? Array.from(dotsWrap.querySelectorAll("span")) : [];
 
     const SPOTLIGHT_INDEX_KEY = "peo_overview_spotlight_index_v1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const SPOTLIGHT_AUTOPLAY_MS = 5000;
+    const prefersReducedMotion = typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        : false;
+    let slides = items.slice();
+    let usesConstructionSlides = false;
+    let lastImageUrl = "";
+    let currentSpotlightBgUrl = "";
 
     const normalize = (value) => String(value || "").trim().toLowerCase();
+    // Only allow construction uploads from the static uploads folder. This prevents the spotlight from
+    // accidentally showing user profile images or other unrelated assets.
+    const isConstructionSpotlightUrl = (value) => {
+        const url = String(value || "").trim();
+        if (!url.startsWith("/static/uploads/")) return false;
+        const filename = url.slice("/static/uploads/".length).split("?")[0];
+        if (!filename) return false;
+        if (filename.startsWith("profile_")) return false;
+        return true;
+    };
     const clampIndex = (value) => {
-        if (!items.length) return 0;
+        if (!slides.length) return 0;
         const idx = Number.parseInt(String(value ?? ""), 10);
         if (!Number.isFinite(idx)) return 0;
-        return Math.min(items.length - 1, Math.max(0, idx));
+        return Math.min(slides.length - 1, Math.max(0, idx));
     };
 
     const readSpotlightIndex = () => {
@@ -9948,6 +10178,143 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const pickRandomValue = (values, excludeValue = "") => {
+        const list = Array.isArray(values) ? values.filter(Boolean) : [];
+        if (!list.length) return "";
+        if (list.length === 1) return String(list[0]);
+        const normalizedExclude = String(excludeValue || "").trim();
+        for (let tries = 0; tries < 6; tries += 1) {
+            const candidate = String(list[Math.floor(Math.random() * list.length)]);
+            if (candidate && candidate !== normalizedExclude) return candidate;
+        }
+        return String(list[Math.floor(Math.random() * list.length)]);
+    };
+
+    const buildConstructionSlides = (records) =>
+        (Array.isArray(records) ? records : [])
+            .filter((record) => record && typeof record === "object")
+            .map((record) => {
+                const id = String(record.__id || "").trim();
+                const title = String(record.project_name || record.project || "").trim() || "Construction Project";
+                const location = String(record.location || "").trim();
+                const contractor = String(record.contractor || "").trim();
+                const subtitle = [location, contractor].filter(Boolean).join(" \u00b7 ");
+
+                const imagePool = [];
+                const images = Array.isArray(record.accomplishment_images) ? record.accomplishment_images : [];
+                images.forEach((img) => {
+                    const url = (typeof img === "string"
+                        ? img
+                        : String(img?.dataUrl || img?.url || ""))
+                        .trim();
+                    if (isConstructionSpotlightUrl(url)) imagePool.push(url);
+                });
+
+                const legacy = String(record.accomplishment_image || "").trim();
+                if (isConstructionSpotlightUrl(legacy)) imagePool.push(legacy);
+
+                const uniq = Array.from(new Set(imagePool));
+                return {
+                    id,
+                    title,
+                    subtitle,
+                    category: "Construction",
+                    imageUrls: uniq,
+                };
+            })
+            .filter((slide) => slide.imageUrls && slide.imageUrls.length);
+
+    const refreshSlides = (records) => {
+        const constructed = buildConstructionSlides(records);
+        if (constructed.length) {
+            slides = constructed;
+            usesConstructionSlides = true;
+        } else {
+            slides = items.slice();
+            usesConstructionSlides = false;
+        }
+
+        // The template only renders dots for the server-provided spotlight items. Hide them when we
+        // switch to construction-driven slides (could be hundreds of records).
+        if (dotsWrap instanceof HTMLElement) {
+            dotsWrap.style.display = usesConstructionSlides ? "none" : "";
+        }
+    };
+
+    const ensureSpotlightLayers = () => {
+        let bgA = spotlightScene.querySelector('.spotlight-bg[data-layer="a"]');
+        if (!(bgA instanceof HTMLElement)) {
+            bgA = document.createElement("div");
+            bgA.className = "spotlight-bg";
+            bgA.dataset.layer = "a";
+            spotlightScene.insertAdjacentElement("afterbegin", bgA);
+        }
+
+        let bgB = spotlightScene.querySelector('.spotlight-bg[data-layer="b"]');
+        if (!(bgB instanceof HTMLElement)) {
+            bgB = document.createElement("div");
+            bgB.className = "spotlight-bg";
+            bgB.dataset.layer = "b";
+            spotlightScene.insertAdjacentElement("afterbegin", bgB);
+        }
+
+        let overlay = spotlightScene.querySelector(".spotlight-overlay");
+        if (!(overlay instanceof HTMLElement)) {
+            overlay = document.createElement("div");
+            overlay.className = "spotlight-overlay";
+            spotlightScene.insertAdjacentElement("afterbegin", overlay);
+        }
+
+        return { bgA, bgB, overlay };
+    };
+
+    const { bgA: spotlightBgA, bgB: spotlightBgB } = ensureSpotlightLayers();
+    let spotlightBgIsA = true;
+    let spotlightBgHasRendered = false;
+
+    const clearSpotlightBackground = () => {
+        [spotlightBgA, spotlightBgB].forEach((el) => {
+            el.style.backgroundImage = "";
+            el.classList.remove("is-visible");
+        });
+        currentSpotlightBgUrl = "";
+        spotlightBgHasRendered = false;
+        spotlightBgIsA = true;
+    };
+
+    const setSpotlightBackground = (url) => {
+        const nextUrl = String(url || "").trim();
+        if (!nextUrl) {
+            clearSpotlightBackground();
+            return;
+        }
+
+        if (nextUrl === currentSpotlightBgUrl && spotlightBgHasRendered) {
+            return;
+        }
+
+        const safeUrl = nextUrl.replace(/\"/g, "%22");
+
+        if (prefersReducedMotion || !spotlightBgHasRendered) {
+            // Render immediately on the primary layer (no crossfade).
+            spotlightBgA.style.backgroundImage = `url("${safeUrl}")`;
+            spotlightBgA.classList.add("is-visible");
+            spotlightBgB.classList.remove("is-visible");
+            spotlightBgB.style.backgroundImage = "";
+            spotlightBgIsA = true;
+        } else {
+            const primaryEl = spotlightBgIsA ? spotlightBgA : spotlightBgB;
+            const secondaryEl = spotlightBgIsA ? spotlightBgB : spotlightBgA;
+            secondaryEl.style.backgroundImage = `url("${safeUrl}")`;
+            secondaryEl.classList.add("is-visible");
+            primaryEl.classList.remove("is-visible");
+            spotlightBgIsA = !spotlightBgIsA;
+        }
+
+        spotlightBgHasRendered = true;
+        currentSpotlightBgUrl = nextUrl;
+    };
+
     const getSpotlightImageUrl = (item, records) => {
         const record = records.find((candidate) => {
             if (!candidate || typeof candidate !== "object") return false;
@@ -9959,20 +10326,24 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!record || typeof record !== "object") return "";
         const images = Array.isArray(record.accomplishment_images) ? record.accomplishment_images : [];
         const fallback = String(record.accomplishment_image || "").trim();
-        const first = String(images[0] || "").trim() || fallback;
-        if (!first) return "";
-        if (!/^data:image\//i.test(first) && !/^https?:\/\//i.test(first)) {
-            // Avoid setting unknown schemes.
-            return "";
-        }
-        return first;
+        const pool = [];
+        images.forEach((img) => {
+            const url = (typeof img === "string"
+                ? img
+                : String(img?.dataUrl || img?.url || ""))
+                .trim();
+            if (isConstructionSpotlightUrl(url)) pool.push(url);
+        });
+        if (isConstructionSpotlightUrl(fallback)) pool.push(fallback);
+        return pickRandomValue(Array.from(new Set(pool)), lastImageUrl);
     };
 
     const applySpotlight = (idx, options = {}) => {
         const recordCache = options.records || readConstructionRecords();
         const nextIndex = clampIndex(idx);
-        const item = items[nextIndex];
+        const item = slides[nextIndex];
         if (!item) return;
+        activeIndex = nextIndex;
 
         spotlightScene.dataset.spotlightProjectId = item.id || "";
         spotlightScene.dataset.spotlightProjectName = item.title || "";
@@ -9981,15 +10352,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (titleEl) titleEl.textContent = item.title || "Accomplished Project";
         if (subtitleEl) subtitleEl.textContent = item.subtitle || "";
 
-        const imageUrl = getSpotlightImageUrl(item, recordCache);
+        const imageUrl = usesConstructionSlides
+            ? pickRandomValue(item.imageUrls, lastImageUrl)
+            : getSpotlightImageUrl(item, recordCache);
         if (imageUrl) {
-            const safeUrl = imageUrl.replace(/\"/g, "%22");
-            spotlightScene.style.setProperty("--spotlight-image", `url("${safeUrl}")`);
+            setSpotlightBackground(imageUrl);
+            lastImageUrl = imageUrl;
         } else {
-            spotlightScene.style.removeProperty("--spotlight-image");
+            clearSpotlightBackground();
         }
 
-        if (dotEls.length) {
+        if (!usesConstructionSlides && dotEls.length) {
             dotEls.forEach((dot, dotIndex) => {
                 dot.classList.toggle("is-active", dotIndex === nextIndex);
             });
@@ -9998,14 +10371,34 @@ document.addEventListener("DOMContentLoaded", () => {
         writeSpotlightIndex(nextIndex);
     };
 
-    // Initial render (keep a cached construction read so we don't parse JSON multiple times).
-    const cachedConstruction = readConstructionRecords();
-    applySpotlight(readSpotlightIndex(), { records: cachedConstruction });
+    // Initial render.
+    const initialRecords = readConstructionRecords();
+    refreshSlides(initialRecords);
+    if (!slides.length) {
+        return;
+    }
+    let activeIndex = readSpotlightIndex();
+    applySpotlight(activeIndex, { records: initialRecords });
 
     const go = (delta) => {
-        const current = readSpotlightIndex();
-        const next = (current + delta + items.length) % items.length;
-        applySpotlight(next, { records: cachedConstruction });
+        const next = (activeIndex + delta + slides.length) % slides.length;
+        applySpotlight(next);
+    };
+
+    const goRandom = () => {
+        if (slides.length <= 1) {
+            applySpotlight(activeIndex);
+            return;
+        }
+        let next = activeIndex;
+        for (let tries = 0; tries < 8; tries += 1) {
+            const candidate = Math.floor(Math.random() * slides.length);
+            if (candidate !== activeIndex) {
+                next = candidate;
+                break;
+            }
+        }
+        applySpotlight(next);
     };
 
     if (prevButton instanceof HTMLElement) {
@@ -10021,6 +10414,67 @@ document.addEventListener("DOMContentLoaded", () => {
             go(1);
         });
     }
+
+    // Auto-advance the spotlight carousel (skip if only one item or user prefers reduced motion).
+    let autoplayTimer = null;
+
+    const stopAutoplay = () => {
+        if (autoplayTimer) {
+            window.clearInterval(autoplayTimer);
+            autoplayTimer = null;
+        }
+    };
+
+    const startAutoplay = () => {
+        stopAutoplay();
+        if (prefersReducedMotion) return;
+        if (slides.length <= 1) return;
+        autoplayTimer = window.setInterval(() => {
+            if (document.visibilityState === "hidden") return;
+            goRandom();
+        }, SPOTLIGHT_AUTOPLAY_MS);
+    };
+
+    const restartAutoplay = () => {
+        startAutoplay();
+    };
+
+    // Pause on focus so keyboard users can read/click without fighting the timer.
+    spotlightSection.addEventListener("focusin", stopAutoplay);
+    spotlightSection.addEventListener("focusout", startAutoplay);
+
+    if (prevButton instanceof HTMLElement) {
+        prevButton.addEventListener("click", restartAutoplay);
+    }
+    if (nextButton instanceof HTMLElement) {
+        nextButton.addEventListener("click", restartAutoplay);
+    }
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+            stopAutoplay();
+        } else {
+            startAutoplay();
+        }
+    });
+
+    startAutoplay();
+
+    // Keep spotlight in sync when construction records update (e.g., after uploading photos).
+    window.addEventListener("focus", () => {
+        refreshSlides(readConstructionRecords());
+        applySpotlight(activeIndex);
+    });
+    window.addEventListener("storage", (event) => {
+        if (String(event.key || "") === CONSTRUCTION_STORAGE_KEY) {
+            // Records changed elsewhere; keep the current slide but refresh the image.
+            refreshSlides(readConstructionRecords());
+            applySpotlight(activeIndex);
+        }
+        if (String(event.key || "") === SPOTLIGHT_INDEX_KEY) {
+            applySpotlight(readSpotlightIndex());
+        }
+    });
 })();
 
 /* ROAD_MAINTENANCE_SCRIPT_END */
@@ -10048,6 +10502,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const prevPageButton = constructionDashboard.querySelector(".js-construction-prev-page");
     const nextPageButton = constructionDashboard.querySelector(".js-construction-next-page");
 	    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
+<<<<<<< HEAD
  	    const constructionModal = document.querySelector(".js-construction-modal");
  	    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
  	    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
@@ -10057,9 +10512,21 @@ document.addEventListener("DOMContentLoaded", () => {
  	    const closeConstructionModalButtons = constructionModal
  	        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
  	        : [];
+=======
+	    const constructionModal = document.querySelector(".js-construction-modal");
+	    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
+        const constructionPhotoInput = constructionModal ? constructionModal.querySelector(".js-construction-photo-input") : null;
+	    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
+	    const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
+	    const closeConstructionModalButtons = constructionModal
+	        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
+	        : [];
+    const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
+>>>>>>> 884bff9d07a2b0531ef2ed5db597882b5dd621a0
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
+    const CONSTRUCTION_MAX_IMAGE_COUNT = 10;
     const CONSTRUCTION_FIELDS = [
         "project_name",
         "location",
@@ -10134,6 +10601,107 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const normalizeHeader = (value) => {
         return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    };
+
+    const getCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getCsrfToken = () => {
+        const tokenFromCookie = getCookie("csrftoken");
+        if (tokenFromCookie) return tokenFromCookie;
+        const tokenFromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenFromDom instanceof HTMLInputElement ? String(tokenFromDom.value || "").trim() : "";
+    };
+
+    const normalizeAccomplishmentImages = (value) => {
+        const list = Array.isArray(value) ? value : [];
+        return list
+            .map((img) => {
+                if (typeof img === "string") {
+                    const dataUrl = img.trim();
+                    return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                }
+                if (!img || typeof img !== "object") return null;
+                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                if (!dataUrl) return null;
+                return {
+                    dataUrl,
+                    name: String(img.name || "").trim(),
+                    uploaded_at: String(img.uploaded_at || "").trim(),
+                };
+            })
+            .filter(Boolean);
+    };
+
+    const mergeAccomplishmentImages = (existing, incoming) => {
+        const seen = new Set();
+        const merged = [];
+        [...normalizeAccomplishmentImages(incoming), ...normalizeAccomplishmentImages(existing)].forEach((img) => {
+            const key = String(img.dataUrl || "").trim();
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            merged.push(img);
+        });
+        return merged.slice(0, CONSTRUCTION_MAX_IMAGE_COUNT);
+    };
+
+    const uploadConstructionPhotos = async (files) => {
+        const list = Array.isArray(files) ? files : [];
+        if (!list.length) return { ok: true, images: [] };
+        if (!constructionPhotoUploadUrl) {
+            return { ok: false, error: "Photo upload URL is not configured." };
+        }
+
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
+        }
+
+        const payload = new FormData();
+        list.forEach((file) => {
+            payload.append("photos", file, file?.name || "photo");
+        });
+
+        try {
+            const response = await window.fetch(constructionPhotoUploadUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Accept": "application/json",
+                },
+                body: payload,
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data || data.ok !== true) {
+                return { ok: false, error: String(data?.error || "Photo upload failed.") };
+            }
+
+            const nowIso = new Date().toISOString();
+            const uploaded = Array.isArray(data.files) ? data.files : [];
+            const images = uploaded
+                .map((item) => ({
+                    dataUrl: String(item?.url || "").trim(),
+                    name: String(item?.original_name || item?.name || "").trim(),
+                    uploaded_at: nowIso,
+                }))
+                .filter((img) => img.dataUrl);
+
+            return { ok: true, images: images.slice(0, CONSTRUCTION_MAX_IMAGE_COUNT) };
+        } catch (error) {
+            return { ok: false, error: "Unable to upload photos right now." };
+        }
     };
 
     let constructionXlsxPromise = null;
@@ -10251,6 +10819,7 @@ document.addEventListener("DOMContentLoaded", () => {
         time_elapsed: "% of Time Elapsed",
         slippage: "Slippage (+) (-) %",
         remarks: "Remarks",
+        accomplishment_images: "Accomplishment Photos",
     };
 
     const normalizeStringValue = (value) => {
@@ -10430,9 +10999,25 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const getConstructionChangedFields = (previousRecord, nextRecord) => {
-        return CONSTRUCTION_FIELDS.filter((field) => {
+        const changed = CONSTRUCTION_FIELDS.filter((field) => {
             return normalizeStringValue(previousRecord?.[field]) !== normalizeStringValue(nextRecord?.[field]);
         });
+
+        const normalizeImagesForCompare = (value) => {
+            const list = Array.isArray(value) ? value : [];
+            return list
+                .map((img) => (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim())
+                .filter(Boolean)
+                .sort();
+        };
+
+        const prevImages = normalizeImagesForCompare(previousRecord?.accomplishment_images);
+        const nextImages = normalizeImagesForCompare(nextRecord?.accomplishment_images);
+        if (prevImages.join("|") !== nextImages.join("|")) {
+            changed.push("accomplishment_images");
+        }
+
+        return changed;
     };
 
     const getConstructionFieldLabel = (field) => {
@@ -11118,6 +11703,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	                fillConstructionForm(record);
 	            }
 	        }
+<<<<<<< HEAD
         if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
             constructionRouteDivisionSelect.value = "";
         }
@@ -11127,6 +11713,16 @@ document.addEventListener("DOMContentLoaded", () => {
         renderConstructionRouteFiles(mode === "edit" ? record : null);
         constructionModal.hidden = false;
         document.body.classList.add("construction-modal-open");
+=======
+            if (constructionPhotoInput instanceof HTMLInputElement) {
+                constructionPhotoInput.value = "";
+            }
+	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+	            constructionRouteDivisionSelect.value = "";
+	        }
+	        constructionModal.hidden = false;
+	        document.body.classList.add("construction-modal-open");
+>>>>>>> 884bff9d07a2b0531ef2ed5db597882b5dd621a0
 	        requestAnimationFrame(() => {
 	            const firstField = constructionForm?.querySelector('[name="project_name"]');
 	            if (firstField) firstField.focus();
@@ -11141,6 +11737,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	        editingRecordId = null;
 	        setConstructionFormMode("create");
 	        if (constructionForm) constructionForm.reset();
+<<<<<<< HEAD
         if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
             constructionRouteDivisionSelect.value = "";
         }
@@ -11150,6 +11747,16 @@ document.addEventListener("DOMContentLoaded", () => {
         renderConstructionRouteFiles(null);
         syncConstructionRouteControls();
     };
+=======
+            if (constructionPhotoInput instanceof HTMLInputElement) {
+                constructionPhotoInput.value = "";
+            }
+	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+	            constructionRouteDivisionSelect.value = "";
+	        }
+	        syncConstructionRouteControls();
+	    };
+>>>>>>> 884bff9d07a2b0531ef2ed5db597882b5dd621a0
 
 	    const buildRecordFromForm = () => {
 	        if (!constructionForm) return null;
@@ -11671,8 +12278,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return images
             .slice(0, 10)
             .map((img) => ({
-                dataUrl: String(img?.dataUrl || "").trim(),
-                name: String(img?.name || "").trim(),
+                dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
+                name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
             }))
             .filter((img) => img.dataUrl);
     };
@@ -11701,7 +12308,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (constructionForm) {
-        constructionForm.addEventListener("submit", (event) => {
+        constructionForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             if (!constructionForm.checkValidity()) {
                 constructionForm.reportValidity();
@@ -11711,6 +12318,57 @@ document.addEventListener("DOMContentLoaded", () => {
             const formRecord = buildRecordFromForm();
             if (!formRecord) return;
             const isEditingRecord = Boolean(editingRecordId);
+            const submitButton = constructionForm.querySelector('button[type="submit"]');
+
+            const existingRecord = isEditingRecord
+                ? records.find((record) => record && typeof record === "object" && record.__id === editingRecordId)
+                : null;
+            const existingImages = normalizeAccomplishmentImages(existingRecord?.accomplishment_images);
+            const pickedFiles = constructionPhotoInput instanceof HTMLInputElement && constructionPhotoInput.files
+                ? Array.from(constructionPhotoInput.files)
+                : [];
+
+            let mergedImages = existingImages;
+            if (pickedFiles.length) {
+                const remaining = Math.max(0, CONSTRUCTION_MAX_IMAGE_COUNT - existingImages.length);
+                const toUpload = pickedFiles.slice(0, remaining);
+                if (!toUpload.length) {
+                    showPeoGeneralToast(`You can upload up to ${CONSTRUCTION_MAX_IMAGE_COUNT} photos per record.`, {
+                        title: "Construction Division",
+                        variant: "warning",
+                    });
+                    return;
+                }
+
+                if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = true;
+                }
+
+                const uploadResult = await uploadConstructionPhotos(toUpload);
+                if (!uploadResult?.ok) {
+                    if (submitButton instanceof HTMLButtonElement) {
+                        submitButton.disabled = false;
+                    }
+                    showPeoGeneralToast(String(uploadResult?.error || "Unable to upload photos."), {
+                        title: "Construction Division",
+                        variant: "danger",
+                    });
+                    return;
+                }
+
+                mergedImages = mergeAccomplishmentImages(existingImages, uploadResult.images);
+                if (constructionPhotoInput instanceof HTMLInputElement) {
+                    constructionPhotoInput.value = "";
+                }
+
+                if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = false;
+                }
+            }
+
+            const nextFormRecord = (pickedFiles.length && mergedImages.length)
+                ? { ...formRecord, accomplishment_images: mergedImages }
+                : formRecord;
 
             if (editingRecordId) {
                 const index = records.findIndex((record) => record.__id === editingRecordId);
@@ -11718,7 +12376,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const previousRecord = records[index];
                     const nextRecord = applyConstructionRecordUpdate(
                         previousRecord,
-                        { ...formRecord, __id: editingRecordId },
+                        { ...nextFormRecord, __id: editingRecordId },
                         {
                             updateType: "edited",
                             changedBy: getConstructionCurrentUser(),
@@ -11740,7 +12398,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     syncConstructionStatusToAdmin(updatedRecord);
                 }
             } else {
-                const created = initializeConstructionRecord(formRecord, {
+                const created = initializeConstructionRecord(nextFormRecord, {
                     updateType: "created",
                     changedBy: getConstructionCurrentUser(),
                 });
@@ -16099,8 +16757,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 const images = Array.isArray(record.accomplishment_images)
                     ? record.accomplishment_images
                         .map((img) => ({
-                            dataUrl: String(img?.dataUrl || "").trim(),
-                            name: String(img?.name || "").trim(),
+                            dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
+                            name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
                         }))
                         .filter((img) => img.dataUrl)
                     : [];
