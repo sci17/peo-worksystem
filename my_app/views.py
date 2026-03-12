@@ -915,6 +915,38 @@ def _build_tracking_payload(user):
                     return at
         return ''
 
+    def last_division_event_time(events, division_name):
+        if not events:
+            return ''
+        target = str(division_name or '').strip()
+        if not target:
+            return ''
+        for ev in reversed(events):
+            if not isinstance(ev, dict):
+                continue
+            for field in ('from', 'to', 'by'):
+                if normalize_division(ev.get(field)) == target:
+                    at = str(ev.get('at') or '').strip()
+                    if at:
+                        return at
+        return ''
+
+    def maintenance_status_from_events(events):
+        if not events:
+            return ''
+        for ev in reversed(events):
+            if not isinstance(ev, dict):
+                continue
+            action = str(ev.get('action') or '').strip().lower()
+            if 'maintenance status' not in action:
+                continue
+            note = str(ev.get('note') or '').strip()
+            marker = 'status set to'
+            lower_note = note.lower()
+            if marker in lower_note:
+                return note[lower_note.rfind(marker) + len(marker):].strip(' .:-')  # keep original case
+        return ''
+
     payload = {}
     for record in admin_records:
         if not isinstance(record, dict):
@@ -955,37 +987,82 @@ def _build_tracking_payload(user):
             {
                 'division': 'Admin',
                 'status': admin_status(record),
-                'last_update': pick_first(record, '__submitted_at', '__updated_at', 'date_received', 'date'),
+                'last_update': pick_first(record, '__status_updated_at', '__updated_at', '__submitted_at', 'date_received', 'date'),
                 'has_record': True,
             },
             {
                 'division': 'Planning',
                 'status': planning_status(planning_record),
-                'last_update': pick_first(planning_record, '__updated_at', 'date_received', 'date', 'date_received_admin'),
+                'last_update': pick_first(
+                    planning_record,
+                    '__status_updated_at',
+                    '__updated_at',
+                    '__received_at',
+                    '__created_at',
+                    'date_received',
+                    'date',
+                    'date_received_admin',
+                ),
                 'has_record': bool(planning_record),
             },
             {
                 'division': 'Construction',
                 'status': construction_status(construction_record),
-                'last_update': pick_first(construction_record, '__updated_at', 'date_received', 'date_started', 'date_completed'),
+                'last_update': pick_first(
+                    construction_record,
+                    '__status_updated_at',
+                    '__updated_at',
+                    '__received_at',
+                    '__created_at',
+                    'date_recv',
+                    'date_received',
+                    'date_started',
+                    'date_completed',
+                ),
                 'has_record': bool(construction_record),
             },
             {
                 'division': 'Quality',
                 'status': quality_status(quality_record),
-                'last_update': pick_first(quality_record, '__updated_at', 'date_received', 'date', 'date_checked'),
+                'last_update': pick_first(
+                    quality_record,
+                    '__status_updated_at',
+                    '__updated_at',
+                    '__received_at',
+                    '__created_at',
+                    'date_recv',
+                    'date_received',
+                    'doc_date',
+                    'date',
+                    'date_checked',
+                ),
                 'has_record': bool(quality_record),
             },
             {
                 'division': 'Maintenance',
-                'status': maintenance_status(maintenance_tasks_for_record),
-                'last_update': pick_first(
-                    (maintenance_tasks_for_record[0] if maintenance_tasks_for_record else {}),
-                    'updatedAt',
-                    'createdAt',
-                    'date',
+                'status': (
+                    maintenance_status(maintenance_tasks_for_record)
+                    if maintenance_tasks_for_record
+                    else (
+                        maintenance_status_from_events(events)
+                        or ('Routed' if (last_division_event_time(events, 'Maintenance') or pick_first(record, 'maintenance_sent_date')) else '—')
+                    )
                 ),
-                'has_record': bool(maintenance_tasks_for_record),
+                'last_update': (
+                    pick_first(
+                        (maintenance_tasks_for_record[0] if maintenance_tasks_for_record else {}),
+                        'updatedAt',
+                        'createdAt',
+                        'date',
+                    )
+                    or last_division_event_time(events, 'Maintenance')
+                    or pick_first(record, 'maintenance_sent_date')
+                ),
+                'has_record': (
+                    bool(maintenance_tasks_for_record)
+                    or bool(last_division_event_time(events, 'Maintenance'))
+                    or bool(str(record.get('maintenance_sent_date') or '').strip())
+                ),
             },
         ]
 
@@ -1007,7 +1084,7 @@ def _build_tracking_payload(user):
             'title': title,
             'contractor': normalize_label(record.get('contractor')),
             'routed_to': routed_to,
-            'last_update': last_event_time(events) or pick_first(record, '__submitted_at', '__updated_at', 'date_received', 'date'),
+            'last_update': last_event_time(events) or pick_first(record, '__status_updated_at', '__updated_at', '__submitted_at', 'date_received', 'date'),
             'steps': steps,
             'timeline': events,
             'document': document,
