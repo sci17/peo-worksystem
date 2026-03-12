@@ -196,6 +196,182 @@ function togglePassword() {
 
 window.togglePassword = togglePassword;
 
+const peoInferMimeFromFileName = (fileName) => {
+    const name = String(fileName || "").trim().toLowerCase();
+    if (name.endsWith(".pdf")) return "application/pdf";
+    if (name.endsWith(".png")) return "image/png";
+    if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+    if (name.endsWith(".gif")) return "image/gif";
+    if (name.endsWith(".webp")) return "image/webp";
+    return "";
+};
+
+const peoReadFileAsDataUrl = (file) => {
+    return new Promise((resolve, reject) => {
+        if (!(file instanceof File)) {
+            reject(new Error("Invalid file."));
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Failed to read file."));
+        reader.readAsDataURL(file);
+    });
+};
+
+const peoNormalizeDataUrl = ({ dataUrl, fileName = "", mimeType = "" }) => {
+    const raw = String(dataUrl || "").trim();
+    if (!raw) return "";
+    if (raw.startsWith("data:")) return raw;
+    if (raw.startsWith("blob:")) return raw;
+    if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("/")) return raw;
+
+    const inferred = String(mimeType || "").trim() || peoInferMimeFromFileName(fileName) || "application/octet-stream";
+    const base64 = raw.replace(/^base64,/, "");
+    return `data:${inferred};base64,${base64}`;
+};
+
+const peoBuildAttachment = ({ dataUrl, fileName = "", mimeType = "", addedBy = "" } = {}) => {
+    const normalizedUrl = peoNormalizeDataUrl({ dataUrl, fileName, mimeType });
+    if (!normalizedUrl) return null;
+    const name = String(fileName || "").trim() || "Scanned file";
+    const type = String(mimeType || "").trim() || peoInferMimeFromFileName(name) || "";
+    const by = String(addedBy || "").trim();
+    const at = new Date().toISOString();
+    const id = `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return { id, name, type, dataUrl: normalizedUrl, addedBy: by, addedAt: at };
+};
+
+const peoEscapeHtmlSafe = (value) => {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+};
+
+const peoExtractAttachments = (record) => {
+    const source = record && typeof record === "object" ? record : {};
+    const rawList = Array.isArray(source.__attachments) ? source.__attachments : [];
+    const attachments = rawList
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+            id: String(item.id || "").trim() || `att_${Math.random().toString(36).slice(2, 8)}`,
+            name: String(item.name || item.fileName || "").trim() || "Scanned file",
+            type: String(item.type || item.mimeType || "").trim(),
+            dataUrl: peoNormalizeDataUrl({ dataUrl: item.dataUrl || item.url || item.data || "", fileName: item.name || "", mimeType: item.type || "" }),
+            addedBy: String(item.addedBy || "").trim(),
+            addedAt: String(item.addedAt || "").trim(),
+        }))
+        .filter((item) => Boolean(item.dataUrl));
+
+    const legacy = peoNormalizeDataUrl({
+        dataUrl: source.scanned_file_data || source.scan_url || "",
+        fileName: source.scanned_file_name || "",
+        mimeType: source.scanned_file_type || "",
+    });
+    if (legacy) {
+        const already = attachments.some((att) => att.dataUrl === legacy);
+        if (!already) {
+            attachments.push({
+                id: `att_legacy_${Math.random().toString(36).slice(2, 8)}`,
+                name: String(source.scanned_file_name || "Scanned file").trim() || "Scanned file",
+                type: String(source.scanned_file_type || "").trim(),
+                dataUrl: legacy,
+                addedBy: "",
+                addedAt: "",
+            });
+        }
+    }
+
+    return attachments;
+};
+
+const peoMergeAttachments = (left, right) => {
+    const a = Array.isArray(left) ? left : [];
+    const b = Array.isArray(right) ? right : [];
+    const merged = [];
+    const seen = new Set();
+    [...a, ...b].forEach((item) => {
+        if (!item || typeof item !== "object") return;
+        const dataUrl = String(item.dataUrl || item.url || item.data || "").trim();
+        const name = String(item.name || "").trim();
+        const key = `${name}::${dataUrl}`;
+        if (!dataUrl || seen.has(key)) return;
+        seen.add(key);
+        merged.push(item);
+    });
+    return merged;
+};
+
+const peoRenderAttachmentList = (container, attachments) => {
+    if (!(container instanceof HTMLElement)) return;
+    container.innerHTML = "";
+    const list = Array.isArray(attachments) ? attachments : [];
+    const registry = window.peoFileRegistry instanceof Map ? window.peoFileRegistry : new Map();
+    window.peoFileRegistry = registry;
+    list.forEach((att) => {
+        if (att && typeof att === "object" && att.id && att.dataUrl) {
+            registry.set(String(att.id), String(att.dataUrl));
+        }
+        const item = document.createElement("div");
+        item.className = "peo-route-file-item";
+        item.innerHTML = `
+            <span class="peo-route-file-name" title="${peoEscapeHtmlSafe(att.name)}">${peoEscapeHtmlSafe(att.name)}</span>
+            <button type="button" class="peo-route-file-btn" data-peo-open-file-id="${peoEscapeHtmlSafe(att.id)}">View</button>
+        `;
+        container.appendChild(item);
+    });
+};
+
+document.addEventListener("click", async (event) => {
+    const target = event.target instanceof Element
+        ? event.target.closest("[data-peo-open-file-id],[data-peo-open-file]")
+        : null;
+    if (!target) return;
+    const registryKey = String(target.getAttribute("data-peo-open-file-id") || "").trim();
+    const url = registryKey
+        ? String((window.peoFileRegistry instanceof Map ? window.peoFileRegistry.get(registryKey) : "") || "").trim()
+        : String(target.getAttribute("data-peo-open-file") || "").trim();
+    if (!url) return;
+    event.preventDefault();
+    await peoOpenFile({ dataUrl: url });
+});
+
+const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTab = false } = {}) => {
+    const normalized = peoNormalizeDataUrl({ dataUrl, fileName, mimeType });
+    if (!normalized) return { ok: false, error: "Missing file data." };
+
+    const openTarget = (url) => {
+        if (openInSameTab) {
+            window.location.href = url;
+            return true;
+        }
+        const opened = window.open(url, "_blank", "noopener,noreferrer");
+        if (opened) return true;
+        window.location.href = url;
+        return false;
+    };
+
+    if (normalized.startsWith("http") || normalized.startsWith("/")) {
+        openTarget(normalized);
+        return { ok: true };
+    }
+
+    try {
+        const response = await fetch(normalized);
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        openTarget(objectUrl);
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        return { ok: true };
+    } catch (error) {
+        openTarget(normalized);
+        return { ok: true };
+    }
+};
+
 (() => {
     const API_BASE = "/api/division-store/";
 
@@ -408,11 +584,9 @@ window.togglePassword = togglePassword;
             return;
         }
         const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
-            const safe = record && typeof record === "object" ? { ...record } : {};
-            delete safe.scanned_file_data;
-            return safe;
+            return record && typeof record === "object" ? { ...record } : {};
         });
-        window.peoDivisionStore.queueSync("admin", safeRecords);
+        window.peoDivisionStore.queueSync("admin", safeRecords, 0);
     };
 
     const writeAdminRecords = (records) => {
@@ -448,7 +622,7 @@ window.togglePassword = togglePassword;
         const normalized = normalizeMaintenanceState(state);
         writeJson(MAINTENANCE_STORAGE_KEY, normalized);
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
-            window.peoDivisionStore.queueSync("maintenance", normalized);
+            window.peoDivisionStore.queueSync("maintenance", normalized, 0);
         }
     };
 
@@ -536,6 +710,20 @@ window.togglePassword = togglePassword;
         const amount = pickFirst(record.revised_contract_cost, record.revised_contract_amount, record.contract_cost, record.contract_amount, record.amount, record.allocated_amount);
         const description = pickFirst(record.remarks, record.notes, record.description, record.particulars, record.doc_type);
         const dateReceived = pickFirst(record.date_received, record.date_recv, record.dueDateIso, record.due_date, getLocalIsoDate());
+        const scannedFileName = pickFirst(record.scanned_file_name, record.scannedFileName, record.file_name, record.filename);
+        const scannedFileType = pickFirst(record.scanned_file_type, record.scannedFileType, record.file_type, record.mimetype);
+        const scannedFileRaw = pickFirst(record.scanned_file_data, record.scannedFileData, record.scan_url, record.scanUrl);
+        const scannedFileData = peoNormalizeDataUrl({
+            dataUrl: scannedFileRaw,
+            fileName: scannedFileName,
+            mimeType: scannedFileType,
+        });
+        const attachment = peoBuildAttachment({
+            dataUrl: scannedFileData,
+            fileName: scannedFileName,
+            mimeType: scannedFileType,
+            addedBy: labelForDivisionKey(sourceDivisionKey) || String(sourceDivisionKey || "").trim(),
+        });
 
         const nowIso = new Date().toISOString();
         const id = `admin_submit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -555,6 +743,10 @@ window.togglePassword = togglePassword;
             status: "Routed",
             division: labelForDivisionKey(targetDivisionKey) || "Admin",
             doc_type: `Submission (${labelForDivisionKey(sourceDivisionKey) || sourceDivisionKey || "Unknown"})`,
+            scanned_file_name: scannedFileName,
+            scanned_file_type: scannedFileType,
+            scanned_file_data: scannedFileData,
+            __attachments: attachment ? [attachment] : [],
             __submitted_from_division: String(sourceDivisionKey || "").trim(),
             __submitted_from_source_id: pickFirst(record.__id, record.id, record.adminRecordId),
             __submitted_at: nowIso,
@@ -588,7 +780,7 @@ window.togglePassword = togglePassword;
         return { adminRecordId: created.__record_id, adminRecords };
     };
 
-    const submitToDivision = ({ sourceDivisionKey, sourceRecord, targetDivisionKey, existingAdminRecordId }) => {
+    const submitToDivision = ({ sourceDivisionKey, sourceRecord, targetDivisionKey, existingAdminRecordId, uploadedFile }) => {
         const targetKey = resolveDivisionKey(targetDivisionKey);
         if (!targetKey) {
             return { ok: false, error: "Unknown target division." };
@@ -625,6 +817,48 @@ window.togglePassword = togglePassword;
             }
         }
 
+        const sourceObj = sourceRecord && typeof sourceRecord === "object" ? sourceRecord : {};
+        const incomingFileName = pickFirst(sourceObj.scanned_file_name, sourceObj.scannedFileName, sourceObj.file_name, sourceObj.filename);
+        const incomingFileType = pickFirst(sourceObj.scanned_file_type, sourceObj.scannedFileType, sourceObj.file_type, sourceObj.mimetype);
+        const incomingFileRaw = pickFirst(sourceObj.scanned_file_data, sourceObj.scannedFileData, sourceObj.scan_url, sourceObj.scanUrl);
+        const incomingFileData = peoNormalizeDataUrl({
+            dataUrl: incomingFileRaw,
+            fileName: incomingFileName,
+            mimeType: incomingFileType,
+        });
+
+        const existingAttachments = peoExtractAttachments(updated);
+        const incomingAttachment = incomingFileData
+            ? peoBuildAttachment({
+                dataUrl: incomingFileData,
+                fileName: incomingFileName,
+                mimeType: incomingFileType,
+                addedBy: labelForDivisionKey(sourceKey) || String(sourceDivisionKey || "").trim(),
+            })
+            : null;
+
+        const uploadedAttachment = uploadedFile && typeof uploadedFile === "object"
+            ? peoBuildAttachment({
+                dataUrl: uploadedFile.dataUrl,
+                fileName: uploadedFile.fileName || uploadedFile.name || "",
+                mimeType: uploadedFile.mimeType || uploadedFile.type || "",
+                addedBy: labelForDivisionKey(sourceKey) || String(sourceDivisionKey || "").trim(),
+            })
+            : null;
+
+        const mergedAttachments = peoMergeAttachments(
+            existingAttachments,
+            [incomingAttachment, uploadedAttachment].filter(Boolean)
+        );
+        updated.__attachments = mergedAttachments;
+
+        const latest = mergedAttachments.length ? mergedAttachments[mergedAttachments.length - 1] : null;
+        if (latest) {
+            updated.scanned_file_name = latest.name || updated.scanned_file_name || "";
+            updated.scanned_file_type = latest.type || updated.scanned_file_type || "";
+            updated.scanned_file_data = latest.dataUrl || updated.scanned_file_data || "";
+        }
+
         const existingEvents = Array.isArray(updated.__tracking_events) ? updated.__tracking_events.filter((ev) => ev && typeof ev === "object") : [];
         const fromLabel = labelForDivisionKey(prevTargetKey) || String(current.division || "").trim();
         const toLabel = labelForDivisionKey(targetKey) || String(updated.division || "").trim();
@@ -645,11 +879,12 @@ window.togglePassword = togglePassword;
         adminRecords[idx] = updated;
         writeAdminRecords(adminRecords);
 
-        if (prevTargetKey === "maintenance" && targetKey !== "maintenance") {
-            removeMaintenanceTaskByAdminRecordId(adminRecordId);
-        }
         if (targetKey === "maintenance") {
             upsertMaintenanceTaskFromAdminRecord(updated, sourceDivisionKey);
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+            window.peoDivisionStore.flushSync();
         }
 
         return { ok: true, adminRecordId };
@@ -859,6 +1094,33 @@ document.addEventListener("DOMContentLoaded", () => {
     const allRows = Array.from(document.querySelectorAll(".js-tracking-row"));
     const emptyRow = document.querySelector(".js-tracking-empty-row");
 
+    // Insert Location column cells (header is server-rendered).
+    const ensureLocationCells = () => {
+        allRows.forEach((row) => {
+            if (!(row instanceof HTMLTableRowElement)) return;
+            if (row.querySelector('[data-tracking-col="location"]')) return;
+            const adminId = String(row.getAttribute("data-admin-id") || "").trim();
+            const location = String(
+                payload?.[adminId]?.document?.["Location"]
+                || payload?.[adminId]?.location
+                || ""
+            ).trim();
+            const cells = Array.from(row.querySelectorAll("td"));
+            if (cells.length < 3) return;
+            const td = document.createElement("td");
+            td.dataset.trackingCol = "location";
+            td.textContent = location || "—";
+            row.insertBefore(td, cells[2]);
+        });
+
+        const emptyCells = Array.from(document.querySelectorAll(".js-tracking-empty-row td[colspan]"));
+        emptyCells.forEach((cell) => {
+            cell.setAttribute("colspan", "11");
+        });
+    };
+
+    ensureLocationCells();
+
     const applySearch = () => {
         if (!(searchInput instanceof HTMLInputElement)) return;
         const q = String(searchInput.value || "").trim().toLowerCase();
@@ -884,6 +1146,8 @@ document.addEventListener("DOMContentLoaded", () => {
 document.addEventListener("DOMContentLoaded", () => {
     const roots = Array.from(document.querySelectorAll(".js-division-submissions"));
     if (!roots.length) return;
+
+    document.body.classList.add("submissions-page");
 
     const toast = (message, options = {}) => {
         if (typeof window.showPeoGeneralToast === "function") {
@@ -944,12 +1208,9 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
-            if (!record || typeof record !== "object") return record;
-            const safe = { ...record };
-            delete safe.scanned_file_data;
-            return safe;
+            return record && typeof record === "object" ? { ...record } : record;
         });
-        window.peoDivisionStore.queueSync("admin", safeRecords);
+        window.peoDivisionStore.queueSync("admin", safeRecords, 0);
     };
 
     const writeAdminStore = (records) => {
@@ -1023,6 +1284,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     || ""
                 ).trim(),
                 scannedFileName: String(record.scanned_file_name || "").trim(),
+                scannedFileType: String(record.scanned_file_type || "").trim(),
                 scannedFileData: String(record.scanned_file_data || "").trim(),
                 remarks: String(record.description || record.remarks || "").trim() || "-",
             }));
@@ -1064,6 +1326,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const editStatusSelect = root.querySelector(".js-submissions-edit-status");
         const routeDivisionSelect = root.querySelector(".js-submissions-route-division");
         const routeSubmitButton = root.querySelector(".js-submissions-route-submit");
+        const routeFileInput = root.querySelector(".js-submissions-route-file");
+        const routeFiles = root.querySelector(".js-submissions-route-files");
         const PAGE_SIZE = 10;
         let currentPage = 1;
         let editingRecordId = "";
@@ -1104,6 +1368,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (routeSubmitButton instanceof HTMLButtonElement) {
                 routeSubmitButton.disabled = true;
+            }
+            if (routeFileInput instanceof HTMLInputElement) {
+                routeFileInput.value = "";
+            }
+            if (routeFiles instanceof HTMLElement) {
+                routeFiles.innerHTML = "";
             }
             if (editForm instanceof HTMLFormElement) {
                 editForm.reset();
@@ -1202,6 +1472,18 @@ document.addEventListener("DOMContentLoaded", () => {
             routeSubmitButton.disabled = !selected || !targetKey;
         };
 
+        const renderRouteFiles = () => {
+            if (!(routeFiles instanceof HTMLElement)) return;
+            if (!editingRecordId) {
+                routeFiles.innerHTML = "";
+                return;
+            }
+            const adminRecord = adminRecords.find(
+                (record) => String(record?.__record_id || record?.__id || "").trim() === editingRecordId
+            );
+            peoRenderAttachmentList(routeFiles, peoExtractAttachments(adminRecord || {}));
+        };
+
         root.querySelectorAll(".js-submissions-close").forEach((button) => {
             button.addEventListener("click", closeViewModal);
         });
@@ -1209,7 +1491,7 @@ document.addEventListener("DOMContentLoaded", () => {
             button.addEventListener("click", closeEditModal);
         });
 
-        root.addEventListener("click", (event) => {
+        root.addEventListener("click", async (event) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
             const actionButton = target.closest("[data-submissions-action]");
@@ -1232,9 +1514,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     toast("No scanned file is available for this submission.", { title: "Submitted Projects", variant: "warning" });
                     return;
                 }
-                const openedWindow = window.open(row.scannedFileData, "_blank", "noopener");
-                if (!openedWindow) {
-                    window.location.href = row.scannedFileData;
+                const result = await peoOpenFile({
+                    dataUrl: row.scannedFileData,
+                    fileName: row.scannedFileName,
+                    mimeType: row.scannedFileType,
+                });
+                if (!result.ok) {
+                    toast(String(result.error || "Unable to open scanned file."), { title: "Submitted Projects", variant: "danger" });
                 }
                 return;
             }
@@ -1247,6 +1533,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (routeDivisionSelect instanceof HTMLSelectElement) {
                     routeDivisionSelect.value = "";
                 }
+                if (routeFileInput instanceof HTMLInputElement) {
+                    routeFileInput.value = "";
+                }
+                renderRouteFiles();
                 syncRouteControls();
                 openModal(editModal);
             }
@@ -1257,7 +1547,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (routeSubmitButton instanceof HTMLButtonElement) {
-            routeSubmitButton.addEventListener("click", () => {
+            routeSubmitButton.addEventListener("click", async () => {
                 if (!editingRecordId) {
                     toast("Please select a submission to edit before routing.", { title: "Submitted Projects", variant: "warning" });
                     return;
@@ -1292,6 +1582,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 const remarksValue = editRemarksInput instanceof HTMLTextAreaElement ? editRemarksInput.value.trim() : row.remarks;
                 const submittedDateValue = editSubmittedInput instanceof HTMLInputElement ? editSubmittedInput.value.trim() : "";
 
+                let uploadedFile = null;
+                const selectedFile = routeFileInput instanceof HTMLInputElement
+                    ? (routeFileInput.files && routeFileInput.files[0])
+                    : null;
+                if (selectedFile instanceof File && selectedFile.size > 0) {
+                    try {
+                        const dataUrl = await peoReadFileAsDataUrl(selectedFile);
+                        const addedBy = router.labelForDivisionKey
+                            ? (router.labelForDivisionKey(divisionKey) || String(divisionKey || "").trim())
+                            : String(divisionKey || "").trim();
+                        uploadedFile = peoBuildAttachment({
+                            dataUrl,
+                            fileName: selectedFile.name,
+                            mimeType: selectedFile.type || "",
+                            addedBy,
+                        });
+                    } catch (error) {
+                        toast("Unable to read the attached file. Please try again.", { title: "Submitted Projects", variant: "danger" });
+                        return;
+                    }
+                }
+
                 const submission = router.submitToDivision({
                     sourceDivisionKey: divisionKey,
                     sourceRecord: {
@@ -1310,6 +1622,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     },
                     targetDivisionKey: targetKey,
                     existingAdminRecordId: row.id,
+                    uploadedFile,
                 });
 
                 if (submission && submission.ok) {
@@ -1325,6 +1638,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (routeDivisionSelect instanceof HTMLSelectElement) {
                         routeDivisionSelect.value = "";
                     }
+                    if (routeFileInput instanceof HTMLInputElement) {
+                        routeFileInput.value = "";
+                    }
+                    renderRouteFiles();
                     syncRouteControls();
                     toast("Submission routed successfully.", { title: "Submitted Projects", variant: "success" });
                     return;
@@ -2542,11 +2859,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const writeAdminDivisionRecords = (records) => {
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
-                const safe = record && typeof record === "object" ? { ...record } : {};
-                delete safe.scanned_file_data;
-                return safe;
+                return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("admin", safeRecords);
+            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
         }
 
         if (!isLocalStorageAvailable()) return;
@@ -3237,6 +3552,7 @@ document.addEventListener("DOMContentLoaded", () => {
         delete values.scanned_file;
         const scannedFile = formData.get("scanned_file");
         let scannedFilePayload = null;
+        let scannedFileAttachment = null;
 
         if (scannedFile instanceof File && scannedFile.size > 0) {
             try {
@@ -3245,6 +3561,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     scanned_file_type: scannedFile.type || "",
                     scanned_file_data: await readFileAsDataUrl(scannedFile),
                 };
+                scannedFileAttachment = peoBuildAttachment({
+                    dataUrl: scannedFilePayload.scanned_file_data,
+                    fileName: scannedFilePayload.scanned_file_name,
+                    mimeType: scannedFilePayload.scanned_file_type,
+                    addedBy: "Admin Division",
+                });
             } catch (error) {
                 showPeoGeneralToast("Unable to read the scanned file. Please try again.", {
                     title: "Upload Error",
@@ -3275,6 +3597,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 updatedRecord.scanned_file_type = scannedFilePayload.scanned_file_type;
                 updatedRecord.scanned_file_data = scannedFilePayload.scanned_file_data;
             }
+            if (scannedFileAttachment) {
+                const existingAttachments = peoExtractAttachments(currentRecord);
+                updatedRecord.__attachments = peoMergeAttachments(existingAttachments, [scannedFileAttachment]);
+            }
             if (tableType === "billing") {
                 const previousSnapshot = buildBillingHistoryEntry(currentRecord);
                 updatedRecord.billing_status = values.status;
@@ -3303,6 +3629,9 @@ document.addEventListener("DOMContentLoaded", () => {
             values.scanned_file_name = scannedFilePayload.scanned_file_name;
             values.scanned_file_type = scannedFilePayload.scanned_file_type;
             values.scanned_file_data = scannedFilePayload.scanned_file_data;
+        }
+        if (scannedFileAttachment) {
+            values.__attachments = peoMergeAttachments(peoExtractAttachments(values), [scannedFileAttachment]);
         }
         addAdminDivisionRecord(values);
         form.reset();
@@ -3756,9 +4085,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     });
                     return;
                 }
-                const openedWindow = window.open(record.scanned_file_data, "_blank", "noopener");
-                if (!openedWindow) {
-                    window.location.href = record.scanned_file_data;
+                const result = await peoOpenFile({
+                    dataUrl: record.scanned_file_data,
+                    fileName: record.scanned_file_name,
+                    mimeType: record.scanned_file_type,
+                });
+                if (!result.ok) {
+                    showPeoGeneralToast(String(result.error || "Unable to open scanned file."), {
+                        title: "File Error",
+                        variant: "danger",
+                    });
                 }
                 return;
             }
@@ -3919,6 +4255,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const taskForm = document.querySelector(".js-task-form");
     const taskRouteSelect = document.querySelector(".js-task-route-division");
     const taskRouteSubmit = document.querySelector(".js-task-route-submit");
+    const taskRouteFileInput = document.querySelector(".js-task-route-file");
+    const taskRouteFiles = document.querySelector(".js-task-route-files");
     const taskAssignedInput = document.querySelector(".js-task-assigned-input");
     const taskAssignedList = document.querySelector(".js-task-assigned-list");
     const contractorManagement = document.querySelector(".js-contractor-management");
@@ -7748,12 +8086,33 @@ document.addEventListener("DOMContentLoaded", () => {
         taskRouteSubmit.disabled = !selected || !targetKey;
     };
 
+    const renderTaskRouteFiles = () => {
+        if (!(taskRouteFiles instanceof HTMLElement)) return;
+        if (!editingTaskRow) {
+            taskRouteFiles.innerHTML = "";
+            return;
+        }
+        const adminRecordId = String(editingTaskRow.dataset.adminRecordId || "").trim();
+        if (!adminRecordId) {
+            taskRouteFiles.innerHTML = "";
+            return;
+        }
+        const adminRecord = readAdminDivisionRecords().find((item) => String(item?.__record_id || "").trim() === adminRecordId);
+        peoRenderAttachmentList(taskRouteFiles, peoExtractAttachments(adminRecord || {}));
+    };
+
     const closeTaskModal = () => {
         if (!taskModal) {
             return;
         }
         taskModal.hidden = true;
         editingTaskRow = null;
+        if (taskRouteFileInput instanceof HTMLInputElement) {
+            taskRouteFileInput.value = "";
+        }
+        if (taskRouteFiles instanceof HTMLElement) {
+            taskRouteFiles.innerHTML = "";
+        }
         resetTaskModal();
         setBodyScrollLock();
     };
@@ -7765,6 +8124,10 @@ document.addEventListener("DOMContentLoaded", () => {
         editingTaskRow = null;
         resetTaskModal();
         setTaskModalMode("create");
+        if (taskRouteFileInput instanceof HTMLInputElement) {
+            taskRouteFileInput.value = "";
+        }
+        renderTaskRouteFiles();
         taskModal.hidden = false;
         setBodyScrollLock();
         const firstInput = taskModal.querySelector("input[name='title']");
@@ -7809,6 +8172,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (taskRouteSelect instanceof HTMLSelectElement) {
             taskRouteSelect.value = "";
         }
+        if (taskRouteFileInput instanceof HTMLInputElement) {
+            taskRouteFileInput.value = "";
+        }
+        renderTaskRouteFiles();
         syncTaskRouteControls();
 
         taskModal.hidden = false;
@@ -7941,7 +8308,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (taskRouteSubmit instanceof HTMLButtonElement) {
-        taskRouteSubmit.addEventListener("click", () => {
+        taskRouteSubmit.addEventListener("click", async () => {
             if (!editingTaskRow) {
                 showRoadUploadStatusToast("Select a task to edit before submitting.", "warning");
                 return;
@@ -7975,6 +8342,25 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const existingAdminRecordId = String(editingTaskRow.dataset.adminRecordId || "").trim();
+            let uploadedFile = null;
+            const selectedFile = taskRouteFileInput instanceof HTMLInputElement
+                ? (taskRouteFileInput.files && taskRouteFileInput.files[0])
+                : null;
+            if (selectedFile instanceof File && selectedFile.size > 0) {
+                try {
+                    const dataUrl = await peoReadFileAsDataUrl(selectedFile);
+                    uploadedFile = peoBuildAttachment({
+                        dataUrl,
+                        fileName: selectedFile.name,
+                        mimeType: selectedFile.type || "",
+                        addedBy: "Maintenance Division",
+                    });
+                } catch (error) {
+                    showRoadUploadStatusToast("Unable to read the attached file. Please try again.", "danger");
+                    return;
+                }
+            }
+
             const submission = router.submitToDivision({
                 sourceDivisionKey: "maintenance",
                 sourceRecord: {
@@ -7991,12 +8377,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 },
                 targetDivisionKey: targetKey,
                 existingAdminRecordId,
+                uploadedFile,
             });
 
             if (submission && submission.ok) {
                 if (submission.adminRecordId) {
                     editingTaskRow.dataset.adminRecordId = String(submission.adminRecordId);
                 }
+                if (taskRouteFileInput instanceof HTMLInputElement) {
+                    taskRouteFileInput.value = "";
+                }
+                renderTaskRouteFiles();
                 taskRouteSelect.value = "";
                 syncTaskRouteControls();
                 showRoadUploadStatusToast("Task submitted successfully.", "success");
@@ -8074,16 +8465,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 billing_status: nextStatus,
                 status: nextStatus,
             };
+            const events = Array.isArray(nextRecord.__tracking_events)
+                ? nextRecord.__tracking_events.filter((ev) => ev && typeof ev === "object")
+                : [];
+            events.push({
+                at: new Date().toISOString(),
+                action: "Maintenance status updated",
+                from: "Maintenance",
+                to: "Admin",
+                by: "Maintenance",
+                note: `Status set to ${nextStatus}`,
+            });
+            nextRecord.__tracking_events = events;
             records[index] = nextRecord;
             window.localStorage.setItem(adminDivisionStorageKey, JSON.stringify(records));
 
             if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
                 const safeRecords = records.map((record) => {
-                    const safe = record && typeof record === "object" ? { ...record } : {};
-                    delete safe.scanned_file_data;
-                    return safe;
+                    return record && typeof record === "object" ? { ...record } : record;
                 });
-                window.peoDivisionStore.queueSync("admin", safeRecords);
+                window.peoDivisionStore.queueSync("admin", safeRecords, 0);
             }
         } catch (error) {
             // Ignore storage errors.
@@ -9007,7 +9408,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
-            window.peoDivisionStore.queueSync("maintenance", payload);
+            window.peoDivisionStore.queueSync("maintenance", payload, 0);
         }
     }
 
@@ -9736,13 +10137,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const normalize = (value) => String(value || "").trim().toLowerCase();
     // Only allow construction uploads from the static uploads folder. This prevents the spotlight from
     // accidentally showing user profile images or other unrelated assets.
-    const isConstructionSpotlightUrl = (value) => {
-        const url = String(value || "").trim();
-        if (!url.startsWith("/static/uploads/")) return false;
+    const normalizeConstructionSpotlightUrl = (value) => {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+
+        let url = raw;
+        if (url.startsWith("static/uploads/")) {
+            url = `/${url}`;
+        } else if (url.startsWith("./static/uploads/")) {
+            url = url.slice(1);
+        }
+
+        if (!url.startsWith("/static/uploads/")) return "";
         const filename = url.slice("/static/uploads/".length).split("?")[0];
-        if (!filename) return false;
-        if (filename.startsWith("profile_")) return false;
-        return true;
+        if (!filename) return "";
+        if (filename.startsWith("profile_")) return "";
+        return url;
     };
     const clampIndex = (value) => {
         if (!slides.length) return 0;
@@ -9806,11 +10216,13 @@ document.addEventListener("DOMContentLoaded", () => {
                         ? img
                         : String(img?.dataUrl || img?.url || ""))
                         .trim();
-                    if (isConstructionSpotlightUrl(url)) imagePool.push(url);
+                    const normalizedUrl = normalizeConstructionSpotlightUrl(url);
+                    if (normalizedUrl) imagePool.push(normalizedUrl);
                 });
 
                 const legacy = String(record.accomplishment_image || "").trim();
-                if (isConstructionSpotlightUrl(legacy)) imagePool.push(legacy);
+                const normalizedLegacy = normalizeConstructionSpotlightUrl(legacy);
+                if (normalizedLegacy) imagePool.push(normalizedLegacy);
 
                 const uniq = Array.from(new Set(imagePool));
                 return {
@@ -9931,9 +10343,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? img
                 : String(img?.dataUrl || img?.url || ""))
                 .trim();
-            if (isConstructionSpotlightUrl(url)) pool.push(url);
+            const normalizedUrl = normalizeConstructionSpotlightUrl(url);
+            if (normalizedUrl) pool.push(normalizedUrl);
         });
-        if (isConstructionSpotlightUrl(fallback)) pool.push(fallback);
+        const normalizedFallback = normalizeConstructionSpotlightUrl(fallback);
+        if (normalizedFallback) pool.push(normalizedFallback);
         return pickRandomValue(Array.from(new Set(pool)), lastImageUrl);
     };
 
@@ -10100,15 +10514,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectAllCheckbox = constructionDashboard.querySelector(".js-construction-select-all");
     const prevPageButton = constructionDashboard.querySelector(".js-construction-prev-page");
     const nextPageButton = constructionDashboard.querySelector(".js-construction-next-page");
-	    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
-	    const constructionModal = document.querySelector(".js-construction-modal");
-	    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
-        const constructionPhotoInput = constructionModal ? constructionModal.querySelector(".js-construction-photo-input") : null;
-	    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
-	    const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
-	    const closeConstructionModalButtons = constructionModal
-	        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
-	        : [];
+    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
+    const constructionModal = document.querySelector(".js-construction-modal");
+    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
+    const constructionPhotoInput = constructionModal ? constructionModal.querySelector(".js-construction-photo-input") : null;
+    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
+    const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
+    const constructionRouteFileInput = constructionModal ? constructionModal.querySelector(".js-construction-route-file") : null;
+    const constructionRouteFiles = constructionModal ? constructionModal.querySelector(".js-construction-route-files") : null;
+    const closeConstructionModalButtons = constructionModal
+        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
+        : [];
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
@@ -10765,7 +11181,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 delete safe.accomplishment_image_name;
                 return safe;
             });
-            window.peoDivisionStore.queueSync("construction", safeRecords);
+            window.peoDivisionStore.queueSync("construction", safeRecords, 0);
         }
     };
 
@@ -10784,6 +11200,13 @@ document.addEventListener("DOMContentLoaded", () => {
             window.localStorage.setItem(ADMIN_DIVISION_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage failures.
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+                return record && typeof record === "object" ? { ...record } : record;
+            });
+            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
         }
     };
 
@@ -10822,8 +11245,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const syncConstructionStatusToAdmin = (constructionRecord) => {
         const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
-        if (String(record.__admin_source || "") !== "admin_document") return false;
-        const sourceId = String(record.__admin_source_id || "").trim();
+        const sourceId = String(record.__admin_source_id || record.__admin_submission_id || "").trim();
         if (!sourceId) return false;
 
         const nextStatus = mapConstructionPercentToAdminStatus(record.status_current);
@@ -10834,9 +11256,21 @@ document.addEventListener("DOMContentLoaded", () => {
         if (idx < 0) return false;
 
         const existing = adminRecords[idx] || {};
+        const currentStatus = String(existing.doc_status || existing.status || "").trim();
+        if (currentStatus === nextStatus) return false;
         const updated = { ...existing };
         updated.doc_status = nextStatus;
         updated.status = nextStatus;
+        const events = Array.isArray(updated.__tracking_events) ? updated.__tracking_events.filter((ev) => ev && typeof ev === "object") : [];
+        events.push({
+            at: new Date().toISOString(),
+            action: "Construction status updated",
+            from: "Construction",
+            to: "Admin",
+            by: "Construction",
+            note: `Status set to ${nextStatus}`,
+        });
+        updated.__tracking_events = events;
         adminRecords[idx] = updated;
         writeAdminDivisionRecords(adminRecords);
         return true;
@@ -10895,6 +11329,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const syncAdminRoutedConstructionRecords = (existingRecords) => {
         const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
         const adminRecords = readAdminDivisionRecords();
+        const adminById = new Map(
+            adminRecords
+                .filter((record) => String(record?.__record_id || "").trim())
+                .map((record) => [String(record.__record_id).trim(), record])
+        );
         const routedFromAdmin = adminRecords
             .filter((record) => isConstructionDivisionLabel(record?.division))
             .filter((record) => String(record?.__record_id || "").trim())
@@ -10948,7 +11387,21 @@ document.addEventListener("DOMContentLoaded", () => {
             };
         });
 
-        const nextRecords = [...mergedRouted, ...nonRouted];
+        // Preserve admin-routed records even after they are routed out of Construction.
+        const outgoingPreserved = Array.from(existingRoutedBySource.entries())
+            .filter(([sourceId]) => !routedBySourceId.has(sourceId))
+            .map(([sourceId, existing]) => {
+                const adminRecord = adminById.get(sourceId);
+                if (!adminRecord) return existing;
+                const mapped = mapAdminRecordToConstruction(adminRecord);
+                return {
+                    ...existing,
+                    ...mapped,
+                    route: "Outgoing",
+                };
+            });
+
+        const nextRecords = [...mergedRouted, ...outgoingPreserved, ...nonRouted];
         const beforeSignature = JSON.stringify(currentRecords);
         const afterSignature = JSON.stringify(nextRecords);
         if (beforeSignature !== afterSignature) {
@@ -11243,52 +11696,71 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-	    const openConstructionModal = (mode = "create", record = null) => {
-	        if (!constructionModal) return;
-	        editingRecordId = mode === "edit" ? record?.__id || null : null;
-	        setConstructionFormMode(mode);
-	        if (constructionForm) {
-	            constructionForm.reset();
-	            if (mode === "edit" && record) {
-	                fillConstructionForm(record);
-	            }
-	        }
-            if (constructionPhotoInput instanceof HTMLInputElement) {
-                constructionPhotoInput.value = "";
+    const openConstructionModal = (mode = "create", record = null) => {
+        if (!constructionModal) return;
+        editingRecordId = mode === "edit" ? record?.__id || null : null;
+        setConstructionFormMode(mode);
+        if (constructionForm) {
+            constructionForm.reset();
+            if (mode === "edit" && record) {
+                fillConstructionForm(record);
             }
-	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
-	            constructionRouteDivisionSelect.value = "";
-	        }
-	        constructionModal.hidden = false;
-	        document.body.classList.add("construction-modal-open");
-	        requestAnimationFrame(() => {
-	            const firstField = constructionForm?.querySelector('[name="project_name"]');
-	            if (firstField) firstField.focus();
-	        });
-	        syncConstructionRouteControls();
-	    };
+        }
+        if (constructionPhotoInput instanceof HTMLInputElement) {
+            constructionPhotoInput.value = "";
+        }
+        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+            constructionRouteDivisionSelect.value = "";
+        }
+        if (constructionRouteFileInput instanceof HTMLInputElement) {
+            constructionRouteFileInput.value = "";
+        }
 
-	    const closeConstructionModal = () => {
-	        if (!constructionModal) return;
-	        constructionModal.hidden = true;
-	        document.body.classList.remove("construction-modal-open");
-	        editingRecordId = null;
-	        setConstructionFormMode("create");
-	        if (constructionForm) constructionForm.reset();
-            if (constructionPhotoInput instanceof HTMLInputElement) {
-                constructionPhotoInput.value = "";
-            }
-	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
-	            constructionRouteDivisionSelect.value = "";
-	        }
-	        syncConstructionRouteControls();
-	    };
+        constructionModal.hidden = false;
+        document.body.classList.add("construction-modal-open");
+        requestAnimationFrame(() => {
+            const firstField = constructionForm?.querySelector('[name="project_name"]');
+            if (firstField) firstField.focus();
+        });
 
-	    const buildRecordFromForm = () => {
-	        if (!constructionForm) return null;
-	        const formData = new FormData(constructionForm);
-	        const projectName = getTrimmedFormValue(formData, "project_name");
-	        if (!projectName) return null;
+        // Show routed files (when present) for the record currently being viewed.
+        try {
+            renderConstructionRouteFiles(record);
+        } catch (error) {
+            // Ignore missing renderer during early initialization.
+        }
+        syncConstructionRouteControls();
+    };
+
+    const closeConstructionModal = () => {
+        if (!constructionModal) return;
+        constructionModal.hidden = true;
+        document.body.classList.remove("construction-modal-open");
+        editingRecordId = null;
+        setConstructionFormMode("create");
+        if (constructionForm) constructionForm.reset();
+        if (constructionPhotoInput instanceof HTMLInputElement) {
+            constructionPhotoInput.value = "";
+        }
+        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+            constructionRouteDivisionSelect.value = "";
+        }
+        if (constructionRouteFileInput instanceof HTMLInputElement) {
+            constructionRouteFileInput.value = "";
+        }
+        try {
+            renderConstructionRouteFiles(null);
+        } catch (error) {
+            // Ignore missing renderer during early initialization.
+        }
+        syncConstructionRouteControls();
+    };
+
+    const buildRecordFromForm = () => {
+        if (!constructionForm) return null;
+        const formData = new FormData(constructionForm);
+        const projectName = getTrimmedFormValue(formData, "project_name");
+        if (!projectName) return null;
 
         return {
             __id: createRecordId(),
@@ -11308,21 +11780,43 @@ document.addEventListener("DOMContentLoaded", () => {
             status_current: getTrimmedFormValue(formData, "status_current"),
             time_elapsed: getTrimmedFormValue(formData, "time_elapsed"),
             slippage: getTrimmedFormValue(formData, "slippage"),
-	            remarks: getTrimmedFormValue(formData, "remarks"),
-	        };
-	    };
+            remarks: getTrimmedFormValue(formData, "remarks"),
+        };
+    };
 
-	    const getConstructionRouteSourceRecord = () => {
-	        const base = buildRecordFromForm();
-	        if (!base) return null;
-	        if (editingRecordId) {
-	            const existing = records.find((record) => record.__id === editingRecordId);
-	            return existing
-	                ? { ...existing, ...base, __id: editingRecordId }
-	                : { ...base, __id: editingRecordId };
-	        }
-	        return base;
-	    };
+ 	    const getConstructionRouteSourceRecord = () => {
+ 	        const base = buildRecordFromForm();
+ 	        if (!base) return null;
+ 	        if (editingRecordId) {
+ 	            const existing = records.find((record) => record.__id === editingRecordId);
+ 	            return existing
+ 	                ? { ...existing, ...base, __id: editingRecordId }
+ 	                : { ...base, __id: editingRecordId };
+ 	        }
+ 	        return base;
+ 	    };
+
+        const renderConstructionRouteFiles = (record) => {
+            if (!(constructionRouteFiles instanceof HTMLElement)) return;
+            const source = record && typeof record === "object" ? record : null;
+            const adminId = source
+                ? String(source.__admin_source_id || source.__admin_submission_id || "").trim()
+                : "";
+            if (!adminId) {
+                constructionRouteFiles.innerHTML = "";
+                return;
+            }
+            try {
+                const raw = window.localStorage.getItem("peo_admin_division_records_v1");
+                const parsed = raw ? JSON.parse(raw) : [];
+                const adminRecord = Array.isArray(parsed)
+                    ? parsed.find((item) => String(item?.__record_id || "").trim() === adminId)
+                    : null;
+                peoRenderAttachmentList(constructionRouteFiles, peoExtractAttachments(adminRecord || {}));
+            } catch (error) {
+                constructionRouteFiles.innerHTML = "";
+            }
+        };
 
 	    const syncConstructionRouteControls = () => {
 	        if (!(constructionRouteSubmitButton instanceof HTMLButtonElement)) return;
@@ -11341,7 +11835,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	        constructionForm.addEventListener("input", syncConstructionRouteControls);
 	    }
 	    if (constructionRouteSubmitButton instanceof HTMLButtonElement) {
-	        constructionRouteSubmitButton.addEventListener("click", () => {
+	        constructionRouteSubmitButton.addEventListener("click", async () => {
 	            const router = window.peoProjectRouter;
 	            if (!router || typeof router.submitToDivision !== "function") {
 	                showPeoGeneralToast("Project submission is not available right now.", {
@@ -11372,11 +11866,32 @@ document.addEventListener("DOMContentLoaded", () => {
 	            const existingAdminRecordId = String(
 	                sourceRecord.__admin_source_id || sourceRecord.__admin_submission_id || ""
 	            ).trim();
+
+                let uploadedFile = null;
+                const selectedFile = constructionRouteFileInput instanceof HTMLInputElement
+                    ? (constructionRouteFileInput.files?.[0] || null)
+                    : null;
+                if (selectedFile) {
+                    try {
+                        uploadedFile = {
+                            fileName: selectedFile.name,
+                            mimeType: selectedFile.type || "",
+                            dataUrl: await peoReadFileAsDataUrl(selectedFile),
+                        };
+                    } catch (error) {
+                        showPeoGeneralToast("Unable to read the attached file. Please try again.", {
+                            title: "Construction Division",
+                            variant: "warning",
+                        });
+                        return;
+                    }
+                }
 	            const result = router.submitToDivision({
 	                sourceDivisionKey: "construction",
 	                sourceRecord,
 	                targetDivisionKey: targetKey,
 	                existingAdminRecordId,
+                    uploadedFile,
 	            });
 
 	            if (!result?.ok) {
@@ -11398,6 +11913,10 @@ document.addEventListener("DOMContentLoaded", () => {
 	            records = syncAdminRoutedConstructionRecords(records);
 	            writeStoredRecords(records);
 	            renderTable();
+                if (constructionRouteFileInput instanceof HTMLInputElement) {
+                    constructionRouteFileInput.value = "";
+                }
+                renderConstructionRouteFiles(sourceRecord);
 
 	            if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
 	                constructionRouteDivisionSelect.value = "";
@@ -12163,7 +12682,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 delete safe.accomplishment_image_name;
                 return safe;
             });
-            window.peoDivisionStore.queueSync("construction", safeForSync);
+            window.peoDivisionStore.queueSync("construction", safeForSync, 0);
         }
 
         return wrote;
@@ -12648,15 +13167,21 @@ document.addEventListener("DOMContentLoaded", () => {
 	    const planningDocBudgetOtherInput = planningDocEditForm instanceof HTMLFormElement
 	        ? planningDocEditForm.querySelector(".js-planning-doc-budget-other")
 	        : null;
-	    const planningRouteDivisionSelect = planningDocEditForm instanceof HTMLFormElement
-	        ? planningDocEditForm.querySelector(".js-planning-route-division")
-	        : null;
-	    const planningRouteSubmitButton = planningDocEditForm instanceof HTMLFormElement
-	        ? planningDocEditForm.querySelector(".js-planning-route-submit")
-	        : null;
-	    const planningDocCloseButtons = planningDocModal instanceof HTMLElement
-	        ? Array.from(planningDocModal.querySelectorAll(".js-close-planning-doc-modal"))
-	        : [];
+ 	    const planningRouteDivisionSelect = planningDocEditForm instanceof HTMLFormElement
+ 	        ? planningDocEditForm.querySelector(".js-planning-route-division")
+ 	        : null;
+ 	    const planningRouteSubmitButton = planningDocEditForm instanceof HTMLFormElement
+ 	        ? planningDocEditForm.querySelector(".js-planning-route-submit")
+ 	        : null;
+        const planningRouteFileInput = planningDocEditForm instanceof HTMLFormElement
+            ? planningDocEditForm.querySelector(".js-planning-route-file")
+            : null;
+        const planningRouteFiles = planningDocEditForm instanceof HTMLFormElement
+            ? planningDocEditForm.querySelector(".js-planning-route-files")
+            : null;
+ 	    const planningDocCloseButtons = planningDocModal instanceof HTMLElement
+ 	        ? Array.from(planningDocModal.querySelectorAll(".js-close-planning-doc-modal"))
+ 	        : [];
     const PLANNING_BUDGET_STORAGE_KEY = "peo_planning_budget_records_v1";
     const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
     const PLANNING_DOCUMENT_DELETED_ADMIN_IDS_KEY = "peo_planning_deleted_admin_ids_v1";
@@ -12921,11 +13446,18 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             // Ignore storage failures.
         }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+                return record && typeof record === "object" ? { ...record } : record;
+            });
+            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+        }
     };
 
     const syncPlanningDocumentStatusToAdmin = (planningDocRecord) => {
         const record = planningDocRecord && typeof planningDocRecord === "object" ? planningDocRecord : {};
-        const sourceId = String(record.__admin_source_id || "").trim();
+        const sourceId = String(record.__admin_source_id || record.__admin_submission_id || "").trim();
         if (!sourceId) return false;
 
         const nextStatus = normalizePlanningDocStatus(record.status || "For Review");
@@ -12936,9 +13468,21 @@ document.addEventListener("DOMContentLoaded", () => {
         if (idx < 0) return false;
 
         const existing = adminRecords[idx] || {};
+        const currentStatus = String(existing.doc_status || existing.status || "").trim();
+        if (currentStatus === nextStatus) return false;
         const updated = { ...existing };
         updated.doc_status = nextStatus;
         updated.status = nextStatus;
+        const events = Array.isArray(updated.__tracking_events) ? updated.__tracking_events.filter((ev) => ev && typeof ev === "object") : [];
+        events.push({
+            at: new Date().toISOString(),
+            action: "Planning status updated",
+            from: "Planning",
+            to: "Admin",
+            by: "Planning",
+            note: `Status set to ${nextStatus}`,
+        });
+        updated.__tracking_events = events;
         adminRecords[idx] = updated;
         writeAdminDivisionRecords(adminRecords);
         return true;
@@ -12962,7 +13506,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
-            window.peoDivisionStore.queueSync("planning", records);
+            window.peoDivisionStore.queueSync("planning", records, 0);
         }
     };
 
@@ -13202,7 +13746,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const mapped = adminBySourceId.get(sourceId);
             if (!mapped) {
-                // Drop records no longer routed to Planning or removed in Admin.
+                // Keep records that were previously visible in Planning even after routing out.
+                // Only drop if the source admin record is gone (deleted).
+                const adminRecords = readAdminDivisionRecords();
+                const adminRecord = adminRecords.find((item) => String(item?.__record_id || "").trim() === sourceId);
+                if (!adminRecord) {
+                    return acc;
+                }
+                acc.push({
+                    ...record,
+                    __route: "Outgoing",
+                    __routed_to: String(adminRecord?.division || "").trim(),
+                });
                 return acc;
             }
 
@@ -13210,6 +13765,8 @@ document.addEventListener("DOMContentLoaded", () => {
             acc.push({
                 ...mapped,
                 ...record,
+                __route: "Incoming",
+                __routed_to: "",
                 slip_no: String(pickPlanningEditedValue(record?.slip_no, mapped.slip_no || "")).trim(),
                 document_name: String(pickPlanningEditedValue(record?.document_name, mapped.document_name || "")).trim(),
                 location: String(pickPlanningEditedValue(record?.location, mapped.location || "")).trim(),
@@ -13976,14 +14533,26 @@ document.addEventListener("DOMContentLoaded", () => {
     let planningToastTimer = null;
 	    let planningConfirmOverlay = null;
 
-	    const syncPlanningRouteControls = () => {
-	        if (!(planningRouteSubmitButton instanceof HTMLButtonElement)) return;
-	        const router = window.peoProjectRouter;
-	        const targetKey = router && typeof router.resolveDivisionKey === "function"
-	            ? router.resolveDivisionKey(planningRouteDivisionSelect?.value)
-	            : "";
-	        planningRouteSubmitButton.disabled = !editingPlanningDocumentId || !targetKey;
-	    };
+ 	    const syncPlanningRouteControls = () => {
+ 	        if (!(planningRouteSubmitButton instanceof HTMLButtonElement)) return;
+ 	        const router = window.peoProjectRouter;
+ 	        const targetKey = router && typeof router.resolveDivisionKey === "function"
+ 	            ? router.resolveDivisionKey(planningRouteDivisionSelect?.value)
+ 	            : "";
+ 	        planningRouteSubmitButton.disabled = !editingPlanningDocumentId || !targetKey;
+ 	    };
+
+        const renderPlanningRouteFiles = (record) => {
+            if (!(planningRouteFiles instanceof HTMLElement)) return;
+            const source = record && typeof record === "object" ? record : {};
+            const adminRecordId = String(source.__admin_source_id || source.__admin_submission_id || "").trim();
+            if (!adminRecordId) {
+                planningRouteFiles.innerHTML = "";
+                return;
+            }
+            const adminRecord = readAdminDivisionRecords().find((item) => String(item?.__record_id || "").trim() === adminRecordId);
+            peoRenderAttachmentList(planningRouteFiles, peoExtractAttachments(adminRecord || {}));
+        };
 
     const getPlanningPpaBudgetAllocationOptions = () => {
         if (!Array.isArray(planningBudgetRecords) || !planningBudgetRecords.length) return [];
@@ -14448,25 +15017,31 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-	    const closePlanningDocModal = () => {
-	        if (!(planningDocModal instanceof HTMLElement)) return;
-	        planningDocModal.classList.remove("is-open");
-	        planningDocModal.hidden = true;
-	        planningDocModal.setAttribute("hidden", "");
-	        planningDocModal.style.display = "none";
-	        editingPlanningDocumentId = null;
-	        pendingPlanningBudgetDetailRecordId = null;
-	        if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
-	            planningRouteDivisionSelect.value = "";
-	        }
-	        syncPlanningRouteControls();
-	        syncPlanningModalBodyState();
-	    };
+ 	    const closePlanningDocModal = () => {
+ 	        if (!(planningDocModal instanceof HTMLElement)) return;
+ 	        planningDocModal.classList.remove("is-open");
+ 	        planningDocModal.hidden = true;
+ 	        planningDocModal.setAttribute("hidden", "");
+ 	        planningDocModal.style.display = "none";
+ 	        editingPlanningDocumentId = null;
+ 	        pendingPlanningBudgetDetailRecordId = null;
+ 	        if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
+ 	            planningRouteDivisionSelect.value = "";
+ 	        }
+            if (planningRouteFileInput instanceof HTMLInputElement) {
+                planningRouteFileInput.value = "";
+            }
+            if (planningRouteFiles instanceof HTMLElement) {
+                planningRouteFiles.innerHTML = "";
+            }
+ 	        syncPlanningRouteControls();
+ 	        syncPlanningModalBodyState();
+ 	    };
 
-	    const openPlanningDocModal = (recordId) => {
-	        if (!(planningDocModal instanceof HTMLElement) || !(planningDocEditForm instanceof HTMLFormElement)) return;
-	        const record = planningDocumentRecords.find((item) => String(item?.id || "") === String(recordId || ""));
-	        if (!record) return;
+ 	    const openPlanningDocModal = (recordId) => {
+ 	        if (!(planningDocModal instanceof HTMLElement) || !(planningDocEditForm instanceof HTMLFormElement)) return;
+ 	        const record = planningDocumentRecords.find((item) => String(item?.id || "") === String(recordId || ""));
+ 	        if (!record) return;
 
         closeModal();
         closeEditModal();
@@ -14500,10 +15075,14 @@ document.addEventListener("DOMContentLoaded", () => {
 	        setValue("budget_allocation_other", record.budget_allocation_other || "");
 	        setValue("remarks", record.remarks || "");
 	        syncPlanningDocBudgetOtherField();
-	        if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
-	            planningRouteDivisionSelect.value = "";
-	        }
-	        syncPlanningRouteControls();
+ 	        if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
+ 	            planningRouteDivisionSelect.value = "";
+ 	        }
+            if (planningRouteFileInput instanceof HTMLInputElement) {
+                planningRouteFileInput.value = "";
+            }
+            renderPlanningRouteFiles(record);
+ 	        syncPlanningRouteControls();
 
 	        planningDocModal.classList.add("is-open");
 	        planningDocModal.hidden = false;
@@ -14774,8 +15353,8 @@ document.addEventListener("DOMContentLoaded", () => {
 	        });
 	    }
 
-	    if (planningRouteSubmitButton instanceof HTMLButtonElement) {
-	        planningRouteSubmitButton.addEventListener("click", () => {
+ 	    if (planningRouteSubmitButton instanceof HTMLButtonElement) {
+	        planningRouteSubmitButton.addEventListener("click", async () => {
 	            const router = window.peoProjectRouter;
 	            if (!router || typeof router.submitToDivision !== "function") {
 	                showPeoGeneralToast("Project submission is not available right now.", {
@@ -14805,11 +15384,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	            const record = planningDocumentRecords[recordIndex] || {};
 	            const existingAdminRecordId = String(record.__admin_source_id || record.__admin_submission_id || "").trim();
+                let uploadedFile = null;
+                const selectedFile = planningRouteFileInput instanceof HTMLInputElement
+                    ? (planningRouteFileInput.files && planningRouteFileInput.files[0])
+                    : null;
+                if (selectedFile instanceof File && selectedFile.size > 0) {
+                    try {
+                        const dataUrl = await peoReadFileAsDataUrl(selectedFile);
+                        uploadedFile = peoBuildAttachment({
+                            dataUrl,
+                            fileName: selectedFile.name,
+                            mimeType: selectedFile.type || "",
+                            addedBy: "Planning Division",
+                        });
+                    } catch (error) {
+                        showPeoGeneralToast("Unable to read the attached file. Please try again.", {
+                            title: "Planning Division",
+                            variant: "danger",
+                        });
+                        return;
+                    }
+                }
+
 	            const result = router.submitToDivision({
 	                sourceDivisionKey: "planning",
 	                sourceRecord: record,
 	                targetDivisionKey: targetKey,
 	                existingAdminRecordId,
+                    uploadedFile,
 	            });
 
 	            if (!result?.ok) {
@@ -16787,15 +17389,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const qualityTabs = Array.from(qualityDashboard.querySelectorAll("[data-quality-tab]"));
     const routeFilterButton = qualityDashboard.querySelector(".js-quality-route-filter");
     const openModalButton = qualityDashboard.querySelector(".js-quality-open-modal");
-	    const qualityModal = document.querySelector(".js-quality-modal");
-	    const qualityForm = qualityModal ? qualityModal.querySelector(".js-quality-form") : null;
-	    const qualityModalTitle = qualityModal ? qualityModal.querySelector("#quality-modal-title") : null;
-	    const qualityModalSubtitle = qualityModal ? qualityModal.querySelector(".js-quality-modal-subtitle") : null;
-	    const qualityRouteDivisionSelect = qualityModal ? qualityModal.querySelector(".js-quality-route-division") : null;
-	    const qualityRouteSubmitButton = qualityModal ? qualityModal.querySelector(".js-quality-route-submit") : null;
-	    const closeQualityButtons = qualityModal
-	        ? Array.from(qualityModal.querySelectorAll(".js-quality-close-modal"))
-	        : [];
+ 	    const qualityModal = document.querySelector(".js-quality-modal");
+ 	    const qualityForm = qualityModal ? qualityModal.querySelector(".js-quality-form") : null;
+ 	    const qualityModalTitle = qualityModal ? qualityModal.querySelector("#quality-modal-title") : null;
+ 	    const qualityModalSubtitle = qualityModal ? qualityModal.querySelector(".js-quality-modal-subtitle") : null;
+ 	    const qualityRouteDivisionSelect = qualityModal ? qualityModal.querySelector(".js-quality-route-division") : null;
+ 	    const qualityRouteSubmitButton = qualityModal ? qualityModal.querySelector(".js-quality-route-submit") : null;
+        const qualityRouteFileInput = qualityModal ? qualityModal.querySelector(".js-quality-route-file") : null;
+        const qualityRouteFiles = qualityModal ? qualityModal.querySelector(".js-quality-route-files") : null;
+ 	    const closeQualityButtons = qualityModal
+ 	        ? Array.from(qualityModal.querySelectorAll(".js-quality-close-modal"))
+ 	        : [];
     const deleteQualityButton = qualityModal ? qualityModal.querySelector(".js-quality-delete-record") : null;
 
     if (!(qualityTableWrap instanceof HTMLElement) || !(qualityTableBody instanceof HTMLElement) || !(qualityPagination instanceof HTMLElement)) {
@@ -16895,6 +17499,9 @@ document.addEventListener("DOMContentLoaded", () => {
             || adminRecord?.date_received_admin
             || fallbackDate
         ).trim();
+        const adminAttachments = peoExtractAttachments(adminRecord);
+        const latestAdminAttachment = adminAttachments.length ? adminAttachments[adminAttachments.length - 1] : null;
+        const scanUrl = String(latestAdminAttachment?.dataUrl || adminRecord?.scanned_file_data || "").trim();
         const statusValue = String(adminRecord?.doc_status || adminRecord?.status || "").trim();
         const billingType = String(adminRecord?.billing_type || "").trim();
         const billingTypeOther = String(adminRecord?.billing_type_other || "").trim();
@@ -16914,7 +17521,7 @@ document.addEventListener("DOMContentLoaded", () => {
             billing_type: typeOfBilling,
             project_location: String(adminRecord?.document_name || "").trim(),
             location_detail: String(adminRecord?.location || "").trim(),
-            scan_url: String(adminRecord?.scanned_file_data || "").trim(),
+            scan_url: scanUrl,
             route: "Incoming",
             received_by: "Quality Division",
             date_recv: String(adminRecord?.date_received || adminRecord?.date_received_admin || docDate).trim(),
@@ -16929,6 +17536,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const syncAdminRoutedQualityRecords = (existingRecords) => {
         const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
         const adminRecords = readAdminDivisionRecords();
+        const adminById = new Map(
+            adminRecords
+                .filter((record) => String(record?.__record_id || "").trim())
+                .map((record) => [String(record.__record_id).trim(), record])
+        );
         const routedFromAdmin = adminRecords
             .filter((record) => {
                 const division = normalizeDivisionLabel(record?.division);
@@ -16962,7 +17574,21 @@ document.addEventListener("DOMContentLoaded", () => {
             };
         });
 
-        const nextRecords = [...mergedRouted, ...nonRouted];
+        // Preserve admin-routed records even after they are routed out of Quality.
+        const outgoingPreserved = Array.from(existingRoutedBySource.entries())
+            .filter(([sourceId]) => !routedBySourceId.has(sourceId))
+            .map(([sourceId, existing]) => {
+                const adminRecord = adminById.get(sourceId);
+                if (!adminRecord) return existing;
+                const mapped = mapAdminRecordToQuality(adminRecord);
+                return {
+                    ...existing,
+                    ...mapped,
+                    route: "Outgoing",
+                };
+            });
+
+        const nextRecords = [...mergedRouted, ...outgoingPreserved, ...nonRouted];
         const beforeSignature = JSON.stringify(currentRecords);
         const afterSignature = JSON.stringify(nextRecords);
         if (beforeSignature !== afterSignature) {
@@ -17042,12 +17668,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
-                const safe = record && typeof record === "object" ? { ...record } : {};
-                delete safe.scan_url;
-                delete safe.scanned_file_data;
-                return safe;
+                return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("quality", safeRecords);
+            window.peoDivisionStore.queueSync("quality", safeRecords, 0);
         }
     };
 
@@ -17281,6 +17904,12 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const createRecordRow = (record) => {
+        const scanUrl = record.scan_url ? peoNormalizeDataUrl({ dataUrl: record.scan_url }) : "";
+        const adminRecordId = String(record.__admin_source_id || record.__admin_submission_id || "").trim();
+        const adminRecord = adminRecordId
+            ? readAdminDivisionRecords().find((item) => String(item?.__record_id || "").trim() === adminRecordId)
+            : null;
+        const hasScan = Boolean(scanUrl) || peoExtractAttachments(adminRecord || record).length > 0;
         const row = document.createElement("tr");
         row.className = "quality-data-row";
         row.dataset.recordId = record.__id;
@@ -17293,7 +17922,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>${escapeHtml(record.project_location || "-")}</td>
             <td>${escapeHtml(record.location_detail || "-")}</td>
             <td>
-                <a href="${escapeHtml(record.scan_url || "#")}" class="quality-scan-link ${record.scan_url ? "" : "is-disabled"}" ${record.scan_url ? 'target="_blank" rel="noopener noreferrer"' : 'aria-disabled="true" tabindex="-1"'}>
+                <a href="#" class="quality-scan-link ${hasScan ? "" : "is-disabled"}" ${hasScan ? "" : 'aria-disabled="true" tabindex="-1"'}>
                     <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                     <span>Scan</span>
                 </a>
@@ -17484,18 +18113,116 @@ document.addEventListener("DOMContentLoaded", () => {
 	        document.body.classList.toggle("quality-modal-open", isOpen);
 	    };
 
-	    const syncQualityRouteControls = () => {
-	        if (!(qualityRouteSubmitButton instanceof HTMLButtonElement)) return;
-	        const router = window.peoProjectRouter;
-	        const targetKey = router && typeof router.resolveDivisionKey === "function"
-	            ? router.resolveDivisionKey(qualityRouteDivisionSelect?.value)
-	            : "";
-	        const hasSource = Boolean(editingRecordId || buildRecordFromForm());
-	        qualityRouteSubmitButton.disabled = !targetKey || !hasSource;
-	    };
+ 	    const syncQualityRouteControls = () => {
+ 	        if (!(qualityRouteSubmitButton instanceof HTMLButtonElement)) return;
+ 	        const router = window.peoProjectRouter;
+ 	        const targetKey = router && typeof router.resolveDivisionKey === "function"
+ 	            ? router.resolveDivisionKey(qualityRouteDivisionSelect?.value)
+ 	            : "";
+ 	        const hasSource = Boolean(editingRecordId || buildRecordFromForm());
+ 	        qualityRouteSubmitButton.disabled = !targetKey || !hasSource;
+ 	    };
 
-	    const openQualityModal = (mode = "create", record = null) => {
-	        if (!(qualityModal instanceof HTMLElement) || !(qualityForm instanceof HTMLFormElement)) return;
+        let qualityScanModal = null;
+
+        const ensureQualityScanModal = () => {
+            if (qualityScanModal) return qualityScanModal;
+
+            const overlay = document.createElement("div");
+            overlay.className = "quality-scan-overlay";
+            overlay.hidden = true;
+            overlay.innerHTML = `
+                <div class="quality-scan-backdrop" data-quality-scan-close></div>
+                <div class="quality-scan-dialog" role="dialog" aria-modal="true" aria-labelledby="quality-scan-title">
+                    <header class="quality-scan-head">
+                        <div class="quality-scan-heading">
+                            <span class="quality-scan-kicker">Scanned Files</span>
+                            <h4 id="quality-scan-title" class="js-quality-scan-title">Scan</h4>
+                            <p class="js-quality-scan-subtitle">Files attached to this record.</p>
+                        </div>
+                        <button type="button" class="quality-scan-close" data-quality-scan-close aria-label="Close scanned files">
+                            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                        </button>
+                    </header>
+                    <div class="quality-scan-body">
+                        <div class="peo-route-files js-quality-scan-files" aria-label="Scanned files list"></div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            const close = () => {
+                overlay.hidden = true;
+                document.body.classList.remove("quality-scan-open");
+                const list = overlay.querySelector(".js-quality-scan-files");
+                if (list instanceof HTMLElement) list.innerHTML = "";
+            };
+
+            overlay.addEventListener("click", (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) return;
+                if (target.hasAttribute("data-quality-scan-close") || target.closest("[data-quality-scan-close]")) {
+                    close();
+                }
+            });
+
+            qualityScanModal = {
+                overlay,
+                title: overlay.querySelector(".js-quality-scan-title"),
+                subtitle: overlay.querySelector(".js-quality-scan-subtitle"),
+                list: overlay.querySelector(".js-quality-scan-files"),
+                close,
+            };
+            return qualityScanModal;
+        };
+
+        const openQualityScanModal = (record) => {
+            const modal = ensureQualityScanModal();
+            const source = record && typeof record === "object" ? record : {};
+            const adminRecordId = String(source.__admin_source_id || source.__admin_submission_id || "").trim();
+            const adminRecord = adminRecordId
+                ? readAdminDivisionRecords().find((item) => String(item?.__record_id || "").trim() === adminRecordId)
+                : null;
+
+            const attachments = peoExtractAttachments(adminRecord || source);
+            if (!attachments.length) {
+                showPeoGeneralToast("No scanned files are available for this record yet.", {
+                    title: "Quality Division",
+                    variant: "warning",
+                });
+                return;
+            }
+
+            if (modal.title instanceof HTMLElement) {
+                modal.title.textContent = String(source.doc_no || "Scan").trim() || "Scan";
+            }
+            if (modal.subtitle instanceof HTMLElement) {
+                const sourceLabel = String(source.received_from || "").trim();
+                modal.subtitle.textContent = `${attachments.length} file(s)${sourceLabel ? ` • ${sourceLabel}` : ""}`;
+            }
+            if (modal.list instanceof HTMLElement) {
+                peoRenderAttachmentList(modal.list, attachments);
+            }
+
+            modal.overlay.hidden = false;
+            document.body.classList.add("quality-scan-open");
+        };
+
+        const renderQualityRouteFiles = (record) => {
+            if (!(qualityRouteFiles instanceof HTMLElement)) return;
+            const source = record && typeof record === "object" ? record : {};
+            const adminRecordId = String(source.__admin_source_id || source.__admin_submission_id || "").trim();
+            if (!adminRecordId) {
+                qualityRouteFiles.innerHTML = "";
+                return;
+            }
+            const adminRecord = readAdminDivisionRecords().find((item) => String(item?.__record_id || "").trim() === adminRecordId);
+            peoRenderAttachmentList(qualityRouteFiles, peoExtractAttachments(adminRecord || {}));
+        };
+
+ 	    const openQualityModal = (mode = "create", record = null) => {
+ 	        if (!(qualityModal instanceof HTMLElement) || !(qualityForm instanceof HTMLFormElement)) return;
 
         qualityForm.reset();
         editingRecordId = mode === "edit" ? record?.__id || null : null;
@@ -17514,10 +18241,14 @@ document.addEventListener("DOMContentLoaded", () => {
 	        if (mode === "edit" && record) {
 	            fillQualityForm(record);
 	        }
-	        if (qualityRouteDivisionSelect instanceof HTMLSelectElement) {
-	            qualityRouteDivisionSelect.value = "";
-	        }
-	        syncQualityRouteControls();
+ 	        if (qualityRouteDivisionSelect instanceof HTMLSelectElement) {
+ 	            qualityRouteDivisionSelect.value = "";
+ 	        }
+            if (qualityRouteFileInput instanceof HTMLInputElement) {
+                qualityRouteFileInput.value = "";
+            }
+            renderQualityRouteFiles(mode === "edit" ? record : null);
+ 	        syncQualityRouteControls();
 
 	        qualityModal.hidden = false;
 	        syncModalState();
@@ -17527,16 +18258,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-	    const closeQualityModal = () => {
-	        if (!(qualityModal instanceof HTMLElement)) return;
-	        qualityModal.hidden = true;
-	        editingRecordId = null;
-	        if (qualityRouteDivisionSelect instanceof HTMLSelectElement) {
-	            qualityRouteDivisionSelect.value = "";
-	        }
-	        syncQualityRouteControls();
-	        syncModalState();
-	    };
+ 	    const closeQualityModal = () => {
+ 	        if (!(qualityModal instanceof HTMLElement)) return;
+ 	        qualityModal.hidden = true;
+ 	        editingRecordId = null;
+ 	        if (qualityRouteDivisionSelect instanceof HTMLSelectElement) {
+ 	            qualityRouteDivisionSelect.value = "";
+ 	        }
+            if (qualityRouteFileInput instanceof HTMLInputElement) {
+                qualityRouteFileInput.value = "";
+            }
+            if (qualityRouteFiles instanceof HTMLElement) {
+                qualityRouteFiles.innerHTML = "";
+            }
+ 	        syncQualityRouteControls();
+ 	        syncModalState();
+ 	    };
 
     if (openModalButton instanceof HTMLElement) {
         openModalButton.addEventListener("click", () => {
@@ -17556,8 +18293,8 @@ document.addEventListener("DOMContentLoaded", () => {
 	        });
 	    }
 
-	    if (qualityRouteSubmitButton instanceof HTMLButtonElement) {
-	        qualityRouteSubmitButton.addEventListener("click", () => {
+ 	    if (qualityRouteSubmitButton instanceof HTMLButtonElement) {
+	        qualityRouteSubmitButton.addEventListener("click", async () => {
 	            const router = window.peoProjectRouter;
 	            if (!router || typeof router.submitToDivision !== "function") {
 	                showPeoGeneralToast("Project submission is not available right now.", {
@@ -17591,11 +18328,34 @@ document.addEventListener("DOMContentLoaded", () => {
 	            const existingAdminRecordId = String(
 	                sourceRecord.__admin_source_id || sourceRecord.__admin_submission_id || ""
 	            ).trim();
+                let uploadedFile = null;
+                const selectedFile = qualityRouteFileInput instanceof HTMLInputElement
+                    ? (qualityRouteFileInput.files && qualityRouteFileInput.files[0])
+                    : null;
+                if (selectedFile instanceof File && selectedFile.size > 0) {
+                    try {
+                        const dataUrl = await peoReadFileAsDataUrl(selectedFile);
+                        uploadedFile = peoBuildAttachment({
+                            dataUrl,
+                            fileName: selectedFile.name,
+                            mimeType: selectedFile.type || "",
+                            addedBy: "Quality Division",
+                        });
+                    } catch (error) {
+                        showPeoGeneralToast("Unable to read the attached file. Please try again.", {
+                            title: "Quality Division",
+                            variant: "danger",
+                        });
+                        return;
+                    }
+                }
+
 	            const result = router.submitToDivision({
 	                sourceDivisionKey: "quality",
 	                sourceRecord,
 	                targetDivisionKey: targetKey,
 	                existingAdminRecordId,
+                    uploadedFile,
 	            });
 
 	            if (!result?.ok) {
@@ -17635,8 +18395,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && qualityModal instanceof HTMLElement && !qualityModal.hidden) {
+        if (event.key !== "Escape") return;
+        if (qualityModal instanceof HTMLElement && !qualityModal.hidden) {
             closeQualityModal();
+            return;
+        }
+        if (qualityScanModal?.overlay instanceof HTMLElement && !qualityScanModal.overlay.hidden) {
+            qualityScanModal.close();
         }
     });
 
@@ -17779,7 +18544,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
-        if (target.closest(".quality-scan-link")) return;
+
+        const scanLink = target.closest(".quality-scan-link");
+        if (scanLink instanceof HTMLElement) {
+            event.preventDefault();
+            const row = scanLink.closest("tr[data-record-id]");
+            if (!(row instanceof HTMLTableRowElement)) return;
+            const recordId = row.dataset.recordId;
+            const record = records.find((item) => item.__id === recordId);
+            if (!record) return;
+            openQualityScanModal(record);
+            return;
+        }
 
         const row = target.closest("tr[data-record-id]");
         if (!(row instanceof HTMLTableRowElement)) return;

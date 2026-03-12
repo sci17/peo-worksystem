@@ -18,6 +18,7 @@
                 <colgroup>
                     <col style="width: 120px;">
                     <col style="width: 320px;">
+                    <col style="width: 260px;">
                     <col style="width: 220px;">
                     <col style="width: 140px;">
                     <col style="width: 150px;">
@@ -31,6 +32,7 @@
                     <tr>
                         <th>Slip No.</th>
                         <th>Project / Document</th>
+                        <th>Location</th>
                         <th>Contractor</th>
                         <th>Routed To</th>
                         <th>Admin</th>
@@ -64,11 +66,11 @@
                             </tr>
                         {% endfor %}
                         <tr class="construction-empty-row js-tracking-empty-row" hidden>
-                            <td colspan="10">No matching workflow records.</td>
+                            <td colspan="11">No matching workflow records.</td>
                         </tr>
                     {% else %}
                         <tr class="construction-empty-row js-tracking-empty-row">
-                            <td colspan="10">No workflow records found yet.</td>
+                            <td colspan="11">No workflow records found yet.</td>
                         </tr>
                     {% endif %}
                 </tbody>

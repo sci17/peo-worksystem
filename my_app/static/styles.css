@@ -7539,7 +7539,8 @@ body.construction-modal-open {
     z-index: 1;
     width: min(100%, 720px);
     max-height: min(100vh - 40px, 820px);
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     border: 1px solid #d8e2ef;
     border-radius: 22px;
     background:
@@ -7723,15 +7724,52 @@ body.construction-modal-open {
 
 .construction-form-actions {
     display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    border-top: 1px solid #edf2f7;
+    background: #ffffff;
+}
+
+.construction-route-panel {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    align-items: start;
+    min-width: 0;
+}
+
+.construction-route-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    min-width: 0;
+}
+
+.construction-route-panel .peo-route-files {
+    min-width: 0;
+    max-height: 140px;
+    overflow: auto;
+}
+
+.construction-route-controls .js-construction-route-submit {
+    justify-self: end;
+    width: auto;
+}
+
+.construction-field input[type="file"] {
+    max-width: 100%;
+    padding: 8px 10px;
+    line-height: 1.2;
+}
+
+.construction-action-buttons {
+    display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 10px;
-    padding-top: 12px;
-    padding-bottom: 2px;
-    border-top: 1px solid #edf2f7;
-    position: sticky;
-    bottom: 0;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #ffffff 28%);
+    flex-wrap: wrap;
 }
 
 .construction-btn {
@@ -8226,9 +8264,8 @@ body.construction-modal-open {
         padding: 12px;
     }
 
-    .construction-form-actions {
-        flex-direction: column;
-        align-items: stretch;
+    .construction-route-panel {
+        grid-template-columns: 1fr;
     }
 
     .construction-btn {
@@ -13268,6 +13305,76 @@ body.planning-modal-open {
 /* DIVISION_SWITCHER_STYLES_END */
 
 /* SUBMISSIONS_STYLES_START */
+body.submissions-page,
+body.submissions-page .portal-shell,
+body.submissions-page .portal-main,
+body.submissions-page .portal-content {
+    overflow-x: hidden;
+}
+
+.submissions-board,
+.submissions-panel,
+.submissions-table-wrap {
+    min-width: 0;
+}
+
+.peo-route-file-help {
+    display: block;
+    margin-top: 6px;
+    color: #6b8199;
+    font-size: 0.78rem;
+}
+
+.peo-route-files {
+    width: 100%;
+    border: 1px dashed #d0ddea;
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 10px 12px;
+    display: grid;
+    gap: 8px;
+}
+
+.peo-route-files:empty::before {
+    content: "No files received yet.";
+    color: #7a92aa;
+    font-size: 0.86rem;
+}
+
+.peo-route-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+.peo-route-file-name {
+    color: #112e4d;
+    font-size: 0.88rem;
+    font-weight: 700;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.peo-route-file-btn {
+    border: 1px solid #c7d8ee;
+    background: #f2f8ff;
+    color: #1f4f85;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.peo-route-file-btn:hover {
+    background: #e6f1ff;
+}
+
 .submissions-board .project-header {
     margin-bottom: 12px;
 }
@@ -13332,6 +13439,14 @@ body.planning-modal-open {
 
 .submissions-table {
     min-width: 1280px;
+}
+
+.submissions-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .submissions-source-badge {
@@ -15683,6 +15798,109 @@ body.project-modal-open {
 
 body.quality-modal-open {
     overflow: hidden;
+}
+
+body.quality-scan-open {
+    overflow: hidden;
+}
+
+.quality-scan-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1270;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+}
+
+.quality-scan-overlay[hidden] {
+    display: none !important;
+}
+
+.quality-scan-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(9, 22, 39, 0.58);
+    backdrop-filter: blur(4px);
+}
+
+.quality-scan-dialog {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 560px);
+    max-height: min(100vh - 40px, 620px);
+    overflow: auto;
+    border: 1px solid #d8e2ef;
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 28px 60px rgba(10, 28, 47, 0.26);
+}
+
+.quality-scan-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid #e6edf6;
+}
+
+.quality-scan-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.quality-scan-kicker {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    min-height: 24px;
+    padding: 0 10px;
+    border: 1px solid #d5e1f4;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.84);
+    color: #315b94;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.quality-scan-head h4 {
+    margin: 0;
+    color: #10253e;
+    font-size: 1.02rem;
+    line-height: 1.3;
+}
+
+.quality-scan-head p {
+    margin: 2px 0 0;
+    color: #6d8098;
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+.quality-scan-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #d8dfeb;
+    border-radius: 11px;
+    background: #f7f9fc;
+    color: #445a73;
+    cursor: pointer;
+}
+
+.quality-scan-close .material-symbols-outlined {
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.quality-scan-body {
+    padding: 14px 16px 16px;
 }
 
 .quality-modal-overlay {
