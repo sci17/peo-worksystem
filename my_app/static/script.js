@@ -10514,6 +10514,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectAllCheckbox = constructionDashboard.querySelector(".js-construction-select-all");
     const prevPageButton = constructionDashboard.querySelector(".js-construction-prev-page");
     const nextPageButton = constructionDashboard.querySelector(".js-construction-next-page");
+<<<<<<< HEAD
+	    const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
+<<<<<<< HEAD
+ 	    const constructionModal = document.querySelector(".js-construction-modal");
+ 	    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
+ 	    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
+ 	    const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
+	    const constructionRouteFileInput = constructionModal ? constructionModal.querySelector(".js-construction-route-file") : null;
+	    const constructionRouteFiles = constructionModal ? constructionModal.querySelector(".js-construction-route-files") : null;
+ 	    const closeConstructionModalButtons = constructionModal
+ 	        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
+ 	        : [];
+=======
+	    const constructionModal = document.querySelector(".js-construction-modal");
+	    const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
+        const constructionPhotoInput = constructionModal ? constructionModal.querySelector(".js-construction-photo-input") : null;
+	    const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
+	    const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
+	    const closeConstructionModalButtons = constructionModal
+	        ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
+	        : [];
+    const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
+>>>>>>> 884bff9d07a2b0531ef2ed5db597882b5dd621a0
+=======
     const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
     const constructionModal = document.querySelector(".js-construction-modal");
     const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
@@ -10526,6 +10550,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
         : [];
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
@@ -11698,6 +11723,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const openConstructionModal = (mode = "create", record = null) => {
         if (!constructionModal) return;
+<<<<<<< HEAD
+	        editingRecordId = mode === "edit" ? record?.__id || null : null;
+	        setConstructionFormMode(mode);
+	        if (constructionForm) {
+	            constructionForm.reset();
+	            if (mode === "edit" && record) {
+	                fillConstructionForm(record);
+	            }
+	        }
+<<<<<<< HEAD
+=======
         editingRecordId = mode === "edit" ? record?.__id || null : null;
         setConstructionFormMode(mode);
         if (constructionForm) {
@@ -11709,6 +11745,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
         if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
             constructionRouteDivisionSelect.value = "";
         }
@@ -11718,6 +11755,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
         constructionModal.hidden = false;
         document.body.classList.add("construction-modal-open");
+<<<<<<< HEAD
+=======
+            if (constructionPhotoInput instanceof HTMLInputElement) {
+                constructionPhotoInput.value = "";
+            }
+	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+	            constructionRouteDivisionSelect.value = "";
+	        }
+	        constructionModal.hidden = false;
+	        document.body.classList.add("construction-modal-open");
+>>>>>>> 884bff9d07a2b0531ef2ed5db597882b5dd621a0
+	        requestAnimationFrame(() => {
+	            const firstField = constructionForm?.querySelector('[name="project_name"]');
+	            if (firstField) firstField.focus();
+	        });
+=======
         requestAnimationFrame(() => {
             const firstField = constructionForm?.querySelector('[name="project_name"]');
             if (firstField) firstField.focus();
@@ -11729,10 +11782,20 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             // Ignore missing renderer during early initialization.
         }
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
         syncConstructionRouteControls();
     };
 
     const closeConstructionModal = () => {
+<<<<<<< HEAD
+	        if (!constructionModal) return;
+	        constructionModal.hidden = true;
+	        document.body.classList.remove("construction-modal-open");
+	        editingRecordId = null;
+	        setConstructionFormMode("create");
+	        if (constructionForm) constructionForm.reset();
+<<<<<<< HEAD
+=======
         if (!constructionModal) return;
         constructionModal.hidden = true;
         document.body.classList.remove("construction-modal-open");
@@ -11742,6 +11805,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
         if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
             constructionRouteDivisionSelect.value = "";
         }
@@ -11755,6 +11819,19 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         syncConstructionRouteControls();
     };
+<<<<<<< HEAD
+=======
+            if (constructionPhotoInput instanceof HTMLInputElement) {
+                constructionPhotoInput.value = "";
+            }
+	        if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
+	            constructionRouteDivisionSelect.value = "";
+	        }
+	        syncConstructionRouteControls();
+	    };
+>>>>>>> 884bff9d07a2b0531ef2ed5db597882b5dd621a0
+=======
+>>>>>>> d2ca302364c8609db42703c718e96d451ffee681
 
     const buildRecordFromForm = () => {
         if (!constructionForm) return null;
