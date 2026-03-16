@@ -15567,8 +15567,8 @@ body.project-modal-open {
 }
 
 .quality-table {
-    width: 1710px;
-    min-width: 1710px;
+    width: max-content;
+    min-width: 100%;
     table-layout: fixed;
     border-collapse: separate;
     border-spacing: 0;
@@ -15588,6 +15588,8 @@ body.project-modal-open {
     text-align: left;
     border-bottom: 1px solid #e2e8f3;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .quality-table thead th:first-child {
@@ -15606,6 +15608,8 @@ body.project-modal-open {
     line-height: 1.45;
     vertical-align: middle;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .quality-table tbody tr:not(.quality-empty-row) {
@@ -16084,6 +16088,12 @@ body.quality-scan-open {
     font-weight: 700;
     letter-spacing: 0.09em;
     text-transform: uppercase;
+}
+
+.quality-form-field input[readonly] {
+    background: #f1f5f9;
+    color: #64748b;
+    cursor: not-allowed;
 }
 
 .quality-choice-grid {

@@ -2405,11 +2405,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const wrapper = document.createElement("div");
         wrapper.className = "pa-select-custom";
 
-        const trigger = document.createElement("button");
-        trigger.type = "button";
-        trigger.className = "pa-select-custom__trigger";
-        trigger.setAttribute("aria-haspopup", "listbox");
-        trigger.setAttribute("aria-expanded", "false");
+	        const trigger = document.createElement("button");
+	        trigger.type = "button";
+	        trigger.className = "pa-select-custom__trigger";
+	        trigger.setAttribute("aria-haspopup", "listbox");
+	        trigger.setAttribute("aria-expanded", "false");
+	        trigger.disabled = select.disabled;
+	        wrapper.classList.toggle("is-disabled", select.disabled);
 
         const label = document.createElement("span");
         label.className = "pa-select-custom__label";
@@ -2447,28 +2449,31 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         };
 
-        const syncFromSelect = () => {
-            const selectedOption = select.options[select.selectedIndex];
-            label.textContent = selectedOption?.textContent || "Select";
-            menu.querySelectorAll(".pa-select-custom__option").forEach((button) => {
-                const isSelected = button.dataset.value === select.value;
-                button.classList.toggle("is-selected", isSelected);
-                button.setAttribute("aria-selected", isSelected ? "true" : "false");
-            });
-        };
+	        const syncFromSelect = () => {
+	            const selectedOption = select.options[select.selectedIndex];
+	            label.textContent = selectedOption?.textContent || "Select";
+	            trigger.disabled = select.disabled;
+	            wrapper.classList.toggle("is-disabled", select.disabled);
+	            menu.querySelectorAll(".pa-select-custom__option").forEach((button) => {
+	                const isSelected = button.dataset.value === select.value;
+	                button.classList.toggle("is-selected", isSelected);
+	                button.setAttribute("aria-selected", isSelected ? "true" : "false");
+	            });
+	        };
         select._adminSelectSync = syncFromSelect;
         select._adminSelectRender = renderOptions;
 
         renderOptions();
         syncFromSelect();
 
-        trigger.addEventListener("click", (event) => {
-            event.stopPropagation();
-            const willOpen = !wrapper.classList.contains("is-open");
-            closeAdminSelectDropdowns();
-            wrapper.classList.toggle("is-open", willOpen);
-            trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
-        });
+	        trigger.addEventListener("click", (event) => {
+	            if (select.disabled) return;
+	            event.stopPropagation();
+	            const willOpen = !wrapper.classList.contains("is-open");
+	            closeAdminSelectDropdowns();
+	            wrapper.classList.toggle("is-open", willOpen);
+	            trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+	        });
 
         menu.addEventListener("click", (event) => {
             const optionButton = event.target.closest(".pa-select-custom__option");
@@ -2493,19 +2498,21 @@ document.addEventListener("DOMContentLoaded", () => {
             select.dataset.adminSelectListenerBound = "true";
         }
 
-        if (!select._adminSelectObserver && typeof MutationObserver !== "undefined") {
-            const observer = new MutationObserver(() => {
-                if (typeof select._adminSelectRender === "function") {
-                    select._adminSelectRender();
-                }
-                if (typeof select._adminSelectSync === "function") {
-                    select._adminSelectSync();
-                }
-            });
-            observer.observe(select, {
-                childList: true,
-                subtree: true,
-                attributes: true,
+	        if (!select._adminSelectObserver && typeof MutationObserver !== "undefined") {
+	            const observer = new MutationObserver(() => {
+	                if (typeof select._adminSelectRender === "function") {
+	                    select._adminSelectRender();
+	                }
+	                if (typeof select._adminSelectSync === "function") {
+	                    select._adminSelectSync();
+	                }
+	                trigger.disabled = select.disabled;
+	                wrapper.classList.toggle("is-disabled", select.disabled);
+	            });
+	            observer.observe(select, {
+	                childList: true,
+	                subtree: true,
+	                attributes: true,
             });
             select._adminSelectObserver = observer;
         }
@@ -2621,30 +2628,33 @@ document.addEventListener("DOMContentLoaded", () => {
         return normalized || "draft";
     };
 
-    const buildBillingHistoryEntry = (record, changedAt) => {
-        const snapshot = {
-            billing_type: String(record.billing_type || "").trim(),
-            billing_type_other: String(record.billing_type_other || "").trim(),
-            percentage: String(record.percentage || "").trim(),
-            date_received: String(record.date_received || "").trim(),
-            received_by: String(record.received_by || "").trim(),
-            status: normalizeBillingHistoryStatus(record.billing_status || record.status || "draft"),
-            changed_at: changedAt || new Date().toISOString(),
-        };
-        return snapshot;
-    };
+	    const buildBillingHistoryEntry = (record, changedAt) => {
+	        const receivedFrom = String(record.received_from || record.received_by || "").trim();
+	        const snapshot = {
+	            billing_type: String(record.billing_type || "").trim(),
+	            billing_type_other: String(record.billing_type_other || "").trim(),
+	            percentage: String(record.percentage || "").trim(),
+	            date_received: String(record.date_received || "").trim(),
+	            received_from: receivedFrom,
+	            // Backward-compat for older stored snapshots/records
+	            received_by: String(record.received_by || "").trim(),
+	            status: normalizeBillingHistoryStatus(record.billing_status || record.status || "draft"),
+	            changed_at: changedAt || new Date().toISOString(),
+	        };
+	        return snapshot;
+	    };
 
-    const hasBillingHistoryChange = (previousEntry, nextEntry) => {
-        const fields = [
-            "billing_type",
-            "billing_type_other",
-            "percentage",
-            "date_received",
-            "received_by",
-            "status",
-        ];
-        return fields.some((field) => String(previousEntry?.[field] || "") !== String(nextEntry?.[field] || ""));
-    };
+	    const hasBillingHistoryChange = (previousEntry, nextEntry) => {
+	        const fields = [
+	            "billing_type",
+	            "billing_type_other",
+	            "percentage",
+	            "date_received",
+	            "received_from",
+	            "status",
+	        ];
+	        return fields.some((field) => String(previousEntry?.[field] || "") !== String(nextEntry?.[field] || ""));
+	    };
 
     const ensureBillingHistory = (record) => {
         const existingHistory = Array.isArray(record.billing_history) ? [...record.billing_history] : [];
@@ -2684,9 +2694,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (entry.date_received) {
                     detailParts.push(formatDate(entry.date_received));
                 }
-                if (entry.received_by) {
-                    detailParts.push(entry.received_by);
-                }
+	                if (entry.received_from || entry.received_by) {
+	                    detailParts.push(entry.received_from || entry.received_by);
+	                }
 
                 details.textContent = detailParts.length
                     ? detailParts.join(" | ")
@@ -2732,23 +2742,48 @@ document.addEventListener("DOMContentLoaded", () => {
         return historyWrap;
     };
 
-    const generateRecordId = () => {
-        return `${ADMIN_DIVISION_RECORD_ID_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    };
+	    const generateRecordId = () => {
+	        return `${ADMIN_DIVISION_RECORD_ID_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+	    };
 
-    const normalizeRecord = (rawRecord) => {
-        const normalized = { ...(rawRecord || {}) };
-        normalized.__record_id = normalized.__record_id || generateRecordId();
-        const fallbackStatus = normalized.status || "Draft";
+	    const ADMIN_DIVISION_LABELS = {
+	        admin: "Admin Division",
+	        planning: "Planning Division",
+	        construction: "Construction Division",
+	        quality: "Quality Division",
+	        maintenance: "Maintenance Division",
+	    };
+
+	    const resolveAdminDivisionKey = (value) => {
+	        const normalized = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+	        if (!normalized) return "";
+	        if (normalized.includes("planning")) return "planning";
+	        if (normalized.includes("construction")) return "construction";
+	        if (normalized.includes("quality")) return "quality";
+	        if (normalized.includes("maintenance")) return "maintenance";
+	        if (normalized.includes("admin")) return "admin";
+	        return "";
+	    };
+
+	    const labelForAdminDivisionKey = (key) => ADMIN_DIVISION_LABELS[String(key || "")] || "";
+
+	    const normalizeRecord = (rawRecord) => {
+	        const normalized = { ...(rawRecord || {}) };
+	        normalized.__record_id = normalized.__record_id || generateRecordId();
+	        const fallbackStatus = normalized.status || "Draft";
         normalized.doc_status = normalized.doc_status || fallbackStatus;
         normalized.billing_status = normalized.billing_status || normalized.doc_status || "Draft";
-        normalized.status = normalized.doc_status;
-        normalized.division = normalized.division || "Admin";
-        normalized.doc_type = normalized.doc_type || "Other";
-        normalized.scanned_file_name = normalized.scanned_file_name || "";
-        normalized.scanned_file_type = normalized.scanned_file_type || "";
-        normalized.scanned_file_data = normalized.scanned_file_data || "";
-        normalized.billing_history = ensureBillingHistory(normalized);
+	        normalized.status = normalized.doc_status;
+	        normalized.division = normalized.division || "Admin";
+	        normalized.doc_type = normalized.doc_type || "Other";
+	        if (!String(normalized.received_from || "").trim()) {
+	            const submittedKey = resolveAdminDivisionKey(normalized.__submitted_from_division);
+	            normalized.received_from = labelForAdminDivisionKey(submittedKey) || String(normalized.received_by || "").trim();
+	        }
+	        normalized.scanned_file_name = normalized.scanned_file_name || "";
+	        normalized.scanned_file_type = normalized.scanned_file_type || "";
+	        normalized.scanned_file_data = normalized.scanned_file_data || "";
+	        normalized.billing_history = ensureBillingHistory(normalized);
         return normalized;
     };
 
@@ -2870,6 +2905,30 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             // Ignore storage write failures (quota/private mode).
         }
+    };
+
+    let maintenanceAdminStoreFetchPromise = null;
+    const ensureAdminDivisionRecords = async () => {
+        const local = readAdminDivisionRecords();
+        if (local.length) return local;
+
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.fetchStore !== "function") return local;
+
+        if (!maintenanceAdminStoreFetchPromise) {
+            maintenanceAdminStoreFetchPromise = Promise.resolve()
+                .then(() => store.fetchStore("admin"))
+                .catch(() => null);
+        }
+
+        const server = await maintenanceAdminStoreFetchPromise;
+        const serverData = server && typeof server === "object" ? server.data : null;
+        const records = Array.isArray(serverData) ? serverData : [];
+        if (records.length) {
+            writeAdminDivisionRecords(records);
+        }
+
+        return readAdminDivisionRecords();
     };
 
     const normalizeDivisionKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -3099,15 +3158,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    const refreshBillingCounters = () => {
-        if (!billingTableBody) return;
+	    const refreshBillingCounters = () => {
+	        if (!billingTableBody) return;
 
-        const rows = getTableDataRows(billingTableBody, "pa-empty-billing");
-        const statuses = rows.map((row) => normalizeStatus(row.children[7]?.textContent));
-        const total = rows.length;
-        const draft = statuses.filter((status) => status === "draft").length;
-        const forReview = statuses.filter((status) => status === "for_review").length;
-        const routed = statuses.filter((status) => status === "routed").length;
+	        const rows = getTableDataRows(billingTableBody, "pa-empty-billing");
+	        const statuses = rows.map((row) => normalizeStatus(row.children[8]?.textContent));
+	        const total = rows.length;
+	        const draft = statuses.filter((status) => status === "draft").length;
+	        const forReview = statuses.filter((status) => status === "for_review").length;
+	        const routed = statuses.filter((status) => status === "routed").length;
         const processing = statuses.filter((status) => status === "processing" || status === "on_process").length;
         const approved = statuses.filter((status) => status === "approved" || status === "received").length;
         const open = statuses.filter((status) => status === "open").length;
@@ -3218,20 +3277,62 @@ document.addEventListener("DOMContentLoaded", () => {
         otherWrap.classList.toggle("pa-form-hidden-field", !isOthers);
     };
 
-    const toggleBillingReceivedFields = (form) => {
-        const statusSelect = form?.querySelector('[data-admin-status-select]');
-        const dateWrap = form?.querySelector('[data-admin-received-date-wrap]');
-        const receivedByWrap = form?.querySelector('[data-admin-received-by-wrap]');
-        if (!statusSelect || !dateWrap || !receivedByWrap) return;
+	    const toggleBillingReceivedFields = (form) => {
+	        const statusSelect = form?.querySelector('[data-admin-status-select]');
+	        const dateWrap = form?.querySelector('[data-admin-received-date-wrap]');
+	        const receivedFromWrap = form?.querySelector('[data-admin-received-from-wrap]');
+	        if (!statusSelect || !dateWrap || !receivedFromWrap) return;
 
-        const isReceived = normalizeStatus(statusSelect.value) === "received";
-        dateWrap.classList.toggle("pa-form-hidden-field", !isReceived);
-        receivedByWrap.classList.toggle("pa-form-hidden-field", !isReceived);
-    };
+	        const normalizedStatus = normalizeStatus(statusSelect.value);
+	        const shouldShow = normalizedStatus === "approved" || normalizedStatus === "received";
+	        dateWrap.classList.toggle("pa-form-hidden-field", !shouldShow);
+	        receivedFromWrap.classList.toggle("pa-form-hidden-field", !shouldShow);
+	    };
 
-    const openEditModalForRecord = (recordId, tableType = "documents") => {
-        const record = readAdminDivisionRecords().find((item) => item.__record_id === recordId);
-        if (!record) return;
+	    const setAdminModalSectionDisabled = (form, sectionKey, disabled) => {
+	        if (!(form instanceof HTMLFormElement)) return;
+	        const section = form.querySelector(`[data-admin-form-section="${sectionKey}"]`);
+	        if (!section) return;
+	        section.querySelectorAll("input, select, textarea").forEach((control) => {
+	            if (!(control instanceof HTMLElement)) return;
+	            if (control instanceof HTMLInputElement && control.type === "hidden") return;
+	            control.disabled = Boolean(disabled);
+	        });
+	    };
+
+	    const applyAdminNewDocumentModalInteractivity = (form, mode) => {
+	        if (!(form instanceof HTMLFormElement)) return;
+
+	        // Reset: everything editable.
+	        ["details", "routing", "billing"].forEach((key) => setAdminModalSectionDisabled(form, key, false));
+
+	        if (mode === "create") {
+	            // New Document: billing info is view-only.
+	            setAdminModalSectionDisabled(form, "billing", true);
+	        }
+
+	        if (mode === "edit_billing") {
+	            // Billing Edit: project details + routing are view-only, but status and billing fields are editable.
+	            setAdminModalSectionDisabled(form, "details", true);
+	            setAdminModalSectionDisabled(form, "routing", true);
+
+	            const statusSelect = form.querySelector('[data-admin-status-select]');
+	            if (statusSelect instanceof HTMLSelectElement) {
+	                statusSelect.disabled = false;
+	            }
+
+	            const scannedFileInput = form.querySelector('[name="scanned_file"]');
+	            if (scannedFileInput instanceof HTMLInputElement) {
+	                scannedFileInput.disabled = false;
+	            }
+	        }
+
+	        enhanceAdminFormSelects(form);
+	    };
+
+	    const openEditModalForRecord = (recordId, tableType = "documents") => {
+	        const record = readAdminDivisionRecords().find((item) => item.__record_id === recordId);
+	        if (!record) return;
 
         const modal = buildNewDocumentModal();
         const form = modal.querySelector("#admin-new-document-form");
@@ -3246,12 +3347,13 @@ document.addEventListener("DOMContentLoaded", () => {
         form.reset();
         setFormStatusOptionsByMode(form, tableType);
         enhanceAdminFormSelects(form);
-        const recordForForm = {
-            ...record,
-            status: tableType === "billing"
-                ? (
-                    normalizeStatus(record.billing_status || record.status) === "received"
-                        ? "Approved"
+	        const recordForForm = {
+	            ...record,
+	            received_from: record.received_from || record.received_by || "",
+	            status: tableType === "billing"
+	                ? (
+	                    normalizeStatus(record.billing_status || record.status) === "received"
+	                        ? "Approved"
                         : normalizeStatus(record.billing_status || record.status) === "on_process"
                             ? "Processing"
                             : (record.billing_status || record.status)
@@ -3277,13 +3379,14 @@ document.addEventListener("DOMContentLoaded", () => {
             if (subtitle) subtitle.textContent = "Update document details";
             if (submitButton) submitButton.textContent = "Save Changes";
         }
-        toggleBillingTypeOtherField(form);
-        toggleBillingReceivedFields(form);
-        setExistingScannedFileName(form, record.scanned_file_name || "");
+	        toggleBillingTypeOtherField(form);
+	        toggleBillingReceivedFields(form);
+	        setExistingScannedFileName(form, record.scanned_file_name || "");
+	        applyAdminNewDocumentModalInteractivity(form, tableType === "billing" ? "edit_billing" : "edit_document");
 
-        modal.style.display = "flex";
-        document.body.style.overflow = "hidden";
-    };
+	        modal.style.display = "flex";
+	        document.body.style.overflow = "hidden";
+	    };
 
     const applyDocumentFilters = () => {
         if (!documentsTableBody) return;
@@ -3328,20 +3431,20 @@ document.addEventListener("DOMContentLoaded", () => {
         syncSelectionControls();
     };
 
-    const applyBillingFilters = () => {
-        if (!billingTableBody) return;
+	    const applyBillingFilters = () => {
+	        if (!billingTableBody) return;
 
         const rows = getTableDataRows(billingTableBody, "pa-empty-billing");
         const searchTerm = String(billingSearchInput?.value || "").trim().toLowerCase();
         const selectedStatus = normalizeStatus(billingStatusFilter?.value || "all");
         let visibleCount = 0;
 
-        rows.forEach((row) => {
-            const statusValue = normalizeStatus(row.children[7]?.textContent || "");
-            const rowText = Array.from(row.querySelectorAll("td"))
-                .map((cell) => cell.textContent || "")
-                .join(" ")
-                .toLowerCase();
+	        rows.forEach((row) => {
+	            const statusValue = normalizeStatus(row.children[8]?.textContent || "");
+	            const rowText = Array.from(row.querySelectorAll("td"))
+	                .map((cell) => cell.textContent || "")
+	                .join(" ")
+	                .toLowerCase();
 
             const matchesSearch = !searchTerm || rowText.includes(searchTerm);
             const matchesStatus = selectedStatus === "all" || statusValue === selectedStatus;
@@ -3355,13 +3458,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (matches) visibleCount += 1;
         });
 
-        ensureEmptyRowState(
-            billingTableBody,
-            "pa-empty-billing",
-            12,
-            "No billing records found.",
-            visibleCount === 0
-        );
+	        ensureEmptyRowState(
+	            billingTableBody,
+	            "pa-empty-billing",
+	            13,
+	            "No billing records found.",
+	            visibleCount === 0
+	        );
         if (billingCountLabel) {
             billingCountLabel.textContent = `${visibleCount} record${visibleCount === 1 ? "" : "s"}`;
         }
@@ -3431,8 +3534,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const addBillingRow = (values, options = {}) => {
-        if (!billingTableBody) return;
+	    const addBillingRow = (values, options = {}) => {
+	        if (!billingTableBody) return;
         const prepend = options.prepend !== false;
         const shouldRefresh = options.refresh !== false;
         const recordId = values.__record_id || generateRecordId();
@@ -3440,31 +3543,38 @@ document.addEventListener("DOMContentLoaded", () => {
         const emptyRow = billingTableBody.querySelector(".pa-empty-billing");
         if (emptyRow) emptyRow.remove();
 
-        const row = document.createElement("tr");
-        row.dataset.recordId = recordId;
-        const amount = values.revised_contract_amount || values.contract_amount || "-";
-        row.appendChild(createRowSelectionCell(recordId));
-        const fields = [
-            values.slip_no || "-",
-            values.document_name || "-",
-            values.contractor || "-",
-            getBillingTypeDisplay(values),
-            values.percentage || "-",
-            amount,
-            statusLabel(values.billing_status || values.status),
-            formatDate(values.date_received),
-            values.received_by || "-",
-        ];
+	        const row = document.createElement("tr");
+	        row.dataset.recordId = recordId;
+	        const contractAmount = values.contract_amount || "-";
+	        const revisedContractAmount = values.revised_contract_amount || values.contract_amount || "-";
+	        const receivedFrom = values.received_from
+	            || (labelForAdminDivisionKey(resolveAdminDivisionKey(values.__submitted_from_division)) || "")
+	            || values.received_by
+	            || "-";
+	        const receivedDate = values.date_received || values.__submitted_at || values.__updated_at || getLocalIsoDate();
+	        row.appendChild(createRowSelectionCell(recordId));
+	        const fields = [
+	            values.slip_no || "-",
+	            values.document_name || "-",
+	            values.contractor || "-",
+	            getBillingTypeDisplay(values),
+	            values.percentage || "-",
+	            contractAmount,
+	            revisedContractAmount,
+	            statusLabel(values.billing_status || values.status),
+	            formatDate(receivedDate),
+	            receivedFrom,
+	        ];
 
-        fields.forEach((value, index) => {
-            const cell = document.createElement("td");
-            if (index === 6) {
-                cell.appendChild(createStatusBadge(value));
-            } else {
-                cell.textContent = value;
-            }
-            row.appendChild(cell);
-        });
+	        fields.forEach((value, index) => {
+	            const cell = document.createElement("td");
+	            if (index === 7) {
+	                cell.appendChild(createStatusBadge(value));
+	            } else {
+	                cell.textContent = value;
+	            }
+	            row.appendChild(cell);
+	        });
 
         const historyCell = document.createElement("td");
         historyCell.appendChild(buildBillingHistoryCell(values));
@@ -3540,12 +3650,13 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    const createRecordsFromForm = async (form, options = {}) => {
-        if (!form) return false;
-        if (!form.checkValidity()) {
-            form.reportValidity();
-            return false;
-        }
+	    const createRecordsFromForm = async (form, options = {}) => {
+	        if (!form) return false;
+	        if (!form.checkValidity()) {
+	            form.reportValidity();
+	            showAdminStatusToast("Please complete the required fields before saving.", "info");
+	            return false;
+	        }
 
         const formData = new FormData(form);
         const values = Object.fromEntries(formData.entries());
@@ -3576,9 +3687,24 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        values.status = values.status || "Draft";
-        values.division = values.division || "Admin";
-        values.doc_type = values.doc_type || "Other";
+	        const isEditing = Boolean(options.recordId);
+	        if (!isEditing) {
+	            values.status = values.status || "Draft";
+	            values.division = values.division || "Admin";
+	            values.doc_type = values.doc_type || "Other";
+	        }
+	        if (Object.prototype.hasOwnProperty.call(values, "received_from") || Object.prototype.hasOwnProperty.call(values, "received_by")) {
+	            const normalizedReceivedFrom = String(values.received_from || values.received_by || "").trim();
+	            if (normalizedReceivedFrom) {
+	                values.received_from = normalizedReceivedFrom;
+	            } else {
+	                delete values.received_from;
+	            }
+	        }
+	        const shouldAutoSetDateReceived = !isEditing || options.tableType === "billing";
+	        if (shouldAutoSetDateReceived && !String(values.date_received || "").trim()) {
+	            values.date_received = getLocalIsoDate();
+	        }
 
         if (options.recordId) {
             const records = readAdminDivisionRecords();
@@ -3601,15 +3727,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 const existingAttachments = peoExtractAttachments(currentRecord);
                 updatedRecord.__attachments = peoMergeAttachments(existingAttachments, [scannedFileAttachment]);
             }
-            if (tableType === "billing") {
-                const previousSnapshot = buildBillingHistoryEntry(currentRecord);
-                updatedRecord.billing_status = values.status;
-                updatedRecord.doc_status = currentRecord.doc_status;
-                const nextSnapshot = buildBillingHistoryEntry(updatedRecord);
-                const currentHistory = ensureBillingHistory(currentRecord);
-                if (hasBillingHistoryChange(previousSnapshot, nextSnapshot)) {
-                    updatedRecord.billing_history = [...currentHistory, nextSnapshot];
-                } else {
+	            if (tableType === "billing") {
+	                const previousSnapshot = buildBillingHistoryEntry(currentRecord);
+	                updatedRecord.billing_status = values.status;
+	                updatedRecord.doc_status = currentRecord.doc_status;
+	                if (!String(updatedRecord.received_from || "").trim()) {
+	                    const submittedKey = resolveAdminDivisionKey(updatedRecord.__submitted_from_division);
+	                    updatedRecord.received_from = labelForAdminDivisionKey(submittedKey) || String(updatedRecord.received_by || "").trim();
+	                }
+	                if (!String(updatedRecord.date_received || "").trim()) {
+	                    updatedRecord.date_received = toInputDate(currentRecord.__submitted_at) || getLocalIsoDate();
+	                }
+	                const nextSnapshot = buildBillingHistoryEntry(updatedRecord);
+	                const currentHistory = ensureBillingHistory(currentRecord);
+	                if (hasBillingHistoryChange(previousSnapshot, nextSnapshot)) {
+	                    updatedRecord.billing_history = [...currentHistory, nextSnapshot];
+	                } else {
                     updatedRecord.billing_history = currentHistory;
                 }
             } else {
@@ -3664,8 +3797,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         <span class="material-symbols-outlined" aria-hidden="true">close</span>
                     </button>
                 </div>
-                <form id="admin-new-document-form" class="pa-doc-form">
-                    <div class="pa-doc-form-section">
+	                <form id="admin-new-document-form" class="pa-doc-form">
+	                    <div class="pa-doc-form-section" data-admin-form-section="details">
                         <div class="pa-doc-form-section-head">
                             <div class="pa-doc-form-section-icon" aria-hidden="true">
                                 <span class="material-symbols-outlined">description</span>
@@ -3744,7 +3877,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         </label>
                     </div>
 
-                    <div class="pa-doc-form-section">
+	                    <div class="pa-doc-form-section" data-admin-form-section="routing">
                         <div class="pa-doc-form-section-head">
                             <div class="pa-doc-form-section-icon" aria-hidden="true">
                                 <span class="material-symbols-outlined">share</span>
@@ -3789,7 +3922,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         </div>
                     </div>
 
-                    <div class="pa-doc-form-section">
+	                    <div class="pa-doc-form-section" data-admin-form-section="billing">
                         <div class="pa-doc-form-section-head">
                             <div class="pa-doc-form-section-icon" aria-hidden="true">
                                 <span class="material-symbols-outlined">payments</span>
@@ -3848,10 +3981,17 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <span>Date Received</span>
                                 <input type="date" name="date_received">
                             </label>
-                            <label class="pa-doc-field pa-form-hidden-field" data-admin-received-by-wrap>
-                                <span>Received By</span>
-                                <input name="received_by" placeholder="Name of receiver">
-                            </label>
+	                            <label class="pa-doc-field pa-form-hidden-field" data-admin-received-from-wrap>
+	                                <span>Received From</span>
+	                                <select name="received_from">
+	                                    <option value="">Select division</option>
+	                                    <option>Planning Division</option>
+	                                    <option>Construction Division</option>
+	                                    <option>Quality Division</option>
+	                                    <option>Maintenance Division</option>
+	                                    <option>Admin Division</option>
+	                                </select>
+	                            </label>
                         </div>
                     </div>
 
@@ -3885,10 +4025,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const billingTypeSelect = form.querySelector('[data-admin-billing-type-select]');
         const scannedFileInput = form.querySelector('[name="scanned_file"]');
         setFormStatusOptionsByMode(form, "documents");
-        enhanceAdminFormSelects(form);
-        toggleBillingTypeOtherField(form);
-        toggleBillingReceivedFields(form);
-        setExistingScannedFileName(form, "");
+	        enhanceAdminFormSelects(form);
+	        toggleBillingTypeOtherField(form);
+	        toggleBillingReceivedFields(form);
+	        setExistingScannedFileName(form, "");
+	        applyAdminNewDocumentModalInteractivity(form, "create");
 
         if (statusSelect) {
             statusSelect.addEventListener("change", () => {
@@ -3906,23 +4047,34 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
-        form.addEventListener("submit", async (event) => {
-            event.preventDefault();
-            const isEditing = Boolean(editingRecordId);
-            const created = await createRecordsFromForm(form, {
-                recordId: editingRecordId,
-                tableType: editingTableType,
-            });
-            if (created) {
-                closeModal();
-                showAdminStatusToast(
-                    isEditing
-                        ? "Data was updated successfully."
-                        : "New data was created successfully.",
-                    "success"
-                );
-            }
-        });
+	        form.addEventListener("submit", async (event) => {
+	            event.preventDefault();
+	            try {
+	                const isEditing = Boolean(editingRecordId);
+	                const created = await createRecordsFromForm(form, {
+	                    recordId: editingRecordId,
+	                    tableType: editingTableType,
+	                });
+	                if (created) {
+	                    closeModal();
+	                    showAdminStatusToast(
+	                        isEditing
+	                            ? "Data was updated successfully."
+	                            : "New data was created successfully.",
+	                        "success"
+	                    );
+	                }
+	            } catch (error) {
+	                console.error(error);
+	                const message = (error && typeof error === "object" && "message" in error)
+	                    ? String(error.message || "").trim()
+	                    : "";
+	                showAdminStatusToast(
+	                    message ? `Unable to save the record: ${message}` : "Unable to save the record. Please try again.",
+	                    "info"
+	                );
+	            }
+	        });
 
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape" && overlay.style.display === "flex") {
@@ -3944,13 +4096,14 @@ document.addEventListener("DOMContentLoaded", () => {
             editingRecordId = null;
             editingTableType = null;
             if (form) form.reset();
-            if (form) {
-                setFormStatusOptionsByMode(form, "documents");
-                enhanceAdminFormSelects(form);
-                toggleBillingTypeOtherField(form);
-                toggleBillingReceivedFields(form);
-                setExistingScannedFileName(form, "");
-            }
+	            if (form) {
+	                setFormStatusOptionsByMode(form, "documents");
+	                enhanceAdminFormSelects(form);
+	                toggleBillingTypeOtherField(form);
+	                toggleBillingReceivedFields(form);
+	                setExistingScannedFileName(form, "");
+	                applyAdminNewDocumentModalInteractivity(form, "create");
+	            }
             const kicker = modal.querySelector(".pa-doc-modal-kicker");
             if (kicker) kicker.textContent = "Document Register";
             if (title) title.textContent = "Create New Document";
@@ -8097,8 +8250,25 @@ document.addEventListener("DOMContentLoaded", () => {
             taskRouteFiles.innerHTML = "";
             return;
         }
-        const adminRecord = readAdminDivisionRecords().find((item) => String(item?.__record_id || "").trim() === adminRecordId);
-        peoRenderAttachmentList(taskRouteFiles, peoExtractAttachments(adminRecord || {}));
+        const findAdminRecord = (records) => {
+            return (Array.isArray(records) ? records : []).find((item) => String(item?.__record_id || "").trim() === adminRecordId) || null;
+        };
+
+        const localRecords = readAdminDivisionRecords();
+        const localAdminRecord = findAdminRecord(localRecords);
+        if (localAdminRecord) {
+            peoRenderAttachmentList(taskRouteFiles, peoExtractAttachments(localAdminRecord));
+            return;
+        }
+
+        taskRouteFiles.innerHTML = "";
+        ensureAdminDivisionRecords().then((records) => {
+            if (!editingTaskRow) return;
+            const currentId = String(editingTaskRow.dataset.adminRecordId || "").trim();
+            if (currentId !== adminRecordId) return;
+            const adminRecord = findAdminRecord(records);
+            peoRenderAttachmentList(taskRouteFiles, peoExtractAttachments(adminRecord || {}));
+        });
     };
 
     const closeTaskModal = () => {
@@ -9425,9 +9595,28 @@ document.addEventListener("DOMContentLoaded", () => {
             savedState = null;
         }
 
+        const baseState = {
+            version: 1,
+            roadRecords: [],
+            equipmentRows: [],
+            scheduleRows: [],
+            taskRows: [],
+            personnelRecords: [],
+            contractorRecords: [],
+        };
+
         if (!savedState || typeof savedState !== "object") {
-            return;
+            savedState = { ...baseState };
+        } else {
+            savedState = { ...baseState, ...savedState };
         }
+
+        savedState.taskRows = Array.isArray(savedState.taskRows) ? savedState.taskRows : [];
+        savedState.roadRecords = Array.isArray(savedState.roadRecords) ? savedState.roadRecords : [];
+        savedState.equipmentRows = Array.isArray(savedState.equipmentRows) ? savedState.equipmentRows : [];
+        savedState.scheduleRows = Array.isArray(savedState.scheduleRows) ? savedState.scheduleRows : [];
+        savedState.personnelRecords = Array.isArray(savedState.personnelRecords) ? savedState.personnelRecords : [];
+        savedState.contractorRecords = Array.isArray(savedState.contractorRecords) ? savedState.contractorRecords : [];
 
         const adminRecordById = new Map();
         try {
@@ -10493,19 +10682,11 @@ document.addEventListener("DOMContentLoaded", () => {
 /* ROAD_MAINTENANCE_SCRIPT_END */
 
 /* CONSTRUCTION_DIVISION_SCRIPT_START */
-document.addEventListener("DOMContentLoaded", () => {
-    const constructionDashboard = document.querySelector(".js-construction-dashboard");
-    if (!constructionDashboard) return;
+    document.addEventListener("DOMContentLoaded", () => {
+	    const constructionDashboard = document.querySelector(".js-construction-dashboard");
+	    if (!constructionDashboard) return;
 
-    const adminAssignedPanel = document.querySelector(".js-construction-admin-assigned");
-    const adminAssignedTableBody = adminAssignedPanel
-        ? adminAssignedPanel.querySelector(".js-construction-admin-table-body")
-        : null;
-    const adminAssignedMeta = adminAssignedPanel
-        ? adminAssignedPanel.querySelector(".js-construction-admin-meta")
-        : null;
-
-    const constructionTableBody = constructionDashboard.querySelector(".js-construction-table-body");
+	    const constructionTableBody = constructionDashboard.querySelector(".js-construction-table-body");
     const constructionRecordMeta = constructionDashboard.querySelector(".js-construction-record-meta");
     const constructionProjectDashboardUrl = String(constructionDashboard.dataset.projectDashboardUrl || "").trim();
     const addRecordButton = constructionDashboard.querySelector(".js-construction-add-record");
@@ -10528,6 +10709,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
+    const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
     const CONSTRUCTION_MAX_IMAGE_COUNT = 10;
     const CONSTRUCTION_FIELDS = [
@@ -10773,6 +10955,16 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!Number.isNaN(parsed.getTime())) return toDisplay(parsed);
         }
 
+        // Avoid timezone shifts for date-only strings (YYYY-MM-DD).
+        const isoDateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoDateOnlyMatch) {
+            const year = Number(isoDateOnlyMatch[1]);
+            const month = Number(isoDateOnlyMatch[2]);
+            const day = Number(isoDateOnlyMatch[3]);
+            const parsed = new Date(year, month - 1, day);
+            if (!Number.isNaN(parsed.getTime())) return toDisplay(parsed);
+        }
+
         const numeric = Number(text.replace(/,/g, ""));
         if (!Number.isNaN(numeric) && numeric > 59) {
             const excelEpoch = new Date(Date.UTC(1899, 11, 30));
@@ -10869,6 +11061,16 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!Number.isNaN(parsed.getTime())) return parsed;
         }
 
+        // Avoid timezone shifts for date-only strings (YYYY-MM-DD).
+        const isoDateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoDateOnlyMatch) {
+            const year = Number(isoDateOnlyMatch[1]);
+            const month = Number(isoDateOnlyMatch[2]);
+            const day = Number(isoDateOnlyMatch[3]);
+            const parsed = new Date(year, month - 1, day);
+            if (!Number.isNaN(parsed.getTime())) return parsed;
+        }
+
         const parsed = new Date(text);
         return Number.isNaN(parsed.getTime()) ? null : parsed;
     };
@@ -10888,6 +11090,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const computeConstructionDerivedFields = (record, reportDate) => {
         const next = { ...(record || {}) };
+        const isAdminRouted = String(next.__admin_source || "") === "admin_document";
+
+        const parsePercentValue = (value) => {
+            const text = normalizeStringValue(value);
+            if (!text) return null;
+            const numeric = parseConstructionNumber(text);
+            if (numeric === null) return null;
+            const hasPercentSign = /%/.test(text);
+            if (hasPercentSign) return numeric;
+            return Math.abs(numeric) <= 1 ? (numeric * 100) : numeric;
+        };
 
         const ntpDate = parseConstructionDateValue(next.ntp_date);
         const cdDaysRaw = parseConstructionNumber(next.cd);
@@ -10895,17 +11108,48 @@ document.addEventListener("DOMContentLoaded", () => {
         const addlCdRaw = parseConstructionNumber(next.addl_cd);
         const addlCdDays = addlCdRaw !== null ? Math.max(0, addlCdRaw) : null;
 
-        // Respect manually entered expiry dates. Only auto-compute when the date field is blank.
+        // Original Expiry Date = NTP Date + C.D (days).
         let originalExpiryDate = parseConstructionDateValue(next.original_expiry_date);
-        if (!originalExpiryDate && ntpDate && cdDays !== null && cdDays > 0) {
+        if (ntpDate && cdDays !== null && cdDays > 0) {
             originalExpiryDate = new Date(ntpDate.getTime() + (cdDays * 86400000));
             next.original_expiry_date = toIsoDateOnly(originalExpiryDate);
         }
 
-        const revisedExpiryDate = parseConstructionDateValue(next.revised_expiry_date);
+        const revisedExpiryDate = isAdminRouted ? null : parseConstructionDateValue(next.revised_expiry_date);
         if (!revisedExpiryDate && originalExpiryDate && addlCdDays !== null) {
             const revisedExpiry = new Date(originalExpiryDate.getTime() + (addlCdDays * 86400000));
             next.revised_expiry_date = toIsoDateOnly(revisedExpiry);
+        }
+
+        const existingTimeElapsed = normalizeStringValue(next.time_elapsed);
+        const shouldComputeTimeElapsed = isAdminRouted || !existingTimeElapsed;
+        if (shouldComputeTimeElapsed && ntpDate && cdDays !== null && cdDays > 0) {
+            const plannedDays = cdDays + ((addlCdDays !== null && addlCdDays > 0) ? addlCdDays : 0);
+            const completedDate = parseConstructionDateValue(next.date_completed);
+            const endDate = completedDate || (reportDate instanceof Date ? reportDate : null);
+            const ntpMs = getUtcDateOnlyMs(ntpDate);
+            const endMs = endDate ? getUtcDateOnlyMs(endDate) : null;
+            const elapsedDays = (ntpMs !== null && endMs !== null) ? Math.abs((endMs - ntpMs) / 86400000) : null;
+
+            if (elapsedDays !== null && elapsedDays > 0 && plannedDays > 0) {
+                // Per requirement:
+                // - No add'l C.D: (NTP date - Completed date) / C.D
+                // - With add'l C.D: (NTP date - Completed date) / (C.D + Add'l C.D)
+                // Store as a percent value (0-100+) so completed projects land on ~100%.
+                next.time_elapsed = String((elapsedDays / plannedDays) * 100);
+            }
+        }
+
+        const existingSlippage = normalizeStringValue(next.slippage);
+        const shouldComputeSlippage = isAdminRouted || !existingSlippage;
+        if (shouldComputeSlippage) {
+            const statusCurrentPercent = parsePercentValue(next.status_current);
+            const timeElapsedPercent = parsePercentValue(next.time_elapsed);
+            if (statusCurrentPercent !== null && timeElapsedPercent !== null && timeElapsedPercent !== 0) {
+                // Derived from the requested ratio (current status % / time elapsed %) and converted to a signed variance.
+                // 0% means on-schedule, positive is ahead, negative is behind.
+                next.slippage = String(((statusCurrentPercent / timeElapsedPercent) * 100) - 100);
+            }
         }
 
         return next;
@@ -11243,6 +11487,27 @@ document.addEventListener("DOMContentLoaded", () => {
         return fallback;
     };
 
+    const readDeletedConstructionAdminIds = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_DELETED_ADMIN_IDS_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()) : []);
+        } catch (error) {
+            return new Set();
+        }
+    };
+
+    const writeDeletedConstructionAdminIds = (idsSet) => {
+        try {
+            window.localStorage.setItem(
+                CONSTRUCTION_DELETED_ADMIN_IDS_KEY,
+                JSON.stringify(Array.from(idsSet))
+            );
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    };
+
     const syncConstructionStatusToAdmin = (constructionRecord) => {
         const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
         const sourceId = String(record.__admin_source_id || record.__admin_submission_id || "").trim();
@@ -11280,6 +11545,18 @@ document.addEventListener("DOMContentLoaded", () => {
         const statusValue = String(adminRecord?.doc_status || adminRecord?.status || "").trim();
         const statusPercent = mapAdminStatusToConstructionPercent(statusValue);
         const locationText = String(adminRecord?.location || "").trim();
+        const ntpDateValue = String(
+            adminRecord?.date_started
+            || adminRecord?.date_started_peo
+            || adminRecord?.ntp_date
+            || ""
+        ).trim();
+        const completionDateValue = String(
+            adminRecord?.completion_date
+            || adminRecord?.date_completed
+            || adminRecord?.completed_date
+            || ""
+        ).trim();
 
         const extractMunicipality = (locationValue) => {
             const text = String(locationValue || "").trim();
@@ -11290,17 +11567,105 @@ document.addEventListener("DOMContentLoaded", () => {
             return "";
         };
 
-        const getInclusiveDayDiff = (start, end) => {
-            const startUtc = getUtcDateOnlyMs(start);
-            const endUtc = getUtcDateOnlyMs(end);
-            if (startUtc === null || endUtc === null) return null;
-            const diffDays = Math.floor((endUtc - startUtc) / 86400000) + 1;
-            return Number.isFinite(diffDays) ? Math.max(0, diffDays) : null;
+        const getPeriodCoveredDays = (value, fallbackYear) => {
+            const text = normalizeStringValue(value).replace(/[–—]/g, "-").trim();
+            if (!text) return "";
+
+            const monthByName = {
+                jan: 0, january: 0,
+                feb: 1, february: 1,
+                mar: 2, march: 2,
+                apr: 3, april: 3,
+                may: 4,
+                jun: 5, june: 5,
+                jul: 6, july: 6,
+                aug: 7, august: 7,
+                sep: 8, sept: 8, september: 8,
+                oct: 9, october: 9,
+                nov: 10, november: 10,
+                dec: 11, december: 11,
+            };
+
+            const parseMonthToken = (token) => {
+                const key = String(token || "").toLowerCase().trim();
+                return Object.prototype.hasOwnProperty.call(monthByName, key) ? monthByName[key] : null;
+            };
+
+            const rangeYearPattern = /^([a-z]{3,9})\s*-\s*([a-z]{3,9})(?:\s+(\d{4}))?$/i;
+            const dualYearPattern = /^([a-z]{3,9})\s*(\d{4})\s*-\s*([a-z]{3,9})\s*(\d{4})$/i;
+            const singleMonthPattern = /^([a-z]{3,9})(?:\s+(\d{4}))?$/i;
+
+            const resolveYear = (yearToken) => {
+                const parsed = Number(yearToken);
+                if (Number.isFinite(parsed) && parsed >= 1900 && parsed <= 3000) return parsed;
+                const fallback = Number(fallbackYear);
+                if (Number.isFinite(fallback) && fallback >= 1900 && fallback <= 3000) return fallback;
+                return new Date().getFullYear();
+            };
+
+            const diffDaysInclusive = (startUtcMs, endUtcMs) => {
+                if (!Number.isFinite(startUtcMs) || !Number.isFinite(endUtcMs)) return "";
+                const diff = Math.floor((endUtcMs - startUtcMs) / 86400000) + 1;
+                return Number.isFinite(diff) && diff > 0 ? String(diff) : "";
+            };
+
+            const normalized = text.replace(/\s+/g, " ");
+            let match = normalized.match(dualYearPattern);
+            if (match) {
+                const startMonth = parseMonthToken(match[1]);
+                const startYear = Number(match[2]);
+                const endMonth = parseMonthToken(match[3]);
+                const endYear = Number(match[4]);
+                if (startMonth === null || endMonth === null) return "";
+                if (!Number.isFinite(startYear) || !Number.isFinite(endYear)) return "";
+                return diffDaysInclusive(
+                    Date.UTC(startYear, startMonth, 1),
+                    Date.UTC(endYear, endMonth + 1, 0)
+                );
+            }
+
+            match = normalized.match(rangeYearPattern);
+            if (match) {
+                const startMonth = parseMonthToken(match[1]);
+                const endMonth = parseMonthToken(match[2]);
+                if (startMonth === null || endMonth === null) return "";
+                const year = resolveYear(match[3]);
+                const endYear = endMonth >= startMonth ? year : year + 1;
+                return diffDaysInclusive(
+                    Date.UTC(year, startMonth, 1),
+                    Date.UTC(endYear, endMonth + 1, 0)
+                );
+            }
+
+            match = normalized.match(singleMonthPattern);
+            if (match) {
+                const monthIndex = parseMonthToken(match[1]);
+                if (monthIndex === null) return "";
+                const year = resolveYear(match[2]);
+                const dayCount = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+                return Number.isFinite(dayCount) && dayCount > 0 ? String(dayCount) : "";
+            }
+
+            return "";
         };
 
-        const ntpDate = parseConstructionDateValue(String(adminRecord?.date_started || "").trim());
-        const originalExpiryDate = parseConstructionDateValue(String(adminRecord?.completion_date || "").trim());
-        const cdDays = (ntpDate && originalExpiryDate) ? getInclusiveDayDiff(ntpDate, originalExpiryDate) : null;
+        const inferredYear = parseConstructionDateValue(ntpDateValue)?.getFullYear()
+            || parseConstructionDateValue(completionDateValue)?.getFullYear()
+            || new Date().getFullYear();
+        const periodCoveredDays = getPeriodCoveredDays(adminRecord?.period_covered, inferredYear);
+        let cdValue = String(periodCoveredDays || "").trim();
+        if (!cdValue) {
+            const ntpDate = parseConstructionDateValue(ntpDateValue);
+            const completionDate = parseConstructionDateValue(completionDateValue);
+            const startUtc = getUtcDateOnlyMs(ntpDate);
+            const endUtc = getUtcDateOnlyMs(completionDate);
+            if (startUtc !== null && endUtc !== null) {
+                const diffDays = Math.floor((endUtc - startUtc) / 86400000) + 1;
+                if (Number.isFinite(diffDays) && diffDays > 0) {
+                    cdValue = String(diffDays);
+                }
+            }
+        }
 
         return {
             __id: `construction_admin_${String(adminRecord?.__record_id || "")}`,
@@ -11311,11 +11676,11 @@ document.addEventListener("DOMContentLoaded", () => {
             mun: extractMunicipality(locationText),
             contractor: String(adminRecord?.contractor || "").trim(),
             contract_cost: String(adminRecord?.contract_amount || "").trim(),
-            ntp_date: String(adminRecord?.date_started || "").trim(),
-            cd: cdDays === null ? "" : String(cdDays),
-            original_expiry_date: String(adminRecord?.completion_date || "").trim(),
+            ntp_date: ntpDateValue,
+            cd: cdValue,
+            original_expiry_date: "",
             addl_cd: "",
-            revised_expiry_date: String(adminRecord?.date_released_accounting || "").trim(),
+            revised_expiry_date: "",
             date_completed: "",
             revised_contract_cost: String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim(),
             status_previous: "",
@@ -11328,6 +11693,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const syncAdminRoutedConstructionRecords = (existingRecords) => {
         const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
+        const deletedAdminIds = readDeletedConstructionAdminIds();
         const adminRecords = readAdminDivisionRecords();
         const adminById = new Map(
             adminRecords
@@ -11337,6 +11703,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const routedFromAdmin = adminRecords
             .filter((record) => isConstructionDivisionLabel(record?.division))
             .filter((record) => String(record?.__record_id || "").trim())
+            .filter((record) => !deletedAdminIds.has(String(record.__record_id).trim()))
             .map((record) => mapAdminRecordToConstruction(record));
 
         const routedBySourceId = new Map(
@@ -11370,9 +11737,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 mun: String(pickNonEmpty(existing.mun, incoming.mun) || "").trim(),
                 contractor: String(pickNonEmpty(existing.contractor, incoming.contractor) || "").trim(),
                 contract_cost: String(pickNonEmpty(existing.contract_cost, incoming.contract_cost) || "").trim(),
-                ntp_date: String(pickNonEmpty(existing.ntp_date, incoming.ntp_date) || "").trim(),
-                cd: String(pickNonEmpty(existing.cd, incoming.cd) || "").trim(),
-                original_expiry_date: String(pickNonEmpty(existing.original_expiry_date, incoming.original_expiry_date) || "").trim(),
+                ntp_date: String(incoming.ntp_date || "").trim(),
+                cd: String(incoming.cd || "").trim(),
+                original_expiry_date: "",
+                revised_expiry_date: "",
                 revised_contract_cost: String(pickNonEmpty(existing.revised_contract_cost, incoming.revised_contract_cost) || "").trim(),
                 remarks: String(pickNonEmpty(existing.remarks, incoming.remarks) || "").trim(),
                 status_previous: String(pickNonEmpty(existing.status_previous, incoming.status_previous) || "").trim(),
@@ -11401,7 +11769,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 };
             });
 
-        const nextRecords = [...mergedRouted, ...outgoingPreserved, ...nonRouted];
+        const nextRecords = [...mergedRouted, ...outgoingPreserved, ...nonRouted]
+            .filter((record) => {
+                if (String(record?.__admin_source || "") !== "admin_document") return true;
+                const sourceId = String(record?.__admin_source_id || "").trim();
+                if (!sourceId) return true;
+                return !deletedAdminIds.has(sourceId);
+            });
         const beforeSignature = JSON.stringify(currentRecords);
         const afterSignature = JSON.stringify(nextRecords);
         if (beforeSignature !== afterSignature) {
@@ -11414,33 +11788,30 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentPage = 1;
     let editingRecordId = null;
 
-    const isAdminRoutedRecord = (record) => String(record?.__admin_source || "") === "admin_document";
+	    const isAdminRoutedRecord = (record) => String(record?.__admin_source || "") === "admin_document";
 
-    const getLocalRecords = () => {
-        return (Array.isArray(records) ? records : []).filter((record) => !isAdminRoutedRecord(record));
-    };
+	    const getVisibleRecords = () => {
+	        return Array.isArray(records) ? records : [];
+	    };
 
-    const getAdminAssignedRecords = () => {
-        return (Array.isArray(records) ? records : []).filter((record) => isAdminRoutedRecord(record));
-    };
-
-    const getTotalPages = () => {
-        return Math.max(1, Math.ceil(getLocalRecords().length / CONSTRUCTION_PAGE_SIZE));
-    };
+	    const getTotalPages = () => {
+	        return Math.max(1, Math.ceil(getVisibleRecords().length / CONSTRUCTION_PAGE_SIZE));
+	    };
 
     const clampCurrentPage = () => {
         currentPage = Math.min(Math.max(1, currentPage), getTotalPages());
     };
 
-    const getCurrentPageRecords = () => {
-        const start = (currentPage - 1) * CONSTRUCTION_PAGE_SIZE;
-        return getLocalRecords().slice(start, start + CONSTRUCTION_PAGE_SIZE);
-    };
+	    const getCurrentPageRecords = () => {
+	        const start = (currentPage - 1) * CONSTRUCTION_PAGE_SIZE;
+	        return getVisibleRecords().slice(start, start + CONSTRUCTION_PAGE_SIZE);
+	    };
 
-    const getVisibleRowCheckboxes = () => {
-        if (!constructionTableBody) return [];
-        return Array.from(constructionTableBody.querySelectorAll(".js-construction-row-select"));
-    };
+	    const getVisibleRowCheckboxes = () => {
+	        if (!constructionTableBody) return [];
+	        return Array.from(constructionTableBody.querySelectorAll(".js-construction-row-select"))
+	            .filter((checkbox) => checkbox instanceof HTMLInputElement && !checkbox.disabled);
+	    };
 
     const renderPagination = () => {
         clampCurrentPage();
@@ -11479,36 +11850,37 @@ document.addEventListener("DOMContentLoaded", () => {
         selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < rowCheckboxes.length;
     };
 
-    const renderTable = () => {
-        if (!constructionTableBody) return;
-        constructionTableBody.innerHTML = "";
+	    const renderTable = () => {
+	        if (!constructionTableBody) return;
+	        constructionTableBody.innerHTML = "";
 
-        const pagedRecords = getCurrentPageRecords();
-        const pageStartIndex = (currentPage - 1) * CONSTRUCTION_PAGE_SIZE;
-        const localCount = getLocalRecords().length;
+	        const pagedRecords = getCurrentPageRecords();
+	        const pageStartIndex = (currentPage - 1) * CONSTRUCTION_PAGE_SIZE;
+	        const totalCount = getVisibleRecords().length;
 
-        if (!localCount) {
-            constructionTableBody.innerHTML = `
-                <tr class="construction-empty-row">
-                    <td colspan="19">No construction records available yet.</td>
-                </tr>
-            `;
-        } else {
-            pagedRecords.forEach((record, index) => {
-                const row = document.createElement("tr");
-                row.dataset.recordId = record.__id;
-                const projectName = escapeHtml(toDisplay(record.project_name));
-                const projectDashboardHref = constructionProjectDashboardUrl && record.__id
-                    ? `${constructionProjectDashboardUrl}?id=${encodeURIComponent(record.__id)}`
-                    : "";
-                row.innerHTML = `
-                    <td class="pa-select-col">
-                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}">
-                    </td>
-                    <td>${pageStartIndex + index + 1}</td>
-                    <td>${projectDashboardHref ? `<a class="construction-project-link" href="${escapeHtml(projectDashboardHref)}">${projectName}</a>` : projectName}</td>
-                    <td>${escapeHtml(toDisplay(record.location))}</td>
-                    <td>${escapeHtml(toDisplay(record.mun))}</td>
+	        if (!totalCount) {
+	            constructionTableBody.innerHTML = `
+	                <tr class="construction-empty-row">
+	                    <td colspan="19">No construction records available yet.</td>
+	                </tr>
+	            `;
+	        } else {
+	            pagedRecords.forEach((record, index) => {
+	                const row = document.createElement("tr");
+	                row.dataset.recordId = record.__id;
+	                const isAdminAssigned = isAdminRoutedRecord(record);
+	                const projectName = escapeHtml(toDisplay(record.project_name));
+	                const projectDashboardHref = constructionProjectDashboardUrl && record.__id
+	                    ? `${constructionProjectDashboardUrl}?id=${encodeURIComponent(record.__id)}`
+	                    : "";
+	                row.innerHTML = `
+	                    <td class="pa-select-col">
+	                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}">
+	                    </td>
+	                    <td>${pageStartIndex + index + 1}</td>
+	                    <td>${projectDashboardHref ? `<a class="construction-project-link" href="${escapeHtml(projectDashboardHref)}">${projectName}</a>` : projectName}</td>
+	                    <td>${escapeHtml(toDisplay(record.location))}</td>
+	                    <td>${escapeHtml(toDisplay(record.mun))}</td>
                     <td>${escapeHtml(toDisplay(record.contractor))}</td>
                     <td>${escapeHtml(formatMoney(record.contract_cost))}</td>
                     <td>${escapeHtml(formatDate(record.ntp_date))}</td>
@@ -11526,82 +11898,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 `;
                 constructionTableBody.appendChild(row);
             });
-        }
+	        }
 
-        if (constructionRecordMeta) {
-            constructionRecordMeta.textContent = `${localCount} record${localCount === 1 ? "" : "s"}`;
-        }
-        renderPagination();
-        updateSelectionControls();
-        renderAdminAssignedTable();
-    };
-
-    const renderAdminAssignedTable = () => {
-        const routed = getAdminAssignedRecords();
-        if (adminAssignedMeta) {
-            adminAssignedMeta.textContent = `${routed.length} project${routed.length === 1 ? "" : "s"}`;
-        }
-        if (!(adminAssignedPanel instanceof HTMLElement)) return;
-        adminAssignedPanel.hidden = routed.length === 0;
-        if (!adminAssignedTableBody) return;
-        adminAssignedTableBody.innerHTML = "";
-
-        if (!routed.length) {
-            adminAssignedTableBody.innerHTML = `
-                <tr class="construction-empty-row">
-                    <td colspan="19">No admin-assigned projects yet.</td>
-                </tr>
-            `;
-            return;
-        }
-
-        const blank = (value) => {
-            const text = String(value ?? "").trim();
-            return text ? text : "";
-        };
-
-        const formatMoneyBlank = (value) => {
-            const text = blank(value);
-            return text ? formatMoney(text) : "";
-        };
-
-        const formatDateBlank = (value) => {
-            const text = blank(value);
-            return text ? formatDate(text) : "";
-        };
-
-        routed.forEach((record, index) => {
-            const row = document.createElement("tr");
-            row.dataset.recordId = record.__id;
-            const projectNameText = blank(record.project_name);
-            const projectName = escapeHtml(projectNameText);
-            const projectDashboardHref = constructionProjectDashboardUrl && record.__id
-                ? `${constructionProjectDashboardUrl}?id=${encodeURIComponent(record.__id)}`
-                : "";
-            row.innerHTML = `
-                <td class="pa-select-col"></td>
-                <td>${index + 1}</td>
-                <td>${projectDashboardHref ? `<a class="construction-project-link" href="${escapeHtml(projectDashboardHref)}">${projectName}</a>` : projectName}</td>
-                <td>${escapeHtml(blank(record.location))}</td>
-                <td>${escapeHtml(blank(record.mun))}</td>
-                <td>${escapeHtml(blank(record.contractor))}</td>
-                <td>${escapeHtml(formatMoneyBlank(record.contract_cost))}</td>
-                <td>${escapeHtml(formatDateBlank(record.ntp_date))}</td>
-                <td>${escapeHtml(blank(record.cd))}</td>
-                <td>${escapeHtml(formatDateBlank(record.original_expiry_date))}</td>
-                <td>${escapeHtml(blank(record.addl_cd))}</td>
-                <td>${escapeHtml(formatDateBlank(record.revised_expiry_date))}</td>
-                <td>${escapeHtml(formatDateBlank(record.date_completed))}</td>
-                <td>${escapeHtml(formatMoneyBlank(record.revised_contract_cost))}</td>
-                <td>${escapeHtml(blank(record.status_previous) ? formatPercent(record.status_previous, { decimals: 0, fractionToPercent: true }) : "")}</td>
-                <td>${escapeHtml(blank(record.status_current) ? formatPercent(record.status_current, { decimals: 0, fractionToPercent: true }) : "")}</td>
-                <td>${escapeHtml(blank(record.time_elapsed) ? formatPercent(record.time_elapsed) : "")}</td>
-                <td>${escapeHtml(blank(record.slippage) ? formatPercent(record.slippage, { signed: true }) : "")}</td>
-                <td>${escapeHtml(blank(record.remarks))}</td>
-            `;
-            adminAssignedTableBody.appendChild(row);
-        });
-    };
+	        if (constructionRecordMeta) {
+	            constructionRecordMeta.textContent = `${totalCount} record${totalCount === 1 ? "" : "s"}`;
+	        }
+	        renderPagination();
+	        updateSelectionControls();
+	    };
 
     const createRecordId = () => {
         return `construction_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -11687,6 +11991,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const setConstructionProjectOverviewReadonly = (isReadonly) => {
+        if (!constructionForm) return;
+        const overviewFields = [
+            "project_name",
+            "location",
+            "mun",
+            "contractor",
+            "contract_cost",
+            "revised_contract_cost",
+        ];
+
+        overviewFields.forEach((field) => {
+            const input = constructionForm.querySelector(`[name="${field}"]`);
+            if (!(input instanceof HTMLInputElement)) return;
+            input.readOnly = Boolean(isReadonly);
+            if (isReadonly) {
+                input.setAttribute("aria-readonly", "true");
+            } else {
+                input.removeAttribute("aria-readonly");
+            }
+        });
+    };
+
     const fillConstructionForm = (record) => {
         if (!constructionForm || !record) return;
         CONSTRUCTION_FIELDS.forEach((field) => {
@@ -11706,6 +12033,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 fillConstructionForm(record);
             }
         }
+        setConstructionProjectOverviewReadonly(mode === "edit");
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
@@ -11719,7 +12047,9 @@ document.addEventListener("DOMContentLoaded", () => {
         constructionModal.hidden = false;
         document.body.classList.add("construction-modal-open");
         requestAnimationFrame(() => {
-            const firstField = constructionForm?.querySelector('[name="project_name"]');
+            const firstField = mode === "edit"
+                ? constructionForm?.querySelector('input:not([type="file"]):not([readonly]):not([disabled]), select:not([disabled]), textarea:not([readonly]):not([disabled])')
+                : constructionForm?.querySelector('[name="project_name"]');
             if (firstField) firstField.focus();
         });
 
@@ -11739,6 +12069,7 @@ document.addEventListener("DOMContentLoaded", () => {
         editingRecordId = null;
         setConstructionFormMode("create");
         if (constructionForm) constructionForm.reset();
+        setConstructionProjectOverviewReadonly(false);
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
@@ -11910,9 +12241,9 @@ document.addEventListener("DOMContentLoaded", () => {
 	                }
 	            }
 
-	            records = syncAdminRoutedConstructionRecords(records);
-	            writeStoredRecords(records);
-	            renderTable();
+ 	            records = syncAdminRoutedConstructionRecords(records).map((record) => normalizeConstructionRecord(record));
+ 	            writeStoredRecords(records);
+ 	            renderTable();
                 if (constructionRouteFileInput instanceof HTMLInputElement) {
                     constructionRouteFileInput.value = "";
                 }
@@ -12554,6 +12885,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 .map((checkbox) => checkbox.dataset.recordId);
             if (!selectedIds.length) return;
 
+            const deletedAdminIds = readDeletedConstructionAdminIds();
+            const selectedSet = new Set(selectedIds);
+            records.forEach((record) => {
+                if (!selectedSet.has(record.__id)) return;
+                if (!isAdminRoutedRecord(record)) return;
+                const sourceId = String(record.__admin_source_id || "").trim();
+                if (!sourceId) return;
+                deletedAdminIds.add(sourceId);
+            });
+
             const approved = await showPeoGeneralConfirm({
                 title: "Delete Selected Records",
                 message: `Delete ${selectedIds.length} selected construction record(s)?`,
@@ -12566,6 +12907,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const removeSet = new Set(selectedIds);
             records = records.filter((record) => !removeSet.has(record.__id));
             clampCurrentPage();
+            writeDeletedConstructionAdminIds(deletedAdminIds);
             writeStoredRecords(records);
             renderTable();
             showPeoGeneralToast(`${selectedIds.length} construction record(s) deleted successfully.`, {
@@ -12575,33 +12917,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    if (adminAssignedTableBody) {
-        adminAssignedTableBody.addEventListener("click", (event) => {
-            const target = event.target;
-            if (!(target instanceof HTMLElement)) return;
-
-            const link = target.closest('a[href]');
-            if (link) {
-                if (!(link instanceof HTMLElement) || !link.classList.contains("construction-project-link")) return;
-                if (event.ctrlKey || event.metaKey) return;
-                event.preventDefault();
-            }
-
-            const row = target.closest("tr");
-            if (!(row instanceof HTMLTableRowElement)) return;
-            const recordId = String(row.dataset.recordId || "").trim();
-            if (!recordId) return;
-
-            const record = records.find((item) => item.__id === recordId);
-            if (!record) return;
-
-            openConstructionModal("edit", record);
-        });
-    }
-
     const resyncAdminAssignedProjects = () => {
-        records = syncAdminRoutedConstructionRecords(readStoredRecords());
+        records = syncAdminRoutedConstructionRecords(readStoredRecords()).map((record) => normalizeConstructionRecord(record));
         clampCurrentPage();
+        writeStoredRecords(records);
         renderTable();
     };
 
@@ -13164,9 +13483,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const planningDocBudgetOtherWrap = planningDocEditForm instanceof HTMLFormElement
         ? planningDocEditForm.querySelector(".js-planning-doc-budget-other-wrap")
         : null;
-	    const planningDocBudgetOtherInput = planningDocEditForm instanceof HTMLFormElement
-	        ? planningDocEditForm.querySelector(".js-planning-doc-budget-other")
-	        : null;
+		    const planningDocBudgetOtherInput = planningDocEditForm instanceof HTMLFormElement
+		        ? planningDocEditForm.querySelector(".js-planning-doc-budget-other")
+		        : null;
  	    const planningRouteDivisionSelect = planningDocEditForm instanceof HTMLFormElement
  	        ? planningDocEditForm.querySelector(".js-planning-route-division")
  	        : null;
@@ -13679,8 +13998,8 @@ document.addEventListener("DOMContentLoaded", () => {
             .reduce((sum, record) => sum + parsePlanningDocAmount(record?.amount), 0);
     };
 
-    const mapAdminRecordToPlanningDocument = (adminRecord) => {
-        const fallbackDate = new Date().toISOString().slice(0, 10);
+	    const mapAdminRecordToPlanningDocument = (adminRecord) => {
+	        const fallbackDate = new Date().toISOString().slice(0, 10);
         const dateReceived = String(
             adminRecord?.date_received_peo
             || adminRecord?.date_received_admin
@@ -13700,18 +14019,24 @@ document.addEventListener("DOMContentLoaded", () => {
             || ""
         ).trim();
 
-        return {
-            id: `planning_doc_admin_${String(adminRecord?.__record_id || "")}`,
-            __admin_source_id: String(adminRecord?.__record_id || ""),
-            slip_no: String(adminRecord?.slip_no || "").trim(),
-            document_name: String(adminRecord?.document_name || "").trim(),
-            location: String(adminRecord?.location || "").trim(),
-            contractor: String(adminRecord?.contractor || "").trim(),
-            amount: String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim(),
-            received_from: "Admin Division",
-            date_received: dateReceived,
-            status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
-            budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
+	        const contractAmount = String(adminRecord?.contract_amount || "").trim();
+	        const revisedContractAmount = String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim();
+
+	        return {
+	            id: `planning_doc_admin_${String(adminRecord?.__record_id || "")}`,
+	            __admin_source_id: String(adminRecord?.__record_id || ""),
+	            slip_no: String(adminRecord?.slip_no || "").trim(),
+	            document_name: String(adminRecord?.document_name || "").trim(),
+	            location: String(adminRecord?.location || "").trim(),
+	            contractor: String(adminRecord?.contractor || "").trim(),
+	            contract_amount: contractAmount,
+	            revised_contract_amount: revisedContractAmount,
+	            // Keep `amount` as the canonical value used by planning budget computations.
+	            amount: revisedContractAmount,
+	            received_from: "Admin Division",
+	            date_received: dateReceived,
+	            status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
+	            budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
             budget_allocation_other: mappedBudgetAllocation === "Others" ? mappedBudgetOther : "",
             remarks: String(adminRecord?.description || "").trim(),
             created_at: Date.now(),
@@ -13762,23 +14087,25 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             // Preserve Planning-side edits for fields managed in the Planning document register.
-            acc.push({
-                ...mapped,
-                ...record,
-                __route: "Incoming",
-                __routed_to: "",
-                slip_no: String(pickPlanningEditedValue(record?.slip_no, mapped.slip_no || "")).trim(),
-                document_name: String(pickPlanningEditedValue(record?.document_name, mapped.document_name || "")).trim(),
-                location: String(pickPlanningEditedValue(record?.location, mapped.location || "")).trim(),
-                contractor: String(pickPlanningEditedValue(record?.contractor, mapped.contractor || "")).trim(),
-                amount: String(pickPlanningEditedValue(record?.amount, mapped.amount || "")).trim(),
-                received_from: String(pickPlanningEditedValue(record?.received_from, mapped.received_from || "")).trim(),
-                date_received: String(pickPlanningEditedValue(record?.date_received, mapped.date_received || "")).trim(),
-                status: normalizePlanningDocStatus(pickPlanningEditedValue(record?.status, mapped.status || "For Review")),
-                budget_allocation: String(pickPlanningEditedValue(record?.budget_allocation, mapped.budget_allocation || "")).trim(),
-                budget_allocation_other: String(pickPlanningEditedValue(record?.budget_allocation_other, mapped.budget_allocation_other || "")).trim(),
-                remarks: String(pickPlanningEditedValue(record?.remarks, mapped.remarks || "")).trim(),
-            });
+	            acc.push({
+	                ...mapped,
+	                ...record,
+	                __route: "Incoming",
+	                __routed_to: "",
+	                slip_no: String(pickPlanningEditedValue(record?.slip_no, mapped.slip_no || "")).trim(),
+	                document_name: String(pickPlanningEditedValue(record?.document_name, mapped.document_name || "")).trim(),
+	                location: String(pickPlanningEditedValue(record?.location, mapped.location || "")).trim(),
+	                contractor: String(pickPlanningEditedValue(record?.contractor, mapped.contractor || "")).trim(),
+	                contract_amount: String(pickPlanningEditedValue(record?.contract_amount, mapped.contract_amount || "")).trim(),
+	                amount: String(pickPlanningEditedValue(record?.amount, mapped.amount || "")).trim(),
+	                revised_contract_amount: String(pickPlanningEditedValue(record?.amount, mapped.amount || "")).trim(),
+	                received_from: String(pickPlanningEditedValue(record?.received_from, mapped.received_from || "")).trim(),
+	                date_received: String(pickPlanningEditedValue(record?.date_received, mapped.date_received || "")).trim(),
+	                status: normalizePlanningDocStatus(pickPlanningEditedValue(record?.status, mapped.status || "For Review")),
+	                budget_allocation: String(pickPlanningEditedValue(record?.budget_allocation, mapped.budget_allocation || "")).trim(),
+	                budget_allocation_other: String(pickPlanningEditedValue(record?.budget_allocation_other, mapped.budget_allocation_other || "")).trim(),
+	                remarks: String(pickPlanningEditedValue(record?.remarks, mapped.remarks || "")).trim(),
+	            });
             adminBySourceId.delete(sourceId);
             return acc;
         }, []);
@@ -13798,14 +14125,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!(planningDocumentsTableBody instanceof HTMLTableSectionElement)) return;
         planningDocumentsTableBody.innerHTML = "";
 
-        if (!Array.isArray(records) || !records.length) {
-            const emptyRow = document.createElement("tr");
-            emptyRow.className = "planning-doc-empty-row";
-            emptyRow.innerHTML = '<td colspan="11">No planning documents available yet.</td>';
-            planningDocumentsTableBody.appendChild(emptyRow);
-            if (planningDocCountLabel instanceof HTMLElement) {
-                planningDocCountLabel.textContent = "0 document(s)";
-            }
+	        if (!Array.isArray(records) || !records.length) {
+	            const emptyRow = document.createElement("tr");
+	            emptyRow.className = "planning-doc-empty-row";
+	            emptyRow.innerHTML = '<td colspan="12">No planning documents available yet.</td>';
+	            planningDocumentsTableBody.appendChild(emptyRow);
+	            if (planningDocCountLabel instanceof HTMLElement) {
+	                planningDocCountLabel.textContent = "0 document(s)";
+	            }
             return;
         }
 
@@ -13820,20 +14147,23 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const getPlanningDocumentRowMarkup = (record) => {
-        const safeStatus = normalizePlanningDocStatus(record?.status);
-        const budgetAllocation = getPlanningDocBudgetAllocationDisplay(record);
+	    const getPlanningDocumentRowMarkup = (record) => {
+	        const safeStatus = normalizePlanningDocStatus(record?.status);
+	        const budgetAllocation = getPlanningDocBudgetAllocationDisplay(record);
+	        const contractAmount = record?.contract_amount;
+	        const revisedContractAmount = record?.revised_contract_amount ?? record?.amount;
 
-        return `
-            <td>${escapeHtml(record?.slip_no || "-")}</td>
-            <td>${escapeHtml(record?.document_name || "-")}</td>
-            <td>${escapeHtml(record?.location || "-")}</td>
-            <td>${escapeHtml(record?.contractor || "-")}</td>
-            <td>${escapeHtml(formatPlanningDocAmount(record?.amount))}</td>
-            <td>${escapeHtml(record?.received_from || "-")}</td>
-            <td>${escapeHtml(formatPlanningDocDate(record?.date_received))}</td>
-            <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
-            <td>${escapeHtml(budgetAllocation)}</td>
+	        return `
+	            <td>${escapeHtml(record?.slip_no || "-")}</td>
+	            <td>${escapeHtml(record?.document_name || "-")}</td>
+	            <td>${escapeHtml(record?.location || "-")}</td>
+	            <td>${escapeHtml(record?.contractor || "-")}</td>
+	            <td>${escapeHtml(formatPlanningDocAmount(contractAmount))}</td>
+	            <td>${escapeHtml(formatPlanningDocAmount(revisedContractAmount))}</td>
+	            <td>${escapeHtml(record?.received_from || "-")}</td>
+	            <td>${escapeHtml(formatPlanningDocDate(record?.date_received))}</td>
+	            <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
+	            <td>${escapeHtml(budgetAllocation)}</td>
             <td class="planning-doc-remarks">${escapeHtml(record?.remarks || "-")}</td>
             <td class="planning-doc-actions">
                 <div class="planning-doc-actions-group">
@@ -14484,34 +14814,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         planningBudgetDetailTbody.innerHTML = "";
-        if (!matchedDocuments.length) {
-            planningBudgetDetailTbody.innerHTML = '<tr class="planning-budget-detail-empty-row"><td colspan="10">No documents registered under this budget allocation.</td></tr>';
-        } else {
-            const rows = matchedDocuments.map((doc, index) => {
-                const safeStatus = normalizePlanningDocStatus(doc.status);
-                return `
-                    <tr>
-                        <td>${index + 1}</td>
-                        <td>${escapeHtml(doc.slip_no || "-")}</td>
-                        <td>${escapeHtml(doc.document_name || "-")}</td>
-                        <td>${escapeHtml(doc.location || "-")}</td>
-                        <td>${escapeHtml(doc.contractor || "-")}</td>
-                        <td>${escapeHtml(formatPlanningDocAmount(doc.amount))}</td>
-                        <td>${escapeHtml(formatPlanningDocDate(doc.date_received))}</td>
-                        <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
-                        <td class="planning-doc-remarks">${escapeHtml(doc.remarks || "-")}</td>
-                        <td class="planning-doc-actions">
-                            <div class="planning-doc-actions-group">
-                                <button type="button" class="planning-doc-action-btn is-edit js-planning-budget-detail-edit" data-record-id="${escapeHtml(doc.id || "")}" aria-label="Edit document" title="Edit">
-                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join("");
-            planningBudgetDetailTbody.innerHTML = rows;
-        }
+	        if (!matchedDocuments.length) {
+	            planningBudgetDetailTbody.innerHTML = '<tr class="planning-budget-detail-empty-row"><td colspan="10">No documents registered under this budget allocation.</td></tr>';
+	        } else {
+	            const rows = matchedDocuments.map((doc, index) => {
+	                const safeStatus = normalizePlanningDocStatus(doc.status);
+	                const revisedContractAmount = doc?.revised_contract_amount ?? doc?.amount;
+	                return `
+	                    <tr>
+	                        <td>${index + 1}</td>
+	                        <td>${escapeHtml(doc.slip_no || "-")}</td>
+	                        <td>${escapeHtml(doc.document_name || "-")}</td>
+	                        <td>${escapeHtml(doc.location || "-")}</td>
+	                        <td>${escapeHtml(doc.contractor || "-")}</td>
+	                        <td>${escapeHtml(formatPlanningDocAmount(doc.contract_amount))}</td>
+	                        <td>${escapeHtml(formatPlanningDocAmount(revisedContractAmount))}</td>
+	                        <td>${escapeHtml(formatPlanningDocDate(doc.date_received))}</td>
+	                        <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
+	                        <td class="planning-doc-remarks">${escapeHtml(doc.remarks || "-")}</td>
+	                    </tr>
+	                `;
+	            }).join("");
+	            planningBudgetDetailTbody.innerHTML = rows;
+	        }
 
         activePlanningBudgetDetailRecordId = String(record.id || "");
         planningBudgetDetailSection.hidden = false;
@@ -15003,19 +15328,52 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    const syncPlanningDocBudgetOtherField = () => {
-        if (!(planningDocBudgetAllocationSelect instanceof HTMLSelectElement)
-            || !(planningDocBudgetOtherWrap instanceof HTMLElement)
-            || !(planningDocBudgetOtherInput instanceof HTMLInputElement)) {
-            return;
-        }
-        const isOthers = planningDocBudgetAllocationSelect.value === "Others";
-        planningDocBudgetOtherWrap.hidden = !isOthers;
-        planningDocBudgetOtherInput.required = isOthers;
-        if (!isOthers) {
-            planningDocBudgetOtherInput.value = "";
-        }
-    };
+	    const syncPlanningDocBudgetOtherField = () => {
+	        if (!(planningDocBudgetAllocationSelect instanceof HTMLSelectElement)
+	            || !(planningDocBudgetOtherWrap instanceof HTMLElement)
+	            || !(
+	                planningDocBudgetOtherInput instanceof HTMLInputElement
+	                || planningDocBudgetOtherInput instanceof HTMLTextAreaElement
+	            )) {
+	            return;
+	        }
+	        const isOthers = planningDocBudgetAllocationSelect.value === "Others";
+	        planningDocBudgetOtherWrap.hidden = !isOthers;
+	        planningDocBudgetOtherWrap.style.display = isOthers ? "" : "none";
+	        planningDocBudgetOtherInput.required = isOthers;
+	        if (!isOthers) {
+	            planningDocBudgetOtherInput.value = "";
+	        }
+	    };
+
+	    const setPlanningDocReadonlyFields = (form, isReadonly) => {
+	        if (!(form instanceof HTMLFormElement)) return;
+	        const readonlyFields = [
+	            "slip_no",
+	            "document_name",
+	            "location",
+	            "contractor",
+	            "amount",
+	            "received_from",
+	            "date_received",
+	        ];
+	        readonlyFields.forEach((name) => {
+	            const field = form.elements.namedItem(name);
+	            if (field instanceof HTMLInputElement) {
+	                if (field.type === "date") {
+	                    field.disabled = Boolean(isReadonly);
+	                } else {
+	                    field.readOnly = Boolean(isReadonly);
+	                }
+	            }
+	            if (field instanceof HTMLSelectElement) {
+	                field.disabled = Boolean(isReadonly);
+	            }
+	            if (field instanceof HTMLTextAreaElement) {
+	                field.readOnly = Boolean(isReadonly);
+	            }
+	        });
+	    };
 
  	    const closePlanningDocModal = () => {
  	        if (!(planningDocModal instanceof HTMLElement)) return;
@@ -15038,10 +15396,10 @@ document.addEventListener("DOMContentLoaded", () => {
  	        syncPlanningModalBodyState();
  	    };
 
- 	    const openPlanningDocModal = (recordId) => {
- 	        if (!(planningDocModal instanceof HTMLElement) || !(planningDocEditForm instanceof HTMLFormElement)) return;
- 	        const record = planningDocumentRecords.find((item) => String(item?.id || "") === String(recordId || ""));
- 	        if (!record) return;
+	    const openPlanningDocModal = (recordId) => {
+	        if (!(planningDocModal instanceof HTMLElement) || !(planningDocEditForm instanceof HTMLFormElement)) return;
+	        const record = planningDocumentRecords.find((item) => String(item?.id || "") === String(recordId || ""));
+	        if (!record) return;
 
         closeModal();
         closeEditModal();
@@ -15066,18 +15424,19 @@ document.addEventListener("DOMContentLoaded", () => {
         setValue("amount", record.amount || "");
         setValue("received_from", record.received_from || "");
         setValue("date_received", toPlanningDocInputDate(record.date_received || ""));
-        setValue("status", normalizePlanningDocStatus(record.status));
+	        setValue("status", normalizePlanningDocStatus(record.status));
 
         const normalizedBudget = resolvePlanningBudgetAllocationValue(record.budget_allocation)
             || String(record.budget_allocation || "").trim();
-        refreshPlanningDocBudgetAllocationSelect(normalizedBudget);
-        setValue("budget_allocation", normalizedBudget);
-	        setValue("budget_allocation_other", record.budget_allocation_other || "");
-	        setValue("remarks", record.remarks || "");
-	        syncPlanningDocBudgetOtherField();
- 	        if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
- 	            planningRouteDivisionSelect.value = "";
- 	        }
+	        refreshPlanningDocBudgetAllocationSelect(normalizedBudget);
+	        setValue("budget_allocation", normalizedBudget);
+		        setValue("budget_allocation_other", record.budget_allocation_other || "");
+		        setValue("remarks", record.remarks || "");
+		        syncPlanningDocBudgetOtherField();
+		        setPlanningDocReadonlyFields(planningDocEditForm, true);
+	 	        if (planningRouteDivisionSelect instanceof HTMLSelectElement) {
+	 	            planningRouteDivisionSelect.value = "";
+	 	        }
             if (planningRouteFileInput instanceof HTMLInputElement) {
                 planningRouteFileInput.value = "";
             }
@@ -15441,40 +15800,29 @@ document.addEventListener("DOMContentLoaded", () => {
 	    }
 
     if (planningDocEditForm instanceof HTMLFormElement) {
-        planningDocEditForm.addEventListener("submit", (event) => {
-            event.preventDefault();
-            if (!editingPlanningDocumentId) {
-                closePlanningDocModal();
-                return;
-            }
+	        planningDocEditForm.addEventListener("submit", (event) => {
+	            event.preventDefault();
+	            if (!editingPlanningDocumentId) {
+	                closePlanningDocModal();
+	                return;
+	            }
 
             const recordIndex = planningDocumentRecords.findIndex((record) => {
                 return String(record?.id || "") === editingPlanningDocumentId;
             });
-            if (recordIndex === -1) {
-                closePlanningDocModal();
-                return;
-            }
+	            if (recordIndex === -1) {
+	                closePlanningDocModal();
+	                return;
+	            }
 
-            const formData = new FormData(planningDocEditForm);
-            const slipNo = String(formData.get("slip_no") || "").trim();
-            const documentName = String(formData.get("document_name") || "").trim();
-            const receivedFrom = String(formData.get("received_from") || "").trim();
-            const dateReceived = toPlanningDocInputDate(formData.get("date_received")) || String(formData.get("date_received") || "").trim();
-            const rawStatus = String(formData.get("status") || "").trim();
+	            const existingRecord = planningDocumentRecords[recordIndex] || {};
+	            const formData = new FormData(planningDocEditForm);
+	            const rawStatus = String(formData.get("status") || "").trim();
 
-            if (!slipNo || !documentName || !receivedFrom || !dateReceived || !rawStatus) {
-                showPeoGeneralToast("Please complete all required fields before saving changes.", {
-                    title: "Planning Division",
-                    variant: "warning",
-                });
-                return;
-            }
-
-            const budgetAllocation = resolvePlanningBudgetAllocationValue(formData.get("budget_allocation"));
-            if (budgetAllocation === null || budgetAllocation === "") {
-                showPeoGeneralToast("Please select a valid budget allocation.", {
-                    title: "Planning Division",
+	            const budgetAllocation = resolvePlanningBudgetAllocationValue(formData.get("budget_allocation"));
+	            if (budgetAllocation === null || budgetAllocation === "") {
+	                showPeoGeneralToast("Please select a valid budget allocation.", {
+	                    title: "Planning Division",
                     variant: "warning",
                 });
                 return;
@@ -15489,24 +15837,36 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const resolvedStatus = rawStatus
-                ? normalizePlanningDocStatus(rawStatus)
-                : "For Review";
+	            const resolvedStatus = rawStatus
+	                ? normalizePlanningDocStatus(rawStatus)
+	                : normalizePlanningDocStatus(existingRecord.status) || "For Review";
 
-            const updatedRecord = {
-                ...planningDocumentRecords[recordIndex],
-                slip_no: slipNo,
-                document_name: documentName,
-                location: String(formData.get("location") || "").trim(),
-                contractor: String(formData.get("contractor") || "").trim(),
-                amount: String(formData.get("amount") || "").trim(),
-                received_from: receivedFrom,
-                date_received: dateReceived,
-                status: resolvedStatus,
-                budget_allocation: budgetAllocation,
-                budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
-                remarks: String(formData.get("remarks") || "").trim(),
-            };
+	            const slipNo = String(existingRecord.slip_no || "").trim();
+	            const documentName = String(existingRecord.document_name || "").trim();
+	            const location = String(existingRecord.location || "").trim();
+	            const contractor = String(existingRecord.contractor || "").trim();
+	            const amount = String(existingRecord.amount || "").trim();
+	            const contractAmount = String(existingRecord.contract_amount || "").trim();
+	            const revisedContractAmount = String(existingRecord.revised_contract_amount || existingRecord.amount || "").trim();
+	            const receivedFrom = String(existingRecord.received_from || "").trim();
+	            const dateReceived = String(existingRecord.date_received || "").trim();
+
+	            const updatedRecord = {
+	                ...existingRecord,
+	                slip_no: slipNo,
+	                document_name: documentName,
+	                location,
+	                contractor,
+	                contract_amount: contractAmount,
+	                revised_contract_amount: revisedContractAmount,
+	                amount,
+	                received_from: receivedFrom,
+	                date_received: dateReceived,
+	                status: resolvedStatus,
+	                budget_allocation: budgetAllocation,
+	                budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
+	                remarks: String(formData.get("remarks") || "").trim(),
+	            };
 
             planningDocumentRecords[recordIndex] = updatedRecord;
             writeStoredPlanningDocuments(planningDocumentRecords);
@@ -17425,6 +17785,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
     };
 
+    const parseCsvSet = (value) => {
+        const raw = String(value || "").trim();
+        if (!raw) return new Set();
+        return new Set(
+            raw
+                .split(",")
+                .map((item) => normalizeText(item))
+                .filter(Boolean)
+        );
+    };
+
     const createRecordId = () => {
         return `quality_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     };
@@ -17702,6 +18073,163 @@ document.addEventListener("DOMContentLoaded", () => {
         return "All routes";
     };
 
+    const qualityUploadParticularsDefault = new Set(
+        [
+            "test result",
+            "quality control program",
+            "quality control assurance",
+            "certificate of no testing",
+            "affidavit (inspectorate)",
+            "accomplishment report (signed)",
+            "travel order",
+            "order of payment",
+            "certification",
+            "punch list",
+            "pouring permit",
+            "others",
+        ].map((value) => normalizeText(value))
+    );
+
+    const qualityUploadOutgoingStatusesDefault = new Set(
+        ["for action", "in progress", "for release"].map((value) => normalizeText(value))
+    );
+
+    const qualityUploadParticulars = (
+        qualityForm instanceof HTMLElement
+            ? parseCsvSet(qualityForm.dataset.qualityUploadParticulars)
+            : new Set()
+    );
+    if (!qualityUploadParticulars.size) {
+        qualityUploadParticularsDefault.forEach((value) => qualityUploadParticulars.add(value));
+    }
+
+    const qualityUploadOutgoingStatuses = (
+        qualityForm instanceof HTMLElement
+            ? parseCsvSet(qualityForm.dataset.qualityUploadOutgoingStatuses)
+            : new Set()
+    );
+    if (!qualityUploadOutgoingStatuses.size) {
+        qualityUploadOutgoingStatusesDefault.forEach((value) => qualityUploadOutgoingStatuses.add(value));
+    }
+
+    let qualityScanAttachment = null;
+    let qualityBaseScanAttachments = [];
+    let qualityScanUploadPrompted = false;
+    let qualityScanUploadDismissed = false;
+
+    const QUALITY_LOCKED_FIELDS = [
+        "received_from",
+        "doc_date",
+        "doc_no",
+        "project_location",
+        "location_detail",
+    ];
+
+    const setQualityEditReadonly = (isReadonly) => {
+        if (!(qualityForm instanceof HTMLFormElement)) return;
+        QUALITY_LOCKED_FIELDS.forEach((fieldName) => {
+            const field = qualityForm.elements.namedItem(fieldName);
+            if (field instanceof HTMLInputElement) {
+                field.readOnly = Boolean(isReadonly);
+                if (isReadonly) {
+                    field.setAttribute("aria-readonly", "true");
+                } else {
+                    field.removeAttribute("aria-readonly");
+                }
+            }
+        });
+    };
+
+    const getQualityFormRadioValue = (fieldName) => {
+        if (!(qualityForm instanceof HTMLFormElement)) return "";
+        const field = qualityForm.elements.namedItem(fieldName);
+        if (field && typeof field === "object" && "value" in field) {
+            return String(field.value || "").trim();
+        }
+        return "";
+    };
+
+    const getQualityScanUrlValue = () => {
+        if (!(qualityForm instanceof HTMLFormElement)) return "";
+        const field = qualityForm.elements.namedItem("scan_url");
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+            return String(field.value || "").trim();
+        }
+        return "";
+    };
+
+    const qualityHasAnyScan = () => {
+        if (qualityScanAttachment) return true;
+        if (qualityBaseScanAttachments.length) return true;
+        return Boolean(getQualityScanUrlValue());
+    };
+
+    const qualityShouldActivateScanUpload = () => {
+        const particulars = normalizeText(getQualityFormRadioValue("particulars"));
+        const route = normalizeText(getQualityFormRadioValue("route"));
+        const status = normalizeText(getQualityFormRadioValue("status"));
+        const matchesParticular = particulars && qualityUploadParticulars.has(particulars);
+        const matchesOutgoing = route === "outgoing" && qualityUploadOutgoingStatuses.has(status);
+        return Boolean(matchesParticular || matchesOutgoing);
+    };
+
+    const applyQualityScanAttachmentToRecord = (sourceRecord) => {
+        const record = sourceRecord && typeof sourceRecord === "object" ? { ...sourceRecord } : null;
+        if (!record) return sourceRecord;
+        if (!qualityScanAttachment) return record;
+
+        const mergedAttachments = peoMergeAttachments(peoExtractAttachments(record), [qualityScanAttachment]);
+        record.__attachments = mergedAttachments;
+
+        const latest = mergedAttachments.length ? mergedAttachments[mergedAttachments.length - 1] : null;
+        if (latest) {
+            record.scanned_file_name = latest.name || record.scanned_file_name || "";
+            record.scanned_file_type = latest.type || record.scanned_file_type || "";
+            record.scanned_file_data = latest.dataUrl || record.scanned_file_data || "";
+        }
+
+        return record;
+    };
+
+    const maybePromptQualityRouteFileUpload = ({ autoPrompt = false } = {}) => {
+        if (!autoPrompt) return;
+        if (!(qualityRouteFileInput instanceof HTMLInputElement)) return;
+        if (!qualityShouldActivateScanUpload()) return;
+        if (qualityHasAnyScan()) return;
+        if (qualityScanUploadPrompted || qualityScanUploadDismissed) return;
+
+        qualityScanUploadPrompted = true;
+        window.setTimeout(() => {
+            if (qualityRouteFileInput instanceof HTMLInputElement && !qualityHasAnyScan()) {
+                qualityRouteFileInput.click();
+            }
+        }, 0);
+    };
+
+    const ensureQualityScanAttachmentFromRouteFile = async () => {
+        if (qualityScanAttachment) return { ok: true };
+        if (!(qualityRouteFileInput instanceof HTMLInputElement)) return { ok: true };
+        const selectedFile = qualityRouteFileInput.files && qualityRouteFileInput.files[0];
+        if (!(selectedFile instanceof File) || !selectedFile.size) return { ok: true };
+
+        try {
+            const dataUrl = await peoReadFileAsDataUrl(selectedFile);
+            const attachment = peoBuildAttachment({
+                dataUrl,
+                fileName: selectedFile.name,
+                mimeType: selectedFile.type || "",
+                addedBy: "Quality Division",
+            });
+            if (!attachment) {
+                return { ok: false, error: "Unable to attach file." };
+            }
+            qualityScanAttachment = attachment;
+            return { ok: true };
+        } catch (error) {
+            return { ok: false, error: "Unable to read the attached file. Please try again." };
+        }
+    };
+
     const buildRecordFromForm = () => {
         if (!(qualityForm instanceof HTMLFormElement)) return null;
 
@@ -17726,7 +18254,8 @@ document.addEventListener("DOMContentLoaded", () => {
             remarks: String(formData.get("remarks") ?? "").trim(),
         };
 
-        return record.received_from && record.doc_date && record.doc_no ? record : null;
+        if (!(record.received_from && record.doc_date && record.doc_no)) return null;
+        return applyQualityScanAttachmentToRecord(record);
     };
 
     const setQualityFormFieldValue = (fieldName, nextValue) => {
@@ -18226,6 +18755,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         qualityForm.reset();
         editingRecordId = mode === "edit" ? record?.__id || null : null;
+        setQualityEditReadonly(mode === "edit");
+        qualityScanAttachment = null;
+        qualityBaseScanAttachments = peoExtractAttachments(mode === "edit" ? record : null);
+        qualityScanUploadPrompted = false;
+        qualityScanUploadDismissed = false;
 
         if (qualityModalTitle instanceof HTMLElement) {
             qualityModalTitle.textContent = mode === "edit" ? "Edit Quality Record" : "Add Quality Record";
@@ -18249,6 +18783,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             renderQualityRouteFiles(mode === "edit" ? record : null);
  	        syncQualityRouteControls();
+            maybePromptQualityRouteFileUpload({ autoPrompt: false });
 
 	        qualityModal.hidden = false;
 	        syncModalState();
@@ -18262,6 +18797,11 @@ document.addEventListener("DOMContentLoaded", () => {
  	        if (!(qualityModal instanceof HTMLElement)) return;
  	        qualityModal.hidden = true;
  	        editingRecordId = null;
+            setQualityEditReadonly(false);
+            qualityScanAttachment = null;
+            qualityBaseScanAttachments = [];
+            qualityScanUploadPrompted = false;
+            qualityScanUploadDismissed = false;
  	        if (qualityRouteDivisionSelect instanceof HTMLSelectElement) {
  	            qualityRouteDivisionSelect.value = "";
  	        }
@@ -18274,6 +18814,20 @@ document.addEventListener("DOMContentLoaded", () => {
  	        syncQualityRouteControls();
  	        syncModalState();
  	    };
+
+        if (qualityRouteFileInput instanceof HTMLInputElement) {
+            qualityRouteFileInput.addEventListener("change", async () => {
+                qualityScanAttachment = null;
+                const result = await ensureQualityScanAttachmentFromRouteFile();
+                if (!result.ok) {
+                    qualityRouteFileInput.value = "";
+                    showPeoGeneralToast(String(result.error || "Unable to read the attached file. Please try again."), {
+                        title: "Quality Division",
+                        variant: "danger",
+                    });
+                }
+            });
+        }
 
     if (openModalButton instanceof HTMLElement) {
         openModalButton.addEventListener("click", () => {
@@ -18325,37 +18879,27 @@ document.addEventListener("DOMContentLoaded", () => {
 	                return;
 	            }
 
-	            const existingAdminRecordId = String(
-	                sourceRecord.__admin_source_id || sourceRecord.__admin_submission_id || ""
-	            ).trim();
-                let uploadedFile = null;
-                const selectedFile = qualityRouteFileInput instanceof HTMLInputElement
-                    ? (qualityRouteFileInput.files && qualityRouteFileInput.files[0])
-                    : null;
-                if (selectedFile instanceof File && selectedFile.size > 0) {
-                    try {
-                        const dataUrl = await peoReadFileAsDataUrl(selectedFile);
-                        uploadedFile = peoBuildAttachment({
-                            dataUrl,
-                            fileName: selectedFile.name,
-                            mimeType: selectedFile.type || "",
-                            addedBy: "Quality Division",
-                        });
-                    } catch (error) {
-                        showPeoGeneralToast("Unable to read the attached file. Please try again.", {
-                            title: "Quality Division",
-                            variant: "danger",
-                        });
-                        return;
-                    }
+                const scanResult = await ensureQualityScanAttachmentFromRouteFile();
+                if (!scanResult.ok) {
+                    showPeoGeneralToast(String(scanResult.error || "Unable to read the attached file. Please try again."), {
+                        title: "Quality Division",
+                        variant: "danger",
+                    });
+                    return;
                 }
+
+                const sourceRecordWithScan = applyQualityScanAttachmentToRecord(sourceRecord);
+
+	            const existingAdminRecordId = String(
+	                sourceRecordWithScan.__admin_source_id || sourceRecordWithScan.__admin_submission_id || ""
+	            ).trim();
 
 	            const result = router.submitToDivision({
 	                sourceDivisionKey: "quality",
-	                sourceRecord,
+	                sourceRecord: sourceRecordWithScan,
 	                targetDivisionKey: targetKey,
 	                existingAdminRecordId,
-                    uploadedFile,
+                    uploadedFile: qualityScanAttachment,
 	            });
 
 	            if (!result?.ok) {
@@ -18406,10 +18950,30 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (qualityForm instanceof HTMLFormElement) {
-        qualityForm.addEventListener("submit", (event) => {
+        qualityForm.addEventListener("change", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (
+                target.matches("[name='particulars'], [name='route'], [name='status']")
+                || target.closest("[name='particulars'], [name='route'], [name='status']")
+            ) {
+                maybePromptQualityRouteFileUpload({ autoPrompt: true });
+            }
+        });
+
+        qualityForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             if (!qualityForm.checkValidity()) {
                 qualityForm.reportValidity();
+                return;
+            }
+
+            const scanResult = await ensureQualityScanAttachmentFromRouteFile();
+            if (!scanResult.ok) {
+                showPeoGeneralToast(String(scanResult.error || "Unable to read the attached file. Please try again."), {
+                    title: "Quality Division",
+                    variant: "danger",
+                });
                 return;
             }
 
@@ -18420,10 +18984,15 @@ document.addEventListener("DOMContentLoaded", () => {
             if (editingRecordId) {
                 const targetIndex = records.findIndex((record) => record.__id === editingRecordId);
                 if (targetIndex >= 0) {
-                    records[targetIndex] = { ...records[targetIndex], ...formRecord, __id: editingRecordId };
+                    const mergedRecord = applyQualityScanAttachmentToRecord({
+                        ...records[targetIndex],
+                        ...formRecord,
+                        __id: editingRecordId,
+                    });
+                    records[targetIndex] = mergedRecord;
                 }
             } else {
-                records.unshift(formRecord);
+                records.unshift(applyQualityScanAttachmentToRecord(formRecord));
             }
 
             records = dedupeQualityRecords(records);

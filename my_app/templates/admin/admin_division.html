@@ -215,69 +215,10 @@
                 </article>
             </div>
 
-            <div class="admin-division-status-grid">
-                <article class="admin-division-status-card admin-division-float-card is-draft">
-                    <div class="admin-division-status-card__head">
-                        <span class="material-symbols-outlined admin-division-status-card__icon" aria-hidden="true">draft</span>
-                        <span class="admin-division-status-card__label">Draft</span>
-                    </div>
-                    <strong data-billing-status-card="draft">0</strong>
-                    <small>Billing records still being prepared</small>
-                </article>
-                <article class="admin-division-status-card admin-division-float-card is-for_review">
-                    <div class="admin-division-status-card__head">
-                        <span class="material-symbols-outlined admin-division-status-card__icon" aria-hidden="true">fact_check</span>
-                        <span class="admin-division-status-card__label">For Review</span>
-                    </div>
-                    <strong data-billing-status-card="for_review">0</strong>
-                    <small>Waiting for checking and review</small>
-                </article>
-                <article class="admin-division-status-card admin-division-float-card is-routed">
-                    <div class="admin-division-status-card__head">
-                        <span class="material-symbols-outlined admin-division-status-card__icon" aria-hidden="true">route</span>
-                        <span class="admin-division-status-card__label">Routed</span>
-                    </div>
-                    <strong data-billing-status-card="routed">0</strong>
-                    <small>Forwarded to the next handling desk</small>
-                </article>
-                <article class="admin-division-status-card admin-division-float-card is-processing">
-                    <div class="admin-division-status-card__head">
-                        <span class="material-symbols-outlined admin-division-status-card__icon" aria-hidden="true">sync</span>
-                        <span class="admin-division-status-card__label">Processing</span>
-                    </div>
-                    <strong data-billing-status-card="processing">0</strong>
-                    <small>Under active billing workflow</small>
-                </article>
-                <article class="admin-division-status-card admin-division-float-card is-approved">
-                    <div class="admin-division-status-card__head">
-                        <span class="material-symbols-outlined admin-division-status-card__icon" aria-hidden="true">verified</span>
-                        <span class="admin-division-status-card__label">Approved</span>
-                    </div>
-                    <strong data-billing-status-card="approved">0</strong>
-                    <small>Approved and ready for release</small>
-                </article>
-                <article class="admin-division-status-card admin-division-float-card is-open">
-                    <div class="admin-division-status-card__head">
-                        <span class="material-symbols-outlined admin-division-status-card__icon" aria-hidden="true">folder_open</span>
-                        <span class="admin-division-status-card__label">Open</span>
-                    </div>
-                    <strong data-billing-status-card="open">0</strong>
-                    <small>Still active and unresolved</small>
-                </article>
-                <article class="admin-division-status-card admin-division-float-card is-closed">
-                    <div class="admin-division-status-card__head">
-                        <span class="material-symbols-outlined admin-division-status-card__icon" aria-hidden="true">task_alt</span>
-                        <span class="admin-division-status-card__label">Closed</span>
-                    </div>
-                    <strong data-billing-status-card="closed">0</strong>
-                    <small>Completed billing transactions</small>
-                </article>
-            </div>
-
-            <div class="pa-table-head admin-division-toolbar">
-                <div class="admin-division-toolbar__filters">
-                    <input type="text" class="pa-doc-search" data-admin-billing-search placeholder="Search billing records...">
-                    <select class="pa-select" data-admin-billing-status-filter>
+	            <div class="pa-table-head admin-division-toolbar">
+	                <div class="admin-division-toolbar__filters">
+	                    <input type="text" class="pa-doc-search" data-admin-billing-search placeholder="Search billing records...">
+	                    <select class="pa-select" data-admin-billing-status-filter>
                         <option value="all" selected>All Statuses</option>
                         <option value="draft">Draft</option>
                         <option value="for_review">For Review</option>
@@ -312,24 +253,25 @@
                                 <th>Ref #</th>
                                 <th>Proj Name</th>
                                 <th>Contractor</th>
-                                <th>Billing Type</th>
-                                <th>Percentage</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                                <th>Date Received</th>
-                                <th>Received By</th>
-                                <th>History</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pa-billing-tbody">
-                            <tr class="pa-empty-billing admin-division-empty-state">
-                                <td colspan="12">No billing records found.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+	                                <th>Billing Type</th>
+	                                <th>Percentage</th>
+	                                <th>Contract Amount</th>
+	                                <th>Revised Contract Amount</th>
+	                                <th>Status</th>
+	                                <th>Date Received</th>
+	                                <th>Received From</th>
+	                                <th>History</th>
+	                                <th>Actions</th>
+	                            </tr>
+	                        </thead>
+	                        <tbody id="pa-billing-tbody">
+	                            <tr class="pa-empty-billing admin-division-empty-state">
+	                                <td colspan="13">No billing records found.</td>
+	                            </tr>
+	                        </tbody>
+	                    </table>
+	                </div>
+	            </div>
         </section>
     </div>
 </section>

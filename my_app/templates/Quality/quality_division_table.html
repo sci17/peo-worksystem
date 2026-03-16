@@ -158,7 +158,11 @@
             <button type="button" class="quality-modal-close js-quality-close-modal" aria-label="Close quality form">x</button>
         </div>
 
-        <form class="quality-form js-quality-form">
+        <form
+            class="quality-form js-quality-form"
+            data-quality-upload-particulars="Test Result,Quality Control Program,Quality Control Assurance,Certificate of No Testing,Affidavit (Inspectorate),Accomplishment Report (Signed),Travel Order,Order of Payment,Certification,Punch List,Pouring Permit,Others"
+            data-quality-upload-outgoing-statuses="For Action,In Progress,For Release"
+        >
             <div class="quality-form-grid">
                 <label class="quality-form-field">
                     <span>Received From</span>
@@ -310,24 +314,6 @@
                 </label>
             </div>
 
-            <fieldset class="quality-form-fieldset">
-                <legend>Initial Status</legend>
-                <div class="quality-choice-grid">
-                    <label class="quality-choice-option">
-                        <input type="radio" name="initial_status" value="For Filing" checked required>
-                        <span>For Filing</span>
-                    </label>
-                    <label class="quality-choice-option">
-                        <input type="radio" name="initial_status" value="For Action">
-                        <span>For Action</span>
-                    </label>
-                    <label class="quality-choice-option">
-                        <input type="radio" name="initial_status" value="For Records Only">
-                        <span>For Records Only</span>
-                    </label>
-                </div>
-            </fieldset>
-
             <div class="quality-form-grid">
                 <label class="quality-form-field">
                     <span>Owner/Representative</span>
@@ -364,7 +350,6 @@
  	
 	            <div class="quality-form-actions">
 	                <button type="button" class="quality-form-cancel js-quality-close-modal">Cancel</button>
-	                <button type="button" class="quality-form-delete js-quality-delete-record" hidden>Delete</button>
 	                <button type="button" class="quality-form-submit js-quality-route-submit" disabled>Submit</button>
 	                <button type="submit" class="quality-form-submit">Save Record</button>
 	            </div>

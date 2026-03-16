@@ -118,25 +118,26 @@
                         <tr>
                             <th>Slip No.</th>
                             <th>Document Name</th>
-                            <th>Location</th>
-                            <th>Contractor</th>
-                            <th>Amount</th>
-                            <th>Received From</th>
-                            <th>Date Received</th>
-                            <th>Status</th>
-                            <th>Budget Allocation</th>
+	                            <th>Location</th>
+	                            <th>Contractor</th>
+	                            <th>Contract Amount</th>
+	                            <th>Revised Contract Amount</th>
+	                            <th>Received From</th>
+	                            <th>Date Received</th>
+	                            <th>Status</th>
+	                            <th>Budget Allocation</th>
                             <th>Remarks</th>
                             <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody id="planning-documents-tbody">
-                        <tr class="planning-doc-empty-row">
-                            <td colspan="11">No planning documents available yet.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+	                    <tbody id="planning-documents-tbody">
+	                        <tr class="planning-doc-empty-row">
+	                            <td colspan="12">No planning documents available yet.</td>
+	                        </tr>
+	                    </tbody>
+	                </table>
+	            </div>
+	        </div>
 
         <div class="planning-modal-overlay js-planning-doc-modal" hidden>
             <div class="planning-modal planning-modal--doc-register" role="dialog" aria-modal="true" aria-labelledby="planning-doc-edit-title">
@@ -172,10 +173,10 @@
                             <input type="text" name="contractor" class="planning-form-input">
                         </label>
 
-                        <label class="planning-form-field planning-doc-edit-field--full">
-                            <span>Amount</span>
-                            <input type="text" name="amount" class="planning-form-input" placeholder="e.g., PHP 2,500,000.00">
-                        </label>
+	                        <label class="planning-form-field planning-doc-edit-field--full">
+	                            <span>Revised Contract Amount</span>
+	                            <input type="text" name="amount" class="planning-form-input" placeholder="e.g., PHP 2,500,000.00">
+	                        </label>
 
                         <label class="planning-form-field">
                             <span>Received From</span>
@@ -204,10 +205,10 @@
                             </select>
                         </label>
 
-                        <label class="planning-form-field planning-doc-edit-field--full js-planning-doc-budget-other-wrap" hidden>
-                            <span>Specify Other Budget Allocation</span>
-                            <input type="text" name="budget_allocation_other" class="planning-form-input js-planning-doc-budget-other" placeholder="Enter budget allocation">
-                        </label>
+	                        <label class="planning-form-field planning-doc-edit-field--full js-planning-doc-budget-other-wrap" hidden>
+	                            <span>Specify Other Budget Allocation</span>
+	                            <textarea name="budget_allocation_other" class="planning-form-input planning-form-textarea js-planning-doc-budget-other" rows="2" placeholder="Enter budget allocation"></textarea>
+	                        </label>
 
 	                        <label class="planning-form-field planning-doc-edit-field--full">
 	                            <span>Remarks</span>
@@ -289,23 +290,23 @@
                             <th>Budget No.</th>
                             <th>Slip No.</th>
                             <th>Project Name</th>
-                            <th>Location</th>
-                            <th>Contractor</th>
-                            <th>Amount</th>
-                            <th>Date Received</th>
-                            <th>Status</th>
-                            <th>Remarks</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="js-planning-budget-detail-tbody">
-                        <tr class="planning-budget-detail-empty-row">
-                            <td colspan="10">No documents registered under this budget allocation.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
+	                            <th>Location</th>
+	                            <th>Contractor</th>
+	                            <th>Contract Amount</th>
+	                            <th>Revised Contract Amount</th>
+	                            <th>Date Received</th>
+	                            <th>Status</th>
+	                            <th>Remarks</th>
+	                        </tr>
+	                    </thead>
+		                    <tbody class="js-planning-budget-detail-tbody">
+		                        <tr class="planning-budget-detail-empty-row">
+		                            <td colspan="10">No documents registered under this budget allocation.</td>
+		                        </tr>
+		                    </tbody>
+		                </table>
+		            </div>
+		        </section>
     </section>
 
     <section class="planning-panel" data-planning-panel="ppa" hidden>
@@ -320,64 +321,32 @@
             </button>
         </div>
 
-        <div class="planning-ppa-status-grid">
-            <article class="planning-ppa-status-card planning-ppa-float-card is-total">
-                <div class="planning-ppa-status-card-head">
-                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">analytics</span>
-                    <span class="planning-ppa-status-label">Total PPA</span>
-                </div>
-                <strong data-planning-ppa-summary="total">0</strong>
-                <small>All tracked programs and projects</small>
-            </article>
-            <article class="planning-ppa-status-card planning-ppa-float-card is-draft">
-                <div class="planning-ppa-status-card-head">
-                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">draft</span>
-                    <span class="planning-ppa-status-label">Draft</span>
-                </div>
-                <strong data-planning-ppa-summary="draft">0</strong>
-                <small>Still being prepared for routing</small>
-            </article>
-            <article class="planning-ppa-status-card planning-ppa-float-card is-review">
-                <div class="planning-ppa-status-card-head">
-                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
-                    <span class="planning-ppa-status-label">For Review</span>
-                </div>
-                <strong data-planning-ppa-summary="review">0</strong>
-                <small>Awaiting technical and budget review</small>
-            </article>
-            <article class="planning-ppa-status-card planning-ppa-float-card is-approved">
-                <div class="planning-ppa-status-card-head">
-                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">verified</span>
-                    <span class="planning-ppa-status-label">Approved</span>
-                </div>
-                <strong data-planning-ppa-summary="approved">0</strong>
-                <small>Cleared for implementation planning</small>
-            </article>
-            <article class="planning-ppa-status-card planning-ppa-float-card is-bidding">
-                <div class="planning-ppa-status-card-head">
-                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">gavel</span>
-                    <span class="planning-ppa-status-label">For Bidding</span>
-                </div>
-                <strong data-planning-ppa-summary="bidding">0</strong>
-                <small>Ready to enter the procurement stage</small>
-            </article>
-            <article class="planning-ppa-status-card planning-ppa-float-card is-awarded">
-                <div class="planning-ppa-status-card-head">
-                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">emoji_events</span>
-                    <span class="planning-ppa-status-label">Awarded</span>
-                </div>
-                <strong data-planning-ppa-summary="awarded">0</strong>
-                <small>Already assigned to a winning bidder</small>
-            </article>
-            <article class="planning-ppa-status-card planning-ppa-float-card is-cancelled">
-                <div class="planning-ppa-status-card-head">
-                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">block</span>
-                    <span class="planning-ppa-status-label">Cancelled</span>
-                </div>
-                <strong data-planning-ppa-summary="cancelled">0</strong>
-                <small>Removed from the active program pipeline</small>
-            </article>
-        </div>
+	        <div class="planning-ppa-status-grid">
+	            <article class="planning-ppa-status-card planning-ppa-float-card is-total">
+	                <div class="planning-ppa-status-card-head">
+	                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">analytics</span>
+	                    <span class="planning-ppa-status-label">Total PPA</span>
+	                </div>
+	                <strong data-planning-ppa-summary="total">0</strong>
+	                <small>All tracked programs and projects</small>
+	            </article>
+	            <article class="planning-ppa-status-card planning-ppa-float-card is-approved">
+	                <div class="planning-ppa-status-card-head">
+	                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">verified</span>
+	                    <span class="planning-ppa-status-label">Approved</span>
+	                </div>
+	                <strong data-planning-ppa-summary="approved">0</strong>
+	                <small>Cleared for implementation planning</small>
+	            </article>
+	            <article class="planning-ppa-status-card planning-ppa-float-card is-cancelled">
+	                <div class="planning-ppa-status-card-head">
+	                    <span class="planning-ppa-status-icon material-symbols-outlined" aria-hidden="true">block</span>
+	                    <span class="planning-ppa-status-label">Cancelled</span>
+	                </div>
+	                <strong data-planning-ppa-summary="cancelled">0</strong>
+	                <small>Removed from the active program pipeline</small>
+	            </article>
+	        </div>
 
         <div class="planning-ppa-shell">
             <div class="planning-ppa-shell-head">

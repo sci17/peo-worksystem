@@ -18,70 +18,6 @@
     </div>
 </section>
 
-<section class="road-filter-panel js-construction-admin-assigned" aria-label="Admin assigned construction projects" hidden>
-    <div class="road-table-wrap construction-table-wrap">
-        <div class="road-table-head">
-            <h3>Admin Assigned Projects</h3>
-            <span class="js-construction-admin-meta">0 projects</span>
-        </div>
-        <table class="road-table construction-table">
-            <colgroup>
-                <col style="width:44px;">
-                <col style="width:52px;">
-                <col style="width:300px;">
-                <col style="width:150px;">
-                <col style="width:80px;">
-                <col style="width:180px;">
-                <col style="width:140px;">
-                <col style="width:110px;">
-                <col style="width:75px;">
-                <col style="width:130px;">
-                <col style="width:90px;">
-                <col style="width:130px;">
-                <col style="width:120px;">
-                <col style="width:160px;">
-                <col style="width:92px;">
-                <col style="width:92px;">
-                <col style="width:120px;">
-                <col style="width:110px;">
-                <col style="width:280px;">
-            </colgroup>
-            <thead>
-                <tr>
-                    <th rowspan="2" class="pa-select-col"></th>
-                    <th rowspan="2">#</th>
-                    <th rowspan="2">Project Name</th>
-                    <th rowspan="2">Location</th>
-                    <th rowspan="2">MUN</th>
-                    <th rowspan="2">Contractor</th>
-                    <th rowspan="2">Contract Cost</th>
-                    <th rowspan="2">NTP Date</th>
-                    <th rowspan="2">C.D</th>
-                    <th colspan="3">Contract Period</th>
-                    <th rowspan="2">Date Completed</th>
-                    <th rowspan="2">Revised Contract Cost</th>
-                    <th colspan="2">Status (%) DECEMBER 2025</th>
-                    <th rowspan="2">% of Time Elapsed</th>
-                    <th rowspan="2">Slippage (+) (-) %</th>
-                    <th rowspan="2">Remarks</th>
-                </tr>
-                <tr>
-                    <th>Original Expiry Date</th>
-                    <th>Add'l. C.D</th>
-                    <th>Revised Expiry Date</th>
-                    <th>Previous</th>
-                    <th>Current</th>
-                </tr>
-            </thead>
-            <tbody class="js-construction-admin-table-body">
-                <tr class="construction-empty-row">
-                    <td colspan="19">No admin-assigned projects yet.</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
-
 <div class="construction-modal js-construction-modal" hidden>
     <div class="construction-modal-backdrop js-close-construction-modal"></div>
     <div class="construction-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="construction-modal-title">
@@ -262,13 +198,13 @@
 </div>
 
 <section class="road-filter-panel js-construction-dashboard" aria-label="Construction project register" data-current-user="{{ dashboard_user_name|default:request.user.username }}" data-project-dashboard-url="{% url 'construction_project_dashboard' %}" data-photo-upload-url="{% url 'construction_photo_upload' %}">
-    <div class="schedule-toolbar-row">
-        <h2 style="margin:0; font-size:1.2rem; color:#112e4d;">Physical Accomplishment Status Report</h2>
-        <div class="schedule-toolbar-actions">
-            <button type="button" class="equipment-add-btn js-construction-add-record">
-                <span aria-hidden="true">+</span>
-                <span>Add Record</span>
-            </button>
+	    <div class="schedule-toolbar-row">
+	        <div></div>
+	        <div class="schedule-toolbar-actions">
+	            <button type="button" class="equipment-add-btn js-construction-add-record">
+	                <span aria-hidden="true">+</span>
+	                <span>Add Record</span>
+	            </button>
             <input id="construction-upload-input" class="road-upload-input" type="file" accept=".xlsx,.xls,.csv" multiple>
             <label for="construction-upload-input" class="road-upload-btn">Upload Excel</label>
             <button type="button" class="pa-bulk-delete js-construction-delete-selected" disabled>Delete Selected</button>
@@ -318,7 +254,7 @@
                     <th colspan="3">Contract Period</th>
                     <th rowspan="2">Date Completed</th>
                     <th rowspan="2">Revised Contract Cost</th>
-                    <th colspan="2">Status (%) DECEMBER 2025</th>
+                     <th colspan="2">Status (%)</th>
                     <th rowspan="2">% of Time Elapsed</th>
                     <th rowspan="2">Slippage (+) (-) %</th>
                     <th rowspan="2">Remarks</th>
