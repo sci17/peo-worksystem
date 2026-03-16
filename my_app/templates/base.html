@@ -13,9 +13,49 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
+    <div id="systemLoader" role="status" aria-live="polite" aria-label="Loading PEO Portal">
+        <div class="loader-box">
+            <div class="gears">
+                <svg class="gear gear1" viewBox="0 0 100 100" aria-hidden="true">
+                    <g fill="none" stroke="#0e3360" stroke-width="6">
+                        <circle cx="50" cy="50" r="20" />
+                        <path d="M50 5 L60 5 L63 15 L75 20 L83 13 L92 25 L85 32 L90 45 L100 50 L90 55 L85 68 L92 75 L83 87 L75 80 L63 85 L60 95 L50 95 L40 95 L37 85 L25 80 L17 87 L8 75 L15 68 L10 55 L0 50 L10 45 L15 32 L8 25 L17 13 L25 20 L37 15 L40 5 Z" />
+                    </g>
+                </svg>
+                <svg class="gear gear2" viewBox="0 0 100 100" aria-hidden="true">
+                    <g fill="none" stroke="#0e3360" stroke-width="6">
+                        <circle cx="50" cy="50" r="20" />
+                        <path d="M50 5 L60 5 L63 15 L75 20 L83 13 L92 25 L85 32 L90 45 L100 50 L90 55 L85 68 L92 75 L83 87 L75 80 L63 85 L60 95 L50 95 L40 95 L37 85 L25 80 L17 87 L8 75 L15 68 L10 55 L0 50 L10 45 L15 32 L8 25 L17 13 L25 20 L37 15 L40 5 Z" />
+                    </g>
+                </svg>
+            </div>
+            <h2>PEO Portal</h2>
+            <p>Initializing workflow system...</p>
+            <div class="progress-bar">
+                <div class="progress"></div>
+            </div>
+        </div>
+    </div>
     {% block content %}{% endblock %}
 
     <script src="{% static 'script.js' %}"></script>
     {% block extra_scripts %}{% endblock %}
+    <script>
+        window.addEventListener("load", function () {
+            const loader = document.getElementById("systemLoader");
+            if (!loader) return;
+
+            setTimeout(function () {
+                loader.classList.add("is-hidden");
+                loader.addEventListener(
+                    "transitionend",
+                    function () {
+                        loader.style.display = "none";
+                    },
+                    { once: true }
+                );
+            }, 900);
+        });
+    </script>
 </body>
 </html>

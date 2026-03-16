@@ -9874,8 +9874,11 @@ body.construction-modal-open {
 .contractor-float-contract-list {
     display: grid;
     gap: 10px;
+    max-height: 440px; /* Fallback for browsers that don't support min(). */
     max-height: min(52vh, 440px);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     padding-right: 2px;
 }
 
@@ -19635,4 +19638,121 @@ body.quality-scan-open {
 }
 
 /* TRACKING_DETAILS_MODAL_STYLES_END */
+
+/* GLOBAL LOADER OVERLAY */
+#systemLoader {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(6, 18, 40, 0.45);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 9999;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.45s ease, visibility 0.45s ease;
+}
+
+#systemLoader.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.loader-box {
+    text-align: center;
+    padding: 32px 28px;
+    max-width: 320px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 20px 40px rgba(14, 51, 96, 0.35);
+}
+
+.loader-box h2 {
+    margin: 18px 0 6px;
+    color: #0e3360;
+    font-size: 1.9rem;
+    letter-spacing: 0.02em;
+}
+
+.loader-box p {
+    margin: 0;
+    color: #4c6485;
+    font-size: 0.95rem;
+}
+
+.gears {
+    position: relative;
+    width: 162px;
+    height: 118px;
+    margin: auto;
+}
+
+.gear {
+    position: absolute;
+    width: 82px;
+    height: 82px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.gear1 {
+    left: 2px;
+    top: 0;
+    animation: spin 2.2s linear infinite;
+}
+
+.gear2 {
+    right: 0;
+    bottom: 0;
+    animation: spinReverse 2.2s linear infinite;
+}
+
+.progress-bar {
+    width: 280px;
+    height: 6px;
+    margin: 22px auto 0;
+    border-radius: 999px;
+    background: #dfe7f2;
+    overflow: hidden;
+}
+
+.progress {
+    width: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #3c86dc, #2951a5);
+    animation: loading 3.4s ease-in-out infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes spinReverse {
+    from {
+        transform: rotate(360deg);
+    }
+    to {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes loading {
+    0% {
+        width: 0;
+    }
+    50% {
+        width: 70%;
+    }
+    100% {
+        width: 100%;
+    }
+}
 

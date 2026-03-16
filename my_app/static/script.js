@@ -59,14 +59,15 @@
 
     function setPosition(el, position) {
         // Reset position
-        el.style.top = '';
-        el.style.right = '';
-        el.style.bottom = '';
-        el.style.left = '';
+        // Use "auto" to override the base CSS (which defaults to bottom/right).
+        el.style.top = 'auto';
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+        el.style.left = 'auto';
         el.style.transform = '';
         const pos = String(position || 'bottom-right').toLowerCase();
-        if (pos === 'top-right') { el.style.top = '22px'; el.style.right = '22px'; }
-        else if (pos === 'top-left') { el.style.top = '22px'; el.style.left = '22px'; }
+        if (pos === 'top-right') { el.style.top = '12px'; el.style.right = '22px'; }
+        else if (pos === 'top-left') { el.style.top = '12px'; el.style.left = '22px'; }
         else if (pos === 'bottom-left') { el.style.bottom = '22px'; el.style.left = '22px'; }
         else if (pos === 'center') { el.style.top = '50%'; el.style.left = '50%'; el.style.transform = 'translate(-50%, -50%)'; }
         else { /* bottom-right default */ el.style.right = '22px'; el.style.bottom = '22px'; }
@@ -176,6 +177,199 @@
     } else {
         bindDataAttributes();
     }
+})();
+
+// Incoming document toast notifier (per-division).
+// Uses Admin store routing metadata (__tracking_events / __submitted_at) to notify when a record is routed
+// to the current division again (e.g., Maintenance -> Admin) without spamming older items.
+(function () {
+    const STORAGE_PREFIX = "peo_incoming_doc_toast_state_v1:";
+    const MAX_TRACKED = 500;
+
+    const safeParseJson = (raw, fallback) => {
+        try {
+            return raw ? JSON.parse(raw) : fallback;
+        } catch (error) {
+            return fallback;
+        }
+    };
+
+    const safeStorageGet = (key) => {
+        try {
+            return window.localStorage.getItem(key);
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const safeStorageSet = (key, value) => {
+        try {
+            window.localStorage.setItem(key, value);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const normalizeKey = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    const resolveDivisionKey = (value) => {
+        const raw = String(value || "").trim();
+        const router = window.peoProjectRouter;
+        if (router && typeof router.resolveDivisionKey === "function") {
+            return router.resolveDivisionKey(raw);
+        }
+        return normalizeKey(raw);
+    };
+
+    const labelForDivisionKey = (key) => {
+        const router = window.peoProjectRouter;
+        if (router && typeof router.labelForDivisionKey === "function") {
+            const label = router.labelForDivisionKey(String(key || "").trim());
+            if (label) return label;
+        }
+        const fallback = {
+            admin: "Admin Division",
+            planning: "Planning Division",
+            construction: "Construction Division",
+            quality: "Quality Division",
+            maintenance: "Maintenance Division",
+        };
+        return fallback[String(key || "")] || "";
+    };
+
+    const getLatestRouteEventToDivision = (record, divisionKey) => {
+        const targetKey = resolveDivisionKey(divisionKey);
+        const events = Array.isArray(record?.__tracking_events) ? record.__tracking_events : [];
+        for (let i = events.length - 1; i >= 0; i--) {
+            const ev = events[i];
+            if (!ev || typeof ev !== "object") continue;
+            const toKey = resolveDivisionKey(ev.to || "");
+            if (toKey && toKey === targetKey) {
+                return ev;
+            }
+        }
+        return null;
+    };
+
+    const toEpochMs = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return 0;
+        const ms = Date.parse(text);
+        return Number.isFinite(ms) ? ms : 0;
+    };
+
+    const buildIncomingAdminRows = (divisionKey, adminRecords) => {
+        const targetKey = resolveDivisionKey(divisionKey);
+        return (Array.isArray(adminRecords) ? adminRecords : [])
+            .filter((record) => record && typeof record === "object")
+            .filter((record) => resolveDivisionKey(record.division) === targetKey)
+            .filter((record) => {
+                // Admin division "inbox" notifications should be for routed-in submissions,
+                // not for records originally created by Admin without a sender/history.
+                if (targetKey !== "admin") return true;
+                const hasSender = String(record.__submitted_from_division || "").trim().length > 0;
+                const hasEvents = Array.isArray(record.__tracking_events) && record.__tracking_events.length > 0;
+                return hasSender || hasEvents;
+            })
+            .map((record) => {
+                const id = String(record.__record_id || record.__id || "").trim();
+                const ev = getLatestRouteEventToDivision(record, targetKey);
+                const receivedAtCandidate = String(ev?.at || record.__submitted_at || record.date_received_admin || record.date_received_peo || record.date_received || "").trim();
+                const receivedMs = toEpochMs(receivedAtCandidate) || Date.now();
+
+                const senderCandidate = String(ev?.by || ev?.from || record.__submitted_from_division || "").trim();
+                const senderKey = resolveDivisionKey(senderCandidate) || resolveDivisionKey(record.__submitted_from_division);
+                const senderLabel = labelForDivisionKey(senderKey) || senderCandidate || "Another division";
+
+                const name = String(record.document_name || record.project_name || record.title || "Untitled Document").trim() || "Untitled Document";
+                const slip = String(record.slip_no || record.doc_no || record.slipNo || "").trim();
+
+                return { id, receivedMs, senderLabel, name, slip };
+            })
+            .filter((row) => row.id)
+            .sort((a, b) => b.receivedMs - a.receivedMs);
+    };
+
+    const getStateKey = (divisionKey) => `${STORAGE_PREFIX}${resolveDivisionKey(divisionKey)}`;
+
+    const readState = (divisionKey) => {
+        const raw = safeStorageGet(getStateKey(divisionKey));
+        const parsed = safeParseJson(raw, null);
+        if (!parsed || typeof parsed !== "object") return null;
+        const seen = parsed.seen && typeof parsed.seen === "object" ? parsed.seen : {};
+        return { v: 1, seen };
+    };
+
+    const writeState = (divisionKey, state) => {
+        const payload = state && typeof state === "object" ? state : { v: 1, seen: {} };
+        safeStorageSet(getStateKey(divisionKey), JSON.stringify(payload));
+    };
+
+    const showToast = (message, options) => {
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast(message, options || {});
+            return;
+        }
+        if (window.PEOToast && typeof window.PEOToast.show === "function") {
+            window.PEOToast.show({
+                message: String(message || ""),
+                title: String(options?.title || ""),
+                variant: String(options?.variant || "info"),
+                duration: typeof options?.duration === "number" ? options.duration : 3200,
+                persist: !!options?.persist,
+                position: options?.position,
+                style: options?.style,
+            });
+        }
+    };
+
+    const check = (divisionKey, adminRecords) => {
+        const key = resolveDivisionKey(divisionKey);
+        if (!key) return { ok: false, reason: "missing_division" };
+
+        const incoming = buildIncomingAdminRows(key, adminRecords);
+        const existing = readState(key);
+
+        if (!existing) {
+            // First run for this division on this device: mark current inbox as seen to avoid spam.
+            const seed = incoming.reduce((acc, row) => {
+                acc[row.id] = row.receivedMs;
+                return acc;
+            }, {});
+            writeState(key, { v: 1, seen: seed });
+            return { ok: true, initialized: true, newCount: 0 };
+        }
+
+        const seen = existing.seen || {};
+        const newRows = incoming.filter((row) => {
+            const prev = Number(seen[row.id] || 0);
+            return !prev || row.receivedMs > prev;
+        });
+
+        // Update seen state for all current inbox rows (bounded).
+        const nextSeen = { ...seen };
+        incoming.slice(0, MAX_TRACKED).forEach((row) => {
+            nextSeen[row.id] = row.receivedMs;
+        });
+        writeState(key, { v: 1, seen: nextSeen });
+
+        if (!newRows.length) {
+            return { ok: true, initialized: false, newCount: 0 };
+        }
+
+        const divisionLabel = labelForDivisionKey(key) || "Division";
+        const latest = newRows[0];
+        const title = "New Document Received";
+        const message = newRows.length === 1
+            ? `New document received in ${divisionLabel} from ${latest.senderLabel}: ${latest.name}${latest.slip ? ` (Slip ${latest.slip})` : ""}`
+            : `${newRows.length} new documents received in ${divisionLabel}. Latest from ${latest.senderLabel}: ${latest.name}`;
+
+        showToast(message, { title, variant: "info" });
+        return { ok: true, initialized: false, newCount: newRows.length };
+    };
+
+    window.peoIncomingDocToast = { check };
 })();
 
 function togglePassword() {
@@ -810,7 +1004,12 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         const nowIso = new Date().toISOString();
         if (sourceKey) {
             const hasSubmittedFrom = String(updated.__submitted_from_division || "").trim();
-            if (sourceKey !== "admin" || !hasSubmittedFrom) {
+            const isRouteChange = prevTargetKey !== targetKey;
+            // Always stamp the "sender" division on real routing actions so the Submitted Projects table
+            // can show who sent the record (including Admin routing the same record multiple times).
+            // Also stamp when the sender differs from the destination (e.g., Maintenance sending back to Admin
+            // even if the admin record is already currently marked as "Admin").
+            if (isRouteChange || !hasSubmittedFrom || sourceKey !== targetKey) {
                 updated.__submitted_from_division = sourceKey;
                 updated.__submitted_from_source_id = pickFirst(sourceRecord?.__id, sourceRecord?.id, sourceRecord?.adminRecordId);
                 updated.__submitted_at = nowIso;
@@ -863,11 +1062,14 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         const fromLabel = labelForDivisionKey(prevTargetKey) || String(current.division || "").trim();
         const toLabel = labelForDivisionKey(targetKey) || String(updated.division || "").trim();
         const byLabel = labelForDivisionKey(sourceKey) || String(sourceDivisionKey || "").trim();
-        if (prevTargetKey !== targetKey || !existingEvents.length) {
+        const shouldAddRouteEvent = (prevTargetKey !== targetKey)
+            || !existingEvents.length
+            || (sourceKey && sourceKey !== targetKey);
+        if (shouldAddRouteEvent) {
             existingEvents.push({
                 at: nowIso,
                 action: "Routed",
-                from: fromLabel,
+                from: labelForDivisionKey(sourceKey) || fromLabel,
                 to: toLabel,
                 by: byLabel,
                 source_division: String(sourceKey || "").trim(),
@@ -944,9 +1146,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const formatDate = (value) => {
         const text = String(value ?? "").trim();
         if (!text) return "—";
+        // Guard against mojibake where an em dash was decoded as "â€”".
+        if (text === "\u00e2\u20ac\u201d") return "—";
+
+        // Avoid showing fake times for date-only strings like "2026-03-12" (which JS treats as UTC).
+        const dateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateOnlyMatch) {
+            const year = Number(dateOnlyMatch[1]);
+            const month = Number(dateOnlyMatch[2]);
+            const day = Number(dateOnlyMatch[3]);
+            const parsed = new Date(year, Math.max(0, month - 1), day);
+            if (Number.isNaN(parsed.getTime())) return text;
+            return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+        }
+
         const parsed = new Date(text);
         if (Number.isNaN(parsed.getTime())) return text;
-        return parsed.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+        const hasTime = /T\d{2}:\d{2}/.test(text) || /\d{1,2}:\d{2}/.test(text);
+        return hasTime
+            ? parsed.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+            : parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     };
 
     const escapeHtml = (value) => {
@@ -1257,16 +1476,134 @@ document.addEventListener("DOMContentLoaded", () => {
         return raw;
     };
 
+    const readMaintenanceTaskRows = () => {
+        try {
+            const raw = window.localStorage.getItem("peo_maintenance_state_v1");
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (!parsed || typeof parsed !== "object") return [];
+            return Array.isArray(parsed.taskRows) ? parsed.taskRows : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const reconcileMaintenanceOutgoingSubmissions = (records) => {
+        // If a task was routed out from Maintenance, the Admin record must show Maintenance as the sender.
+        // This prevents "From Quality" (stale sender) when Maintenance was actually the last sender.
+        const taskRows = readMaintenanceTaskRows();
+        if (!taskRows.length) return records;
+
+        const latestTaskByAdminId = new Map();
+        taskRows.forEach((row) => {
+            if (!row || typeof row !== "object") return;
+            const id = String(row.adminRecordId || "").trim();
+            if (!id) return;
+            const updatedAt = String(row.updatedAt || row.updated_at || row.createdAt || row.created_at || "").trim();
+            if (!updatedAt) return;
+            const prev = latestTaskByAdminId.get(id);
+            if (!prev) {
+                latestTaskByAdminId.set(id, row);
+                return;
+            }
+            const prevAt = String(prev.updatedAt || prev.updated_at || prev.createdAt || prev.created_at || "").trim();
+            if (prevAt && prevAt >= updatedAt) return;
+            latestTaskByAdminId.set(id, row);
+        });
+
+        let changed = false;
+        const nextRecords = (Array.isArray(records) ? records : []).map((record) => {
+            if (!record || typeof record !== "object") return record;
+            const id = String(record.__record_id || record.__id || "").trim();
+            if (!id) return record;
+            const taskRow = latestTaskByAdminId.get(id);
+            if (!taskRow) return record;
+            const routeKey = normalizeKey(taskRow.route || "");
+            if (routeKey !== "outgoing") return record;
+
+            const updatedAt = String(taskRow.updatedAt || taskRow.updated_at || taskRow.createdAt || taskRow.created_at || "").trim();
+            if (!updatedAt) return record;
+
+            const currentDivisionKey = normalizeDivisionKeyFromAdmin(record.division);
+            if (!currentDivisionKey || currentDivisionKey === "maintenance") return record;
+
+            const existingSenderKey = normalizeDivisionKeyFromAdmin(record.__submitted_from_division);
+            const existingSubmittedAt = String(record.__submitted_at || "").trim();
+            const needsFix = existingSenderKey !== "maintenance" || (existingSubmittedAt && existingSubmittedAt < updatedAt);
+            if (!needsFix) return record;
+
+            const router = window.peoProjectRouter;
+            const fromLabel = router?.labelForDivisionKey ? (router.labelForDivisionKey("maintenance") || "Maintenance Division") : "Maintenance Division";
+            const toLabel = router?.labelForDivisionKey ? (router.labelForDivisionKey(currentDivisionKey) || record.division || "Admin") : (record.division || "Admin");
+
+            const existingEvents = Array.isArray(record.__tracking_events)
+                ? record.__tracking_events.filter((ev) => ev && typeof ev === "object")
+                : [];
+            const hasEvent = existingEvents.some((ev) => {
+                const at = String(ev.at || ev.timestamp || "").trim();
+                if (at && at !== updatedAt) return false;
+                const byKey = normalizeDivisionKeyFromAdmin(ev.by || ev.from || "");
+                const toKey = normalizeDivisionKeyFromAdmin(ev.to || "");
+                return byKey === "maintenance" && toKey === currentDivisionKey;
+            });
+
+            const events = hasEvent
+                ? existingEvents
+                : [...existingEvents, { at: updatedAt, action: "Routed", from: fromLabel, to: toLabel, by: fromLabel, note: "Reconciled from Maintenance task log" }];
+
+            changed = true;
+            return {
+                ...record,
+                __submitted_from_division: "maintenance",
+                __submitted_at: updatedAt,
+                __updated_at: record.__updated_at || updatedAt,
+                __tracking_events: events,
+            };
+        });
+
+        if (changed) {
+            writeAdminStore(nextRecords);
+            if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                window.peoDivisionStore.flushSync();
+            }
+            return nextRecords;
+        }
+        return records;
+    };
+
+    const getLatestRouteEventToDivision = (record, divisionKey) => {
+        const targetKey = normalizeKey(divisionKey);
+        const events = Array.isArray(record?.__tracking_events)
+            ? record.__tracking_events.filter((ev) => ev && typeof ev === "object")
+            : [];
+        for (let i = events.length - 1; i >= 0; i -= 1) {
+            const ev = events[i];
+            const toKey = normalizeDivisionKeyFromAdmin(ev?.to || ev?.to_division || "");
+            if (toKey && toKey === targetKey) {
+                return ev;
+            }
+        }
+        return null;
+    };
+
     const getSubmissionsForDivision = (adminRecords, divisionKey) => {
         const targetKey = normalizeKey(divisionKey);
         return (Array.isArray(adminRecords) ? adminRecords : [])
             .filter((record) => record && typeof record === "object")
             .filter((record) => normalizeDivisionKeyFromAdmin(record.division) === targetKey)
-            .filter((record) => String(record.__submitted_from_division || "").trim())
+            .filter((record) => String(record.__submitted_from_division || "").trim() || (Array.isArray(record.__tracking_events) && record.__tracking_events.length))
             .map((record) => ({
                 id: String(record.__record_id || record.__id || "").trim(),
-                from: String(record.__submitted_from_division || "").trim(),
-                fromLabel: labelFromDivisionValue(record.__submitted_from_division || ""),
+                from: (() => {
+                    const ev = getLatestRouteEventToDivision(record, targetKey);
+                    const candidate = ev?.by || ev?.from || record.__submitted_from_division || "";
+                    return normalizeDivisionKeyFromAdmin(candidate) || String(record.__submitted_from_division || "").trim();
+                })(),
+                fromLabel: (() => {
+                    const ev = getLatestRouteEventToDivision(record, targetKey);
+                    const candidate = ev?.by || ev?.from || record.__submitted_from_division || "";
+                    const senderKey = normalizeDivisionKeyFromAdmin(candidate) || String(record.__submitted_from_division || "").trim();
+                    return labelFromDivisionValue(senderKey);
+                })(),
                 slipNo: String(record.slip_no || record.slipNo || record.doc_no || record.project_id || "").trim() || "-",
                 name: String(record.document_name || record.project_name || "").trim() || "-",
                 location: String(record.location || "").trim() || "-",
@@ -1276,7 +1613,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 status: String(record.doc_status || record.status || record.billing_status || "").trim() || "-",
                 amount: String(record.revised_contract_amount || record.contract_amount || "").trim(),
                 submittedAt: String(
-                    record.__submitted_at
+                    (getLatestRouteEventToDivision(record, targetKey)?.at)
+                    || record.__submitted_at
                     || record.date_received_admin
                     || record.date_received_peo
                     || record.date_received
@@ -1335,6 +1673,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!(tbody instanceof HTMLElement)) return;
 
         let adminRecords = await ensureAdminStore();
+        adminRecords = reconcileMaintenanceOutgoingSubmissions(adminRecords);
+        if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+            window.peoIncomingDocToast.check(divisionKey, adminRecords);
+        }
         let allRows = getSubmissionsForDivision(adminRecords, divisionKey);
 
         const syncModalState = () => {
@@ -1441,15 +1783,18 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         const updateAdminRecord = (recordId, updates) => {
-            const index = adminRecords.findIndex(
+            // Always merge onto the latest localStorage snapshot so we don't overwrite routing metadata
+            // like __submitted_from_division / __tracking_events with stale in-memory copies.
+            const latestRecords = readAdminStore();
+            const index = latestRecords.findIndex(
                 (record) => String(record?.__record_id || record?.__id || "").trim() === recordId
             );
             if (index < 0) return false;
-            const current = adminRecords[index] && typeof adminRecords[index] === "object" ? adminRecords[index] : {};
+            const current = latestRecords[index] && typeof latestRecords[index] === "object" ? latestRecords[index] : {};
             const next = { ...current, ...updates };
-            adminRecords = [...adminRecords];
-            adminRecords[index] = next;
-            writeAdminStore(adminRecords);
+            latestRecords[index] = next;
+            adminRecords = latestRecords;
+            writeAdminStore(latestRecords);
             refreshRows();
             return true;
         };
@@ -1626,12 +1971,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
 
                 if (submission && submission.ok) {
-                    const divisionLabel = router.labelForDivisionKey
-                        ? router.labelForDivisionKey(targetKey)
-                        : (targetDivision || row.division);
-                    if (divisionLabel) {
-                        updateAdminRecord(editingRecordId, { division: divisionLabel });
-                    }
                     adminRecords = readAdminStore();
                     refreshRows();
                     render();
@@ -2955,6 +3294,11 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             // Ignore storage write failures (quota/private mode).
         }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeState = state && typeof state === "object" ? state : { version: 1, taskRows: [] };
+            window.peoDivisionStore.queueSync("maintenance", safeState, 0);
+        }
     };
 
     const buildMaintenanceStateBase = (state) => {
@@ -2979,6 +3323,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const buildMaintenanceTaskFromAdminRecord = (record) => {
+        const nowIso = new Date().toISOString();
         const sourceDivisionRaw = String(record?.__submitted_from_division || "").trim();
         const sourceDivisionKey = sourceDivisionRaw
             ? normalizeDivisionKey(sourceDivisionRaw)
@@ -3002,6 +3347,8 @@ document.addEventListener("DOMContentLoaded", () => {
             || record?.date_received
             || getLocalIsoDate()
         ).trim();
+        const createdAt = String(record?.__submitted_at || record?.__updated_at || "").trim() || nowIso;
+        const updatedAt = createdAt;
 
         return {
             adminRecordId,
@@ -3016,6 +3363,9 @@ document.addEventListener("DOMContentLoaded", () => {
             receiveFrom: sourceDivisionLabel || "Admin",
             dueDateIso: dateReceivedIso,
             dueDateDisplay: formatDate(dateReceivedIso),
+            createdAt,
+            updatedAt,
+            route: "Incoming",
             status: "Incoming",
             notes: String(record?.description || "").trim(),
         };
@@ -3062,7 +3412,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const divisionKey = normalizeDivisionKey(record?.division);
         if (divisionKey !== "maintenance") {
-            removeMaintenanceTaskRowByAdminRecordId(adminRecordId);
+            const currentState = buildMaintenanceStateBase(readMaintenanceState());
+            const existingIndex = currentState.taskRows.findIndex((row) => String(row?.adminRecordId || "").trim() === adminRecordId);
+            if (existingIndex >= 0) {
+                const nowIso = new Date().toISOString();
+                currentState.taskRows[existingIndex] = {
+                    ...currentState.taskRows[existingIndex],
+                    route: "Outgoing",
+                    updatedAt: nowIso,
+                };
+                writeMaintenanceState(currentState);
+            }
             return;
         }
 
@@ -4305,6 +4665,9 @@ document.addEventListener("DOMContentLoaded", () => {
     applyDocumentFilters();
     applyBillingFilters();
     restoreAdminDivisionRecords();
+    if ((documentsTableBody || billingTableBody) && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+        window.peoIncomingDocToast.check("admin", readAdminDivisionRecords());
+    }
     syncSelectionControls();
     enableAdminDivisionCardFloat();
 });
@@ -4494,6 +4857,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const adminDivisionStorageKey = "peo_admin_division_records_v1";
     const constructionStorageKey = "peo_construction_records_v1";
     const roadAcceptedUploadTypes = ".xlsx,.xls,.csv,.txt,.json";
+
+    if (maintenanceTaskTracker && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+        let adminRecordsForToast = [];
+        try {
+            const raw = window.localStorage.getItem(adminDivisionStorageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            adminRecordsForToast = Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            adminRecordsForToast = [];
+        }
+        window.peoIncomingDocToast.check("maintenance", adminRecordsForToast);
+    }
     let editingMunicipalityKey = "";
     let editingMunicipalityName = "";
     let editingMunicipalityRecordIndexes = [];
@@ -8551,9 +8926,16 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             if (submission && submission.ok) {
+                const nowIso = new Date().toISOString();
                 if (submission.adminRecordId) {
                     editingTaskRow.dataset.adminRecordId = String(submission.adminRecordId);
                 }
+                editingTaskRow.dataset.route = targetKey === "maintenance" ? "Incoming" : "Outgoing";
+                editingTaskRow.dataset.updatedAt = nowIso;
+                if (!String(editingTaskRow.dataset.createdAt || "").trim()) {
+                    editingTaskRow.dataset.createdAt = nowIso;
+                }
+                persistMaintenanceState();
                 if (taskRouteFileInput instanceof HTMLInputElement) {
                     taskRouteFileInput.value = "";
                 }
@@ -8656,6 +9038,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 window.peoDivisionStore.queueSync("admin", safeRecords, 0);
             }
+
+            // Keep the maintenance task row timestamps in sync for tracking details.
+            const nowIso = new Date().toISOString();
+            const taskRow = (typeof getTaskRows === "function")
+                ? getTaskRows().find((row) => String(row?.dataset?.adminRecordId || "").trim() === normalizedId)
+                : null;
+            if (taskRow && typeof persistMaintenanceState === "function") {
+                taskRow.dataset.updatedAt = nowIso;
+                if (!String(taskRow.dataset.createdAt || "").trim()) {
+                    taskRow.dataset.createdAt = nowIso;
+                }
+                persistMaintenanceState();
+            }
         } catch (error) {
             // Ignore storage errors.
         }
@@ -8729,7 +9124,14 @@ document.addEventListener("DOMContentLoaded", () => {
 	                receiveFrom,
 	                allocation: allocationValue || division,
 	                notes,
+                    createdAt: (isEditingTask && editingTaskRow) ? String(editingTaskRow.dataset.createdAt || "").trim() : "",
+                    updatedAt: new Date().toISOString(),
+                    route: (isEditingTask && editingTaskRow) ? String(editingTaskRow.dataset.route || "").trim() : "Incoming",
 	            };
+
+                if (!taskPayload.createdAt) {
+                    taskPayload.createdAt = taskPayload.updatedAt;
+                }
 
 	            if (isEditingTask && editingTaskRow) {
 	                const updatedRow = createTaskRowElement(taskPayload);
@@ -9122,6 +9524,9 @@ document.addEventListener("DOMContentLoaded", () => {
         row.dataset.allocation = allocationLabel;
         row.dataset.adminRecordId = String(record.adminRecordId || "").trim();
         row.dataset.notes = String(record.notes || "").trim();
+        row.dataset.createdAt = String(record.createdAt || "").trim();
+        row.dataset.updatedAt = String(record.updatedAt || "").trim();
+        row.dataset.route = String(record.route || "").trim();
 
         row.innerHTML = `
             <td>${escapeHtml(record.slipNo || "-")}</td>
@@ -9167,6 +9572,9 @@ document.addEventListener("DOMContentLoaded", () => {
             receiveFrom: String(row.dataset.receiveFrom || "").trim() || (row.cells[6]?.textContent || "").trim(),
             allocation: String(row.dataset.allocation || "").trim() || (row.cells[9]?.textContent || "").trim(),
             notes: String(row.dataset.notes || "").trim(),
+            createdAt: String(row.dataset.createdAt || "").trim(),
+            updatedAt: String(row.dataset.updatedAt || "").trim(),
+            route: String(row.dataset.route || "").trim(),
         }));
     }
 
@@ -9773,6 +10181,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const adminRecordId = String(record.adminRecordId || "").trim();
                 let dueDateIso = String(record.dueDateIso || "").trim();
+                let createdAt = String(record.createdAt || "").trim();
+                let updatedAt = String(record.updatedAt || "").trim();
+                let route = String(record.route || "").trim();
                 if (!dueDateIso && adminRecordId && adminRecordById.has(adminRecordId)) {
                     const adminRecord = adminRecordById.get(adminRecordId);
                     dueDateIso = String(
@@ -9783,9 +10194,18 @@ document.addEventListener("DOMContentLoaded", () => {
                         || adminRecord?.date_received
                         || ""
                     ).trim();
+                    if (!createdAt) {
+                        createdAt = String(adminRecord?.__submitted_at || adminRecord?.__updated_at || "").trim();
+                    }
+                    if (!route) {
+                        route = normalizeKey(adminRecord?.division) === "maintenance" ? "Incoming" : "Outgoing";
+                    }
                 }
                 if (!dueDateIso && adminRecordId) {
                     dueDateIso = getLocalIsoDate();
+                }
+                if (!updatedAt) {
+                    updatedAt = createdAt;
                 }
                 taskTableBody.append(createTaskRowElement({
                     adminRecordId,
@@ -9802,6 +10222,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     receiveFrom: String(record.receiveFrom || "").trim(),
                     allocation: String(record.allocation || "").trim(),
                     notes: String(record.notes || "").trim(),
+                    createdAt,
+                    updatedAt,
+                    route,
                 }));
             });
 
@@ -11524,11 +11947,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const currentStatus = String(existing.doc_status || existing.status || "").trim();
         if (currentStatus === nextStatus) return false;
         const updated = { ...existing };
+        const nowIso = new Date().toISOString();
         updated.doc_status = nextStatus;
         updated.status = nextStatus;
+        updated.__updated_at = nowIso;
+        updated.__status_updated_at = nowIso;
         const events = Array.isArray(updated.__tracking_events) ? updated.__tracking_events.filter((ev) => ev && typeof ev === "object") : [];
         events.push({
-            at: new Date().toISOString(),
+            at: nowIso,
             action: "Construction status updated",
             from: "Construction",
             to: "Admin",
@@ -11542,6 +11968,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const mapAdminRecordToConstruction = (adminRecord) => {
+        const nowIso = new Date().toISOString();
+        const fallbackDate = nowIso.slice(0, 10);
+        const receivedAt = String(adminRecord?.__submitted_at || "").trim()
+            || String(adminRecord?.date_received || adminRecord?.date_received_admin || adminRecord?.date_started || fallbackDate).trim()
+            || fallbackDate;
         const statusValue = String(adminRecord?.doc_status || adminRecord?.status || "").trim();
         const statusPercent = mapAdminStatusToConstructionPercent(statusValue);
         const locationText = String(adminRecord?.location || "").trim();
@@ -11671,6 +12102,8 @@ document.addEventListener("DOMContentLoaded", () => {
             __id: `construction_admin_${String(adminRecord?.__record_id || "")}`,
             __admin_source: "admin_document",
             __admin_source_id: String(adminRecord?.__record_id || ""),
+            __received_at: receivedAt,
+            __created_at: receivedAt,
             project_name: String(adminRecord?.document_name || "").trim(),
             location: locationText,
             mun: extractMunicipality(locationText),
@@ -11785,6 +12218,9 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     let records = syncAdminRoutedConstructionRecords(readStoredRecords());
+    if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+        window.peoIncomingDocToast.check("construction", readAdminDivisionRecords());
+    }
     let currentPage = 1;
     let editingRecordId = null;
 
@@ -13790,11 +14226,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const currentStatus = String(existing.doc_status || existing.status || "").trim();
         if (currentStatus === nextStatus) return false;
         const updated = { ...existing };
+        const nowIso = new Date().toISOString();
         updated.doc_status = nextStatus;
         updated.status = nextStatus;
+        updated.__updated_at = nowIso;
+        updated.__status_updated_at = nowIso;
         const events = Array.isArray(updated.__tracking_events) ? updated.__tracking_events.filter((ev) => ev && typeof ev === "object") : [];
         events.push({
-            at: new Date().toISOString(),
+            at: nowIso,
             action: "Planning status updated",
             from: "Planning",
             to: "Admin",
@@ -13998,8 +14437,14 @@ document.addEventListener("DOMContentLoaded", () => {
             .reduce((sum, record) => sum + parsePlanningDocAmount(record?.amount), 0);
     };
 
+<<<<<<< HEAD
 	    const mapAdminRecordToPlanningDocument = (adminRecord) => {
 	        const fallbackDate = new Date().toISOString().slice(0, 10);
+=======
+    const mapAdminRecordToPlanningDocument = (adminRecord) => {
+        const nowIso = new Date().toISOString();
+        const fallbackDate = nowIso.slice(0, 10);
+>>>>>>> 86840d6d0476528b8467b95aaa21e4eb5feb961e
         const dateReceived = String(
             adminRecord?.date_received_peo
             || adminRecord?.date_received_admin
@@ -14007,6 +14452,7 @@ document.addEventListener("DOMContentLoaded", () => {
             || adminRecord?.date_started
             || fallbackDate
         ).trim();
+        const receivedAt = String(adminRecord?.__submitted_at || "").trim() || dateReceived || fallbackDate;
         const mappedBudgetAllocation = normalizeBudgetAllocationValue(
             adminRecord?.budget_allocation
             || adminRecord?.budget_name
@@ -14019,6 +14465,7 @@ document.addEventListener("DOMContentLoaded", () => {
             || ""
         ).trim();
 
+<<<<<<< HEAD
 	        const contractAmount = String(adminRecord?.contract_amount || "").trim();
 	        const revisedContractAmount = String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim();
 
@@ -14037,6 +14484,22 @@ document.addEventListener("DOMContentLoaded", () => {
 	            date_received: dateReceived,
 	            status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
 	            budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
+=======
+        return {
+            id: `planning_doc_admin_${String(adminRecord?.__record_id || "")}`,
+            __admin_source_id: String(adminRecord?.__record_id || ""),
+            __received_at: receivedAt,
+            __created_at: receivedAt,
+            slip_no: String(adminRecord?.slip_no || "").trim(),
+            document_name: String(adminRecord?.document_name || "").trim(),
+            location: String(adminRecord?.location || "").trim(),
+            contractor: String(adminRecord?.contractor || "").trim(),
+            amount: String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim(),
+            received_from: "Admin Division",
+            date_received: dateReceived,
+            status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
+            budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
+>>>>>>> 86840d6d0476528b8467b95aaa21e4eb5feb961e
             budget_allocation_other: mappedBudgetAllocation === "Others" ? mappedBudgetOther : "",
             remarks: String(adminRecord?.description || "").trim(),
             created_at: Date.now(),
@@ -14849,6 +15312,9 @@ document.addEventListener("DOMContentLoaded", () => {
 	    let planningBudgetRecords = readStoredBudgets();
 	    let planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
 	    writeStoredPlanningDocuments(planningDocumentRecords);
+        if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+            window.peoIncomingDocToast.check("planning", readAdminDivisionRecords());
+        }
 	    let editingBudgetRecordId = null;
 	    let editingPpaRow = null;
 	    let editingPlanningDocumentId = null;
@@ -15782,8 +16248,16 @@ document.addEventListener("DOMContentLoaded", () => {
 	            }
 
 	            const adminRecordId = String(result.adminRecordId || "").trim();
+                const nowIso = new Date().toISOString();
+                planningDocumentRecords[recordIndex] = {
+                    ...planningDocumentRecords[recordIndex],
+                    __updated_at: nowIso,
+                };
 	            if (adminRecordId && !String(record.__admin_source_id || "").trim()) {
-	                planningDocumentRecords[recordIndex] = { ...record, __admin_submission_id: adminRecordId };
+	                planningDocumentRecords[recordIndex] = {
+                        ...planningDocumentRecords[recordIndex],
+                        __admin_submission_id: adminRecordId,
+                    };
 	                writeStoredPlanningDocuments(planningDocumentRecords);
 	            }
 
@@ -15841,6 +16315,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	                ? normalizePlanningDocStatus(rawStatus)
 	                : normalizePlanningDocStatus(existingRecord.status) || "For Review";
 
+<<<<<<< HEAD
 	            const slipNo = String(existingRecord.slip_no || "").trim();
 	            const documentName = String(existingRecord.document_name || "").trim();
 	            const location = String(existingRecord.location || "").trim();
@@ -15867,6 +16342,30 @@ document.addEventListener("DOMContentLoaded", () => {
 	                budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
 	                remarks: String(formData.get("remarks") || "").trim(),
 	            };
+=======
+            const nowIso = new Date().toISOString();
+            const previousStatus = normalizePlanningDocStatus(planningDocumentRecords[recordIndex]?.status || "");
+            const hasStatusChange = Boolean(previousStatus && resolvedStatus && previousStatus !== resolvedStatus);
+
+            const updatedRecord = {
+                ...planningDocumentRecords[recordIndex],
+                __updated_at: nowIso,
+                __status_updated_at: hasStatusChange
+                    ? nowIso
+                    : (planningDocumentRecords[recordIndex]?.__status_updated_at || ""),
+                slip_no: slipNo,
+                document_name: documentName,
+                location: String(formData.get("location") || "").trim(),
+                contractor: String(formData.get("contractor") || "").trim(),
+                amount: String(formData.get("amount") || "").trim(),
+                received_from: receivedFrom,
+                date_received: dateReceived,
+                status: resolvedStatus,
+                budget_allocation: budgetAllocation,
+                budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
+                remarks: String(formData.get("remarks") || "").trim(),
+            };
+>>>>>>> 86840d6d0476528b8467b95aaa21e4eb5feb961e
 
             planningDocumentRecords[recordIndex] = updatedRecord;
             writeStoredPlanningDocuments(planningDocumentRecords);
@@ -17529,6 +18028,53 @@ let peoGeneralToastTimer = null;
 let peoGeneralConfirmElement = null;
 const PEO_PERSISTED_TOAST_KEY = "peo_persisted_system_toast_v1";
 
+const applyPeoGeneralToastPosition = (el, position) => {
+    if (!(el instanceof HTMLElement)) return;
+
+    // Reset position before applying.
+    // Use "auto" to override the base CSS (which defaults to bottom/right).
+    el.style.top = "auto";
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+    el.style.left = "auto";
+    el.style.transform = "";
+
+    const pos = String(position || "").trim().toLowerCase();
+    if (!pos) return;
+
+    const edge = "22px";
+    const topEdge = "12px";
+
+    if (pos === "top-right") {
+        el.style.top = `calc(env(safe-area-inset-top, 0px) + ${topEdge})`;
+        el.style.right = `calc(env(safe-area-inset-right, 0px) + ${edge})`;
+        return;
+    }
+
+    if (pos === "top-left") {
+        el.style.top = `calc(env(safe-area-inset-top, 0px) + ${topEdge})`;
+        el.style.left = `calc(env(safe-area-inset-left, 0px) + ${edge})`;
+        return;
+    }
+
+    if (pos === "bottom-left") {
+        el.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${edge})`;
+        el.style.left = `calc(env(safe-area-inset-left, 0px) + ${edge})`;
+        return;
+    }
+
+    if (pos === "center") {
+        el.style.top = "50%";
+        el.style.left = "50%";
+        el.style.transform = "translate(-50%, -50%)";
+        return;
+    }
+
+    // bottom-right (default)
+    el.style.right = `calc(env(safe-area-inset-right, 0px) + ${edge})`;
+    el.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${edge})`;
+};
+
 const closePeoGeneralToast = () => {
     if (!(peoGeneralToastElement instanceof HTMLElement)) return;
     peoGeneralToastElement.classList.remove("is-visible");
@@ -17549,6 +18095,7 @@ const showPeoGeneralToast = (message, options = {}) => {
         ? String(options.variant).trim()
         : "success";
     const title = String(options.title || "").trim();
+    const position = String(options.position || "").trim();
     const iconMap = {
         success: "check_circle",
         info: "info",
@@ -17572,6 +18119,7 @@ const showPeoGeneralToast = (message, options = {}) => {
 
     document.body.appendChild(toast);
     peoGeneralToastElement = toast;
+    applyPeoGeneralToastPosition(toast, position);
     window.requestAnimationFrame(() => {
         toast.classList.add("is-visible");
     });
@@ -17683,6 +18231,7 @@ document.addEventListener("DOMContentLoaded", () => {
             showPeoGeneralToast(parsedToast.message, {
                 title: parsedToast.title,
                 variant: parsedToast.variant,
+                position: parsedToast.position,
             });
         }
     } catch (error) {
@@ -17701,6 +18250,7 @@ document.addEventListener("DOMContentLoaded", () => {
             message: trigger.getAttribute("data-peo-toast-message") || "",
             title: trigger.getAttribute("data-peo-toast-title") || "",
             variant: trigger.getAttribute("data-peo-toast-variant") || "info",
+            position: trigger.getAttribute("data-peo-toast-position") || "",
         };
 
         if (trigger instanceof HTMLAnchorElement) {
@@ -17710,6 +18260,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (shouldPersistToNextPage && isRealNavigation) {
                 try {
+                    if (!toastPayload.position && toastPayload.title === "Sidebar Navigation") {
+                        toastPayload.position = "top-right";
+                    }
                     window.sessionStorage.setItem(PEO_PERSISTED_TOAST_KEY, JSON.stringify(toastPayload));
                 } catch (error) {
                     // Ignore storage failures and allow navigation to continue.
@@ -17720,9 +18273,11 @@ document.addEventListener("DOMContentLoaded", () => {
             event.preventDefault();
         }
 
+        const resolvedPosition = toastPayload.position || (toastPayload.title === "Sidebar Navigation" ? "top-right" : "");
         showPeoGeneralToast(toastPayload.message, {
             title: toastPayload.title,
             variant: toastPayload.variant,
+            position: resolvedPosition,
         });
     });
 });
@@ -17841,6 +18396,21 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const writeAdminDivisionRecords = (records) => {
+        try {
+            window.localStorage.setItem(ADMIN_DIVISION_STORAGE_KEY, JSON.stringify(records));
+        } catch (error) {
+            // Ignore storage failures.
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+                return record && typeof record === "object" ? { ...record } : record;
+            });
+            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+        }
+    };
+
     const normalizeDivisionLabel = (value) => {
         return String(value || "").trim().toLowerCase();
     };
@@ -17862,14 +18432,65 @@ document.addEventListener("DOMContentLoaded", () => {
         return "For Review";
     };
 
+    const mapQualityStatusToAdminStatus = (value) => {
+        const normalized = normalizeText(value);
+        if (normalized === "completed") return "Approved";
+        if (normalized === "for release") return "Processing";
+        if (normalized === "in progress") return "Processing";
+        if (normalized === "for action") return "Processing";
+        if (normalized === "for review") return "For Review";
+        return "For Review";
+    };
+
+    const syncQualityStatusToAdmin = (qualityRecord) => {
+        const record = qualityRecord && typeof qualityRecord === "object" ? qualityRecord : {};
+        const sourceId = String(record.__admin_source_id || record.__admin_submission_id || "").trim();
+        if (!sourceId) return false;
+
+        const nextStatus = mapQualityStatusToAdminStatus(record.status);
+        if (!nextStatus) return false;
+
+        const adminRecords = readAdminDivisionRecords();
+        const idx = adminRecords.findIndex((item) => String(item?.__record_id || "").trim() === sourceId);
+        if (idx < 0) return false;
+
+        const existing = adminRecords[idx] || {};
+        const currentStatus = String(existing.doc_status || existing.status || "").trim();
+        if (currentStatus === nextStatus) return false;
+
+        const updated = { ...existing };
+        const nowIso = new Date().toISOString();
+        updated.doc_status = nextStatus;
+        updated.status = nextStatus;
+        updated.__updated_at = nowIso;
+        updated.__status_updated_at = nowIso;
+        const events = Array.isArray(updated.__tracking_events) ? updated.__tracking_events.filter((ev) => ev && typeof ev === "object") : [];
+        events.push({
+            at: nowIso,
+            action: "Quality status updated",
+            from: "Quality",
+            to: "Admin",
+            by: "Quality",
+            note: `Status set to ${nextStatus}`,
+        });
+        updated.__tracking_events = events;
+        adminRecords[idx] = updated;
+        writeAdminDivisionRecords(adminRecords);
+        return true;
+    };
+
     const mapAdminRecordToQuality = (adminRecord) => {
-        const fallbackDate = new Date().toISOString().slice(0, 10);
+        const nowIso = new Date().toISOString();
+        const fallbackDate = nowIso.slice(0, 10);
         const docDate = String(
             adminRecord?.date_received_peo
             || adminRecord?.date_started
             || adminRecord?.date_received_admin
             || fallbackDate
         ).trim();
+        const receivedAt = String(adminRecord?.__submitted_at || "").trim()
+            || String(adminRecord?.date_received || adminRecord?.date_received_admin || docDate || fallbackDate).trim()
+            || fallbackDate;
         const adminAttachments = peoExtractAttachments(adminRecord);
         const latestAdminAttachment = adminAttachments.length ? adminAttachments[adminAttachments.length - 1] : null;
         const scanUrl = String(latestAdminAttachment?.dataUrl || adminRecord?.scanned_file_data || "").trim();
@@ -17885,6 +18506,8 @@ document.addEventListener("DOMContentLoaded", () => {
             __id: `quality_admin_${String(adminRecord?.__record_id || "")}`,
             __admin_source: "admin_document",
             __admin_source_id: String(adminRecord?.__record_id || ""),
+            __received_at: receivedAt,
+            __created_at: receivedAt,
             received_from: "Admin Division",
             doc_date: docDate,
             particulars: mapAdminDocTypeToQualityParticular(adminRecord?.doc_type),
@@ -17938,10 +18561,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const mergedRouted = Array.from(routedBySourceId.values()).map((incoming) => {
             const existing = existingRoutedBySource.get(incoming.__admin_source_id);
-            if (!existing) return incoming;
+            if (!existing) return { ...incoming };
+
+            const hasStatusEdit = String(existing?.__status_updated_at || "").trim().length > 0;
+            const existingStatusText = String(existing?.status || "").trim();
+            const incomingStatusText = String(incoming?.status || "").trim();
+            const mergedStatus = (hasStatusEdit && existingStatusText) ? existingStatusText : (incomingStatusText || existingStatusText);
+
+            const hasRemarksEdit = String(existing?.__updated_at || existing?.__status_updated_at || "").trim().length > 0
+                && String(existing?.remarks || "").trim().length > 0;
+            const mergedRemarks = hasRemarksEdit ? String(existing?.remarks || "").trim() : String(incoming?.remarks || existing?.remarks || "").trim();
+
             return {
-                ...existing,
+                // Keep admin-derived fields current while preserving Quality-side edits where we have a timestamp.
                 ...incoming,
+                ...existing,
+                __admin_source: incoming.__admin_source,
+                __admin_source_id: incoming.__admin_source_id,
+                __received_at: String(existing?.__received_at || incoming?.__received_at || "").trim(),
+                __created_at: String(existing?.__created_at || incoming?.__created_at || "").trim(),
+                // Always prefer the latest scan/attachment pointer from Admin.
+                scan_url: String(incoming?.scan_url || existing?.scan_url || "").trim(),
+                status: mergedStatus,
+                remarks: mergedRemarks,
+                owner_representative: String(existing?.owner_representative || "").trim() || String(incoming?.owner_representative || "").trim(),
+                contact_info: String(existing?.contact_info || "").trim() || String(incoming?.contact_info || "").trim(),
+                billing_type: String(existing?.billing_type || "").trim() || String(incoming?.billing_type || "").trim(),
             };
         });
 
@@ -17953,9 +18598,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!adminRecord) return existing;
                 const mapped = mapAdminRecordToQuality(adminRecord);
                 return {
-                    ...existing,
                     ...mapped,
+                    ...existing,
                     route: "Outgoing",
+                    scan_url: String(mapped?.scan_url || existing?.scan_url || "").trim(),
                 };
             });
 
@@ -18308,6 +18954,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let records = dedupeQualityRecords(syncAdminRoutedQualityRecords(readStoredRecords()));
     writeStoredRecords(records);
+    if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
+        window.peoIncomingDocToast.check("quality", readAdminDivisionRecords());
+    }
     let currentPage = 1;
     let activeTab = "all";
     let activeCardFilter = "all";
@@ -18911,11 +19560,15 @@ document.addEventListener("DOMContentLoaded", () => {
 	            }
 
 	            const adminRecordId = String(result.adminRecordId || "").trim();
+                const nowIso = new Date().toISOString();
 	            if (adminRecordId && editingRecordId) {
 	                const idx = records.findIndex((record) => record.__id === editingRecordId);
 	                if (idx >= 0 && !String(records[idx]?.__admin_source_id || "").trim()) {
 	                    records[idx] = { ...records[idx], __admin_submission_id: adminRecordId };
 	                }
+                    if (idx >= 0) {
+                        records[idx] = { ...records[idx], __updated_at: nowIso };
+                    }
 	            }
 
 	            records = dedupeQualityRecords(syncAdminRoutedQualityRecords(records));
@@ -18980,10 +19633,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const formRecord = buildRecordFromForm();
             if (!formRecord) return;
             const isEditingRecord = Boolean(editingRecordId);
+            const nowIso = new Date().toISOString();
 
             if (editingRecordId) {
                 const targetIndex = records.findIndex((record) => record.__id === editingRecordId);
                 if (targetIndex >= 0) {
+<<<<<<< HEAD
                     const mergedRecord = applyQualityScanAttachmentToRecord({
                         ...records[targetIndex],
                         ...formRecord,
@@ -18993,6 +19648,33 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } else {
                 records.unshift(applyQualityScanAttachmentToRecord(formRecord));
+=======
+                    const existing = records[targetIndex] || {};
+                    const previousStatus = normalizeText(existing?.status);
+                    const nextStatus = normalizeText(formRecord?.status);
+                    const hasStatusChange = Boolean(previousStatus && nextStatus && previousStatus !== nextStatus);
+
+                    const updatedRecord = {
+                        ...existing,
+                        ...formRecord,
+                        __id: editingRecordId,
+                        __updated_at: nowIso,
+                        __status_updated_at: hasStatusChange ? nowIso : (existing?.__status_updated_at || ""),
+                    };
+                    records[targetIndex] = updatedRecord;
+                    syncQualityStatusToAdmin(updatedRecord);
+                }
+            } else {
+                const createdRecord = {
+                    ...formRecord,
+                    __created_at: nowIso,
+                    __received_at: nowIso,
+                    __updated_at: nowIso,
+                    __status_updated_at: nowIso,
+                };
+                records.unshift(createdRecord);
+                syncQualityStatusToAdmin(createdRecord);
+>>>>>>> 86840d6d0476528b8467b95aaa21e4eb5feb961e
             }
 
             records = dedupeQualityRecords(records);

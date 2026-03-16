@@ -1,18 +1,10 @@
+{% extends "base.html" %}
 {% load static %}
-{% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PEO Portal - Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'styles.css' %}">
-</head>
-<body class="portal-body">
+
+{% block title %}PEO Portal - Dashboard{% endblock %}
+{% block body_class %}portal-body{% endblock %}
+
+{% block content %}
     <div class="portal-shell">
         <button type="button" class="sidebar-overlay" aria-label="Close sidebar"></button>
 
@@ -646,6 +638,4 @@
         </main>
     </div>
 
-    <script src="{% static 'script.js' %}"></script>
-</body>
-</html>
+{% endblock %}
