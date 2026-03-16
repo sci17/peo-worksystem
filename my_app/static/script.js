@@ -3246,30 +3246,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    let maintenanceAdminStoreFetchPromise = null;
-    const ensureAdminDivisionRecords = async () => {
-        const local = readAdminDivisionRecords();
-        if (local.length) return local;
-
-        const store = window.peoDivisionStore;
-        if (!store || typeof store.fetchStore !== "function") return local;
-
-        if (!maintenanceAdminStoreFetchPromise) {
-            maintenanceAdminStoreFetchPromise = Promise.resolve()
-                .then(() => store.fetchStore("admin"))
-                .catch(() => null);
-        }
-
-        const server = await maintenanceAdminStoreFetchPromise;
-        const serverData = server && typeof server === "object" ? server.data : null;
-        const records = Array.isArray(serverData) ? serverData : [];
-        if (records.length) {
-            writeAdminDivisionRecords(records);
-        }
-
-        return readAdminDivisionRecords();
-    };
-
     const normalizeDivisionKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const getLocalIsoDate = (date = new Date()) => {
         const year = date.getFullYear();
@@ -3331,6 +3307,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const sourceDivisionLabel = sourceDivisionRaw && window.peoProjectRouter?.labelForDivisionKey
             ? (window.peoProjectRouter.labelForDivisionKey(sourceDivisionKey) || sourceDivisionRaw)
             : sourceDivisionRaw;
+        const divisionKey = normalizeDivisionKey(record?.division);
+        const isIncoming = divisionKey === "maintenance";
         const adminRecordId = String(record?.__record_id || "").trim();
         const slipNo = String(record?.slip_no || "-").trim() || "-";
         const documentName = String(record?.document_name || "-").trim() || "-";
@@ -3360,13 +3338,13 @@ document.addEventListener("DOMContentLoaded", () => {
             allocation,
             priority: billingType,
             amount,
-            receiveFrom: sourceDivisionLabel || "Admin",
+            receiveFrom: sourceDivisionLabel || "Admin Division",
             dueDateIso: dateReceivedIso,
             dueDateDisplay: formatDate(dateReceivedIso),
             createdAt,
             updatedAt,
-            route: "Incoming",
-            status: "Incoming",
+            route: isIncoming ? "Incoming" : "Outgoing",
+            status: isIncoming ? "Incoming" : "Pending",
             notes: String(record?.description || "").trim(),
         };
     };
@@ -3422,6 +3400,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     updatedAt: nowIso,
                 };
                 writeMaintenanceState(currentState);
+            } else {
+                upsertMaintenanceTaskRow(buildMaintenanceTaskFromAdminRecord(record));
             }
             return;
         }
@@ -3670,6 +3650,11 @@ document.addEventListener("DOMContentLoaded", () => {
 	            // New Document: billing info is view-only.
 	            setAdminModalSectionDisabled(form, "billing", true);
 	        }
+
+            if (mode === "edit_document") {
+                // Document Edit: billing info is view-only.
+                setAdminModalSectionDisabled(form, "billing", true);
+            }
 
 	        if (mode === "edit_billing") {
 	            // Billing Edit: project details + routing are view-only, but status and billing fields are editable.
@@ -4857,6 +4842,56 @@ document.addEventListener("DOMContentLoaded", () => {
     const adminDivisionStorageKey = "peo_admin_division_records_v1";
     const constructionStorageKey = "peo_construction_records_v1";
     const roadAcceptedUploadTypes = ".xlsx,.xls,.csv,.txt,.json";
+    let maintenanceAdminStoreSeedPromise = null;
+
+    const readAdminDivisionStoreForMaintenance = () => {
+        try {
+            const raw = window.localStorage.getItem(adminDivisionStorageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeAdminDivisionStoreForMaintenance = (records) => {
+        try {
+            window.localStorage.setItem(adminDivisionStorageKey, JSON.stringify(records));
+        } catch (error) {
+            // Ignore storage failures.
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+                return record && typeof record === "object" ? { ...record } : record;
+            });
+            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+        }
+    };
+
+    const ensureAdminDivisionStoreForMaintenance = async () => {
+        const local = readAdminDivisionStoreForMaintenance();
+        if (local.length) return local;
+
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.fetchStore !== "function") return local;
+
+        if (!maintenanceAdminStoreSeedPromise) {
+            maintenanceAdminStoreSeedPromise = Promise.resolve()
+                .then(() => store.fetchStore("admin"))
+                .catch(() => null);
+        }
+
+        const server = await maintenanceAdminStoreSeedPromise;
+        const serverData = server && typeof server === "object" ? server.data : null;
+        const records = Array.isArray(serverData) ? serverData : [];
+        if (records.length) {
+            writeAdminDivisionStoreForMaintenance(records);
+            return records;
+        }
+
+        return readAdminDivisionStoreForMaintenance();
+    };
 
     if (maintenanceTaskTracker && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
         let adminRecordsForToast = [];
@@ -8625,25 +8660,8 @@ document.addEventListener("DOMContentLoaded", () => {
             taskRouteFiles.innerHTML = "";
             return;
         }
-        const findAdminRecord = (records) => {
-            return (Array.isArray(records) ? records : []).find((item) => String(item?.__record_id || "").trim() === adminRecordId) || null;
-        };
-
-        const localRecords = readAdminDivisionRecords();
-        const localAdminRecord = findAdminRecord(localRecords);
-        if (localAdminRecord) {
-            peoRenderAttachmentList(taskRouteFiles, peoExtractAttachments(localAdminRecord));
-            return;
-        }
-
-        taskRouteFiles.innerHTML = "";
-        ensureAdminDivisionRecords().then((records) => {
-            if (!editingTaskRow) return;
-            const currentId = String(editingTaskRow.dataset.adminRecordId || "").trim();
-            if (currentId !== adminRecordId) return;
-            const adminRecord = findAdminRecord(records);
-            peoRenderAttachmentList(taskRouteFiles, peoExtractAttachments(adminRecord || {}));
-        });
+        const adminRecord = readAdminDivisionRecords().find((item) => String(item?.__record_id || "").trim() === adminRecordId);
+        peoRenderAttachmentList(taskRouteFiles, peoExtractAttachments(adminRecord || {}));
     };
 
     const closeTaskModal = () => {
@@ -10056,11 +10074,6 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             adminRecordById.forEach((record) => {
-                const divisionKey = normalizeDivisionKey(record?.division);
-                const sourceDivision = String(record?.__submitted_from_division || "").trim();
-                if (divisionKey !== "maintenance" || !sourceDivision) {
-                    return;
-                }
                 const taskRow = buildMaintenanceTaskFromAdminRecord(record);
                 const taskId = String(taskRow?.adminRecordId || "").trim();
                 if (taskId && !nextTaskRowsById.has(taskId)) {
@@ -10261,6 +10274,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
         syncTaskPersonnelDropdownOptions();
     }
+
+    const syncTaskManagementFromAdminDivision = (adminRecords) => {
+        if (!taskTableBody) return;
+        const records = Array.isArray(adminRecords) ? adminRecords : [];
+        if (!records.length) return;
+
+        const existingRows = getTaskRows();
+        const rowByAdminId = new Map();
+        const emptyRow = taskTableBody.querySelector(".js-task-empty-row");
+        existingRows.forEach((row) => {
+            const adminRecordId = String(row?.dataset?.adminRecordId || "").trim();
+            if (adminRecordId) rowByAdminId.set(adminRecordId, row);
+        });
+
+        records.forEach((adminRecord) => {
+            if (!adminRecord || typeof adminRecord !== "object") return;
+            const adminRecordId = String(adminRecord.__record_id || "").trim();
+            if (!adminRecordId) return;
+
+            const nextRowData = buildMaintenanceTaskFromAdminRecord(adminRecord);
+            const nextRow = createTaskRowElement(nextRowData);
+            const currentRow = rowByAdminId.get(adminRecordId);
+            if (currentRow instanceof HTMLTableRowElement && currentRow.parentElement === taskTableBody) {
+                currentRow.replaceWith(nextRow);
+            } else {
+                taskTableBody.prepend(nextRow);
+            }
+        });
+
+        if (emptyRow) {
+            emptyRow.remove();
+        }
+
+        persistMaintenanceState();
+        updateTaskSummary();
+        applyTaskFilters();
+    };
 
     if (scheduleForm && scheduleTableBody) {
         scheduleForm.addEventListener("submit", async (event) => {
@@ -10583,6 +10633,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     restoreMaintenanceState();
+
+    if (taskTableBody) {
+        ensureAdminDivisionStoreForMaintenance().then((records) => {
+            syncTaskManagementFromAdminDivision(records);
+        });
+    }
     if (contractorManagement) {
         seedDerivedContractorsFromProjectContracts();
         contractorRows.forEach((row) => syncContractorRowContractMetrics(row));

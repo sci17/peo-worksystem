@@ -1,7 +1,7 @@
 <section class="project-board submissions-board js-division-submissions" data-division-key="{{ submissions_division_key|default:current_section }}">
     <header class="project-header">
         <div class="project-header-copy">
-            <h2>Submitted Projects</h2>
+            <h2>Incoming Task</h2>
             <p>Incoming submissions routed from other divisions.</p>
         </div>
 
@@ -15,7 +15,7 @@
                     data-submissions-url="{{ submissions_url|default:'' }}"
                 >
                     <option value="{{ submissions_main_url|default:'' }}">Main</option>
-                    <option value="{{ submissions_url|default:'' }}" selected>Submitted Projects</option>
+                    <option value="{{ submissions_url|default:'' }}" selected>Incoming Task</option>
                 </select>
             </div>
         </div>
