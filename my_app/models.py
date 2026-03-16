@@ -62,3 +62,16 @@ class DivisionStore(models.Model):
 
     def __str__(self):
         return f'{self.user.get_username()} {self.key} store'
+
+
+class SharedDivisionStore(models.Model):
+    # Global store per division key (shared across users).
+    KEY_CHOICES = DivisionStore.KEY_CHOICES
+
+    key = models.CharField(max_length=20, choices=KEY_CHOICES, unique=True)
+    data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.key} shared store'

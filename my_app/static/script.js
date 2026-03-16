@@ -722,6 +722,7 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
 (() => {
     const ADMIN_STORAGE_KEY = "peo_admin_division_records_v1";
     const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
+    const MAINTENANCE_STATE_UPDATED_EVENT = "peo:maintenance-state-updated";
 
     const DIVISION_LABELS = {
         admin: "Admin Division",
@@ -818,6 +819,14 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
             window.peoDivisionStore.queueSync("maintenance", normalized, 0);
         }
+        const dispatchEvent = () => {
+            if (typeof window.CustomEvent === "function") {
+                window.dispatchEvent(new CustomEvent(MAINTENANCE_STATE_UPDATED_EVENT));
+                return;
+            }
+            window.dispatchEvent(new Event(MAINTENANCE_STATE_UPDATED_EVENT));
+        };
+        dispatchEvent();
     };
 
     const removeMaintenanceTaskByAdminRecordId = (adminRecordId) => {
@@ -3246,7 +3255,44 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+<<<<<<< HEAD
     const normalizeDivisionKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+=======
+    let maintenanceAdminStoreFetchPromise = null;
+    const ensureAdminDivisionRecords = async () => {
+        const local = readAdminDivisionRecords();
+        if (local.length) return local;
+
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.fetchStore !== "function") return local;
+
+        if (!maintenanceAdminStoreFetchPromise) {
+            maintenanceAdminStoreFetchPromise = Promise.resolve()
+                .then(() => store.fetchStore("admin"))
+                .catch(() => null);
+        }
+
+        const server = await maintenanceAdminStoreFetchPromise;
+        const serverData = server && typeof server === "object" ? server.data : null;
+        const records = Array.isArray(serverData) ? serverData : [];
+        if (records.length) {
+            writeAdminDivisionRecords(records);
+        }
+
+        return readAdminDivisionRecords();
+    };
+
+    const normalizeDivisionKey = (value) => {
+        const normalized = String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!normalized) return "";
+        if (normalized.includes("planning")) return "planning";
+        if (normalized.includes("construction")) return "construction";
+        if (normalized.includes("quality")) return "quality";
+        if (normalized.includes("maintenance")) return "maintenance";
+        if (normalized.includes("admin")) return "admin";
+        return normalized;
+    };
+>>>>>>> 6825fcb6ec9839e05f5621e2688e12b0ca9cd963
     const getLocalIsoDate = (date = new Date()) => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -4940,6 +4986,16 @@ document.addEventListener("DOMContentLoaded", () => {
             .replaceAll("'", "&#39;");
 
     const normalizeKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normalizeTaskDivisionFilterKey = (value) => {
+        const normalized = normalizeKey(value);
+        if (!normalized) return "";
+        if (normalized.includes("planning")) return "planningdivision";
+        if (normalized.includes("construction")) return "construction";
+        if (normalized.includes("quality")) return "quality";
+        if (normalized.includes("maintenance")) return "maintenance";
+        if (normalized.includes("admin")) return "admin";
+        return normalized;
+    };
     const normalizeStatus = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
     const normalizeMunicipalityName = (value) =>
         String(value || "")
@@ -9525,7 +9581,7 @@ document.addEventListener("DOMContentLoaded", () => {
             allocationLabel,
             record.notes,
         ].filter(Boolean).join(" ").toLowerCase();
-        row.dataset.division = normalizeKey(allocationLabel);
+        row.dataset.division = normalizeTaskDivisionFilterKey(allocationLabel);
         row.dataset.divisionLabel = allocationLabel;
         row.dataset.priority = normalizedPriority;
         row.dataset.priorityLabel = String(record.priority || "Medium").trim();
@@ -9997,6 +10053,21 @@ document.addEventListener("DOMContentLoaded", () => {
             contractorRecords: serializeContractorRows(),
         };
 
+        const isEmptyPayload = !Array.isArray(payload.roadRecords) || payload.roadRecords.length === 0
+            ? !payload.equipmentRows.length && !payload.scheduleRows.length && !payload.taskRows.length && !payload.personnelRecords.length && !payload.contractorRecords.length
+            : false;
+        let hasExistingLocalState = false;
+        try {
+            hasExistingLocalState = Boolean(window.localStorage.getItem(maintenanceStorageKey));
+        } catch (error) {
+            hasExistingLocalState = false;
+        }
+
+        // Avoid overwriting a non-empty server store with an empty payload on first load (e.g., new device/session).
+        if (isEmptyPayload && !hasExistingLocalState) {
+            return;
+        }
+
         try {
             window.localStorage.setItem(maintenanceStorageKey, JSON.stringify(payload));
         } catch (error) {
@@ -10074,6 +10145,13 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             adminRecordById.forEach((record) => {
+<<<<<<< HEAD
+=======
+                const divisionKey = normalizeDivisionKey(record?.division);
+                if (divisionKey !== "maintenance") {
+                    return;
+                }
+>>>>>>> 6825fcb6ec9839e05f5621e2688e12b0ca9cd963
                 const taskRow = buildMaintenanceTaskFromAdminRecord(record);
                 const taskId = String(taskRow?.adminRecordId || "").trim();
                 if (taskId && !nextTaskRowsById.has(taskId)) {
@@ -10211,7 +10289,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         createdAt = String(adminRecord?.__submitted_at || adminRecord?.__updated_at || "").trim();
                     }
                     if (!route) {
-                        route = normalizeKey(adminRecord?.division) === "maintenance" ? "Incoming" : "Outgoing";
+                        route = normalizeDivisionKey(adminRecord?.division) === "maintenance" ? "Incoming" : "Outgoing";
                     }
                 }
                 if (!dueDateIso && adminRecordId) {
@@ -10634,11 +10712,91 @@ document.addEventListener("DOMContentLoaded", () => {
 
     restoreMaintenanceState();
 
+<<<<<<< HEAD
     if (taskTableBody) {
         ensureAdminDivisionStoreForMaintenance().then((records) => {
             syncTaskManagementFromAdminDivision(records);
         });
     }
+=======
+    const refreshTaskTableFromStorage = () => {
+        if (!(taskTableBody instanceof HTMLElement)) {
+            return;
+        }
+        restoreMaintenanceState();
+        updateTaskSummary();
+        applyTaskFilters();
+    };
+
+    const hydrateMaintenanceStoresFromServer = async () => {
+        if (!(taskTableBody instanceof HTMLElement)) {
+            return;
+        }
+
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.fetchStore !== "function") {
+            return;
+        }
+
+        const safeParse = (raw) => {
+            try {
+                return raw ? JSON.parse(raw) : null;
+            } catch (error) {
+                return null;
+            }
+        };
+
+        const [adminResp, maintenanceResp] = await Promise.all([
+            store.fetchStore("admin").catch(() => null),
+            store.fetchStore("maintenance").catch(() => null),
+        ]);
+
+        const serverAdmin = adminResp && typeof adminResp === "object" ? adminResp.data : null;
+        const serverMaintenance = maintenanceResp && typeof maintenanceResp === "object" ? maintenanceResp.data : null;
+
+        const hasServerAdmin = Array.isArray(serverAdmin) && serverAdmin.length > 0;
+        const hasServerMaintenance = serverMaintenance && typeof serverMaintenance === "object" && !Array.isArray(serverMaintenance)
+            && Object.keys(serverMaintenance).length > 0;
+
+        // Prefer server state when it exists so routed documents show up across sessions/users.
+        if (hasServerAdmin) {
+            try {
+                window.localStorage.setItem(adminDivisionStorageKey, JSON.stringify(serverAdmin));
+            } catch (error) {
+                // Ignore storage failures.
+            }
+        }
+        if (hasServerMaintenance) {
+            try {
+                window.localStorage.setItem(maintenanceStorageKey, JSON.stringify(serverMaintenance));
+            } catch (error) {
+                // Ignore storage failures.
+            }
+        }
+
+        if (hasServerAdmin || hasServerMaintenance) {
+            refreshTaskTableFromStorage();
+        }
+    };
+
+    if (taskTableBody instanceof HTMLElement) {
+        // Keep the Maintenance task table in sync when another tab routes Admin records into Maintenance.
+        window.addEventListener("focus", refreshTaskTableFromStorage);
+        window.addEventListener("storage", (event) => {
+            const key = String(event.key || "");
+            if (key === adminDivisionStorageKey || key === maintenanceStorageKey) {
+                refreshTaskTableFromStorage();
+            }
+        });
+        window.addEventListener(MAINTENANCE_STATE_UPDATED_EVENT, () => {
+            refreshTaskTableFromStorage();
+        });
+
+        // Pull server state when localStorage is empty/stale (e.g., different user/session/device).
+        hydrateMaintenanceStoresFromServer();
+    }
+
+>>>>>>> 6825fcb6ec9839e05f5621e2688e12b0ca9cd963
     if (contractorManagement) {
         seedDerivedContractorsFromProjectContracts();
         contractorRows.forEach((row) => syncContractorRowContractMetrics(row));
