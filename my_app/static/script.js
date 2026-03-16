@@ -14437,14 +14437,9 @@ document.addEventListener("DOMContentLoaded", () => {
             .reduce((sum, record) => sum + parsePlanningDocAmount(record?.amount), 0);
     };
 
-<<<<<<< HEAD
-	    const mapAdminRecordToPlanningDocument = (adminRecord) => {
-	        const fallbackDate = new Date().toISOString().slice(0, 10);
-=======
     const mapAdminRecordToPlanningDocument = (adminRecord) => {
         const nowIso = new Date().toISOString();
         const fallbackDate = nowIso.slice(0, 10);
->>>>>>> 86840d6d0476528b8467b95aaa21e4eb5feb961e
         const dateReceived = String(
             adminRecord?.date_received_peo
             || adminRecord?.date_received_admin
@@ -14465,26 +14460,6 @@ document.addEventListener("DOMContentLoaded", () => {
             || ""
         ).trim();
 
-<<<<<<< HEAD
-	        const contractAmount = String(adminRecord?.contract_amount || "").trim();
-	        const revisedContractAmount = String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim();
-
-	        return {
-	            id: `planning_doc_admin_${String(adminRecord?.__record_id || "")}`,
-	            __admin_source_id: String(adminRecord?.__record_id || ""),
-	            slip_no: String(adminRecord?.slip_no || "").trim(),
-	            document_name: String(adminRecord?.document_name || "").trim(),
-	            location: String(adminRecord?.location || "").trim(),
-	            contractor: String(adminRecord?.contractor || "").trim(),
-	            contract_amount: contractAmount,
-	            revised_contract_amount: revisedContractAmount,
-	            // Keep `amount` as the canonical value used by planning budget computations.
-	            amount: revisedContractAmount,
-	            received_from: "Admin Division",
-	            date_received: dateReceived,
-	            status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
-	            budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
-=======
         return {
             id: `planning_doc_admin_${String(adminRecord?.__record_id || "")}`,
             __admin_source_id: String(adminRecord?.__record_id || ""),
@@ -14499,7 +14474,6 @@ document.addEventListener("DOMContentLoaded", () => {
             date_received: dateReceived,
             status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
             budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
->>>>>>> 86840d6d0476528b8467b95aaa21e4eb5feb961e
             budget_allocation_other: mappedBudgetAllocation === "Others" ? mappedBudgetOther : "",
             remarks: String(adminRecord?.description || "").trim(),
             created_at: Date.now(),
@@ -16315,34 +16289,16 @@ document.addEventListener("DOMContentLoaded", () => {
 	                ? normalizePlanningDocStatus(rawStatus)
 	                : normalizePlanningDocStatus(existingRecord.status) || "For Review";
 
-<<<<<<< HEAD
-	            const slipNo = String(existingRecord.slip_no || "").trim();
-	            const documentName = String(existingRecord.document_name || "").trim();
-	            const location = String(existingRecord.location || "").trim();
-	            const contractor = String(existingRecord.contractor || "").trim();
-	            const amount = String(existingRecord.amount || "").trim();
-	            const contractAmount = String(existingRecord.contract_amount || "").trim();
-	            const revisedContractAmount = String(existingRecord.revised_contract_amount || existingRecord.amount || "").trim();
-	            const receivedFrom = String(existingRecord.received_from || "").trim();
-	            const dateReceived = String(existingRecord.date_received || "").trim();
+            const slipNo = String(existingRecord.slip_no || "").trim();
+            const documentName = String(existingRecord.document_name || "").trim();
+            const location = String(existingRecord.location || "").trim();
+            const contractor = String(existingRecord.contractor || "").trim();
+            const amount = String(existingRecord.amount || "").trim();
+            const contractAmount = String(existingRecord.contract_amount || "").trim();
+            const revisedContractAmount = String(existingRecord.revised_contract_amount || existingRecord.amount || "").trim();
+            const receivedFrom = String(existingRecord.received_from || "").trim();
+            const dateReceived = String(existingRecord.date_received || "").trim();
 
-	            const updatedRecord = {
-	                ...existingRecord,
-	                slip_no: slipNo,
-	                document_name: documentName,
-	                location,
-	                contractor,
-	                contract_amount: contractAmount,
-	                revised_contract_amount: revisedContractAmount,
-	                amount,
-	                received_from: receivedFrom,
-	                date_received: dateReceived,
-	                status: resolvedStatus,
-	                budget_allocation: budgetAllocation,
-	                budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
-	                remarks: String(formData.get("remarks") || "").trim(),
-	            };
-=======
             const nowIso = new Date().toISOString();
             const previousStatus = normalizePlanningDocStatus(planningDocumentRecords[recordIndex]?.status || "");
             const hasStatusChange = Boolean(previousStatus && resolvedStatus && previousStatus !== resolvedStatus);
@@ -16355,9 +16311,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     : (planningDocumentRecords[recordIndex]?.__status_updated_at || ""),
                 slip_no: slipNo,
                 document_name: documentName,
-                location: String(formData.get("location") || "").trim(),
-                contractor: String(formData.get("contractor") || "").trim(),
-                amount: String(formData.get("amount") || "").trim(),
+                location,
+                contractor,
+                contract_amount: contractAmount,
+                revised_contract_amount: revisedContractAmount,
+                amount,
                 received_from: receivedFrom,
                 date_received: dateReceived,
                 status: resolvedStatus,
@@ -16365,7 +16323,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 budget_allocation_other: budgetAllocation === "Others" ? budgetAllocationOther : "",
                 remarks: String(formData.get("remarks") || "").trim(),
             };
->>>>>>> 86840d6d0476528b8467b95aaa21e4eb5feb961e
 
             planningDocumentRecords[recordIndex] = updatedRecord;
             writeStoredPlanningDocuments(planningDocumentRecords);
@@ -19638,17 +19595,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (editingRecordId) {
                 const targetIndex = records.findIndex((record) => record.__id === editingRecordId);
                 if (targetIndex >= 0) {
-<<<<<<< HEAD
-                    const mergedRecord = applyQualityScanAttachmentToRecord({
-                        ...records[targetIndex],
-                        ...formRecord,
-                        __id: editingRecordId,
-                    });
-                    records[targetIndex] = mergedRecord;
-                }
-            } else {
-                records.unshift(applyQualityScanAttachmentToRecord(formRecord));
-=======
                     const existing = records[targetIndex] || {};
                     const previousStatus = normalizeText(existing?.status);
                     const nextStatus = normalizeText(formRecord?.status);
@@ -19674,7 +19620,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 };
                 records.unshift(createdRecord);
                 syncQualityStatusToAdmin(createdRecord);
->>>>>>> 86840d6d0476528b8467b95aaa21e4eb5feb961e
             }
 
             records = dedupeQualityRecords(records);
