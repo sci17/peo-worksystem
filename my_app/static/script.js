@@ -65,12 +65,24 @@
         el.style.bottom = 'auto';
         el.style.left = 'auto';
         el.style.transform = '';
-        const pos = String(position || 'bottom-right').toLowerCase();
-        if (pos === 'top-right') { el.style.top = '12px'; el.style.right = '22px'; }
-        else if (pos === 'top-left') { el.style.top = '12px'; el.style.left = '22px'; }
-        else if (pos === 'bottom-left') { el.style.bottom = '22px'; el.style.left = '22px'; }
+        const pos = String(position || 'bottom-left').toLowerCase();
+
+        el.classList.remove('is-toast-top', 'is-toast-bottom');
+        if (pos.startsWith('top')) el.classList.add('is-toast-top');
+        else if (pos.startsWith('bottom')) el.classList.add('is-toast-bottom');
+
+        const edge = '22px';
+        const topEdge = '12px';
+        const safeTop = `calc(env(safe-area-inset-top, 0px) + ${topEdge})`;
+        const safeRight = `calc(env(safe-area-inset-right, 0px) + ${edge})`;
+        const safeBottom = `calc(env(safe-area-inset-bottom, 0px) + ${edge})`;
+        const safeLeft = `calc(env(safe-area-inset-left, 0px) + ${edge})`;
+
+        if (pos === 'top-right') { el.style.top = safeTop; el.style.right = safeRight; }
+        else if (pos === 'top-left') { el.style.top = safeTop; el.style.left = safeLeft; }
+        else if (pos === 'bottom-left') { el.style.bottom = safeBottom; el.style.left = safeLeft; }
         else if (pos === 'center') { el.style.top = '50%'; el.style.left = '50%'; el.style.transform = 'translate(-50%, -50%)'; }
-        else { /* bottom-right default */ el.style.right = '22px'; el.style.bottom = '22px'; }
+        else { /* bottom-right default */ el.style.right = safeRight; el.style.bottom = safeBottom; }
     }
 
     function setStyle(el, style) {
@@ -93,7 +105,7 @@
     }
 
     function show(options) {
-        const opts = Object.assign({ variant: 'info', title: '', message: '', duration: 3200, persist: false, position: 'bottom-right', style: '' }, options || {});
+        const opts = Object.assign({ variant: 'info', title: '', message: '', duration: 3200, persist: false, position: 'bottom-left', style: '' }, options || {});
         const el = ensureContainer();
         setVariant(el, opts.variant);
         setIcon(el, opts.variant);
@@ -109,17 +121,75 @@
     }
 
     function bindDataAttributes() {
+        if (window.__peoToastDataAttributesBound) {
+            return;
+        }
+        window.__peoToastDataAttributesBound = true;
+
+        const PEO_PERSISTED_TOAST_KEY = "peo_persisted_system_toast_v1";
+
+        try {
+            const persistedToast = window.sessionStorage.getItem(PEO_PERSISTED_TOAST_KEY);
+            if (persistedToast) {
+                window.sessionStorage.removeItem(PEO_PERSISTED_TOAST_KEY);
+                const parsedToast = JSON.parse(persistedToast);
+                if (parsedToast && typeof parsedToast === "object" && String(parsedToast.message || "").trim()) {
+                    const resolvedPosition = parsedToast.position || (parsedToast.title === "Sidebar Navigation" ? "bottom-left" : undefined);
+                    show({
+                        variant: parsedToast.variant || "info",
+                        title: parsedToast.title || "",
+                        message: parsedToast.message || "",
+                        persist: false,
+                        position: resolvedPosition,
+                        style: parsedToast.style || "",
+                    });
+                }
+            }
+        } catch (e) {
+            /* ignore */
+        }
+
         document.addEventListener('click', (ev) => {
             const trigger = ev.target.closest('[data-peo-toast-message]');
             if (!trigger) return;
+            if (trigger.matches(":disabled, [aria-disabled='true']")) return;
             const message = trigger.getAttribute('data-peo-toast-message') || '';
+            if (!String(message || "").trim()) return;
             const title = trigger.getAttribute('data-peo-toast-title') || '';
             const variant = trigger.getAttribute('data-peo-toast-variant') || 'info';
             const persistAttr = trigger.getAttribute('data-peo-toast-persist');
-            const persist = persistAttr === 'true' || persistAttr === '1' || persistAttr === 'navigation';
+            const persist = persistAttr === 'true' || persistAttr === '1';
             const position = trigger.getAttribute('data-peo-toast-position') || undefined;
             const style = trigger.getAttribute('data-peo-toast-style') || undefined;
-            show({ variant, title, message, persist, position, style });
+
+            const resolvedPosition = position || (title === "Sidebar Navigation" ? "bottom-left" : undefined);
+
+            if (trigger instanceof HTMLAnchorElement) {
+                const href = String(trigger.getAttribute("href") || "").trim();
+                const shouldPersistToNextPage = persistAttr === "navigation" || trigger.dataset.peoToastPersist === "navigation";
+                const isRealNavigation = href && href !== "#" && !href.startsWith("javascript:");
+
+                if (shouldPersistToNextPage && isRealNavigation) {
+                    try {
+                        window.sessionStorage.setItem(PEO_PERSISTED_TOAST_KEY, JSON.stringify({
+                            message,
+                            title,
+                            variant,
+                            position: resolvedPosition || "",
+                            style: style || "",
+                        }));
+                    } catch (e) {
+                        /* ignore */
+                    }
+                    return;
+                }
+
+                if (!isRealNavigation) {
+                    ev.preventDefault();
+                }
+            }
+
+            show({ variant, title, message, persist, position: resolvedPosition, style });
         });
 
         document.addEventListener('keydown', (ev) => {
@@ -4802,6 +4872,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const openTaskModalButtons = document.querySelectorAll(".js-open-task-modal");
     const closeTaskModalButtons = document.querySelectorAll(".js-close-task-modal");
     const taskForm = document.querySelector(".js-task-form");
+    const taskRowEditModal = document.querySelector(".js-task-row-edit-modal");
+    const closeTaskRowEditModalButtons = document.querySelectorAll(".js-close-task-row-edit-modal");
+    const taskRowEditForm = document.querySelector(".js-task-row-edit-form");
+    const taskRowEditRouteSelect = document.querySelector(".js-task-row-edit-route-division");
+    const taskRowEditRouteSubmit = document.querySelector(".js-task-row-edit-route-submit");
     const taskRouteSelect = document.querySelector(".js-task-route-division");
     const taskRouteSubmit = document.querySelector(".js-task-route-submit");
     const taskRouteFileInput = document.querySelector(".js-task-route-file");
@@ -4960,6 +5035,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let editingEquipmentRow = null;
     let editingScheduleRow = null;
     let editingTaskRow = null;
+    let editingTaskRowForEditModal = null;
     let editingContractorRow = null;
     let deletingContractorRow = null;
     let evaluatingContractorRow = null;
@@ -8834,6 +8910,108 @@ document.addEventListener("DOMContentLoaded", () => {
         setBodyScrollLock();
     };
 
+    const TASK_ROW_EDIT_LOCKED_FIELD_NAMES = [
+        "slip_no",
+        "title",
+        "location",
+        "contractor",
+        "billing_type",
+        "amount",
+        "receive_from",
+        "date_received",
+        "allocation",
+    ];
+
+    const lockTaskRowEditFormFields = (locked = true) => {
+        if (!taskRowEditForm) return;
+        TASK_ROW_EDIT_LOCKED_FIELD_NAMES.forEach((name) => {
+            const field = taskRowEditForm.elements.namedItem(name);
+            if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+                // Disable date picker interactions; readonly isn't consistently honored for type="date".
+                if (field.type === "date") {
+                    field.disabled = Boolean(locked);
+                } else {
+                    field.readOnly = Boolean(locked);
+                }
+            } else if (field instanceof HTMLSelectElement) {
+                field.disabled = Boolean(locked);
+            }
+        });
+    };
+
+    const closeTaskRowEditModal = () => {
+        if (!taskRowEditModal) {
+            return;
+        }
+        taskRowEditModal.hidden = true;
+        editingTaskRowForEditModal = null;
+        if (taskRowEditForm) {
+            taskRowEditForm.reset();
+        }
+        lockTaskRowEditFormFields(false);
+        if (taskRowEditRouteSelect instanceof HTMLSelectElement) {
+            taskRowEditRouteSelect.value = "";
+        }
+        if (taskRowEditRouteSubmit instanceof HTMLButtonElement) {
+            taskRowEditRouteSubmit.disabled = true;
+        }
+        setBodyScrollLock();
+    };
+
+    const syncTaskRowEditRouteControls = () => {
+        if (!(taskRowEditRouteSelect instanceof HTMLSelectElement) || !(taskRowEditRouteSubmit instanceof HTMLButtonElement)) {
+            return;
+        }
+        const selected = String(taskRowEditRouteSelect.value || "").trim();
+        taskRowEditRouteSubmit.disabled = !selected;
+    };
+
+    const openTaskRowEditModal = (row) => {
+        if (!taskRowEditModal || !taskRowEditForm || !(row instanceof HTMLTableRowElement)) {
+            return;
+        }
+
+        editingTaskRowForEditModal = row;
+        taskRowEditForm.reset();
+        if (taskRowEditRouteSelect instanceof HTMLSelectElement) {
+            taskRowEditRouteSelect.value = "";
+        }
+        if (taskRowEditRouteSubmit instanceof HTMLButtonElement) {
+            taskRowEditRouteSubmit.disabled = true;
+        }
+
+        const setValue = (name, value) => {
+            const field = taskRowEditForm.elements.namedItem(name);
+            if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+                field.value = String(value || "").trim();
+            }
+        };
+
+        setValue("slip_no", row.dataset.slipNo || row.cells[0]?.textContent);
+        setValue("title", row.dataset.title || row.cells[1]?.textContent);
+        setValue("location", row.dataset.location || row.cells[2]?.textContent);
+        setValue("contractor", row.dataset.assignedTo || "");
+        setValue("billing_type", row.dataset.priorityLabel || "");
+        setValue("amount", row.dataset.amount || "");
+        setValue("receive_from", row.dataset.receiveFrom || "");
+        setValue("date_received", row.dataset.dueDateIso || "");
+        setValue("status", row.dataset.statusLabel || row.querySelector(".task-table-pill--status")?.textContent || "Pending");
+        setValue("allocation", row.dataset.allocation || row.dataset.divisionLabel || "");
+        setValue("assigned_personnel", row.dataset.assignedPersonnel || "");
+        setValue("notes", row.dataset.notes || "");
+
+        // Protect core document data: only allow Status, Remarks, Assigned Personnel, and Routing.
+        lockTaskRowEditFormFields(true);
+
+        taskRowEditModal.hidden = false;
+        setBodyScrollLock();
+        const firstEditable = taskRowEditModal.querySelector("input[name='assigned_personnel']");
+        if (firstEditable instanceof HTMLInputElement) {
+            firstEditable.focus();
+            firstEditable.select();
+        }
+    };
+
     const openTaskModal = () => {
         if (!taskModal) {
             return;
@@ -9019,6 +9197,164 @@ document.addEventListener("DOMContentLoaded", () => {
     closeTaskModalButtons.forEach((button) => {
         button.addEventListener("click", closeTaskModal);
     });
+
+    closeTaskRowEditModalButtons.forEach((button) => {
+        button.addEventListener("click", closeTaskRowEditModal);
+    });
+
+    if (taskRowEditRouteSelect instanceof HTMLSelectElement) {
+        taskRowEditRouteSelect.addEventListener("change", syncTaskRowEditRouteControls);
+    }
+
+    if (taskRowEditRouteSubmit instanceof HTMLButtonElement) {
+        taskRowEditRouteSubmit.addEventListener("click", async () => {
+            if (!editingTaskRowForEditModal) {
+                showRoadUploadStatusToast("Select a record to edit before submitting.", "warning");
+                return;
+            }
+
+            const router = window.peoProjectRouter;
+            if (!router || typeof router.submitToDivision !== "function") {
+                showRoadUploadStatusToast("Division submission is not available right now.", "warning");
+                return;
+            }
+
+            const targetDivision = String(taskRowEditRouteSelect?.value || "").trim();
+            const targetKey = router.resolveDivisionKey ? router.resolveDivisionKey(targetDivision) : normalizeTaskDivisionFilterKey(targetDivision);
+            if (!targetKey) {
+                showRoadUploadStatusToast("Please select a division to submit this record to.", "warning");
+                return;
+            }
+
+            const formData = taskRowEditForm ? new FormData(taskRowEditForm) : null;
+            const status = (formData?.get("status") || editingTaskRowForEditModal.dataset.statusLabel || "Pending").toString().trim() || "Pending";
+            const notes = (formData?.get("notes") || editingTaskRowForEditModal.dataset.notes || "").toString().trim();
+            const assignedPersonnel = (formData?.get("assigned_personnel") || editingTaskRowForEditModal.dataset.assignedPersonnel || "").toString().trim();
+
+            const currentRecord = serializeSingleTaskRow(editingTaskRowForEditModal) || {};
+            const slipNo = String(currentRecord.slipNo || "").trim();
+            const title = String(currentRecord.title || "").trim();
+            const location = String(currentRecord.location || "").trim();
+            const contractor = String(currentRecord.assignedTo || "").trim();
+            const billingType = String(currentRecord.priority || "").trim();
+            const amount = String(currentRecord.amount || "").trim();
+            const receiveFrom = String(currentRecord.receiveFrom || "").trim();
+            const dateReceived = String(currentRecord.dueDateIso || "").trim() || getLocalIsoDate();
+            const allocation = String(currentRecord.allocation || currentRecord.division || "").trim();
+
+            if (!title) {
+                showRoadUploadStatusToast("Please enter Document Name before submitting.", "warning");
+                return;
+            }
+
+            const existingAdminRecordId = String(editingTaskRowForEditModal.dataset.adminRecordId || "").trim();
+            const submission = router.submitToDivision({
+                sourceDivisionKey: "maintenance",
+                sourceRecord: {
+                    slip_no: slipNo,
+                    document_name: title,
+                    project_name: title,
+                    location,
+                    contractor,
+                    billing_type: billingType,
+                    revised_contract_amount: amount,
+                    receive_from: receiveFrom,
+                    date_received: dateReceived || getLocalIsoDate(),
+                    status,
+                    division: allocation,
+                    remarks: notes,
+                    notes,
+                    assigned_personnel: assignedPersonnel,
+                },
+                targetDivisionKey: targetKey,
+                existingAdminRecordId,
+                uploadedFile: null,
+            });
+
+            if (!submission || !submission.ok) {
+                showRoadUploadStatusToast(String(submission?.error || "Unable to submit record."), "danger");
+                return;
+            }
+
+            const nowIso = new Date().toISOString();
+            const record = serializeSingleTaskRow(editingTaskRowForEditModal) || {};
+            record.adminRecordId = String(submission.adminRecordId || record.adminRecordId || "").trim();
+            record.route = targetKey === "maintenance" ? "Incoming" : "Outgoing";
+            record.status = status;
+            record.notes = notes;
+            record.assignedPersonnel = assignedPersonnel;
+            record.updatedAt = nowIso;
+            if (!record.createdAt) {
+                record.createdAt = nowIso;
+            }
+
+            const routedLabel = (router.labelForDivisionKey && router.labelForDivisionKey(targetKey)) || targetDivision;
+            record.allocation = routedLabel || record.allocation;
+            record.division = routedLabel || record.division;
+
+            const updatedRow = createTaskRowElement(record);
+            editingTaskRowForEditModal.replaceWith(updatedRow);
+            editingTaskRowForEditModal = null;
+
+            updateTaskSummary();
+            applyTaskFilters();
+            persistMaintenanceState();
+            closeTaskRowEditModal();
+            showRoadUploadStatusToast("Record submitted successfully.", "success");
+        });
+    }
+
+    if (taskRowEditForm) {
+        taskRowEditForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!editingTaskRowForEditModal) {
+                return;
+            }
+
+            const formData = new FormData(taskRowEditForm);
+            const previousStatus = String(editingTaskRowForEditModal.dataset.statusLabel || "").trim();
+            const nextStatus = String(formData.get("status") || previousStatus || "Pending").trim() || "Pending";
+
+            const previous = serializeSingleTaskRow(editingTaskRowForEditModal) || {};
+            const nowIso = new Date().toISOString();
+            if (!String(previous.title || "").trim()) {
+                showRoadUploadStatusToast("Missing record title. Please refresh and try again.", "warning");
+                return;
+            }
+
+            const nextRecord = {
+                ...previous,
+                status: nextStatus,
+                notes: String(formData.get("notes") || "").trim(),
+                assignedPersonnel: String(formData.get("assigned_personnel") || "").trim(),
+                updatedAt: nowIso,
+            };
+
+            if (!nextRecord.createdAt) {
+                nextRecord.createdAt = nowIso;
+            }
+            if (!nextRecord.dueDateIso) {
+                nextRecord.dueDateIso = previous.dueDateIso || "";
+            }
+            if (!nextRecord.dueDateDisplay && nextRecord.dueDateIso) {
+                nextRecord.dueDateDisplay = formatTaskDateValue(nextRecord.dueDateIso);
+            }
+
+            const updatedRow = createTaskRowElement(nextRecord);
+            editingTaskRowForEditModal.replaceWith(updatedRow);
+            editingTaskRowForEditModal = null;
+
+            if (nextRecord.adminRecordId) {
+                updateAdminRecordStatus(nextRecord.adminRecordId, nextStatus);
+            }
+
+            updateTaskSummary();
+            applyTaskFilters();
+            persistMaintenanceState();
+            closeTaskRowEditModal();
+            showRoadUploadStatusToast("Record updated successfully.", "success");
+        });
+    }
 
     if (taskRouteSelect instanceof HTMLSelectElement) {
         taskRouteSelect.addEventListener("change", syncTaskRouteControls);
@@ -9581,6 +9917,44 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const TASK_AGE_MS_PER_DAY = 86400000;
+
+    const parseTaskAgeDateToMs = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return 0;
+
+        const ymdMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (ymdMatch) {
+            const year = Number(ymdMatch[1]);
+            const month = Number(ymdMatch[2]);
+            const day = Number(ymdMatch[3]);
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return 0;
+            return new Date(year, month - 1, day).getTime();
+        }
+
+        const parsed = Date.parse(text);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const getTaskAgeBadgeMarkup = (dateValue) => {
+        const receivedMs = parseTaskAgeDateToMs(dateValue);
+        if (!receivedMs) return "";
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const receivedDate = new Date(receivedMs);
+        receivedDate.setHours(0, 0, 0, 0);
+        const daysOld = Math.max(0, Math.floor((today.getTime() - receivedDate.getTime()) / TASK_AGE_MS_PER_DAY));
+
+        if (daysOld === 0) {
+            return '<span class="peo-doc-age-badge is-new" title="Received today">New</span>';
+        }
+
+        const label = `${daysOld} day${daysOld === 1 ? "" : "s"} ago`;
+        const variantClass = daysOld >= 4 ? "is-stale" : "is-recent";
+        return `<span class="peo-doc-age-badge ${variantClass}" title="Received ${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+    };
+
     // Builds an "Incoming" Maintenance task row from an Admin Division record.
     // Keep this local to the Maintenance page so Task Management does not depend on other page scripts.
     const buildMaintenanceIncomingTaskFromAdminRecord = (adminRecord) => {
@@ -9764,6 +10138,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const allocationLabel = String(record.allocation || record.division || "").trim();
         const assigneeLabel = String(record.assignedTo || "").trim() || String(record.assignedPersonnel || "").trim();
         const assignedPersonnelLabel = String(record.assignedPersonnel || "").trim();
+        const remarksLabel = String(record.notes || "").trim();
 
         row.dataset.search = [
             record.slipNo,
@@ -9775,7 +10150,7 @@ document.addEventListener("DOMContentLoaded", () => {
             record.receiveFrom,
             record.status,
             allocationLabel,
-            record.notes,
+            remarksLabel,
         ].filter(Boolean).join(" ").toLowerCase();
         row.dataset.division = normalizeTaskDivisionFilterKey(allocationLabel);
         row.dataset.divisionLabel = allocationLabel;
@@ -9794,17 +10169,23 @@ document.addEventListener("DOMContentLoaded", () => {
         row.dataset.receiveFrom = String(record.receiveFrom || "").trim();
         row.dataset.allocation = allocationLabel;
         row.dataset.adminRecordId = String(record.adminRecordId || "").trim();
-        row.dataset.notes = String(record.notes || "").trim();
+        row.dataset.notes = remarksLabel;
         row.dataset.createdAt = String(record.createdAt || "").trim();
         row.dataset.updatedAt = String(record.updatedAt || "").trim();
         row.dataset.route = String(record.route || "").trim();
+
+        const ageBadge = getTaskAgeBadgeMarkup(record.updatedAt || record.createdAt || record.dueDateIso || record.dueDateDisplay);
+        const titleText = escapeHtml(record.title || "-");
+        const titleCell = ageBadge
+            ? `<span class="peo-doc-title-inline"><strong>${titleText}</strong>${ageBadge}</span>`
+            : `<strong>${titleText}</strong>`;
 
         row.innerHTML = `
             <td>${escapeHtml(record.slipNo || "-")}</td>
             <td>
                 <div class="task-title-cell">
                     <div class="task-title-copy">
-                        <strong>${escapeHtml(record.title || "-")}</strong>
+                        ${titleCell}
                     </div>
                 </div>
             </td>
@@ -9823,7 +10204,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td class="task-remarks-cell">
                 <div class="task-remarks-content">
                     <div class="task-remarks-copy">
-                        <span class="task-remarks-text">${escapeHtml(record.notes || "-")}</span>
+                        <span class="task-remarks-text">${escapeHtml(remarksLabel)}</span>
                         <span class="task-remarks-personnel${assignedPersonnelLabel ? "" : " task-remarks-personnel--empty"}">
                             ${assignedPersonnelLabel ? `Personnel: ${escapeHtml(assignedPersonnelLabel)}` : "No personnel assigned"}
                         </span>
@@ -11063,7 +11444,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const editButton = target.closest('.js-table-action-edit[data-record-type="task"]');
             if (editButton) {
-                openTaskModalForEdit(row);
+                openTaskRowEditModal(row);
                 return;
             }
 
@@ -11420,6 +11801,7 @@ document.addEventListener("DOMContentLoaded", () => {
             closeRoadDeleteModal();
             closeRoadAddModal();
             closeTaskPersonnelModal();
+            closeTaskRowEditModal();
             closeTaskModal();
             closeRoadDeleteConfirmToast();
             closeRoadUploadDuplicatePrompt();
@@ -11931,6 +12313,44 @@ document.addEventListener("DOMContentLoaded", () => {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    };
+
+    const DOC_AGE_MS_PER_DAY = 86400000;
+
+    const parseLooseDateToMs = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return 0;
+
+        const ymdMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (ymdMatch) {
+            const year = Number(ymdMatch[1]);
+            const month = Number(ymdMatch[2]);
+            const day = Number(ymdMatch[3]);
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return 0;
+            return new Date(year, month - 1, day).getTime();
+        }
+
+        const parsed = Date.parse(text);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const getDocAgeBadgeMarkup = (receivedAt) => {
+        const receivedMs = parseLooseDateToMs(receivedAt);
+        if (!receivedMs) return "";
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const receivedDate = new Date(receivedMs);
+        receivedDate.setHours(0, 0, 0, 0);
+        const daysOld = Math.max(0, Math.floor((today.getTime() - receivedDate.getTime()) / DOC_AGE_MS_PER_DAY));
+
+        if (daysOld === 0) {
+            return '<span class="peo-doc-age-badge is-new" title="Received today">New</span>';
+        }
+
+        const label = `${daysOld} day${daysOld === 1 ? "" : "s"} ago`;
+        const variantClass = daysOld >= 4 ? "is-stale" : "is-recent";
+        return `<span class="peo-doc-age-badge ${variantClass}" title="Received ${escapeHtml(label)}">${escapeHtml(label)}</span>`;
     };
 
     const toDisplay = (value) => {
@@ -13040,12 +13460,19 @@ document.addEventListener("DOMContentLoaded", () => {
 	                const projectDashboardHref = constructionProjectDashboardUrl && record.__id
 	                    ? `${constructionProjectDashboardUrl}?id=${encodeURIComponent(record.__id)}`
 	                    : "";
+                    const ageBadge = isAdminAssigned ? getDocAgeBadgeMarkup(record.__received_at || record.__created_at || record.__report_date) : "";
+                    const projectLabel = projectDashboardHref
+                        ? `<a class="construction-project-link" href="${escapeHtml(projectDashboardHref)}">${projectName}</a>`
+                        : projectName;
+                    const projectCell = ageBadge
+                        ? `<span class="peo-doc-title-inline">${projectLabel}${ageBadge}</span>`
+                        : projectLabel;
 	                row.innerHTML = `
 	                    <td class="pa-select-col">
 	                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}">
 	                    </td>
 	                    <td>${pageStartIndex + index + 1}</td>
-	                    <td>${projectDashboardHref ? `<a class="construction-project-link" href="${escapeHtml(projectDashboardHref)}">${projectName}</a>` : projectName}</td>
+	                    <td>${projectCell}</td>
 	                    <td>${escapeHtml(toDisplay(record.location))}</td>
 	                    <td>${escapeHtml(toDisplay(record.mun))}</td>
                     <td>${escapeHtml(toDisplay(record.contractor))}</td>
@@ -14883,6 +15310,44 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const PLANNING_DOC_AGE_MS_PER_DAY = 86400000;
+
+    const planningParseLooseDateToMs = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return 0;
+
+        const ymdMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (ymdMatch) {
+            const year = Number(ymdMatch[1]);
+            const month = Number(ymdMatch[2]);
+            const day = Number(ymdMatch[3]);
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return 0;
+            return new Date(year, month - 1, day).getTime();
+        }
+
+        const parsed = Date.parse(text);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const getPlanningDocAgeBadgeMarkup = (receivedAt) => {
+        const receivedMs = planningParseLooseDateToMs(receivedAt);
+        if (!receivedMs) return "";
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const receivedDate = new Date(receivedMs);
+        receivedDate.setHours(0, 0, 0, 0);
+        const daysOld = Math.max(0, Math.floor((today.getTime() - receivedDate.getTime()) / PLANNING_DOC_AGE_MS_PER_DAY));
+
+        if (daysOld === 0) {
+            return '<span class="peo-doc-age-badge is-new" title="Received today">New</span>';
+        }
+
+        const label = `${daysOld} day${daysOld === 1 ? "" : "s"} ago`;
+        const variantClass = daysOld >= 4 ? "is-stale" : "is-recent";
+        return `<span class="peo-doc-age-badge ${variantClass}" title="Received ${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+    };
+
     const formatPlanningDocAmount = (value) => {
         const text = String(value || "").trim();
         if (!text) return "-";
@@ -15320,10 +15785,15 @@ document.addEventListener("DOMContentLoaded", () => {
 	        const budgetAllocation = getPlanningDocBudgetAllocationDisplay(record);
 	        const contractAmount = record?.contract_amount;
 	        const revisedContractAmount = record?.revised_contract_amount ?? record?.amount;
+            const ageBadge = getPlanningDocAgeBadgeMarkup(record?.__received_at || record?.date_received || record?.__created_at);
+            const docNameText = escapeHtml(record?.document_name || "-");
+            const docNameCell = ageBadge
+                ? `<span class="peo-doc-title-inline"><span>${docNameText}</span>${ageBadge}</span>`
+                : docNameText;
 
 	        return `
 	            <td>${escapeHtml(record?.slip_no || "-")}</td>
-	            <td>${escapeHtml(record?.document_name || "-")}</td>
+	            <td>${docNameCell}</td>
 	            <td>${escapeHtml(record?.location || "-")}</td>
 	            <td>${escapeHtml(record?.contractor || "-")}</td>
 	            <td>${escapeHtml(formatPlanningDocAmount(contractAmount))}</td>
@@ -18711,113 +19181,35 @@ const peoEscapeHtml = (value) => String(value || "")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
-let peoGeneralToastElement = null;
-let peoGeneralToastTimer = null;
 let peoGeneralConfirmElement = null;
-const PEO_PERSISTED_TOAST_KEY = "peo_persisted_system_toast_v1";
-
-const applyPeoGeneralToastPosition = (el, position) => {
-    if (!(el instanceof HTMLElement)) return;
-
-    // Reset position before applying.
-    // Use "auto" to override the base CSS (which defaults to bottom/right).
-    el.style.top = "auto";
-    el.style.right = "auto";
-    el.style.bottom = "auto";
-    el.style.left = "auto";
-    el.style.transform = "";
-
-    const pos = String(position || "").trim().toLowerCase();
-    if (!pos) return;
-
-    const edge = "22px";
-    const topEdge = "12px";
-
-    if (pos === "top-right") {
-        el.style.top = `calc(env(safe-area-inset-top, 0px) + ${topEdge})`;
-        el.style.right = `calc(env(safe-area-inset-right, 0px) + ${edge})`;
-        return;
-    }
-
-    if (pos === "top-left") {
-        el.style.top = `calc(env(safe-area-inset-top, 0px) + ${topEdge})`;
-        el.style.left = `calc(env(safe-area-inset-left, 0px) + ${edge})`;
-        return;
-    }
-
-    if (pos === "bottom-left") {
-        el.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${edge})`;
-        el.style.left = `calc(env(safe-area-inset-left, 0px) + ${edge})`;
-        return;
-    }
-
-    if (pos === "center") {
-        el.style.top = "50%";
-        el.style.left = "50%";
-        el.style.transform = "translate(-50%, -50%)";
-        return;
-    }
-
-    // bottom-right (default)
-    el.style.right = `calc(env(safe-area-inset-right, 0px) + ${edge})`;
-    el.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${edge})`;
-};
 
 const closePeoGeneralToast = () => {
-    if (!(peoGeneralToastElement instanceof HTMLElement)) return;
-    peoGeneralToastElement.classList.remove("is-visible");
-    const toastToRemove = peoGeneralToastElement;
-    peoGeneralToastElement = null;
-    window.setTimeout(() => {
-        toastToRemove.remove();
-    }, 180);
-    if (peoGeneralToastTimer) {
-        window.clearTimeout(peoGeneralToastTimer);
-        peoGeneralToastTimer = null;
+    if (window.PEOToast && typeof window.PEOToast.clear === "function") {
+        window.PEOToast.clear();
     }
 };
 
 const showPeoGeneralToast = (message, options = {}) => {
-    const text = String(message || "").trim() || "Action completed successfully.";
-    const variant = ["success", "info", "warning", "danger"].includes(String(options.variant || "").trim())
-        ? String(options.variant).trim()
-        : "success";
-    const title = String(options.title || "").trim();
-    const position = String(options.position || "").trim();
-    const iconMap = {
-        success: "check_circle",
-        info: "info",
-        warning: "warning",
-        danger: "error",
-    };
+    if (typeof window.showPeoGeneralToast === "function") {
+        window.showPeoGeneralToast(message, options || {});
+        return null;
+    }
 
-    closePeoGeneralToast();
+    if (window.PEOToast && typeof window.PEOToast.show === "function") {
+        const opts = options || {};
+        const variant = String(opts.variant || "info").toLowerCase();
+        window.PEOToast.show({
+            message: String(message || ""),
+            title: String(opts.title || ""),
+            variant,
+            duration: typeof opts.duration === "number" ? opts.duration : (variant === "danger" ? 5000 : 3200),
+            persist: !!opts.persist,
+            position: opts.position,
+            style: opts.style,
+        });
+    }
 
-    const toast = document.createElement("aside");
-    toast.className = `peo-general-toast is-${variant}`;
-    toast.setAttribute("role", variant === "danger" ? "alert" : "status");
-    toast.setAttribute("aria-live", variant === "danger" ? "assertive" : "polite");
-    toast.innerHTML = `
-        <span class="peo-general-toast__icon material-symbols-outlined" aria-hidden="true">${iconMap[variant]}</span>
-        <div class="peo-general-toast__content">
-            ${title ? `<strong class="peo-general-toast__title">${peoEscapeHtml(title)}</strong>` : ""}
-            <span class="peo-general-toast__message">${peoEscapeHtml(text)}</span>
-        </div>
-    `;
-
-    document.body.appendChild(toast);
-    peoGeneralToastElement = toast;
-    applyPeoGeneralToastPosition(toast, position);
-    window.requestAnimationFrame(() => {
-        toast.classList.add("is-visible");
-    });
-
-    const duration = Number(options.duration);
-    peoGeneralToastTimer = window.setTimeout(() => {
-        closePeoGeneralToast();
-    }, Number.isFinite(duration) && duration > 0 ? duration : 3200);
-
-    return toast;
+    return null;
 };
 
 const closePeoGeneralConfirm = () => {
@@ -18911,66 +19303,6 @@ window.PEOSystemMessages = Object.freeze({
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-    try {
-        const persistedToast = window.sessionStorage.getItem(PEO_PERSISTED_TOAST_KEY);
-        if (persistedToast) {
-            window.sessionStorage.removeItem(PEO_PERSISTED_TOAST_KEY);
-            const parsedToast = JSON.parse(persistedToast);
-            showPeoGeneralToast(parsedToast.message, {
-                title: parsedToast.title,
-                variant: parsedToast.variant,
-                position: parsedToast.position,
-            });
-        }
-    } catch (error) {
-        // Ignore storage failures and continue without a persisted toast.
-    }
-
-    document.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
-
-        const trigger = target.closest("[data-peo-toast-message]");
-        if (!(trigger instanceof HTMLElement)) return;
-        if (trigger.matches(":disabled, [aria-disabled='true']")) return;
-
-        const toastPayload = {
-            message: trigger.getAttribute("data-peo-toast-message") || "",
-            title: trigger.getAttribute("data-peo-toast-title") || "",
-            variant: trigger.getAttribute("data-peo-toast-variant") || "info",
-            position: trigger.getAttribute("data-peo-toast-position") || "",
-        };
-
-        if (trigger instanceof HTMLAnchorElement) {
-            const href = String(trigger.getAttribute("href") || "").trim();
-            const shouldPersistToNextPage = trigger.dataset.peoToastPersist === "navigation";
-            const isRealNavigation = href && href !== "#" && !href.startsWith("javascript:");
-
-            if (shouldPersistToNextPage && isRealNavigation) {
-                try {
-                    if (!toastPayload.position && toastPayload.title === "Sidebar Navigation") {
-                        toastPayload.position = "top-right";
-                    }
-                    window.sessionStorage.setItem(PEO_PERSISTED_TOAST_KEY, JSON.stringify(toastPayload));
-                } catch (error) {
-                    // Ignore storage failures and allow navigation to continue.
-                }
-                return;
-            }
-
-            event.preventDefault();
-        }
-
-        const resolvedPosition = toastPayload.position || (toastPayload.title === "Sidebar Navigation" ? "top-right" : "");
-        showPeoGeneralToast(toastPayload.message, {
-            title: toastPayload.title,
-            variant: toastPayload.variant,
-            position: resolvedPosition,
-        });
-    });
-});
-
-document.addEventListener("DOMContentLoaded", () => {
     const qualityDashboard = document.querySelector(".js-quality-dashboard");
     if (!(qualityDashboard instanceof HTMLElement)) return;
 
@@ -19022,6 +19354,44 @@ document.addEventListener("DOMContentLoaded", () => {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    };
+
+    const QUALITY_DOC_AGE_MS_PER_DAY = 86400000;
+
+    const qualityParseLooseDateToMs = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return 0;
+
+        const ymdMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (ymdMatch) {
+            const year = Number(ymdMatch[1]);
+            const month = Number(ymdMatch[2]);
+            const day = Number(ymdMatch[3]);
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return 0;
+            return new Date(year, month - 1, day).getTime();
+        }
+
+        const parsed = Date.parse(text);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const getQualityDocAgeBadgeMarkup = (receivedAt) => {
+        const receivedMs = qualityParseLooseDateToMs(receivedAt);
+        if (!receivedMs) return "";
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const receivedDate = new Date(receivedMs);
+        receivedDate.setHours(0, 0, 0, 0);
+        const daysOld = Math.max(0, Math.floor((today.getTime() - receivedDate.getTime()) / QUALITY_DOC_AGE_MS_PER_DAY));
+
+        if (daysOld === 0) {
+            return '<span class="peo-doc-age-badge is-new" title="Received today">New</span>';
+        }
+
+        const label = `${daysOld} day${daysOld === 1 ? "" : "s"} ago`;
+        const variantClass = daysOld >= 4 ? "is-stale" : "is-recent";
+        return `<span class="peo-doc-age-badge ${variantClass}" title="Received ${escapeHtml(label)}">${escapeHtml(label)}</span>`;
     };
 
     const normalizeText = (value) => {
@@ -19776,6 +20146,11 @@ document.addEventListener("DOMContentLoaded", () => {
             ? readAdminDivisionRecords().find((item) => String(item?.__record_id || "").trim() === adminRecordId)
             : null;
         const hasScan = Boolean(scanUrl) || peoExtractAttachments(adminRecord || record).length > 0;
+        const ageBadge = getQualityDocAgeBadgeMarkup(record.__received_at || record.date_recv || record.doc_date);
+        const projectLocationText = escapeHtml(record.project_location || "-");
+        const projectLocationCell = ageBadge
+            ? `<span class="peo-doc-title-inline"><span>${projectLocationText}</span>${ageBadge}</span>`
+            : projectLocationText;
         const row = document.createElement("tr");
         row.className = "quality-data-row";
         row.dataset.recordId = record.__id;
@@ -19785,7 +20160,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td><span class="quality-badge ${getParticularBadgeClass(record.particulars)}">${escapeHtml(record.particulars || "Other")}</span></td>
             <td>${escapeHtml(record.doc_no || "-")}</td>
             <td>${escapeHtml(record.billing_type || "-")}</td>
-            <td>${escapeHtml(record.project_location || "-")}</td>
+            <td>${projectLocationCell}</td>
             <td>${escapeHtml(record.location_detail || "-")}</td>
             <td>
                 <a href="#" class="quality-scan-link ${hasScan ? "" : "is-disabled"}" ${hasScan ? "" : 'aria-disabled="true" tabindex="-1"'}>

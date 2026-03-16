@@ -2877,6 +2877,10 @@ body {
     transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
+.peo-general-toast.is-toast-top {
+    transform: translateY(-12px);
+}
+
 .peo-general-toast.is-visible {
     opacity: 1;
     transform: translateY(0);
@@ -7076,6 +7080,7 @@ body {
 }
 
 .task-personnel-field input,
+.task-personnel-field select,
 .task-personnel-field textarea {
     width: 100%;
     min-height: 48px;
@@ -7097,10 +7102,27 @@ body {
 }
 
 .task-personnel-field input:focus,
+.task-personnel-field select:focus,
 .task-personnel-field textarea:focus {
     outline: 0;
     border-color: #6f8fb2;
     box-shadow: 0 0 0 4px rgba(71, 117, 170, 0.16);
+}
+
+.task-personnel-field input[readonly],
+.task-personnel-field textarea[readonly],
+.task-personnel-field input:disabled,
+.task-personnel-field select:disabled,
+.task-personnel-field textarea:disabled {
+    background: #f1f5f9;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+.task-personnel-field input:disabled,
+.task-personnel-field select:disabled,
+.task-personnel-field textarea:disabled {
+    opacity: 1;
 }
 
 .task-personnel-dropdown .dropdown-trigger {
@@ -12056,6 +12078,39 @@ body.construction-modal-open {
     text-align: center;
     color: #6d829b;
     font-style: italic;
+}
+
+.peo-doc-title-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.peo-doc-age-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+
+.peo-doc-age-badge.is-new {
+    background: #c8f0dd;
+    color: #18784f;
+}
+
+.peo-doc-age-badge.is-recent {
+    background: #dbe8ff;
+    color: #305fba;
+}
+
+.peo-doc-age-badge.is-stale {
+    background: #f7d9dd;
+    color: #b44555;
 }
 
 .planning-doc-status {

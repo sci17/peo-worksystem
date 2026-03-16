@@ -570,3 +570,122 @@
         </form>
     </div>
 </div>
+
+<div class="task-personnel-modal js-task-row-edit-modal" hidden>
+    <div class="task-personnel-backdrop js-close-task-row-edit-modal"></div>
+    <div class="task-personnel-dialog task-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="task-row-edit-modal-title">
+        <div class="task-personnel-header">
+            <div class="task-personnel-heading">
+                <span class="task-personnel-kicker">Task</span>
+                <h3 id="task-row-edit-modal-title">Edit Record</h3>
+                <p>Update this record and save changes to the task table.</p>
+            </div>
+            <button type="button" class="task-personnel-close js-close-task-row-edit-modal" aria-label="Close edit form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </div>
+
+        <form class="task-personnel-form js-task-row-edit-form">
+            <section class="task-personnel-panel">
+                <div class="task-personnel-panel-head">
+                    <div class="task-personnel-panel-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">edit</span>
+                    </div>
+                    <div>
+                        <h4>Record Details</h4>
+                        <p>Edit the details shown in the Task Management table.</p>
+                    </div>
+                </div>
+
+                <div class="task-personnel-grid">
+                    <label class="task-personnel-field">
+                        <span>Slip No.</span>
+                        <input type="text" name="slip_no" placeholder="e.g., 0001">
+                    </label>
+
+                    <label class="task-personnel-field task-personnel-field--full">
+                        <span>Document Name *</span>
+                        <input type="text" name="title" placeholder="e.g., Construction Road" required>
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Location</span>
+                        <input type="text" name="location" placeholder="e.g., Brgy. San Rafael">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Contractor</span>
+                        <input type="text" name="contractor" placeholder="e.g., Yurich Builders">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Type of Billing</span>
+                        <input type="text" name="billing_type" placeholder="e.g., Site Instruction">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Amount</span>
+                        <input type="text" name="amount" placeholder="e.g., 1,000,000.00">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Receive From</span>
+                        <input type="text" name="receive_from" placeholder="e.g., Admin">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Date Received</span>
+                        <input type="date" name="date_received">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Status</span>
+                        <select name="status">
+                            <option value="Pending">Pending</option>
+                            <option value="For Review">For Review</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Allocation</span>
+                        <input type="text" name="allocation" placeholder="e.g., Maintenance">
+                    </label>
+
+                    <label class="task-personnel-field">
+                        <span>Assigned Personnel</span>
+                        <input type="text" name="assigned_personnel" list="task-personnel-suggestions" placeholder="Select personnel name">
+                    </label>
+
+                    <label class="task-personnel-field task-personnel-field--full">
+                        <span>Remarks</span>
+                        <textarea name="notes" rows="4" placeholder="Add remarks for this record."></textarea>
+                    </label>
+                </div>
+            </section>
+
+            <div class="task-route-panel" aria-label="Submit record to another division">
+                <span class="task-route-kicker">Submit to Division</span>
+                <div class="task-route-controls">
+                    <select class="task-route-select js-task-row-edit-route-division" aria-label="Select division to submit">
+                        <option value="" selected>Select division</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Planning Division">Planning Division</option>
+                        <option value="Construction">Construction</option>
+                        <option value="Quality">Quality</option>
+                        <option value="Maintenance">Maintenance</option>
+                    </select>
+                    <button type="button" class="task-route-submit js-task-row-edit-route-submit" disabled>Submit</button>
+                </div>
+                <small class="peo-route-file-help">This will route the record to the selected division.</small>
+            </div>
+
+            <div class="task-personnel-actions">
+                <button type="button" class="task-personnel-btn task-personnel-btn--secondary js-close-task-row-edit-modal">Cancel</button>
+                <button type="submit" class="task-personnel-btn task-personnel-btn--primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
