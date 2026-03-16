@@ -10,6 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.forms import UserCreationForm
 from django.http import JsonResponse
+from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.shortcuts import render
@@ -19,7 +20,7 @@ from django.utils.text import get_valid_filename
 from django.views.decorators.http import require_http_methods
 
 from .forms import AccountSettingsForm
-from .models import DivisionStore
+from .models import DivisionStore, SharedDivisionStore
 from .models import UserProfile
 
 
@@ -173,20 +174,28 @@ def _safe_list(value):
     return value if isinstance(value, list) else []
 
 
+def _load_shared_stores(user=None):
+    keys = (
+        DivisionStore.KEY_ADMIN,
+        DivisionStore.KEY_PLANNING,
+        DivisionStore.KEY_CONSTRUCTION,
+        DivisionStore.KEY_QUALITY,
+        DivisionStore.KEY_MAINTENANCE,
+    )
+
+    try:
+        return {store.key: store for store in SharedDivisionStore.objects.filter(key__in=keys)}
+    except (OperationalError, ProgrammingError):
+        if user is None:
+            return {}
+        return {
+            store.key: store
+            for store in DivisionStore.objects.filter(user=user, key__in=keys)
+        }
+
+
 def _build_overview_context(user):
-    stores = {
-        store.key: store
-        for store in DivisionStore.objects.filter(
-            user=user,
-            key__in=(
-                DivisionStore.KEY_ADMIN,
-                DivisionStore.KEY_PLANNING,
-                DivisionStore.KEY_CONSTRUCTION,
-                DivisionStore.KEY_QUALITY,
-                DivisionStore.KEY_MAINTENANCE,
-            ),
-        )
-    }
+    stores = _load_shared_stores(user)
 
     admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
     planning_records = _safe_list(stores.get(DivisionStore.KEY_PLANNING).data if stores.get(DivisionStore.KEY_PLANNING) else [])
@@ -565,19 +574,7 @@ def _build_overview_context(user):
 
 def _build_tracking_rows(user):
     def load_stores():
-        stores = {
-            store.key: store
-            for store in DivisionStore.objects.filter(
-                user=user,
-                key__in=(
-                    DivisionStore.KEY_ADMIN,
-                    DivisionStore.KEY_PLANNING,
-                    DivisionStore.KEY_CONSTRUCTION,
-                    DivisionStore.KEY_QUALITY,
-                    DivisionStore.KEY_MAINTENANCE,
-                ),
-            )
-        }
+        stores = _load_shared_stores(user)
 
         admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
         planning_records = _safe_list(
@@ -742,19 +739,7 @@ def _build_tracking_rows(user):
 
 
 def _build_tracking_payload(user):
-    stores = {
-        store.key: store
-        for store in DivisionStore.objects.filter(
-            user=user,
-            key__in=(
-                DivisionStore.KEY_ADMIN,
-                DivisionStore.KEY_PLANNING,
-                DivisionStore.KEY_CONSTRUCTION,
-                DivisionStore.KEY_QUALITY,
-                DivisionStore.KEY_MAINTENANCE,
-            ),
-        )
-    }
+    stores = _load_shared_stores(user)
 
     admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
     planning_records = _safe_list(stores.get(DivisionStore.KEY_PLANNING).data if stores.get(DivisionStore.KEY_PLANNING) else [])
@@ -1410,7 +1395,12 @@ def project_dashboard(request):
     }
     project_store_seed = dict(store_defaults)
 
-    for store in DivisionStore.objects.filter(user=request.user, key__in=store_defaults.keys()):
+    try:
+        store_iter = SharedDivisionStore.objects.filter(key__in=store_defaults.keys())
+    except (OperationalError, ProgrammingError):
+        store_iter = DivisionStore.objects.filter(user=request.user, key__in=store_defaults.keys())
+
+    for store in store_iter:
         if store.key == DivisionStore.KEY_MAINTENANCE:
             project_store_seed[store.key] = store.data if isinstance(store.data, dict) else {}
         else:
@@ -1516,13 +1506,43 @@ def maintenance_division_submissions(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def division_store_api(request, key):
-    allowed_keys = {choice[0] for choice in DivisionStore.KEY_CHOICES}
+    allowed_keys = {choice[0] for choice in SharedDivisionStore.KEY_CHOICES}
     if key not in allowed_keys:
         return JsonResponse({"error": "Unknown store key."}, status=404)
 
-    store, _ = DivisionStore.objects.get_or_create(user=request.user, key=key)
+    using_shared_store = True
+    try:
+        store, _ = SharedDivisionStore.objects.get_or_create(key=key)
+    except (OperationalError, ProgrammingError):
+        # Backward-compat before the SharedDivisionStore migration is applied.
+        using_shared_store = False
+        store, _ = DivisionStore.objects.get_or_create(user=request.user, key=key)
 
     if request.method == "GET":
+        if using_shared_store:
+            def is_empty_payload(payload):
+                if key == DivisionStore.KEY_MAINTENANCE:
+                    if not isinstance(payload, dict):
+                        return True
+                    # Consider it empty when there are no meaningful arrays in the payload.
+                    for list_key in ("roadRecords", "equipmentRows", "scheduleRows", "taskRows", "personnelRecords", "contractorRecords"):
+                        if isinstance(payload.get(list_key), list) and payload.get(list_key):
+                            return False
+                    return True
+
+                return not (isinstance(payload, list) and len(payload) > 0)
+
+            # Bootstrap shared store from the most recently updated per-user store (if shared is empty).
+            if is_empty_payload(store.data):
+                candidate = (
+                    DivisionStore.objects.filter(key=key)
+                    .order_by("-updated_at")
+                    .first()
+                )
+                if candidate and not is_empty_payload(candidate.data):
+                    store.data = candidate.data
+                    store.save(update_fields=["data", "updated_at"])
+
         return JsonResponse(
             {
                 "key": key,
