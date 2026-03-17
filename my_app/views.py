@@ -21,12 +21,203 @@ from django.views.decorators.http import require_http_methods
 
 from .forms import AccountSettingsForm
 from .models import DivisionStore, SharedDivisionStore
-from .models import UserProfile
+from .models import (
+    DivisionStore,
+    SharedDivisionStore,
+    UserProfile,
+    KEY_ADMIN,
+    KEY_PLANNING,
+    KEY_CONSTRUCTION,
+    KEY_QUALITY,
+    KEY_MAINTENANCE
+)
 
 
 def _get_user_profile(user):
     profile, _ = UserProfile.objects.get_or_create(user=user)
     return profile
+
+
+def _normalize_division_key(value):
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+
+    group_to_key = {
+        "admin": KEY_ADMIN,
+        "planning": KEY_PLANNING,
+        "construction": KEY_CONSTRUCTION,
+        "quality": KEY_QUALITY,
+        "quality control": KEY_QUALITY,
+        "maintenance": KEY_MAINTENANCE,
+        "maitenance": KEY_MAINTENANCE,
+    }
+    if text in group_to_key:
+        return group_to_key[text]
+
+    label_to_key = {
+        "admin division": KEY_ADMIN,
+        "planning division": KEY_PLANNING,
+        "construction division": KEY_CONSTRUCTION,
+        "quality division": KEY_QUALITY,
+        "quality control division": KEY_QUALITY,
+        "maintenance division": KEY_MAINTENANCE,
+    }
+
+    if text in label_to_key:
+        return label_to_key[text]
+    if text in {KEY_ADMIN, KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE}:
+        return text
+
+    return ""
+
+
+def _division_label_for_key(value):
+    key = _normalize_division_key(value)
+    labels = {
+        KEY_ADMIN: "Admin Division",
+        KEY_PLANNING: "Planning Division",
+        KEY_CONSTRUCTION: "Construction Division",
+        KEY_QUALITY: "Quality Division",
+        KEY_MAINTENANCE: "Maintenance Division",
+    }
+    return labels.get(key, "")
+
+
+def _division_key_from_groups(user):
+    try:
+        group_names = {str(group.name or "").strip() for group in user.groups.all()}
+    except Exception:
+        return ""
+
+    keys = {_normalize_division_key(name) for name in group_names}
+    keys.discard("")
+    if len(keys) == 1:
+        return next(iter(keys))
+    return ""
+
+
+def _get_user_division_key(user):
+    try:
+        profile = user.profile
+    except (AttributeError, UserProfile.DoesNotExist):
+        profile = None
+
+    group_key = _normalize_division_key(_division_key_from_groups(user))
+    profile_key = _normalize_division_key(getattr(profile, "division", ""))
+
+    if group_key and profile_key and group_key != profile_key:
+        return ""
+
+    return group_key or profile_key
+
+
+def _store_write_mode(user, store_key):
+    if user.is_superuser:
+        return "full"
+
+    user_division = _get_user_division_key(user)
+    store_key = _normalize_division_key(store_key)
+    if not user_division or not store_key:
+        return ""
+
+    if store_key == user_division:
+        return "full"
+
+    if store_key == KEY_ADMIN and user_division in {KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE}:
+        return "restricted_admin_submit"
+
+    if user_division == KEY_ADMIN and store_key in {KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY}:
+        return "append_only"
+
+    return ""
+
+
+def _json_record_id(record):
+    if not isinstance(record, dict):
+        return ""
+    return str(record.get("__record_id") or record.get("__id") or record.get("id") or "").strip()
+
+
+def _enforce_admin_submit_payload(user_division, existing_data, incoming_data):
+    existing_records = existing_data if isinstance(existing_data, list) else []
+    incoming_records = incoming_data if isinstance(incoming_data, list) else []
+
+    def normalize_sender(record):
+        if not isinstance(record, dict):
+            return ""
+        return _normalize_division_key(record.get("__submitted_from_division"))
+
+    existing_by_id = {}
+    existing_owned_ids = set()
+    other_existing = []
+    for record in existing_records:
+        record_id = _json_record_id(record)
+        if record_id:
+            existing_by_id[record_id] = record
+        if normalize_sender(record) == user_division and record_id:
+            existing_owned_ids.add(record_id)
+        else:
+            other_existing.append(record)
+
+    seen_ids = set()
+    next_owned_records = []
+    for record in incoming_records:
+        if not isinstance(record, dict):
+            continue
+        record_id = _json_record_id(record) or uuid.uuid4().hex
+        if record_id in seen_ids:
+            continue
+        seen_ids.add(record_id)
+
+        sender = normalize_sender(record) or user_division
+        if sender != user_division:
+            continue
+
+        next_record = dict(record)
+        next_record["__record_id"] = record_id
+        next_record["__submitted_from_division"] = user_division
+        next_owned_records.append(next_record)
+
+    # Prevent deletions: keep any previously submitted records even if omitted from the payload.
+    missing_owned = []
+    for record_id in existing_owned_ids:
+        if record_id not in seen_ids:
+            existing_record = existing_by_id.get(record_id)
+            if isinstance(existing_record, dict):
+                missing_owned.append(existing_record)
+
+    return next_owned_records + missing_owned + other_existing
+
+
+def _enforce_append_only_payload(existing_data, incoming_data):
+    existing_records = existing_data if isinstance(existing_data, list) else []
+    incoming_records = incoming_data if isinstance(incoming_data, list) else []
+
+    existing_by_id = {}
+    existing_ids = set()
+    for record in existing_records:
+        record_id = _json_record_id(record)
+        if record_id:
+            existing_by_id[record_id] = record
+            existing_ids.add(record_id)
+
+    new_records = []
+    seen = set(existing_ids)
+    for record in incoming_records:
+        if not isinstance(record, dict):
+            continue
+        record_id = _json_record_id(record)
+        if not record_id:
+            record_id = uuid.uuid4().hex
+        if record_id in seen:
+            continue
+        seen.add(record_id)
+        next_record = dict(record)
+        next_record["__record_id"] = record_id
+        new_records.append(next_record)
+
+    return new_records + existing_records
 
 
 def _build_user_identity(user, profile=None):
@@ -176,11 +367,11 @@ def _safe_list(value):
 
 def _load_shared_stores(user=None):
     keys = (
-        DivisionStore.KEY_ADMIN,
-        DivisionStore.KEY_PLANNING,
-        DivisionStore.KEY_CONSTRUCTION,
-        DivisionStore.KEY_QUALITY,
-        DivisionStore.KEY_MAINTENANCE,
+        KEY_ADMIN,
+        KEY_PLANNING,
+        KEY_CONSTRUCTION,
+        KEY_QUALITY,
+       KEY_MAINTENANCE,
     )
 
     try:
@@ -197,11 +388,11 @@ def _load_shared_stores(user=None):
 def _build_overview_context(user):
     stores = _load_shared_stores(user)
 
-    admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
-    planning_records = _safe_list(stores.get(DivisionStore.KEY_PLANNING).data if stores.get(DivisionStore.KEY_PLANNING) else [])
-    construction_records = _safe_list(stores.get(DivisionStore.KEY_CONSTRUCTION).data if stores.get(DivisionStore.KEY_CONSTRUCTION) else [])
-    quality_records = _safe_list(stores.get(DivisionStore.KEY_QUALITY).data if stores.get(DivisionStore.KEY_QUALITY) else [])
-    maintenance_payload = stores.get(DivisionStore.KEY_MAINTENANCE).data if stores.get(DivisionStore.KEY_MAINTENANCE) else {}
+    admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
+    planning_records = _safe_list(stores.get(KEY_PLANNING).data if stores.get(KEY_PLANNING) else [])
+    construction_records = _safe_list(stores.get(KEY_CONSTRUCTION).data if stores.get(KEY_CONSTRUCTION) else [])
+    quality_records = _safe_list(stores.get(KEY_QUALITY).data if stores.get(KEY_QUALITY) else [])
+    maintenance_payload = stores.get(KEY_MAINTENANCE).data if stores.get(KEY_MAINTENANCE) else {}
     maintenance_payload = maintenance_payload if isinstance(maintenance_payload, dict) else {}
 
     def count_payload_records(payload):
@@ -423,30 +614,30 @@ def _build_overview_context(user):
     # Recent activity (division store syncs)
     activity_entries = []
     dot_class_for = {
-        DivisionStore.KEY_ADMIN: 'dot-blue',
-        DivisionStore.KEY_PLANNING: 'dot-amber',
-        DivisionStore.KEY_CONSTRUCTION: 'dot-green',
-        DivisionStore.KEY_QUALITY: 'dot-slate',
-        DivisionStore.KEY_MAINTENANCE: 'dot-blue',
+        KEY_ADMIN: 'dot-blue',
+        KEY_PLANNING: 'dot-amber',
+        KEY_CONSTRUCTION: 'dot-green',
+        KEY_QUALITY: 'dot-slate',
+        KEY_MAINTENANCE: 'dot-blue',
     }
     label_for = {
-        DivisionStore.KEY_ADMIN: 'Admin Division',
-        DivisionStore.KEY_PLANNING: 'Planning Division',
-        DivisionStore.KEY_CONSTRUCTION: 'Construction Division',
-        DivisionStore.KEY_QUALITY: 'Quality Division',
-        DivisionStore.KEY_MAINTENANCE: 'Maintenance Division',
+        KEY_ADMIN: 'Admin Division',
+        KEY_PLANNING: 'Planning Division',
+        KEY_CONSTRUCTION: 'Construction Division',
+        KEY_QUALITY: 'Quality Division',
+        KEY_MAINTENANCE: 'Maintenance Division',
     }
 
     min_sort_time = now - timedelta(days=36500)
     for key in (
-        DivisionStore.KEY_PLANNING,
-        DivisionStore.KEY_QUALITY,
-        DivisionStore.KEY_CONSTRUCTION,
-        DivisionStore.KEY_ADMIN,
-        DivisionStore.KEY_MAINTENANCE,
+        KEY_PLANNING,
+        KEY_QUALITY,
+        KEY_CONSTRUCTION,
+        KEY_ADMIN,
+        KEY_MAINTENANCE,
     ):
         store = stores.get(key)
-        payload = store.data if store else ([] if key != DivisionStore.KEY_MAINTENANCE else {})
+        payload = store.data if store else ([] if key != KEY_MAINTENANCE else {})
         record_count = count_payload_records(payload)
         activity_entries.append(
             (
@@ -505,11 +696,11 @@ def _build_overview_context(user):
     for name, completion, icon, progress_class in division_completions:
         status_label, status_class = status_for_completion(completion)
         store_key = {
-            'Admin': DivisionStore.KEY_ADMIN,
-            'Planning': DivisionStore.KEY_PLANNING,
-            'Construction': DivisionStore.KEY_CONSTRUCTION,
-            'Quality': DivisionStore.KEY_QUALITY,
-            'Maintenance': DivisionStore.KEY_MAINTENANCE,
+            'Admin':KEY_ADMIN,
+            'Planning': KEY_PLANNING,
+            'Construction': KEY_CONSTRUCTION,
+            'Quality': KEY_QUALITY,
+            'Maintenance': KEY_MAINTENANCE,
         }.get(name)
         store = stores.get(store_key) if store_key else None
         last_synced = _format_notification_time(store.updated_at, fallback='Not synced yet') if store else 'Not synced yet'
@@ -576,15 +767,15 @@ def _build_tracking_rows(user):
     def load_stores():
         stores = _load_shared_stores(user)
 
-        admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
+        admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
         planning_records = _safe_list(
-            stores.get(DivisionStore.KEY_PLANNING).data if stores.get(DivisionStore.KEY_PLANNING) else []
+            stores.get(KEY_PLANNING).data if stores.get(KEY_PLANNING) else []
         )
         construction_records = _safe_list(
-            stores.get(DivisionStore.KEY_CONSTRUCTION).data if stores.get(DivisionStore.KEY_CONSTRUCTION) else []
+            stores.get(KEY_CONSTRUCTION).data if stores.get(KEY_CONSTRUCTION) else []
         )
-        quality_records = _safe_list(stores.get(DivisionStore.KEY_QUALITY).data if stores.get(DivisionStore.KEY_QUALITY) else [])
-        maintenance_payload = stores.get(DivisionStore.KEY_MAINTENANCE).data if stores.get(DivisionStore.KEY_MAINTENANCE) else {}
+        quality_records = _safe_list(stores.get(KEY_QUALITY).data if stores.get(KEY_QUALITY) else [])
+        maintenance_payload = stores.get(KEY_MAINTENANCE).data if stores.get(KEY_MAINTENANCE) else {}
         maintenance_payload = maintenance_payload if isinstance(maintenance_payload, dict) else {}
         return admin_records, planning_records, construction_records, quality_records, maintenance_payload
 
@@ -741,11 +932,11 @@ def _build_tracking_rows(user):
 def _build_tracking_payload(user):
     stores = _load_shared_stores(user)
 
-    admin_records = _safe_list(stores.get(DivisionStore.KEY_ADMIN).data if stores.get(DivisionStore.KEY_ADMIN) else [])
-    planning_records = _safe_list(stores.get(DivisionStore.KEY_PLANNING).data if stores.get(DivisionStore.KEY_PLANNING) else [])
-    construction_records = _safe_list(stores.get(DivisionStore.KEY_CONSTRUCTION).data if stores.get(DivisionStore.KEY_CONSTRUCTION) else [])
-    quality_records = _safe_list(stores.get(DivisionStore.KEY_QUALITY).data if stores.get(DivisionStore.KEY_QUALITY) else [])
-    maintenance_payload = stores.get(DivisionStore.KEY_MAINTENANCE).data if stores.get(DivisionStore.KEY_MAINTENANCE) else {}
+    admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
+    planning_records = _safe_list(stores.get(KEY_PLANNING).data if stores.get(KEY_PLANNING) else [])
+    construction_records = _safe_list(stores.get(KEY_CONSTRUCTION).data if stores.get(KEY_CONSTRUCTION) else [])
+    quality_records = _safe_list(stores.get(KEY_QUALITY).data if stores.get(KEY_QUALITY) else [])
+    maintenance_payload = stores.get(KEY_MAINTENANCE).data if stores.get(KEY_MAINTENANCE) else {}
     maintenance_payload = maintenance_payload if isinstance(maintenance_payload, dict) else {}
 
     def normalize_label(value, fallback='—'):
@@ -1235,6 +1426,25 @@ def _build_dashboard_context(request, **extra):
     current_maintenance = extra.get('current_maintenance', '')
 
     context = _build_user_identity(request.user, profile=profile)
+    user_division_key = _get_user_division_key(request.user)
+    group_division_key = _division_key_from_groups(request.user)
+    profile_division_key = _normalize_division_key(getattr(profile, "division", ""))
+    division_mismatch = bool(group_division_key and profile_division_key and group_division_key != profile_division_key)
+    division_sections = {KEY_ADMIN, KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE}
+    dashboard_readonly = (
+        not request.user.is_superuser
+        and current_section in division_sections
+        and (not user_division_key or current_section != user_division_key)
+    )
+    context.update(
+        {
+            "user_division_key": user_division_key,
+            "user_division_label": _division_label_for_key(user_division_key) or "Unassigned Division",
+            "user_division_mismatch": division_mismatch,
+            "dashboard_readonly": dashboard_readonly,
+            "dashboard_can_edit": not dashboard_readonly,
+        }
+    )
     context.update(
         _build_dashboard_notifications(
             request,
@@ -1387,11 +1597,11 @@ def quality_division_dashboard(request):
 @login_required
 def project_dashboard(request):
     store_defaults = {
-        DivisionStore.KEY_ADMIN: [],
-        DivisionStore.KEY_PLANNING: [],
-        DivisionStore.KEY_CONSTRUCTION: [],
-        DivisionStore.KEY_QUALITY: [],
-        DivisionStore.KEY_MAINTENANCE: {},
+        KEY_ADMIN: [],
+        KEY_PLANNING: [],
+        KEY_CONSTRUCTION: [],
+        KEY_QUALITY: [],
+        KEY_MAINTENANCE: {},
     }
     project_store_seed = dict(store_defaults)
 
@@ -1401,7 +1611,7 @@ def project_dashboard(request):
         store_iter = DivisionStore.objects.filter(user=request.user, key__in=store_defaults.keys())
 
     for store in store_iter:
-        if store.key == DivisionStore.KEY_MAINTENANCE:
+        if store.key == KEY_MAINTENANCE:
             project_store_seed[store.key] = store.data if isinstance(store.data, dict) else {}
         else:
             project_store_seed[store.key] = store.data if isinstance(store.data, list) else []
@@ -1521,7 +1731,7 @@ def division_store_api(request, key):
     if request.method == "GET":
         if using_shared_store:
             def is_empty_payload(payload):
-                if key == DivisionStore.KEY_MAINTENANCE:
+                if key == KEY_MAINTENANCE:
                     if not isinstance(payload, dict):
                         return True
                     # Consider it empty when there are no meaningful arrays in the payload.
@@ -1556,7 +1766,19 @@ def division_store_api(request, key):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON payload."}, status=400)
 
-    store.data = payload
+    write_mode = _store_write_mode(request.user, key)
+    if not write_mode:
+        return JsonResponse({"error": "Read-only access for this division store."}, status=403)
+
+    if write_mode == "restricted_admin_submit":
+        user_division = _get_user_division_key(request.user)
+        if not user_division:
+            return JsonResponse({"error": "Division is not configured for this account."}, status=403)
+        store.data = _enforce_admin_submit_payload(user_division, store.data, payload)
+    elif write_mode == "append_only":
+        store.data = _enforce_append_only_payload(store.data, payload)
+    else:
+        store.data = payload
     store.save()
 
     return JsonResponse(
