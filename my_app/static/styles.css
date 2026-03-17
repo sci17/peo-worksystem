@@ -1684,6 +1684,19 @@ body {
     background: linear-gradient(135deg, #e7c6be, #c3856f);
 }
 
+.leader-avatar-secondary {
+    background: linear-gradient(135deg, #cfe7d0, #74b67a);
+    color: #1b5e20;
+}
+
+.leader-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: inherit;
+}
+
 .leader-tag {
     display: inline-flex;
     margin-bottom: 8px;
@@ -1732,6 +1745,39 @@ body {
     padding-top: 30px;
 }
 
+.assistant-grid {
+    position: relative;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --assistant-gap: 12px;
+    --assistant-pad: 26px;
+    gap: var(--assistant-gap);
+    padding-top: var(--assistant-pad);
+    max-width: 720px;
+}
+
+.assistant-grid::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: calc(25% - (var(--assistant-gap) / 4));
+    right: calc(25% - (var(--assistant-gap) / 4));
+    height: 2px;
+    background: #d4dfeb;
+}
+
+.assistant-grid .leader-card::before {
+    content: "";
+    position: absolute;
+    top: calc(-1 * var(--assistant-pad));
+    left: 50%;
+    width: 2px;
+    height: var(--assistant-pad);
+    background: #d4dfeb;
+    transform: translateX(-50%);
+}
+
 .leader-grid::before {
     content: "";
     position: absolute;
@@ -1751,6 +1797,308 @@ body {
     height: 31px;
     background: #d4dfeb;
     transform: translateX(-50%);
+}
+
+/* Org chart variant (Dashboard Leadership) */
+@keyframes orgchart-rise {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.leadership-section.is-orgchart {
+    --org-ink: #142033;
+    --org-muted: rgba(20, 32, 51, 0.72);
+    --org-line: rgba(20, 32, 51, 0.26);
+    --org-accent: #2e7d32;
+    --org-accent-2: #1e66d0;
+    --org-surface: rgba(255, 255, 255, 0.9);
+    --org-border: rgba(20, 32, 51, 0.14);
+    --org-shadow: 0 16px 34px rgba(16, 24, 40, 0.1);
+}
+
+.leadership-section.is-orgchart .leadership-tree {
+    width: 100%;
+    gap: 0;
+    padding: 18px;
+    border-radius: 22px;
+    border: 1px solid rgba(219, 230, 240, 0.95);
+    background:
+        radial-gradient(circle at 12% 10%, rgba(46, 125, 50, 0.12), transparent 42%),
+        radial-gradient(circle at 86% 30%, rgba(30, 102, 208, 0.1), transparent 45%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 255, 0.82));
+    position: relative;
+    overflow: hidden;
+    overflow-x: auto;
+    animation: orgchart-rise 360ms ease both;
+    isolation: isolate;
+}
+
+.leadership-section.is-orgchart .leadership-tree::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(20, 32, 51, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20, 32, 51, 0.035) 1px, transparent 1px);
+    background-size: 44px 44px;
+    opacity: 0.55;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.leadership-section.is-orgchart .leadership-tree > * {
+    position: relative;
+    z-index: 1;
+}
+
+.leadership-section.is-orgchart .leader-card {
+    --node-width: 220px;
+    width: var(--node-width);
+    max-width: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+}
+
+.leadership-section.is-orgchart .leader-card::after {
+    content: none;
+}
+
+.leadership-section.is-orgchart .leader-card:hover {
+    transform: none;
+}
+
+.leadership-section.is-orgchart .leader-card-primary {
+    --node-width: 360px;
+}
+
+.leadership-section.is-orgchart .leader-avatar {
+    width: 132px;
+    height: 132px;
+    margin: 0;
+    border-radius: 14px;
+    border: 2px solid rgba(20, 32, 51, 0.22);
+    background: #ffffff;
+    color: var(--org-ink);
+    font-weight: 800;
+    box-shadow: 0 14px 24px rgba(16, 24, 40, 0.12);
+    overflow: hidden;
+}
+
+.leadership-section.is-orgchart .leader-avatar-primary {
+    width: 156px;
+    height: 156px;
+    font-size: 1rem;
+}
+
+.leadership-section.is-orgchart .leader-card-secondary .leader-avatar {
+    width: 144px;
+    height: 144px;
+}
+
+.leadership-section.is-orgchart .leader-card-assistant .leader-avatar {
+    width: 132px;
+    height: 132px;
+}
+
+.leadership-section.is-orgchart .leader-grid .leader-avatar {
+    width: 124px;
+    height: 124px;
+}
+
+.leadership-section.is-orgchart .leader-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+
+    /* Helps some browsers render downscaled images a bit crisper. */
+    image-rendering: auto;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+
+    /* Parent clips; avoid double rounding differences between border and image. */
+    border-radius: 0;
+}
+
+.leadership-section.is-orgchart .leader-card-secondary {
+    --node-width: 320px;
+}
+
+.leadership-section.is-orgchart .leader-card-assistant {
+    --node-width: 240px;
+}
+
+.leadership-section.is-orgchart .leader-label {
+    width: 100%;
+    padding: 10px 12px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--org-border);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 14px 26px rgba(16, 24, 40, 0.08);
+    text-align: center;
+}
+
+.leadership-section.is-orgchart .leader-tag {
+    display: inline-block;
+    margin-bottom: 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(46, 125, 50, 0.18);
+    background: rgba(46, 125, 50, 0.08);
+    color: var(--org-accent);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.leadership-section.is-orgchart .leader-card h4 {
+    color: var(--org-ink);
+    font-size: 1.03rem;
+    letter-spacing: 0.01em;
+}
+
+.leadership-section.is-orgchart .leader-card p {
+    margin-top: 4px;
+    color: var(--org-muted);
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-transform: none;
+}
+
+.leadership-section.is-orgchart .leader-dept {
+    display: inline-block;
+    margin: 0 0 8px;
+    padding: 4px 10px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 999px;
+    border: 1px solid rgba(30, 102, 208, 0.18);
+    background: rgba(30, 102, 208, 0.08);
+    color: rgba(20, 32, 51, 0.78);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.leadership-section.is-orgchart .leadership-tree-line,
+.leadership-section.is-orgchart .assistant-grid::before,
+.leadership-section.is-orgchart .assistant-grid .leader-card::before,
+.leadership-section.is-orgchart .leader-grid::before,
+.leadership-section.is-orgchart .leader-grid .leader-card::before {
+    background: var(--org-line);
+}
+
+.leadership-section.is-orgchart .leadership-tree-line {
+    width: 2px;
+    height: 44px;
+    background: var(--org-line);
+    border-radius: 0;
+}
+
+.leadership-section.is-orgchart .leader-grid::before {
+    height: 2px;
+}
+
+.leadership-section.is-orgchart .assistant-grid {
+    --assistant-node: 240px;
+    --assistant-gap: 84px;
+    --assistant-pad: 34px;
+    width: max-content;
+    max-width: none;
+    grid-template-columns: repeat(2, var(--assistant-node));
+    gap: var(--assistant-gap);
+    padding-top: var(--assistant-pad);
+    z-index: 1;
+    justify-items: center;
+}
+
+.leadership-section.is-orgchart .assistant-grid::before {
+    left: calc(var(--assistant-node) / 2);
+    right: calc(var(--assistant-node) / 2);
+    height: 2px;
+    z-index: 0;
+}
+
+.leadership-section.is-orgchart .assistant-grid::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 100%;
+    background: var(--org-line);
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.leadership-section.is-orgchart .assistant-grid .leader-card {
+    z-index: 1;
+    justify-self: center;
+}
+
+.leadership-section.is-orgchart .assistant-grid .leader-card::before {
+    width: 2px;
+}
+
+.leadership-section.is-orgchart .leader-grid .leader-card::before {
+    width: 2px;
+}
+
+.leadership-section.is-orgchart .leader-grid {
+    --leader-pad: 36px;
+    --leader-node: 220px;
+    --leader-gap: 18px;
+    width: max-content;
+    max-width: none;
+    grid-template-columns: repeat(5, var(--leader-node));
+    gap: var(--leader-gap);
+    padding-top: var(--leader-pad);
+    z-index: 1;
+    justify-items: center;
+}
+
+.leadership-section.is-orgchart .leader-grid::before {
+    z-index: 0;
+    left: calc(var(--leader-node) / 2);
+    right: calc(var(--leader-node) / 2);
+}
+
+.leadership-section.is-orgchart .leader-grid .leader-card {
+    z-index: 1;
+    justify-self: center;
+    --node-width: var(--leader-node);
+}
+
+.leadership-section.is-orgchart .leader-grid .leader-card::before {
+    top: calc(-1 * var(--leader-pad));
+    height: var(--leader-pad);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .leadership-section.is-orgchart .leadership-tree {
+        animation: none;
+    }
+
+    .leadership-section.is-orgchart .leader-card {
+        transition: none;
+    }
 }
 
 .overview-analytics {
@@ -2140,6 +2488,10 @@ body {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .assistant-grid {
+        max-width: 640px;
+    }
+
     .leader-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -2195,6 +2547,18 @@ body {
 
     .leader-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .assistant-grid {
+        grid-template-columns: 1fr;
+        padding-top: 12px;
+        max-width: 360px;
+    }
+
+    .assistant-grid::before,
+    .assistant-grid::after,
+    .assistant-grid .leader-card::before {
+        display: none;
     }
 
     .leader-grid::before {
@@ -2286,6 +2650,12 @@ body {
     }
 
     .leader-card-primary {
+        max-width: 100%;
+    }
+
+    .assistant-grid {
+        grid-template-columns: 1fr;
+        padding-top: 12px;
         max-width: 100%;
     }
 
