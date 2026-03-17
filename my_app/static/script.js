@@ -249,6 +249,115 @@
     }
 })();
 
+(function () {
+    const body = document.body;
+    const readOnly = body && body.dataset ? body.dataset.peoDashboardReadonly === "1" : false;
+    const divisionKey = body && body.dataset ? String(body.dataset.peoUserDivisionKey || "").trim().toLowerCase() : "";
+
+    window.peoAccess = {
+        readOnly,
+        divisionKey,
+    };
+
+    if (!readOnly) return;
+
+    const protectedKeys = new Set([
+        "peo_admin_division_records_v1",
+        "peo_planning_budget_records_v1",
+        "peo_planning_document_records_v1",
+        "peo_planning_deleted_admin_ids_v1",
+        "peo_construction_records_v1",
+        "peo_construction_deleted_admin_ids_v1",
+        "peo_quality_records_v1",
+        "peo_maintenance_state_v1",
+    ]);
+
+    const storage = window.localStorage;
+    const originalSetItem = storage && typeof storage.setItem === "function" ? storage.setItem.bind(storage) : null;
+    const originalRemoveItem = storage && typeof storage.removeItem === "function" ? storage.removeItem.bind(storage) : null;
+    if (!originalSetItem || !originalRemoveItem) return;
+
+    let warned = false;
+    const warnOnce = () => {
+        if (warned) return;
+        warned = true;
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast("This dashboard is read-only for your account. Changes won't be saved.", {
+                variant: "warning",
+                title: "Read-only",
+            });
+        }
+    };
+
+    storage.setItem = function (key, value) {
+        const normalizedKey = String(key || "");
+        if (protectedKeys.has(normalizedKey)) {
+            warnOnce();
+            return;
+        }
+        return originalSetItem(normalizedKey, value);
+    };
+
+    storage.removeItem = function (key) {
+        const normalizedKey = String(key || "");
+        if (protectedKeys.has(normalizedKey)) {
+            warnOnce();
+            return;
+        }
+        return originalRemoveItem(normalizedKey);
+    };
+
+    const lockDownEditableUi = () => {
+        const root = document.querySelector(".portal-content");
+        if (!root) return;
+
+        root.querySelectorAll("form").forEach((form) => {
+            form.addEventListener(
+                "submit",
+                (ev) => {
+                    ev.preventDefault();
+                    warnOnce();
+                },
+                true
+            );
+
+            form.querySelectorAll("input, select, textarea, button").forEach((el) => {
+                el.setAttribute("disabled", "disabled");
+                el.setAttribute("aria-disabled", "true");
+            });
+        });
+
+        const shouldDisableButton = (btn) => {
+            if (!(btn instanceof HTMLButtonElement)) return false;
+            if (btn.type === "submit") return true;
+
+            const aria = String(btn.getAttribute("aria-label") || "").toLowerCase();
+            if (aria.includes("edit") || aria.includes("delete") || aria.includes("add") || aria.includes("save") || aria.includes("create")) {
+                return true;
+            }
+
+            const classes = String(btn.className || "").toLowerCase();
+            return /\b(is-edit|is-delete)\b/.test(classes) || /\b(js-[a-z0-9_-]*(add|edit|delete|save|create|submit)[a-z0-9_-]*)\b/.test(classes);
+        };
+
+        root.querySelectorAll("button").forEach((btn) => {
+            if (!shouldDisableButton(btn)) return;
+            btn.setAttribute("disabled", "disabled");
+            btn.setAttribute("aria-disabled", "true");
+        });
+
+        root.querySelectorAll("[contenteditable='true']").forEach((el) => {
+            el.setAttribute("contenteditable", "false");
+        });
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", lockDownEditableUi, { once: true });
+    } else {
+        lockDownEditableUi();
+    }
+})();
+
 // Incoming document toast notifier (per-division).
 // Uses Admin store routing metadata (__tracking_events / __submitted_at) to notify when a record is routed
 // to the current division again (e.g., Maintenance -> Admin) without spamming older items.

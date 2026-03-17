@@ -264,6 +264,15 @@
             </header>
 
 	            <section class="portal-content">
+                    {% if user_division_mismatch %}
+                        <div class="account-settings-alert account-settings-alert--warning" role="status">
+                            Your account division does not match your assigned group. Please ask an administrator to fix your Division/Group assignment.
+                        </div>
+                    {% elif dashboard_readonly %}
+                        <div class="account-settings-alert account-settings-alert--warning" role="status">
+                            Read-only access: {{ user_division_label }} accounts cannot edit the {{ page_heading|default:"this" }} dashboard.
+                        </div>
+                    {% endif %}
 	                {% if current_section == 'admin' %}
 	                    {% include admin_template|default:'admin/admin_division.html' %}
 	                {% elif current_section == 'planning' %}

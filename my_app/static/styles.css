@@ -19570,6 +19570,12 @@ body.quality-scan-open {
     color: #9f2f2f;
 }
 
+.account-settings-alert--warning {
+    background: #fff8e6;
+    border: 1px solid #f0dfb3;
+    color: #7a4d00;
+}
+
 .account-settings-layout {
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr);
