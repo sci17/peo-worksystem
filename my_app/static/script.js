@@ -291,7 +291,7 @@
 
     storage.setItem = function (key, value) {
         const normalizedKey = String(key || "");
-        if (protectedKeys.has(normalizedKey)) {
+        if (protectedKeys.has(normalizedKey) && window.__peoReadonlyStorageBypass !== true) {
             warnOnce();
             return;
         }
@@ -300,7 +300,7 @@
 
     storage.removeItem = function (key) {
         const normalizedKey = String(key || "");
-        if (protectedKeys.has(normalizedKey)) {
+        if (protectedKeys.has(normalizedKey) && window.__peoReadonlyStorageBypass !== true) {
             warnOnce();
             return;
         }
@@ -310,6 +310,8 @@
     const lockDownEditableUi = () => {
         const root = document.querySelector(".portal-content");
         if (!root) return;
+        if (root.dataset && root.dataset.peoReadonlyApplied === "1") return;
+        if (root.dataset) root.dataset.peoReadonlyApplied = "1";
 
         root.querySelectorAll("form").forEach((form) => {
             form.addEventListener(
@@ -327,28 +329,77 @@
             });
         });
 
+        const disableElement = (el) => {
+            if (!el || !(el instanceof HTMLElement)) return;
+            el.setAttribute("aria-disabled", "true");
+            if ("disabled" in el) {
+                try {
+                    el.disabled = true;
+                } catch (_) {
+                    /* ignore */
+                }
+            }
+            el.setAttribute("disabled", "disabled");
+            el.classList.add("peo-readonly-disabled");
+        };
+
         const shouldDisableButton = (btn) => {
             if (!(btn instanceof HTMLButtonElement)) return false;
             if (btn.type === "submit") return true;
 
             const aria = String(btn.getAttribute("aria-label") || "").toLowerCase();
-            if (aria.includes("edit") || aria.includes("delete") || aria.includes("add") || aria.includes("save") || aria.includes("create")) {
+            if (aria.includes("edit") || aria.includes("delete") || aria.includes("add") || aria.includes("save") || aria.includes("create") || aria.includes("upload") || aria.includes("submit") || aria.includes("route")) {
                 return true;
             }
 
             const classes = String(btn.className || "").toLowerCase();
-            return /\b(is-edit|is-delete)\b/.test(classes) || /\b(js-[a-z0-9_-]*(add|edit|delete|save|create|submit)[a-z0-9_-]*)\b/.test(classes);
+            return /\b(is-edit|is-delete)\b/.test(classes) || /\b(js-[a-z0-9_-]*(add|edit|delete|save|create|submit|upload|route)[a-z0-9_-]*)\b/.test(classes);
         };
 
         root.querySelectorAll("button").forEach((btn) => {
             if (!shouldDisableButton(btn)) return;
-            btn.setAttribute("disabled", "disabled");
-            btn.setAttribute("aria-disabled", "true");
+            disableElement(btn);
         });
+
+        root.querySelectorAll("input[type='file']").forEach((input) => disableElement(input));
+        root.querySelectorAll(".road-upload-btn, .submissions-route-submit, .submissions-btn--primary").forEach((el) => disableElement(el));
 
         root.querySelectorAll("[contenteditable='true']").forEach((el) => {
             el.setAttribute("contenteditable", "false");
         });
+
+        const looksMutating = (el) => {
+            if (!el || !(el instanceof HTMLElement)) return false;
+            if (el instanceof HTMLInputElement && el.type === "file") return true;
+            if (el instanceof HTMLButtonElement && shouldDisableButton(el)) return true;
+            const aria = String(el.getAttribute("aria-label") || "").toLowerCase();
+            if (aria && /(add|edit|delete|save|create|upload|submit|route)/.test(aria)) return true;
+            const classes = String(el.className || "").toLowerCase();
+            if (/(upload|delete|edit|save|create|submit|route)/.test(classes)) return true;
+            const text = String(el.textContent || "").trim().toLowerCase();
+            if (text && /^(upload|save|delete|add|create|submit|route)/.test(text)) return true;
+            return false;
+        };
+
+        const isMutatingTarget = (target) => {
+            let node = target instanceof Node ? target : null;
+            for (let i = 0; i < 6 && node; i += 1) {
+                if (node instanceof HTMLElement && looksMutating(node)) return true;
+                node = node.parentNode;
+            }
+            return false;
+        };
+
+        root.addEventListener(
+            "click",
+            (ev) => {
+                if (!isMutatingTarget(ev.target)) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                warnOnce();
+            },
+            true
+        );
     };
 
     if (document.readyState === "loading") {
@@ -883,11 +934,79 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         }
     };
 
+    const STORE_META_PREFIX = "peo_division_store_meta_v1:";
+    const readStoreMeta = (storeKey) => {
+        const raw = safeLocalStorageGet(`${STORE_META_PREFIX}${storeKey}`);
+        const parsed = raw ? safeJsonParse(raw, {}) : {};
+        return parsed && typeof parsed === "object" ? parsed : {};
+    };
+    const writeStoreMeta = (storeKey, meta) => {
+        safeLocalStorageSet(`${STORE_META_PREFIX}${storeKey}`, JSON.stringify(meta || {}));
+    };
+
+    const syncToLocalStorage = async (definitions, options = {}) => {
+        const list = Array.isArray(definitions) ? definitions : [];
+        if (!list.length) return false;
+
+        const force = options && options.force === true;
+        let didWrite = false;
+
+        for (const def of list) {
+            const storeKey = String(def?.storeKey || "").trim();
+            const localKey = String(def?.localStorageKey || "").trim();
+            const type = String(def?.type || "array").trim();
+            if (!storeKey || !localKey) continue;
+
+            const server = await fetchStore(storeKey);
+            if (!server || typeof server !== "object") continue;
+            const serverData = server.data;
+            const serverUpdatedAt = String(server.updated_at || "").trim();
+
+            const isValid = type === "object"
+                ? (serverData && typeof serverData === "object" && !Array.isArray(serverData))
+                : Array.isArray(serverData);
+            if (!isValid) continue;
+
+            const meta = readStoreMeta(storeKey);
+            const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
+            const serverUpdatedAtMs = Date.parse(serverUpdatedAt);
+
+            const localRaw = safeLocalStorageGet(localKey);
+            const localParsed = localRaw ? safeJsonParse(localRaw, null) : null;
+            const localCount = type === "object"
+                ? (localParsed && typeof localParsed === "object" && !Array.isArray(localParsed) ? Object.keys(localParsed).length : 0)
+                : (Array.isArray(localParsed) ? localParsed.length : 0);
+            const serverCount = type === "object" ? Object.keys(serverData || {}).length : serverData.length;
+
+            const shouldWrite = force
+                || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs))
+                || (serverCount > localCount);
+
+            if (!shouldWrite) continue;
+
+            const prevBypass = window.__peoReadonlyStorageBypass;
+            window.__peoReadonlyStorageBypass = true;
+            try {
+                safeLocalStorageSet(localKey, JSON.stringify(serverData));
+                writeStoreMeta(storeKey, {
+                    updated_at: serverUpdatedAt,
+                    fetched_at: new Date().toISOString(),
+                });
+                didWrite = true;
+            } finally {
+                window.__peoReadonlyStorageBypass = prevBypass;
+            }
+        }
+
+        return didWrite;
+    };
+
     window.peoDivisionStore = {
         queueSync,
         flushSync,
         fetchStore,
         hydrateLocalStorageIfEmpty,
+        syncToLocalStorage,
     };
 
     window.addEventListener("pagehide", flushSync);
@@ -895,6 +1014,48 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         if (document.visibilityState === "hidden") {
             flushSync();
         }
+    });
+})();
+
+// Keep localStorage stores in sync with the server so routed/forwarded records show up for other users/devices.
+(() => {
+    const STORE_DEFS = {
+        admin: { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
+        planning: { storeKey: "planning", localStorageKey: "peo_planning_document_records_v1", type: "array" },
+        construction: { storeKey: "construction", localStorageKey: "peo_construction_records_v1", type: "array" },
+        quality: { storeKey: "quality", localStorageKey: "peo_quality_records_v1", type: "array" },
+        maintenance: { storeKey: "maintenance", localStorageKey: "peo_maintenance_state_v1", type: "object" },
+    };
+
+    const getDivisionKey = () => {
+        const fromAccess = window.peoAccess && typeof window.peoAccess === "object" ? String(window.peoAccess.divisionKey || "") : "";
+        const fromBody = document.body && document.body.dataset ? String(document.body.dataset.peoUserDivisionKey || "") : "";
+        return String(fromAccess || fromBody || "").trim().toLowerCase();
+    };
+
+    const sync = async () => {
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return;
+
+        const divisionKey = getDivisionKey();
+        const defs = [STORE_DEFS.admin];
+        if (divisionKey && STORE_DEFS[divisionKey] && divisionKey !== "admin") {
+            defs.push(STORE_DEFS[divisionKey]);
+        }
+
+        await store.syncToLocalStorage(defs);
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => {
+            sync();
+        });
+    } else {
+        sync();
+    }
+
+    window.addEventListener("focus", () => {
+        sync();
     });
 })();
 
@@ -19077,21 +19238,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const sourceId = String(trigger.dataset.constructionSourceId || "").trim();
                 if (!sourceId) return;
 
-                const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
-                const record = constructionRecords.find((item) => String(item?.__id || "").trim() === sourceId);
-                if (!record) {
-                    if (typeof showPeoGeneralToast === "function") {
-                        showPeoGeneralToast("Construction project history was not found on this device.", {
-                            title: "Projects",
-                            variant: "warning",
-                        });
-                    } else {
-                        window.alert("Construction project history was not found on this device.");
-                    }
-                    return;
-                }
-
-                openConstructionHistoryModal(record);
+                window.location.assign(`/projects/construction-history/${encodeURIComponent(sourceId)}/`);
             });
         }
 
@@ -19185,6 +19332,13 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             setSelectValueIfExists(divisionFilter, saved.division);
             syncActiveProjectDivision(typeof saved.division === "string" ? saved.division : "all");
+            // Some browsers (or cached restores) can paint before the first render finishes.
+            // Force an immediate summary sync so the division cards show counts without a click.
+            try {
+                syncProjectRegistrySummary(buildProjectRecords());
+            } catch (e) {
+                /* ignore */
+            }
             enableProjectCardFloat();
             bindProjectBoardListeners();
             tryRestoreConstructionHistoryModal();
@@ -19259,6 +19413,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const hydrateAndBootstrap = () => {
             // Bootstrap immediately so the sidebar "Projects" click shows something right away.
             bootstrapProjectBoard();
+            window.requestAnimationFrame(() => {
+                try {
+                    refreshProjectBoard();
+                } catch (e) {
+                    /* ignore */
+                }
+            });
 
             // Then fetch the latest server copies and refresh once they land in localStorage.
             Promise.resolve(syncProjectStoresFromServer())
@@ -19428,6 +19589,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const qualitySummaryRemarks = qualityDashboard.querySelector("#quality-summary-remarks");
     const qualitySummaryCompleted = qualityDashboard.querySelector("#quality-summary-completed");
     const qualitySummaryTodo = qualityDashboard.querySelector("#quality-summary-todo");
+    const qualityParticularsSelect = qualityDashboard.querySelector(".js-quality-particulars-select");
     const qualityOverviewCards = Array.from(qualityDashboard.querySelectorAll(".quality-overview-card"));
     const qualitySearchInput = qualityDashboard.querySelector(".js-quality-search");
     const qualityTabs = Array.from(qualityDashboard.querySelectorAll("[data-quality-tab]"));
@@ -20128,6 +20290,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let activeTab = "all";
     let activeCardFilter = "all";
     let activeRouteFilter = "all";
+    let activeParticularFilter = "all";
     let searchQuery = "";
     let editingRecordId = null;
     const TABLE_DRAG_THRESHOLD = 8;
@@ -20142,6 +20305,12 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const getFilteredRecords = () => {
+        const normalizedParticularFilter = normalizeText(activeParticularFilter);
+        const matchesParticularFilter = (record) => {
+            if (!normalizedParticularFilter || normalizedParticularFilter === "all") return true;
+            return normalizeText(record.particulars) === normalizedParticularFilter;
+        };
+
         const matchesCardFilter = (record) => {
             const status = normalizeText(record.status);
             const hasRemarks = String(record.remarks || "").trim().length > 0;
@@ -20183,7 +20352,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ].map(normalizeText).join(" ");
             const matchesSearch = !searchQuery || haystack.includes(searchQuery);
 
-            return matchesTab && matchesRoute && matchesSearch && matchesCardFilter(record);
+            return matchesTab && matchesRoute && matchesSearch && matchesCardFilter(record) && matchesParticularFilter(record);
         });
     };
 
@@ -20371,6 +20540,59 @@ document.addEventListener("DOMContentLoaded", () => {
         if (qualitySummaryTodo instanceof HTMLElement) {
             qualitySummaryTodo.textContent = String(tasksToDoCount);
         }
+
+        if (qualityParticularsSelect instanceof HTMLSelectElement) {
+            const labelByKey = new Map();
+            const countByKey = new Map();
+
+            records.forEach((record) => {
+                const label = String(record.particulars || "").trim() || "Others";
+                const key = normalizeText(label) || "others";
+                if (!labelByKey.has(key)) {
+                    labelByKey.set(key, label);
+                }
+                countByKey.set(key, (countByKey.get(key) || 0) + 1);
+            });
+
+            const orderedKeys = [];
+            if (qualityForm instanceof HTMLElement) {
+                qualityForm
+                    .querySelectorAll('input[name="particulars"]')
+                    .forEach((input) => {
+                        if (!(input instanceof HTMLInputElement)) return;
+                        const label = String(input.value || "").trim();
+                        if (!label) return;
+                        const key = normalizeText(label);
+                        if (!key) return;
+                        if (!labelByKey.has(key)) labelByKey.set(key, label);
+                        if (!orderedKeys.includes(key)) orderedKeys.push(key);
+                    });
+            }
+
+            const extras = Array.from(countByKey.keys())
+                .filter((key) => !orderedKeys.includes(key))
+                .sort((a, b) => String(labelByKey.get(a) || a).localeCompare(String(labelByKey.get(b) || b)));
+
+            const allKeys = [...orderedKeys, ...extras];
+            const existingValue = String(qualityParticularsSelect.value || "all");
+            const desiredValue = normalizeText(activeParticularFilter) || normalizeText(existingValue) || "all";
+
+            qualityParticularsSelect.innerHTML = "";
+            const allOption = document.createElement("option");
+            allOption.value = "all";
+            allOption.textContent = `All Particulars (${totalDocuments})`;
+            qualityParticularsSelect.appendChild(allOption);
+
+            allKeys.forEach((key) => {
+                const option = document.createElement("option");
+                option.value = key;
+                option.textContent = `${labelByKey.get(key) || key} (${countByKey.get(key) || 0})`;
+                qualityParticularsSelect.appendChild(option);
+            });
+
+            const hasDesired = Array.from(qualityParticularsSelect.options).some((opt) => opt.value === desiredValue);
+            qualityParticularsSelect.value = hasDesired ? desiredValue : "all";
+        }
     };
 
     const enableQualityCardFloat = () => {
@@ -20457,6 +20679,14 @@ document.addEventListener("DOMContentLoaded", () => {
         renderPagination(filteredRecords);
         window.requestAnimationFrame(syncHorizontalScrollState);
     };
+
+    if (qualityParticularsSelect instanceof HTMLSelectElement) {
+        qualityParticularsSelect.addEventListener("change", () => {
+            activeParticularFilter = String(qualityParticularsSelect.value || "all");
+            currentPage = 1;
+            renderTable();
+        });
+    }
 
 	    const syncModalState = () => {
 	        const isOpen = qualityModal instanceof HTMLElement && !qualityModal.hidden;
@@ -21101,3 +21331,148 @@ if (document.readyState === "loading") {
 } else {
     portalDomReady();
 }
+
+// Full-width project history page (replaces floating modal for history view).
+(function () {
+    const sourceNode = document.getElementById("peo-project-history-source-id");
+    const cardsWrap = document.querySelector(".js-project-history-page-cards");
+    if (!sourceNode || !(cardsWrap instanceof HTMLElement)) return;
+
+    let sourceId = "";
+    try {
+        sourceId = String(JSON.parse(sourceNode.textContent || "\"\"") || "").trim();
+    } catch (error) {
+        sourceId = "";
+    }
+
+    const subtitleEl = document.querySelector(".js-project-history-page-subtitle");
+    const metaEl = document.querySelector(".js-project-history-page-meta");
+
+    const escapeHtml = (value) => {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    };
+
+    const readJsonArray = (storageKey) => {
+        try {
+            const raw = window.localStorage.getItem(storageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const formatMonthLabel = (monthKey) => {
+        const text = String(monthKey || "").trim();
+        const match = text.match(/^(\d{4})-(\d{2})$/);
+        if (!match) return text || "Unknown Month";
+        const year = Number(match[1]);
+        const monthIndex = Number(match[2]) - 1;
+        const date = new Date(year, monthIndex, 1);
+        if (Number.isNaN(date.getTime())) return text;
+        return date.toLocaleString(undefined, { month: "long", year: "numeric" });
+    };
+
+    const buildMonthlyHistoryCards = (record) => {
+        const raw = Array.isArray(record?.accomplishment_history) ? record.accomplishment_history : [];
+        if (!raw.length) {
+            return `<div style="color:#64748b;">No monthly history found for this project yet.</div>`;
+        }
+
+        const buckets = new Map();
+        raw.forEach((entry) => {
+            if (!entry || typeof entry !== "object") return;
+            const month = String(entry.month || "").trim();
+            if (!month) return;
+            const list = buckets.get(month) || [];
+            list.push(entry);
+            buckets.set(month, list);
+        });
+
+        const months = Array.from(buckets.keys()).sort().reverse();
+        const projectName = String(record?.project_name || "Construction Project").trim();
+
+        return months
+            .map((month) => {
+                const entries = buckets.get(month) || [];
+                const latest = entries[0] && typeof entries[0] === "object" ? entries[0] : {};
+                const location = String(latest.location || record.location || "").trim();
+                const contractor = String(latest.contractor || record.contractor || "").trim();
+                const percent = String(latest.status_current || record.status_current || "").trim();
+
+                const seen = new Set();
+                const uniqueImages = [];
+                entries.forEach((e) => {
+                    const imgs = Array.isArray(e?.images) ? e.images : [];
+                    imgs.forEach((img) => {
+                        const url = String(img?.dataUrl || "").trim();
+                        if (!url || seen.has(url)) return;
+                        seen.add(url);
+                        uniqueImages.push(img);
+                    });
+                });
+
+                const imagesHtml = uniqueImages.length
+                    ? `<div class="project-history-month-images">
+                        ${uniqueImages
+                            .map(
+                                (img) =>
+                                    `<img src="${escapeHtml(img.dataUrl)}" alt="${escapeHtml(img.name || projectName || "Project image")}">`
+                            )
+                            .join("")}
+                      </div>`
+                    : `<div style="color:#64748b;">No images saved for this month.</div>`;
+
+                return `
+                    <article class="project-history-month-card">
+                        <div class="project-history-month-head">
+                            <div>
+                                <h5>${escapeHtml(formatMonthLabel(month))}</h5>
+                                <div class="project-history-month-meta">${escapeHtml(projectName)}</div>
+                            </div>
+                            <div class="project-history-month-meta">${percent ? `${escapeHtml(percent)}%` : ""}</div>
+                        </div>
+                        <div class="project-history-month-grid">
+                            <div class="project-history-month-field">
+                                <small>Location</small>
+                                <strong>${escapeHtml(location || "-")}</strong>
+                            </div>
+                            <div class="project-history-month-field">
+                                <small>Contractor</small>
+                                <strong>${escapeHtml(contractor || "-")}</strong>
+                            </div>
+                        </div>
+                        ${imagesHtml}
+                    </article>
+                `;
+            })
+            .join("");
+    };
+
+    const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+    const record = constructionRecords.find((item) => String(item?.__id || "").trim() === sourceId);
+
+    if (subtitleEl instanceof HTMLElement) {
+        const projectName = record ? String(record.project_name || "Construction Project").trim() : "Construction Project";
+        subtitleEl.textContent = `Monthly snapshots and uploaded images for: ${projectName}`;
+    }
+
+    if (!record) {
+        if (metaEl instanceof HTMLElement) {
+            metaEl.textContent = "Project not found in local construction records on this device.";
+        }
+        cardsWrap.innerHTML = `<div style="color:#64748b;">This project history is not available on this device yet.</div>`;
+        return;
+    }
+
+    if (metaEl instanceof HTMLElement) {
+        metaEl.textContent = "History entries are grouped by month and shown full-width on this page.";
+    }
+    cardsWrap.innerHTML = buildMonthlyHistoryCards(record);
+})();

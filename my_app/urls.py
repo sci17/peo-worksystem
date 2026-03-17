@@ -13,6 +13,7 @@ urlpatterns = [
     path('quality-division/', views.quality_division_dashboard, name='quality_division_dashboard'),
     path('quality-division/submissions/', views.quality_division_submissions, name='quality_division_submissions'),
     path('projects/', views.project_dashboard, name='project_dashboard'),
+    path('projects/construction-history/<slug:source_id>/', views.project_construction_history, name='project_construction_history'),
     path('construction-division/', views.construction_division_dashboard, name='construction_division_dashboard'),
     path('construction-division/submissions/', views.construction_division_submissions, name='construction_division_submissions'),
     path('construction-division/project/', views.construction_project_dashboard, name='construction_project_dashboard'),
