@@ -417,7 +417,7 @@
                     {% endif %}
                 </section>
 
-                <section class="leadership-section">
+                <section class="leadership-section is-orgchart">
                     <div class="section-head">
                         <div>
                             <h3>Division Leadership</h3>
@@ -438,57 +438,155 @@
                         {% if overview_leadership_executive %}
                             <article class="leader-card leader-card-primary">
                                 <div class="leader-avatar leader-avatar-primary">
-                                    {{ overview_leadership_executive.initials|default:"--" }}
+                                    {% if overview_leadership_executive.photo_url %}
+                                        <img src="{{ overview_leadership_executive.photo_url }}" alt="{{ overview_leadership_executive.name|default:'Leader photo' }}">
+                                    {% else %}
+                                        {{ overview_leadership_executive.initials|default:"--" }}
+                                    {% endif %}
                                 </div>
-                                <span class="leader-tag">{{ overview_leadership_executive.tag|default:"Executive Office" }}</span>
-                                <h4>{{ overview_leadership_executive.name|default:"" }}</h4>
-                                <p>{{ overview_leadership_executive.title|default:"" }}</p>
+                                <div class="leader-label">
+                                    <span class="leader-tag">{{ overview_leadership_executive.tag|default:"Executive Office" }}</span>
+                                    <h4>{{ overview_leadership_executive.name|default:"Hon. AMY ROA ALVAREZ" }}</h4>
+                                    <p>{{ overview_leadership_executive.title|default:"Governor" }}</p>
+                                </div>
+                            </article>
+                        {% elif overview_leadership_executive is None %}
+                            <article class="leader-card leader-card-primary">
+                                <div class="leader-avatar leader-avatar-primary">--</div>
+                                <div class="leader-label">
+                                    <span class="leader-tag">Executive Office</span>
+                                    <h4>Hon. AMY ROA ALVAREZ</h4>
+                                    <p>Governor</p>
+                                </div>
                             </article>
                         {% else %}
                             <article class="leader-card leader-card-primary">
                                 <div class="leader-avatar leader-avatar-primary">--</div>
-                                <span class="leader-tag">Leadership</span>
-                                <h4>Not configured</h4>
-                                <p>Connect the staff directory to populate leadership.</p>
+                                <div class="leader-label">
+                                    <span class="leader-tag">Leadership</span>
+                                    <h4>Engr. AIREEN C. LAGUISMA</h4>
+                                    <p>Connect the staff directory to populate leadership.</p>
+                                </div>
                             </article>
                         {% endif %}
 
-                        <div class="leadership-tree-line"></div>
+                        <div class="leadership-tree-line" aria-hidden="true"></div>
 
-                        <div class="leader-grid">
+                        <article class="leader-card leader-card-secondary">
+                            <div class="leader-avatar leader-avatar-secondary">
+                                {% if overview_leadership_under_executive.photo_url %}
+                                    <img src="{{ overview_leadership_under_executive.photo_url }}" alt="{{ overview_leadership_under_executive.name|default:'Leader photo' }}">
+                                {% else %}
+                                    {{ overview_leadership_under_executive.initials|default:"--" }}
+                                {% endif %}
+                            </div>
+                            <div class="leader-label">
+                                <span class="leader-tag">{{ overview_leadership_under_executive.tag|default:"Provincial Engineer Office" }}</span>
+                                <h4>{{ overview_leadership_under_executive.name|default:"Engr. AIREEN C. LAGUISMA" }}</h4>
+                                <p>{{ overview_leadership_under_executive.title|default:"PGDH (Provincial Engineer)" }}</p>
+                            </div>
+                        </article>
+
+                        <div class="leadership-tree-line" aria-hidden="true"></div>
+
+                        <div class="assistant-grid" aria-label="Assistant Provincial Engineers">
+                            {% if overview_leadership_assistants %}
+                                {% for assistant in overview_leadership_assistants %}
+                                    <article class="leader-card leader-card-assistant">
+                                        <div class="leader-avatar leader-avatar-secondary {{ assistant.avatar_class|default:'' }}">
+                                            {% if assistant.photo_url %}
+                                                <img src="{{ assistant.photo_url }}" alt="{{ assistant.name|default:'Leader photo' }}">
+                                            {% else %}
+                                                {{ assistant.initials|default:"--" }}
+                                            {% endif %}
+                                        </div>
+                                        <div class="leader-label">
+                                            <span class="leader-tag">{{ assistant.tag|default:"Assistant Provincial Engineer" }}</span>
+                                            <h4>{{ assistant.name|default:"Not assigned" }}</h4>
+                                            <p>{{ assistant.title|default:"Assistant Provincial Engineer" }}</p>
+                                        </div>
+                                    </article>
+                                {% endfor %}
+                            {% else %}
+                                <article class="leader-card leader-card-assistant">
+                                    <div class="leader-avatar leader-avatar-secondary">--</div>
+                                    <div class="leader-label">
+                                        <span class="leader-tag">Assistant Provincial Engineer</span>
+                                        <h4>Engr. ELMON RAY M. JURATIL</h4>
+                                        <p>PGADH (Assistant Provincial Engineer)</p>
+                                    </div>
+                                </article>
+                                <article class="leader-card leader-card-assistant">
+                                    <div class="leader-avatar leader-avatar-secondary">--</div>
+                                    <div class="leader-label">
+                                        <span class="leader-tag">Assistant Provincial Engineer</span>
+                                        <h4>Egnr. RANFORD T. VILLEGAS</h4>
+                                        <p>PGADH (Assistant Provincial Engineer)</p>
+                                    </div>
+                                </article>
+                            {% endif %}
+                        </div>
+
+                        <div class="leadership-tree-line" aria-hidden="true"></div>
+
+                        <div class="leader-grid" aria-label="Division Heads">
                             {% if overview_leadership_divisions %}
                                 {% for leader in overview_leadership_divisions %}
                                     <article class="leader-card">
-                                        <div class="leader-avatar {{ leader.avatar_class|default:'' }}">{{ leader.initials|default:"--" }}</div>
-                                        <h4>{{ leader.name|default:"" }}</h4>
-                                        <span class="leader-dept">{{ leader.department|default:"" }}</span>
+                                        <div class="leader-avatar {{ leader.avatar_class|default:'' }}">
+                                            {% if leader.photo_url %}
+                                                <img src="{{ leader.photo_url }}" alt="{{ leader.name|default:'Leader photo' }}">
+                                            {% else %}
+                                                {{ leader.initials|default:"--" }}
+                                            {% endif %}
+                                        </div>
+                                        <div class="leader-label">
+                                            <span class="leader-dept">{{ leader.department|default:"" }}</span>
+                                            <h4>{{ leader.name|default:"Not assigned" }}</h4>
+                                            <p>{{ leader.title|default:"Division Head" }}</p>
+                                        </div>
                                     </article>
                                 {% endfor %}
                             {% else %}
                                 <article class="leader-card">
                                     <div class="leader-avatar leader-avatar-admin">--</div>
-                                    <h4>Not assigned</h4>
-                                    <span class="leader-dept">Admin Division</span>
+                                    <div class="leader-label">
+                                        <span class="leader-dept">Admin Division</span>
+                                        <h4>Engr. PEARL ANGELIE L. PRADO</h4>
+                                        <p>Division Head</p>
+                                    </div>
                                 </article>
                                 <article class="leader-card">
                                     <div class="leader-avatar leader-avatar-planning">--</div>
-                                    <h4>Not assigned</h4>
-                                    <span class="leader-dept">Planning Division</span>
+                                    <div class="leader-label">
+                                        <span class="leader-dept">Planning Division</span>
+                                        <h4>Engr. ARLENE N. GAMO</h4>
+                                        <p>Division Head</p>
+                                    </div>
                                 </article>
                                 <article class="leader-card">
                                     <div class="leader-avatar leader-avatar-construction">--</div>
-                                    <h4>Not assigned</h4>
-                                    <span class="leader-dept">Construction Division</span>
+                                    <div class="leader-label">
+                                        <span class="leader-dept">Construction Division</span>
+                                        <h4>Engr. ELMON RAY M. JURATIL</h4>
+                                        <p>Division Head</p>
+                                    </div>
                                 </article>
                                 <article class="leader-card">
                                     <div class="leader-avatar leader-avatar-quality">--</div>
-                                    <h4>Not assigned</h4>
-                                    <span class="leader-dept">Quality Division</span>
+                                    <div class="leader-label">
+                                        <span class="leader-dept">Quality Division</span>
+                                        <h4>Engr. CHARISMA WY B. PROELLS</h4>
+                                        <p>Division Head</p>
+                                    </div>
                                 </article>
                                 <article class="leader-card">
                                     <div class="leader-avatar leader-avatar-maintenance">--</div>
-                                    <h4>Not assigned</h4>
-                                    <span class="leader-dept">Maintenance Division</span>
+                                    <div class="leader-label">
+                                        <span class="leader-dept">Maintenance Division</span>
+                                        <h4>Egnr. GLENN J. CAYAPAS</h4>
+                                        <p>Division Head</p>
+                                    </div>
                                 </article>
                             {% endif %}
                         </div>

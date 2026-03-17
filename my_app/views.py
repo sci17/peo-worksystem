@@ -752,6 +752,84 @@ def _build_overview_context(user):
     top_division = max(division_completions, key=lambda row: row[1])[0] if division_completions else ''
     avg_efficiency = int(round(sum(row[1] for row in division_completions) / float(len(division_completions)))) if division_completions else 0
 
+    # Leadership org chart (static profile photos matched by filename).
+    # Note: we match by name-to-filename only (no face recognition).
+    from pathlib import Path
+
+    from django.templatetags.static import static
+
+    profiles_dir = Path(__file__).resolve().parent / 'static' / 'gov. profiles'
+
+    def _normalize_name(value):
+        raw = str(value or '').strip()
+        tokens = [''.join(ch for ch in part.lower() if ch.isalnum()) for part in raw.split()]
+        tokens = [t for t in tokens if t]
+
+        # Strip common honorifics/role prefixes so display text can include them.
+        while tokens and tokens[0] in {'hon', 'honorable', 'engr', 'eng'}:
+            tokens.pop(0)
+
+        return ''.join(tokens)
+
+    def _build_initials(value):
+        parts = [p for p in str(value or '').replace('.', ' ').split() if p.strip()]
+        letters = [p[0].upper() for p in parts if p and p[0].isalpha()]
+        return ''.join(letters[:2]) if letters else '--'
+
+    def _photo_url_for_name(display_name):
+        wanted = _normalize_name(display_name)
+        if not wanted or not profiles_dir.exists():
+            return ''
+
+        for ext in ('.png', '.jpg', '.jpeg', '.webp'):
+            candidate = profiles_dir / f'{display_name}{ext}'
+            if candidate.exists():
+                return static(f'gov. profiles/{candidate.name}')
+
+        for path in profiles_dir.glob('*'):
+            if not path.is_file() or path.suffix.lower() not in ('.png', '.jpg', '.jpeg', '.webp'):
+                continue
+            if _normalize_name(path.stem) == wanted:
+                return static(f'gov. profiles/{path.name}')
+
+        return ''
+
+    def _leader_profile(name, title, tag=''):
+        return {
+            'name': name,
+            'title': title,
+            'tag': tag,
+            'initials': _build_initials(name),
+            'photo_url': _photo_url_for_name(name),
+        }
+
+    def _division_leader(department, name, title='Division Head', avatar_class=''):
+        payload = _leader_profile(name=name, title=title, tag='')
+        payload.update({'department': department, 'avatar_class': avatar_class})
+        return payload
+
+    leadership_executive = _leader_profile(
+        name='Amy Roa Alvarez',
+        title='Governor',
+        tag='Executive Office',
+    )
+    leadership_under_executive = _leader_profile(
+        name='Aireen C. Laguisma',
+        title='Provincial Engineer',
+        tag='Provincial Engineer Office',
+    )
+    leadership_assistants = [
+        _leader_profile(name='Elmon Ray M. Juratil', title='Assistant Provincial Engineer', tag='Assistant Provincial Engineer'),
+        _leader_profile(name='Ranford T. Villegas', title='Assistant Provincial Engineer', tag='Assistant Provincial Engineer'),
+    ]
+    leadership_divisions = [
+        _division_leader('Administrative Division', 'Pearl Angelie L. Prado', avatar_class='leader-avatar-admin'),
+        _division_leader('Planning Division', 'Arlene N. Gamo', avatar_class='leader-avatar-planning'),
+        _division_leader('Construction Division', 'Elmon Ray M. Juratil', avatar_class='leader-avatar-construction'),
+        _division_leader('Maintenance Division', 'Glenn J. Cayapas', avatar_class='leader-avatar-maintenance'),
+        _division_leader('Quality Control Division', 'Charisma Wy B. Proells', avatar_class='leader-avatar-quality'),
+    ]
+
     return {
         'overview_active_projects': active_projects,
         'overview_active_projects_delta': '',
@@ -763,8 +841,10 @@ def _build_overview_context(user):
         'overview_recent_updates_delta': '',
         'overview_recent_updates_progress': overview_recent_updates_progress,
         'overview_spotlight_projects': spotlight_projects,
-        'overview_leadership_executive': None,
-        'overview_leadership_divisions': [],
+        'overview_leadership_executive': leadership_executive,
+        'overview_leadership_under_executive': leadership_under_executive,
+        'overview_leadership_assistants': leadership_assistants,
+        'overview_leadership_divisions': leadership_divisions,
         'overview_recent_activity': recent_activity,
         'overview_division_performance': performance_metrics,
         'overview_top_performer': top_division,
