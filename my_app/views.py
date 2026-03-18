@@ -1816,11 +1816,8 @@ def construction_division_submissions(request):
             request,
             current_section='construction',
             current_construction='proposal',
-            page_heading='Construction Division Submissions',
-            construction_template='shared/division_submissions.html',
-            submissions_division_key='construction',
-            submissions_main_url=reverse('construction_division_dashboard'),
-            submissions_url=reverse('construction_division_submissions'),
+            page_heading='Construction Project Proposal',
+            construction_template='construction/construction_project_proposal.html',
         ),
     )
 
@@ -1941,12 +1938,17 @@ def construction_photo_upload(request):
         if user_division != KEY_CONSTRUCTION:
             return JsonResponse({"error": "Read-only access for construction uploads."}, status=403)
 
-    files = request.FILES.getlist("photos") or request.FILES.getlist("photo") or request.FILES.getlist("accomplishment_photos")
+    files = (
+        request.FILES.getlist("files")
+        or request.FILES.getlist("photos")
+        or request.FILES.getlist("photo")
+        or request.FILES.getlist("accomplishment_photos")
+    )
     if not files:
         return JsonResponse({"error": "No files uploaded."}, status=400)
 
-    allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-    max_bytes = 8 * 1024 * 1024  # 8MB per image
+    allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf"}
+    max_bytes = 8 * 1024 * 1024  # 8MB per file
 
     uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)

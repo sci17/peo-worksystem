@@ -32,27 +32,161 @@
         </div>
     </header>
 
-    <div class="project-search-strip" aria-label="Project search">
-        <label class="project-search-strip-field" for="project-search">
-            <span class="material-symbols-outlined" aria-hidden="true">search</span>
-            <input id="project-search" type="search" placeholder="Search projects by name, ID, or funding source..." data-project-search>
-        </label>
-        <button
-            type="button"
-            class="project-search-submit"
-            data-peo-toast-message="Project search action is ready here for the shared registry view."
-            data-peo-toast-variant="info"
-        >
-            Search
-        </button>
+	    <div class="project-search-strip" aria-label="Project search">
+	        <label class="project-search-strip-field" for="project-search">
+	            <span class="material-symbols-outlined" aria-hidden="true">search</span>
+	            <input id="project-search" type="search" placeholder="Search projects by name, ID, or funding source..." data-project-search>
+	        </label>
+	        <button type="button" class="project-search-filter-btn" data-project-quick-filter-button aria-label="Filters">
+	            <span class="material-symbols-outlined" aria-hidden="true">filter_list</span>
+	        </button>
+	        <button
+	            type="button"
+	            class="project-search-submit"
+	            data-peo-toast-message="Project search action is ready here for the shared registry view."
+	            data-peo-toast-variant="info"
+	        >
+	            Search
+	        </button>
+		    </div>
+
+	    <div class="project-quick-filters" data-project-quick-filters hidden>
+	        <select class="pa-select project-quick-filter-select" data-project-quick-filter="category" aria-label="Category filter">
+	            <option value="all" selected>All Categories</option>
+	            <option value="Public buildings">Public buildings</option>
+	            <option value="Roads">Roads</option>
+	            <option value="Bridges">Bridges</option>
+	            <option value="Other infra projects">Other infra projects</option>
+	        </select>
+
+	        <select class="pa-select project-quick-filter-select" data-project-quick-filter="municipality" aria-label="Municipality filter">
+	            <option value="all" selected>All Municipalities</option>
+	            <option value="Aborlan">Aborlan</option>
+	            <option value="Agutaya">Agutaya</option>
+	            <option value="Araceli">Araceli</option>
+	            <option value="Balabac">Balabac</option>
+	            <option value="Bataraza">Bataraza</option>
+	            <option value="Brooke's Point">Brooke's Point</option>
+	            <option value="Busuanga">Busuanga</option>
+	            <option value="Cagayancillo">Cagayancillo</option>
+	            <option value="Coron">Coron</option>
+	            <option value="Culion">Culion</option>
+	            <option value="Cuyo">Cuyo</option>
+	            <option value="Dumaran">Dumaran</option>
+	            <option value="El Nido">El Nido</option>
+	            <option value="Kalayaan">Kalayaan</option>
+	            <option value="Linapacan">Linapacan</option>
+	            <option value="Magsaysay">Magsaysay</option>
+	            <option value="Narra">Narra</option>
+	            <option value="PPC">PPC</option>
+	            <option value="Provincewide">Provincewide</option>
+	            <option value="Puerto Princesa City">Puerto Princesa City</option>
+	            <option value="Quezon">Quezon</option>
+	            <option value="Rizal">Rizal</option>
+	            <option value="Roxas">Roxas</option>
+	            <option value="San Vicente">San Vicente</option>
+	            <option value="Sofronio Española">Sofronio Española</option>
+	        </select>
+
+	        <select class="pa-select project-quick-filter-select" data-project-quick-filter="status" aria-label="Status filter">
+	            <option value="all" selected>All Statuses</option>
+	            <option value="Opening (10/29/2025)">Opening (10/29/2025)</option>
+	            <option value="No movement">No movement</option>
+	            <option value="Cancelled">Cancelled</option>
+	            <option value="For procurement">For procurement</option>
+	            <option value="Subject for Reversion">Subject for Reversion</option>
+	            <option value="For post qualification">For post qualification</option>
+	            <option value="For Validation">For Validation</option>
+	            <option value="On going">On going</option>
+	            <option value="Negotiated procurement (10/15/2025)">Negotiated procurement (10/15/2025)</option>
+	            <option value="Negotiated procurement (15/2025)">Negotiated procurement (15/2025)</option>
+	            <option value="For cancellation">For cancellation</option>
+	            <option value="Pre-bid">Pre-bid</option>
+	            <option value="Recently Awarded">Recently Awarded</option>
+	            <option value="Reverted">Reverted</option>
+	            <option value="Failure of bidding">Failure of bidding</option>
+	            <option value="For Re-alignment">For Re-alignment</option>
+	            <option value="Re-aligned">Re-aligned</option>
+	            <option value="For preparation">For preparation</option>
+	            <option value="Completed">Completed</option>
+	            <option value="Order of Termination">Order of Termination</option>
+	            <option value="Notice to Terminate">Notice to Terminate</option>
+	            <option value="Issued Notice to Terminate">Issued Notice to Terminate</option>
+	            <option value="Subject for Termination">Subject for Termination</option>
+	            <option value="For Termination">For Termination</option>
+	            <option value="Cancelled (OBR)">Cancelled (OBR)</option>
+	            <option value="c/o PEEDO">c/o PEEDO</option>
+	        </select>
+
+	        <select class="pa-select project-quick-filter-select" data-project-quick-filter="year" aria-label="Year filter">
+	            <option value="all" selected>All Years</option>
+	        </select>
 	    </div>
 
-	    <div data-project-home>
-		    <section class="project-division-section" aria-label="Division project overview">
-		        <div class="project-division-grid">
-	            <article class="project-division-card project-float-card is-planning" data-project-division-card="Planning Division">
-	                <div class="project-division-icon" aria-hidden="true">
-	                    <span class="material-symbols-outlined">architecture</span>
+		    <div data-project-home>
+			    <section class="project-summary-grid" aria-label="Project database analytics">
+			        <article class="project-summary-card project-float-card project-summary-card--total">
+			            <div class="project-summary-card__head">
+			                <span>Total Projects</span>
+			                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">dataset</span>
+			            </div>
+			            <strong data-project-summary="total">0</strong>
+			            <small>all registered project records</small>
+			        </article>
+			
+			        <article class="project-summary-card project-float-card project-summary-card--budget">
+			            <div class="project-summary-card__head">
+			                <span>Total Allocation</span>
+			                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">payments</span>
+			            </div>
+			            <strong data-project-summary="budget">PHP 0.00</strong>
+			            <small>combined allocated amount</small>
+			        </article>
+			
+			        <article class="project-summary-card project-float-card project-summary-card--approved">
+			            <div class="project-summary-card__head">
+			                <span>Approved Projects</span>
+			                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">verified</span>
+			            </div>
+			            <strong data-project-summary="approved">0</strong>
+			            <small>cleared for implementation</small>
+			        </article>
+			
+			        <article class="project-summary-card project-float-card project-summary-card--analysis">
+			            <div class="project-summary-card__head">
+			                <span>Status Analysis</span>
+			                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">monitoring</span>
+			            </div>
+			            <div class="project-status-breakdown">
+			                <div class="project-status-breakdown__row">
+			                    <span>In Planning</span>
+			                    <strong id="project-summary-planning">0</strong>
+			                </div>
+			                <div class="project-status-breakdown__row">
+			                    <span>Approved</span>
+			                    <strong id="project-summary-approved-total">0</strong>
+			                </div>
+			                <div class="project-status-breakdown__row">
+			                    <span>Ongoing</span>
+			                    <strong id="project-summary-ongoing">0</strong>
+			                </div>
+			                <div class="project-status-breakdown__row">
+			                    <span>Completed</span>
+			                    <strong id="project-summary-completed">0</strong>
+			                </div>
+			                <div class="project-status-breakdown__row">
+			                    <span>On Hold</span>
+			                    <strong id="project-summary-onhold">0</strong>
+			                </div>
+			            </div>
+			        </article>
+			    </section>
+
+			    <section class="project-division-section" aria-label="Division project overview">
+			        <div class="project-division-grid">
+		            <article class="project-division-card project-float-card is-planning" data-project-division-card="Planning Division">
+		                <div class="project-division-icon" aria-hidden="true">
+		                    <span class="material-symbols-outlined">architecture</span>
 	                </div>
                 <div class="project-division-copy">
 	                    <strong>Planning Division</strong>
@@ -79,65 +213,7 @@
 	                    <span data-project-division-count="Maintenance Division">0 projects</span>
 	                </div>
 	            </article>
-        </div>
-    </section>
-
-    <section class="project-summary-grid" aria-label="Project database analytics">
-        <article class="project-summary-card project-float-card project-summary-card--total">
-            <div class="project-summary-card__head">
-                <span>Total Projects</span>
-                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">dataset</span>
-            </div>
-            <strong data-project-summary="total">0</strong>
-            <small>all registered project records</small>
-        </article>
-
-        <article class="project-summary-card project-float-card project-summary-card--budget">
-            <div class="project-summary-card__head">
-                <span>Total Allocation</span>
-                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">payments</span>
-            </div>
-            <strong data-project-summary="budget">PHP 0.00</strong>
-            <small>combined allocated amount</small>
-        </article>
-
-        <article class="project-summary-card project-float-card project-summary-card--approved">
-            <div class="project-summary-card__head">
-                <span>Approved Projects</span>
-                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">verified</span>
-            </div>
-            <strong data-project-summary="approved">0</strong>
-            <small>cleared for implementation</small>
-        </article>
-
-        <article class="project-summary-card project-float-card project-summary-card--analysis">
-            <div class="project-summary-card__head">
-                <span>Status Analysis</span>
-                <span class="project-summary-card__icon material-symbols-outlined" aria-hidden="true">monitoring</span>
-            </div>
-            <div class="project-status-breakdown">
-                <div class="project-status-breakdown__row">
-                    <span>In Planning</span>
-                    <strong id="project-summary-planning">0</strong>
-                </div>
-                <div class="project-status-breakdown__row">
-                    <span>Approved</span>
-                    <strong id="project-summary-approved-total">0</strong>
-                </div>
-                <div class="project-status-breakdown__row">
-                    <span>Ongoing</span>
-                    <strong id="project-summary-ongoing">0</strong>
-                </div>
-                <div class="project-status-breakdown__row">
-                    <span>Completed</span>
-                    <strong id="project-summary-completed">0</strong>
-                </div>
-                <div class="project-status-breakdown__row">
-                    <span>On Hold</span>
-                    <strong id="project-summary-onhold">0</strong>
-                </div>
-            </div>
-	        </article>
+	        </div>
 	    </section>
 	    </div>
 

@@ -1253,11 +1253,12 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
             record.name
         );
 
-        const slipNo = pickFirst(record.slip_no, record.slipNo, record.doc_no, record.project_id);
-        const location = pickFirst(record.location, record.location_detail);
-        const contractor = pickFirst(record.contractor, record.owner_representative, record.assignedTo, record.assigned_to);
-        const amount = pickFirst(record.revised_contract_cost, record.revised_contract_amount, record.contract_cost, record.contract_amount, record.amount, record.allocated_amount);
-        const description = pickFirst(record.remarks, record.notes, record.description, record.particulars, record.doc_type);
+	        const slipNo = pickFirst(record.slip_no, record.slipNo, record.doc_no, record.project_id);
+	        const location = pickFirst(record.location, record.location_detail);
+	        const contractor = pickFirst(record.contractor, record.owner_representative, record.assignedTo, record.assigned_to);
+	        const contractAmount = pickFirst(record.contract_cost, record.contract_amount, record.amount, record.allocated_amount);
+	        const revisedContractAmount = pickFirst(record.revised_contract_cost, record.revised_contract_amount);
+	        const description = pickFirst(record.remarks, record.notes, record.description, record.particulars, record.doc_type);
         const dateReceived = pickFirst(record.date_received, record.date_recv, record.dueDateIso, record.due_date, getLocalIsoDate());
         const scannedFileName = pickFirst(record.scanned_file_name, record.scannedFileName, record.file_name, record.filename);
         const scannedFileType = pickFirst(record.scanned_file_type, record.scannedFileType, record.file_type, record.mimetype);
@@ -1281,11 +1282,11 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
             __record_id: id,
             slip_no: slipNo,
             document_name: projectName || "Untitled Submission",
-            location,
-            contractor,
-            contract_amount: amount,
-            revised_contract_amount: amount,
-            description,
+	            location,
+	            contractor,
+	            contract_amount: contractAmount,
+	            revised_contract_amount: revisedContractAmount,
+	            description,
             date_received: dateReceived,
             doc_status: "Routed",
             billing_status: "Routed",
@@ -12553,7 +12554,6 @@ document.addEventListener("DOMContentLoaded", () => {
 	        "project_name",
 	        "location",
 	        "mun",
-	        "road_km",
 	        "contractor",
 	        "contract_cost",
 	        "ntp_date",
@@ -12573,7 +12573,6 @@ document.addEventListener("DOMContentLoaded", () => {
 	        project_name: ["project_name", "project name"],
 	        location: ["location"],
 	        mun: ["mun", "municipality"],
-	        road_km: ["road_km", "road km", "road (km)", "roads in road (km)", "length (km)", "length km", "distance (km)"],
 	        contractor: ["contractor"],
 	        contract_cost: ["contract_cost", "contract cost"],
 	        ntp_date: ["ntp_date", "ntp date", "ntp"],
@@ -12593,7 +12592,6 @@ document.addEventListener("DOMContentLoaded", () => {
 	        project_name: ["project", "name"],
 	        location: ["location"],
 	        mun: ["mun"],
-	        road_km: ["road", "km"],
 	        contractor: ["contractor"],
 	        contract_cost: ["contract", "cost"],
 	        ntp_date: ["ntp", "date"],
@@ -12878,7 +12876,6 @@ document.addEventListener("DOMContentLoaded", () => {
 	        project_name: "Project Name",
 	        location: "Location",
 	        mun: "MUN",
-	        road_km: "Road (km)",
 	        contractor: "Contractor",
 	        contract_cost: "Contract Cost",
 	        ntp_date: "NTP Date",
@@ -13753,7 +13750,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		        if (!totalCount) {
 		            constructionTableBody.innerHTML = `
 		                <tr class="construction-empty-row">
-		                    <td colspan="20">No construction records available yet.</td>
+		                    <td colspan="19">No construction records available yet.</td>
 		                </tr>
 		            `;
 		        } else {
@@ -13780,7 +13777,6 @@ document.addEventListener("DOMContentLoaded", () => {
 		                    <td>${projectCell}</td>
 		                    <td>${escapeHtml(toDisplay(record.location))}</td>
 		                    <td>${escapeHtml(toDisplay(record.mun))}</td>
-		                    <td>${escapeHtml(toDisplay(record.road_km))}</td>
 	                    <td>${escapeHtml(toDisplay(record.contractor))}</td>
 	                    <td>${escapeHtml(formatMoney(record.contract_cost))}</td>
 	                    <td>${escapeHtml(formatDate(record.ntp_date))}</td>
@@ -15964,25 +15960,27 @@ document.addEventListener("DOMContentLoaded", () => {
             || ""
         ).trim();
 
-        return {
-            id: `planning_doc_admin_${String(adminRecord?.__record_id || "")}`,
-            __admin_source_id: String(adminRecord?.__record_id || ""),
-            __received_at: receivedAt,
-            __created_at: receivedAt,
-            slip_no: String(adminRecord?.slip_no || "").trim(),
-            document_name: String(adminRecord?.document_name || "").trim(),
-            location: String(adminRecord?.location || "").trim(),
-            contractor: String(adminRecord?.contractor || "").trim(),
-            amount: String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim(),
-            received_from: "Admin Division",
-            date_received: dateReceived,
-            status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
-            budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
-            budget_allocation_other: mappedBudgetAllocation === "Others" ? mappedBudgetOther : "",
-            remarks: String(adminRecord?.description || "").trim(),
-            created_at: Date.now(),
-        };
-    };
+	        return {
+	            id: `planning_doc_admin_${String(adminRecord?.__record_id || "")}`,
+	            __admin_source_id: String(adminRecord?.__record_id || ""),
+	            __received_at: receivedAt,
+	            __created_at: receivedAt,
+	            slip_no: String(adminRecord?.slip_no || "").trim(),
+	            document_name: String(adminRecord?.document_name || "").trim(),
+	            location: String(adminRecord?.location || "").trim(),
+	            contractor: String(adminRecord?.contractor || "").trim(),
+	            contract_amount: String(adminRecord?.contract_amount || "").trim(),
+	            revised_contract_amount: String(adminRecord?.revised_contract_amount || "").trim(),
+	            amount: String(adminRecord?.revised_contract_amount || adminRecord?.contract_amount || "").trim(),
+	            received_from: "Admin Division",
+	            date_received: dateReceived,
+	            status: normalizePlanningDocStatus(adminRecord?.doc_status || adminRecord?.status || "For Review"),
+	            budget_allocation: resolvePlanningBudgetAllocationValue(mappedBudgetAllocation || ""),
+	            budget_allocation_other: mappedBudgetAllocation === "Others" ? mappedBudgetOther : "",
+	            remarks: String(adminRecord?.description || "").trim(),
+	            created_at: Date.now(),
+	        };
+	    };
 
     const syncAdminToPlanningDocuments = (currentRecords) => {
         const records = Array.isArray(currentRecords) ? [...currentRecords] : [];
@@ -16062,20 +16060,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return merged;
     };
 
-    const renderPlanningDocumentsTable = (records) => {
-        if (!(planningDocumentsTableBody instanceof HTMLTableSectionElement)) return;
-        planningDocumentsTableBody.innerHTML = "";
+	    const renderPlanningDocumentsTable = (records) => {
+	        if (!(planningDocumentsTableBody instanceof HTMLTableSectionElement)) return;
+	        planningDocumentsTableBody.innerHTML = "";
 
-	        if (!Array.isArray(records) || !records.length) {
-	            const emptyRow = document.createElement("tr");
-	            emptyRow.className = "planning-doc-empty-row";
-	            emptyRow.innerHTML = '<td colspan="12">No planning documents available yet.</td>';
-	            planningDocumentsTableBody.appendChild(emptyRow);
-	            if (planningDocCountLabel instanceof HTMLElement) {
-	                planningDocCountLabel.textContent = "0 document(s)";
-	            }
-            return;
-        }
+		        if (!Array.isArray(records) || !records.length) {
+		            const emptyRow = document.createElement("tr");
+		            emptyRow.className = "planning-doc-empty-row";
+		            emptyRow.innerHTML = '<td colspan="12">No planning documents available yet.</td>';
+		            planningDocumentsTableBody.appendChild(emptyRow);
+		            if (planningDocCountLabel instanceof HTMLElement) {
+		                planningDocCountLabel.textContent = "0 document(s)";
+		            }
+	            return;
+	        }
 
         records.forEach((record) => {
             const row = document.createElement("tr");
@@ -16088,33 +16086,33 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-	    const getPlanningDocumentRowMarkup = (record) => {
-	        const safeStatus = normalizePlanningDocStatus(record?.status);
-	        const budgetAllocation = getPlanningDocBudgetAllocationDisplay(record);
-	        const contractAmount = record?.contract_amount;
-	        const revisedContractAmount = record?.revised_contract_amount ?? record?.amount;
-            const ageBadge = getPlanningDocAgeBadgeMarkup(record?.__received_at || record?.date_received || record?.__created_at);
-            const docNameText = escapeHtml(record?.document_name || "-");
-            const docNameCell = ageBadge
-                ? `<span class="peo-doc-title-inline"><span>${docNameText}</span>${ageBadge}</span>`
-                : docNameText;
+		    const getPlanningDocumentRowMarkup = (record) => {
+		        const safeStatus = normalizePlanningDocStatus(record?.status);
+		        const budgetAllocation = getPlanningDocBudgetAllocationDisplay(record);
+		        const contractAmount = record?.contract_amount;
+		        const revisedContractAmount = record?.revised_contract_amount ?? record?.amount;
+	            const ageBadge = getPlanningDocAgeBadgeMarkup(record?.__received_at || record?.date_received || record?.__created_at);
+	            const docNameText = escapeHtml(record?.document_name || "-");
+	            const docNameCell = ageBadge
+	                ? `<span class="peo-doc-title-inline"><span>${docNameText}</span>${ageBadge}</span>`
+	                : docNameText;
 
-	        return `
-	            <td>${escapeHtml(record?.slip_no || "-")}</td>
-	            <td>${docNameCell}</td>
-	            <td>${escapeHtml(record?.location || "-")}</td>
-	            <td>${escapeHtml(record?.contractor || "-")}</td>
-	            <td>${escapeHtml(formatPlanningDocAmount(contractAmount))}</td>
-	            <td>${escapeHtml(formatPlanningDocAmount(revisedContractAmount))}</td>
-	            <td>${escapeHtml(record?.received_from || "-")}</td>
-	            <td>${escapeHtml(formatPlanningDocDate(record?.date_received))}</td>
-	            <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
-	            <td>${escapeHtml(budgetAllocation)}</td>
-            <td class="planning-doc-remarks">${escapeHtml(record?.remarks || "-")}</td>
-            <td class="planning-doc-actions">
-                <div class="planning-doc-actions-group">
-                    <button type="button" class="planning-doc-action-btn is-edit js-planning-doc-edit" data-record-id="${escapeHtml(record?.id || "")}" aria-label="Edit document" title="Edit">
-                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+		        return `
+		            <td>${escapeHtml(record?.slip_no || "-")}</td>
+		            <td>${docNameCell}</td>
+		            <td>${escapeHtml(record?.location || "-")}</td>
+		            <td>${escapeHtml(record?.contractor || "-")}</td>
+		            <td>${escapeHtml(formatPlanningDocAmount(contractAmount))}</td>
+		            <td>${escapeHtml(formatPlanningDocAmount(revisedContractAmount))}</td>
+		            <td>${escapeHtml(record?.received_from || "-")}</td>
+		            <td>${escapeHtml(formatPlanningDocDate(record?.date_received))}</td>
+		            <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
+		            <td>${escapeHtml(budgetAllocation)}</td>
+	            <td class="planning-doc-remarks">${escapeHtml(record?.remarks || "-")}</td>
+	            <td class="planning-doc-actions">
+	                <div class="planning-doc-actions-group">
+	                    <button type="button" class="planning-doc-action-btn is-edit js-planning-doc-edit" data-record-id="${escapeHtml(record?.id || "")}" aria-label="Edit document" title="Edit">
+	                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                     <button type="button" class="planning-doc-action-btn is-delete js-planning-doc-delete" data-record-id="${escapeHtml(record?.id || "")}" aria-label="Delete document" title="Delete">
                         <span class="material-symbols-outlined" aria-hidden="true">delete</span>
@@ -16760,29 +16758,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         planningBudgetDetailTbody.innerHTML = "";
-	        if (!matchedDocuments.length) {
-	            planningBudgetDetailTbody.innerHTML = '<tr class="planning-budget-detail-empty-row"><td colspan="10">No documents registered under this budget allocation.</td></tr>';
-	        } else {
-	            const rows = matchedDocuments.map((doc, index) => {
-	                const safeStatus = normalizePlanningDocStatus(doc.status);
-	                const revisedContractAmount = doc?.revised_contract_amount ?? doc?.amount;
-	                return `
-	                    <tr>
-	                        <td>${index + 1}</td>
-	                        <td>${escapeHtml(doc.slip_no || "-")}</td>
-	                        <td>${escapeHtml(doc.document_name || "-")}</td>
-	                        <td>${escapeHtml(doc.location || "-")}</td>
-	                        <td>${escapeHtml(doc.contractor || "-")}</td>
-	                        <td>${escapeHtml(formatPlanningDocAmount(doc.contract_amount))}</td>
-	                        <td>${escapeHtml(formatPlanningDocAmount(revisedContractAmount))}</td>
-	                        <td>${escapeHtml(formatPlanningDocDate(doc.date_received))}</td>
-	                        <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
-	                        <td class="planning-doc-remarks">${escapeHtml(doc.remarks || "-")}</td>
-	                    </tr>
-	                `;
-	            }).join("");
-	            planningBudgetDetailTbody.innerHTML = rows;
-	        }
+		        if (!matchedDocuments.length) {
+		            planningBudgetDetailTbody.innerHTML = '<tr class="planning-budget-detail-empty-row"><td colspan="10">No documents registered under this budget allocation.</td></tr>';
+		        } else {
+		            const rows = matchedDocuments.map((doc, index) => {
+		                const safeStatus = normalizePlanningDocStatus(doc.status);
+		                const revisedContractAmount = doc?.revised_contract_amount ?? doc?.amount;
+		                return `
+		                    <tr>
+		                        <td>${index + 1}</td>
+		                        <td>${escapeHtml(doc.slip_no || "-")}</td>
+		                        <td>${escapeHtml(doc.document_name || "-")}</td>
+		                        <td>${escapeHtml(doc.location || "-")}</td>
+		                        <td>${escapeHtml(doc.contractor || "-")}</td>
+		                        <td>${escapeHtml(formatPlanningDocAmount(doc.contract_amount))}</td>
+		                        <td>${escapeHtml(formatPlanningDocAmount(revisedContractAmount))}</td>
+		                        <td>${escapeHtml(formatPlanningDocDate(doc.date_received))}</td>
+		                        <td><span class="planning-doc-status ${getPlanningDocStatusClass(safeStatus)}">${escapeHtml(safeStatus)}</span></td>
+		                        <td class="planning-doc-remarks">${escapeHtml(doc.remarks || "-")}</td>
+		                    </tr>
+		                `;
+		            }).join("");
+		            planningBudgetDetailTbody.innerHTML = rows;
+		        }
 
         activePlanningBudgetDetailRecordId = String(record.id || "");
         planningBudgetDetailSection.hidden = false;
@@ -18238,6 +18236,12 @@ document.addEventListener("DOMContentLoaded", () => {
 	        const projectPageLabel = projectBoard.querySelector("[data-project-page-label]");
 	        const projectSearchInput = projectBoard.querySelector("[data-project-search]");
 	        const projectSearchButton = projectBoard.querySelector(".project-search-submit");
+	        const quickFilterButton = projectBoard.querySelector("[data-project-quick-filter-button]");
+	        const quickFiltersPanel = projectBoard.querySelector("[data-project-quick-filters]");
+	        const quickCategoryFilter = projectBoard.querySelector('[data-project-quick-filter="category"]');
+	        const quickMunicipalityFilter = projectBoard.querySelector('[data-project-quick-filter="municipality"]');
+	        const quickStatusFilter = projectBoard.querySelector('[data-project-quick-filter="status"]');
+	        const quickYearFilter = projectBoard.querySelector('[data-project-quick-filter="year"]');
 	        const projectHome = projectBoard.querySelector("[data-project-home]");
 	        const projectShell = projectBoard.querySelector("[data-project-shell]");
 	        const projectBackHomeButton = projectBoard.querySelector("[data-project-back-home]");
@@ -18393,19 +18397,27 @@ document.addEventListener("DOMContentLoaded", () => {
             select.value = desired;
         };
 
-        const persistCurrentProjectUiState = (partial = {}) => {
-            const state = Object.assign({}, readProjectUiState());
-            const divisionValue = divisionFilter instanceof HTMLSelectElement ? String(divisionFilter.value || "all").trim() : "all";
-            const statusValue = statusFilter instanceof HTMLSelectElement ? String(statusFilter.value || "all").trim() : "all";
-            const sortValue = sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest";
-            const queryValue = projectSearchInput instanceof HTMLInputElement ? String(projectSearchInput.value || "") : "";
-            state.division = divisionValue || "all";
-            state.status = statusValue || "all";
-            state.sort = sortValue || "newest";
-            state.query = queryValue;
-            Object.assign(state, partial || {});
-            writeProjectUiState(state);
-        };
+	        const persistCurrentProjectUiState = (partial = {}) => {
+	            const state = Object.assign({}, readProjectUiState());
+	            const divisionValue = divisionFilter instanceof HTMLSelectElement ? String(divisionFilter.value || "all").trim() : "all";
+	            const statusValue = statusFilter instanceof HTMLSelectElement ? String(statusFilter.value || "all").trim() : "all";
+	            const sortValue = sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest";
+	            const queryValue = projectSearchInput instanceof HTMLInputElement ? String(projectSearchInput.value || "") : "";
+	            const categoryValue = quickCategoryFilter instanceof HTMLSelectElement ? String(quickCategoryFilter.value || "all").trim() : "all";
+	            const quickStatusValue = quickStatusFilter instanceof HTMLSelectElement ? String(quickStatusFilter.value || "all").trim() : "all";
+	            const municipalityValue = quickMunicipalityFilter instanceof HTMLSelectElement ? String(quickMunicipalityFilter.value || "all").trim() : "all";
+	            const yearValue = quickYearFilter instanceof HTMLSelectElement ? String(quickYearFilter.value || "all").trim() : "all";
+	            state.division = divisionValue || "all";
+	            state.status = statusValue || "all";
+	            state.sort = sortValue || "newest";
+	            state.query = queryValue;
+	            state.category = categoryValue || "all";
+	            state.quick_status = quickStatusValue || "all";
+	            state.municipality = municipalityValue || "all";
+	            state.year = yearValue || "all";
+	            Object.assign(state, partial || {});
+	            writeProjectUiState(state);
+	        };
 
         const formatProjectCurrency = (amount) => {
             const numericAmount = Number.isFinite(amount) ? amount : 0;
@@ -18679,18 +18691,22 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         };
 
-	        const syncActiveProjectDivision = (divisionName) => {
-	            const selection = String(divisionName || "").trim();
-	            const selectionLower = selection.toLowerCase();
-	            const isAllDivisions = !selection || selectionLower === "all divisions" || selectionLower === "all";
-	            const effectiveDivision = isAllDivisions ? "all" : normalizeDivisionName(selection);
+		        const syncActiveProjectDivision = (divisionName) => {
+		            const selection = String(divisionName || "").trim();
+		            const selectionLower = selection.toLowerCase();
+		            const isAllDivisions = !selection || selectionLower === "all divisions" || selectionLower === "all";
+		            const effectiveDivision = isAllDivisions ? "all" : normalizeDivisionName(selection);
+
+		            if (quickFiltersPanel instanceof HTMLElement) {
+		                quickFiltersPanel.hidden = true;
+		            }
 
 	            if (projectHome instanceof HTMLElement) {
 	                projectHome.hidden = !isAllDivisions;
 	            }
-	            if (projectShell instanceof HTMLElement) {
-	                projectShell.hidden = isAllDivisions;
-	            }
+		            if (projectShell instanceof HTMLElement) {
+		                projectShell.hidden = isAllDivisions;
+		            }
 
 	            if (projectPanelTitle instanceof HTMLElement) {
 	                projectPanelTitle.textContent = isAllDivisions
@@ -18710,13 +18726,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 card.classList.toggle("is-active", isActive);
             });
 
-	            if (divisionFilter instanceof HTMLSelectElement && divisionFilter.value !== effectiveDivision) {
-	                divisionFilter.value = effectiveDivision;
-	            }
-            projectFilterDropdownSyncers.forEach((syncDropdown) => syncDropdown());
-            persistCurrentProjectUiState({ division: isAllDivisions ? "all" : effectiveDivision });
-	            refreshProjectBoard();
-	        };
+		            if (divisionFilter instanceof HTMLSelectElement && divisionFilter.value !== effectiveDivision) {
+		                divisionFilter.value = effectiveDivision;
+		            }
+		            projectFilterDropdownSyncers.forEach((syncDropdown) => syncDropdown());
+		            persistCurrentProjectUiState({ division: isAllDivisions ? "all" : effectiveDivision });
+		            refreshProjectBoard();
+		        };
 
 	        const syncProjectRegistrySummary = (records) => {
 	            const projectRecordsList = Array.isArray(records) ? records : [];
@@ -18806,21 +18822,58 @@ document.addEventListener("DOMContentLoaded", () => {
 		            const constructionRecords = constructionRecordsLocal.length ? constructionRecordsLocal : readSeedArray("construction");
 		            const seededMaintenance = readSeedObject("maintenance");
 		            const maintenanceState = Object.keys(maintenanceStateLocal || {}).length ? maintenanceStateLocal : seededMaintenance;
-		            const maintenanceTasks = Array.isArray(maintenanceState.taskRows) ? maintenanceState.taskRows : [];
-		            const maintenanceRoads = Array.isArray(maintenanceState.roadRecords) ? maintenanceState.roadRecords : [];
+			            const maintenanceTasks = Array.isArray(maintenanceState.taskRows) ? maintenanceState.taskRows : [];
+			            const maintenanceRoads = Array.isArray(maintenanceState.roadRecords) ? maintenanceState.roadRecords : [];
 
-	            const mappedPlanning = planningDocs
-	                .filter((item) => String(item?.id || "").trim())
-		                .map((item, index) => ({
-	                    id: `planning_${String(item.id).trim()}`,
-	                    projectName: String(item?.document_name || item?.slip_no || `Planning Project ${index + 1}`).trim(),
-                    division: "Planning Division",
-	                    fundSource: String(item?.budget_allocation || "Planning Allocation").trim() || "Planning Allocation",
-	                    allocatedAmount: parseProjectAmount(item?.amount || 0),
-	                    status: mapPlanningStatusToProjectStatus(item?.status),
-	                    statusDisplay: mapPlanningStatusToProjectStatus(item?.status),
-	                    createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
-	                }));
+			            const inferCategoryFromProjectName = (projectName) => {
+			                const text = normalizeText(projectName);
+			                if (!text) return "";
+			                if (/\bbridge\b/.test(text) || text.includes("bridges")) return "Bridges";
+			                const roadTokens = ["road", "street", "highway", "rd", "concreting", "asphalt", "paving", "farm-to-market", "fmr"];
+			                if (roadTokens.some((token) => text.includes(token))) return "Roads";
+			                const buildingTokens = ["school", "building", "hospital", "health", "unit", "gym", "multi-purpose", "multipurpose", "center", "centre", "hall"];
+			                if (buildingTokens.some((token) => text.includes(token))) return "Public buildings";
+			                return "Other infra projects";
+			            };
+
+			            const extractMunicipalityFromLocation = (locationText, fallbackValue = "") => {
+			                const fallback = String(fallbackValue || "").trim();
+			                const parts = String(locationText || "")
+			                    .split(",")
+			                    .map((part) => part.trim())
+			                    .filter(Boolean);
+			                if (parts.length >= 3) return parts[1];
+			                if (parts.length === 2) return parts[0];
+			                return fallback;
+			            };
+
+			            const getYearFromCreatedAt = (createdAt) => {
+			                const parsed = new Date(createdAt);
+			                const year = parsed instanceof Date && Number.isFinite(parsed.getTime()) ? parsed.getFullYear() : NaN;
+			                return Number.isFinite(year) ? String(year) : "";
+			            };
+
+		            const mappedPlanning = planningDocs
+		                .filter((item) => String(item?.id || "").trim())
+			                .map((item, index) => {
+			                    const createdAt = Number(item?.created_at || item?.createdAt || Date.now());
+			                    const location = String(item?.location || "").trim();
+			                    const projectName = String(item?.document_name || item?.slip_no || `Planning Project ${index + 1}`).trim();
+			                    return ({
+		                    id: `planning_${String(item.id).trim()}`,
+		                    projectName,
+	                    division: "Planning Division",
+		                    location,
+		                    municipality: extractMunicipalityFromLocation(location),
+		                    category: inferCategoryFromProjectName(projectName),
+		                    fundSource: String(item?.budget_allocation || "Planning Allocation").trim() || "Planning Allocation",
+		                    allocatedAmount: parseProjectAmount(item?.amount || 0),
+		                    status: mapPlanningStatusToProjectStatus(item?.status),
+		                    statusDisplay: mapPlanningStatusToProjectStatus(item?.status),
+		                    year: getYearFromCreatedAt(createdAt),
+		                    createdAt,
+		                });
+			                });
 
 		            const mappedConstruction = constructionRecords
 		                .filter((item) => String(item?.__id || item?.id || item?.project_name || item?.projectName || "").trim())
@@ -18831,46 +18884,73 @@ document.addEventListener("DOMContentLoaded", () => {
 		                        : Number.isFinite(progress) && progress > 0
 		                            ? "Ongoing"
 		                            : "In Planning";
-		                    const remarksText = String(item?.remarks || "").trim();
-		                    const sourceId = String(item?.__id || item?.id || "").trim();
-		                    return {
-		                        id: `construction_${sourceId || String(index)}`,
-		                        sourceRecordId: sourceId,
-		                        projectName: String(item?.project_name || item?.projectName || `Construction Project ${index + 1}`).trim(),
-		                        division: "Construction Division",
-		                        fundSource: String(item?.contractor || item?.fundSource || "Construction Contract").trim() || "Construction Contract",
-		                        allocatedAmount: parseProjectAmount(item?.revised_contract_cost || item?.revisedContractCost || item?.contract_cost || item?.contractCost || 0),
-		                        status: mappedStatus,
-			                        statusDisplay: remarksText || mappedStatus,
-			                        createdAt: Number(item?.created_at || item?.createdAt || item?.__created_at || Date.now()),
-			                    };
-			                });
+				                    const remarksText = String(item?.remarks || "").trim();
+				                    const sourceId = String(item?.__id || item?.id || "").trim();
+				                    const createdAt = Number(item?.created_at || item?.createdAt || item?.__created_at || Date.now());
+				                    const location = String(item?.location || "").trim();
+				                    const municipality = String(item?.mun || "").trim() || extractMunicipalityFromLocation(location);
+				                    const projectName = String(item?.project_name || item?.projectName || `Construction Project ${index + 1}`).trim();
+				                    return {
+				                        id: `construction_${sourceId || String(index)}`,
+				                        sourceRecordId: sourceId,
+				                        projectName,
+				                        division: "Construction Division",
+				                        location,
+				                        municipality,
+				                        category: inferCategoryFromProjectName(projectName),
+				                        fundSource: String(item?.contractor || item?.fundSource || "Construction Contract").trim() || "Construction Contract",
+				                        allocatedAmount: parseProjectAmount(item?.revised_contract_cost || item?.revisedContractCost || item?.contract_cost || item?.contractCost || 0),
+				                        status: mappedStatus,
+				                        statusDisplay: remarksText || mappedStatus,
+				                        year: getYearFromCreatedAt(createdAt),
+				                        createdAt,
+				                    };
+				                });
 
-            const mappedMaintenanceTasks = maintenanceTasks
-                .filter((item) => String(item?.title || item?.taskTitle || "").trim())
-                .map((item, index) => ({
-                    id: `maintenance_task_${index}_${normalizeText(item?.title || item?.taskTitle || "")}`,
-                    projectName: String(item?.title || item?.taskTitle || `Maintenance Task ${index + 1}`).trim(),
-                    division: "Maintenance Division",
-                    fundSource: String(item?.road || item?.division || "Maintenance Task").trim() || "Maintenance Task",
-                    allocatedAmount: 0,
-                    status: mapTaskStatusToProjectStatus(item?.status),
-                    createdAt: Number(item?.createdAt || Date.now()),
-                }));
+	            const mappedMaintenanceTasks = maintenanceTasks
+	                .filter((item) => String(item?.title || item?.taskTitle || "").trim())
+	                .map((item, index) => {
+	                    const createdAt = Number(item?.createdAt || Date.now());
+	                    const location = String(item?.location || "").trim();
+	                    const projectName = String(item?.title || item?.taskTitle || `Maintenance Task ${index + 1}`).trim();
+	                    return ({
+	                    id: `maintenance_task_${index}_${normalizeText(item?.title || item?.taskTitle || "")}`,
+	                    projectName,
+	                    division: "Maintenance Division",
+	                    location,
+	                    municipality: extractMunicipalityFromLocation(location),
+	                    category: inferCategoryFromProjectName(projectName),
+	                    fundSource: String(item?.road || item?.division || "Maintenance Task").trim() || "Maintenance Task",
+	                    allocatedAmount: 0,
+	                    status: mapTaskStatusToProjectStatus(item?.status),
+	                    year: getYearFromCreatedAt(createdAt),
+	                    createdAt,
+	                });
+	                });
 
-            const mappedMaintenanceRoads = !mappedMaintenanceTasks.length
-                ? maintenanceRoads
-                    .filter((item) => String(item?.roadName || "").trim())
-                    .map((item, index) => ({
-                        id: `maintenance_road_${index}_${normalizeText(item?.roadName || "")}`,
-                        projectName: String(item?.roadName || `Maintenance Road ${index + 1}`).trim(),
-                        division: "Maintenance Division",
-                        fundSource: String(item?.municipality || "Road Management").trim() || "Road Management",
-                        allocatedAmount: 0,
-                        status: "In Planning",
-                        createdAt: Number(item?.createdAt || Date.now()),
-                    }))
-                : [];
+	            const mappedMaintenanceRoads = !mappedMaintenanceTasks.length
+	                ? maintenanceRoads
+	                    .filter((item) => String(item?.roadName || "").trim())
+	                    .map((item, index) => {
+	                        const createdAt = Number(item?.createdAt || Date.now());
+	                        const projectName = String(item?.roadName || `Maintenance Road ${index + 1}`).trim();
+	                        const location = projectName;
+	                        const municipality = String(item?.municipality || "").trim() || extractMunicipalityFromLocation(location);
+	                        return ({
+	                        id: `maintenance_road_${index}_${normalizeText(item?.roadName || "")}`,
+	                        projectName,
+	                        division: "Maintenance Division",
+	                        location,
+	                        municipality,
+	                        category: inferCategoryFromProjectName(projectName),
+	                        fundSource: String(item?.municipality || "Road Management").trim() || "Road Management",
+	                        allocatedAmount: 0,
+	                        status: "In Planning",
+	                        year: getYearFromCreatedAt(createdAt),
+	                        createdAt,
+	                    });
+	                    })
+	                : [];
 
 	            const merged = [
 	                ...mappedPlanning,
@@ -18880,27 +18960,68 @@ document.addEventListener("DOMContentLoaded", () => {
 	            ].filter((item) => item.projectName);
 
             const dedupedById = new Map();
-            merged.forEach((item) => {
-                if (!dedupedById.has(item.id)) {
-                    dedupedById.set(item.id, item);
-                }
-            });
-            return Array.from(dedupedById.values());
-        };
+			            merged.forEach((item) => {
+			                if (!dedupedById.has(item.id)) {
+			                    dedupedById.set(item.id, item);
+			                }
+			            });
+			            return Array.from(dedupedById.values());
+			        };
 
-        const buildFilteredProjectRecords = (records) => {
-            const divisionValue = divisionFilter instanceof HTMLSelectElement ? String(divisionFilter.value || "all").trim() : "all";
-            const statusValue = statusFilter instanceof HTMLSelectElement ? String(statusFilter.value || "all").trim() : "all";
-            const sortValue = sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest";
-            const query = projectSearchInput instanceof HTMLInputElement ? normalizeText(projectSearchInput.value) : "";
+	        const syncQuickFilterOptions = (records) => {
+	            const list = Array.isArray(records) ? records : [];
+	            const years = new Set();
 
-	            const filtered = (Array.isArray(records) ? records : []).filter((record) => {
-	                const matchesDivision = divisionValue === "all" || record.division === divisionValue;
-	                const matchesStatus = statusValue === "all" || record.status === statusValue;
-	                const haystack = normalizeText(`${record.projectName} ${record.division} ${record.fundSource} ${record.status} ${record.statusDisplay || ""}`);
-	                const matchesQuery = !query || haystack.includes(query);
-	                return matchesDivision && matchesStatus && matchesQuery;
+	            list.forEach((record) => {
+	                const year = String(record?.year || "").trim();
+	                if (year) years.add(year);
 	            });
+
+	            const sortedYears = Array.from(years).sort((a, b) => Number(b) - Number(a));
+
+	            const updateSelect = (select, { allValue, allLabel, values }) => {
+	                if (!(select instanceof HTMLSelectElement)) return;
+	                const current = String(select.value || allValue).trim() || allValue;
+	                const nextOptions = [allValue, ...values];
+	                select.innerHTML = [
+	                    `<option value="${escapeProjectHtml(allValue)}">${escapeProjectHtml(allLabel)}</option>`,
+	                    ...values.map((value) => `<option value="${escapeProjectHtml(value)}">${escapeProjectHtml(value)}</option>`),
+	                ].join("");
+
+	                const nextValue = nextOptions.includes(current) ? current : allValue;
+	                select.value = nextValue;
+	            };
+
+	            updateSelect(quickYearFilter, {
+	                allValue: "all",
+	                allLabel: "All Years",
+	                values: sortedYears,
+	            });
+	        };
+
+	        const buildFilteredProjectRecords = (records) => {
+	            const divisionValue = divisionFilter instanceof HTMLSelectElement ? String(divisionFilter.value || "all").trim() : "all";
+	            const statusValue = statusFilter instanceof HTMLSelectElement ? String(statusFilter.value || "all").trim() : "all";
+	            const sortValue = sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest";
+	            const categoryValue = quickCategoryFilter instanceof HTMLSelectElement ? String(quickCategoryFilter.value || "all").trim() : "all";
+	            const quickStatusValue = quickStatusFilter instanceof HTMLSelectElement ? String(quickStatusFilter.value || "all").trim() : "all";
+	            const municipalityValue = quickMunicipalityFilter instanceof HTMLSelectElement ? String(quickMunicipalityFilter.value || "all").trim() : "all";
+	            const yearValue = quickYearFilter instanceof HTMLSelectElement ? String(quickYearFilter.value || "all").trim() : "all";
+	            const query = projectSearchInput instanceof HTMLInputElement ? normalizeText(projectSearchInput.value) : "";
+	
+		            const filtered = (Array.isArray(records) ? records : []).filter((record) => {
+		                const matchesDivision = divisionValue === "all" || record.division === divisionValue;
+		                const matchesStatus = statusValue === "all" || record.status === statusValue;
+		                const matchesCategory = categoryValue === "all" || String(record.category || "").trim() === categoryValue;
+		                const recordStatusText = normalizeText(record.statusDisplay || record.status || "");
+		                const desiredQuickStatus = normalizeText(quickStatusValue);
+		                const matchesQuickStatus = quickStatusValue === "all" || (desiredQuickStatus && recordStatusText.includes(desiredQuickStatus));
+		                const matchesMunicipality = municipalityValue === "all" || String(record.municipality || "").trim() === municipalityValue;
+		                const matchesYear = yearValue === "all" || String(record.year || "").trim() === yearValue;
+		                const haystack = normalizeText(`${record.projectName} ${record.division} ${record.fundSource} ${record.status} ${record.statusDisplay || ""}`);
+		                const matchesQuery = !query || haystack.includes(query);
+		                return matchesDivision && matchesStatus && matchesCategory && matchesQuickStatus && matchesMunicipality && matchesYear && matchesQuery;
+		            });
 
             filtered.sort((left, right) => {
                 if (sortValue === "name_asc") return String(left.projectName).localeCompare(String(right.projectName));
@@ -18987,13 +19108,14 @@ document.addEventListener("DOMContentLoaded", () => {
 	            renderProjectPagination();
 	        };
 
-	        const refreshProjectBoard = () => {
-	            projectRecords = buildProjectRecords();
-	            visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
-	            currentProjectPage = 1;
-	            renderProjectBoardPage();
-	            syncProjectRegistrySummary(projectRecords);
-	        };
+		        const refreshProjectBoard = () => {
+		            projectRecords = buildProjectRecords();
+		            syncQuickFilterOptions(projectRecords);
+		            visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
+		            currentProjectPage = 1;
+		            renderProjectBoardPage();
+		            syncProjectRegistrySummary(visibleProjectRecords);
+		        };
 
         const enableProjectCardFloat = () => {
             if (!projectFloatCards.length) return;
@@ -19145,13 +19267,12 @@ document.addEventListener("DOMContentLoaded", () => {
 	                    <div class="project-history-details-table-wrap">
 	                        <table class="road-table project-history-details-table">
 	                            <thead>
-	                                <tr>
-	                                    <th>Project Name</th>
-	                                    <th>Roads in Road (km)</th>
-	                                    <th>Location</th>
-	                                    <th>Municipality</th>
-	                                    <th>Contract Cost</th>
-	                                    <th>C.D.</th>
+	                                    <tr>
+	                                        <th>Project Name</th>
+	                                        <th>Location</th>
+	                                        <th>Municipality</th>
+	                                        <th>Contract Cost</th>
+	                                        <th>C.D.</th>
 	                                    <th>NTP Date</th>
 	                                    <th>Target Completion Date (Original)</th>
 	                                    <th>Revised Completion Date</th>
@@ -19161,13 +19282,12 @@ document.addEventListener("DOMContentLoaded", () => {
 		                                    </tr>
 	                            </thead>
 	                            <tbody>
-	                                <tr>
-	                                    <td>${escapeProjectHtml(toDisplay(record.project_name))}</td>
-	                                    <td>${escapeProjectHtml(toDisplay(record.road_km))}</td>
-	                                    <td>${escapeProjectHtml(toDisplay(record.location))}</td>
-	                                    <td>${escapeProjectHtml(toDisplay(record.mun))}</td>
-	                                    <td>${escapeProjectHtml(formatMoney(record.contract_cost))}</td>
-	                                    <td>${escapeProjectHtml(toDisplay(record.cd))}</td>
+	                                    <tr>
+	                                        <td>${escapeProjectHtml(toDisplay(record.project_name))}</td>
+	                                        <td>${escapeProjectHtml(toDisplay(record.location))}</td>
+	                                        <td>${escapeProjectHtml(toDisplay(record.mun))}</td>
+	                                        <td>${escapeProjectHtml(formatMoney(record.contract_cost))}</td>
+	                                        <td>${escapeProjectHtml(toDisplay(record.cd))}</td>
 	                                    <td>${escapeProjectHtml(formatDate(record.ntp_date))}</td>
 	                                    <td>${escapeProjectHtml(formatDate(record.original_expiry_date))}</td>
 	                                    <td>${escapeProjectHtml(formatDate(record.revised_expiry_date))}</td>
@@ -19393,11 +19513,85 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
 
-	        if (divisionFilter instanceof HTMLSelectElement) {
-	            divisionFilter.addEventListener("change", () => {
-	                syncActiveProjectDivision(divisionFilter.value);
-	            });
-	        }
+		        if (divisionFilter instanceof HTMLSelectElement) {
+		            divisionFilter.addEventListener("change", () => {
+		                syncActiveProjectDivision(divisionFilter.value);
+		            });
+		        }
+
+		        if (quickCategoryFilter instanceof HTMLSelectElement) {
+		            quickCategoryFilter.addEventListener("change", () => {
+		                persistCurrentProjectUiState();
+		                refreshProjectBoard();
+		            });
+		        }
+
+		        if (quickStatusFilter instanceof HTMLSelectElement) {
+		            quickStatusFilter.addEventListener("change", () => {
+		                persistCurrentProjectUiState();
+		                refreshProjectBoard();
+		            });
+		        }
+
+		        if (quickMunicipalityFilter instanceof HTMLSelectElement) {
+		            quickMunicipalityFilter.addEventListener("change", () => {
+		                persistCurrentProjectUiState();
+		                refreshProjectBoard();
+		            });
+		        }
+
+		        if (quickYearFilter instanceof HTMLSelectElement) {
+		            quickYearFilter.addEventListener("change", () => {
+		                persistCurrentProjectUiState();
+		                refreshProjectBoard();
+		            });
+		        }
+
+
+		        if (quickFilterButton instanceof HTMLButtonElement) {
+		            quickFilterButton.addEventListener("click", (event) => {
+		                event.preventDefault();
+		                event.stopPropagation();
+		                if (!(quickFiltersPanel instanceof HTMLElement)) return;
+	
+		                const willOpen = quickFiltersPanel.hidden === true;
+		                if (willOpen) {
+		                    const currentRecords = Array.isArray(projectRecords) && projectRecords.length
+		                        ? projectRecords
+		                        : buildProjectRecords();
+		                    syncQuickFilterOptions(currentRecords);
+	
+		                    if (quickStatusFilter instanceof HTMLSelectElement && statusFilter instanceof HTMLSelectElement) {
+		                        quickStatusFilter.value = String(statusFilter.value || "all");
+		                    }
+		                    if (quickCategoryFilter instanceof HTMLSelectElement && divisionFilter instanceof HTMLSelectElement) {
+		                        quickCategoryFilter.value = String(divisionFilter.value || "all");
+		                    }
+		                }
+	
+		                quickFiltersPanel.hidden = !willOpen;
+		                if (willOpen) {
+		                    const first = quickFiltersPanel.querySelector("select");
+		                    if (first instanceof HTMLSelectElement) {
+		                        window.setTimeout(() => first.focus(), 0);
+		                    }
+		                }
+		            });
+		        }
+
+		        document.addEventListener("click", (event) => {
+		            if (!(quickFiltersPanel instanceof HTMLElement) || quickFiltersPanel.hidden) return;
+		            const target = event.target;
+		            if (quickFiltersPanel.contains(target)) return;
+		            if (quickFilterButton instanceof HTMLElement && quickFilterButton.contains(target)) return;
+		            quickFiltersPanel.hidden = true;
+		        });
+
+		        document.addEventListener("keydown", (event) => {
+		            if (event.key !== "Escape") return;
+		            if (!(quickFiltersPanel instanceof HTMLElement) || quickFiltersPanel.hidden) return;
+		            quickFiltersPanel.hidden = true;
+		        });
 
 	        if (projectPrevButton instanceof HTMLButtonElement) {
 	            projectPrevButton.addEventListener("click", () => {
@@ -19426,12 +19620,12 @@ document.addEventListener("DOMContentLoaded", () => {
 	            });
 	        }
 
-	        if (statusFilter instanceof HTMLSelectElement) {
-	            statusFilter.addEventListener("change", () => {
-	                persistCurrentProjectUiState();
-	                refreshProjectBoard();
-            });
-        }
+		        if (statusFilter instanceof HTMLSelectElement) {
+		            statusFilter.addEventListener("change", () => {
+		                persistCurrentProjectUiState();
+		                refreshProjectBoard();
+	            });
+	        }
 
         if (sortFilter instanceof HTMLSelectElement) {
             sortFilter.addEventListener("change", () => {
@@ -19488,25 +19682,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let projectBoardBootstrapped = false;
 
-        const bootstrapProjectBoard = () => {
-            if (projectBoardBootstrapped) return;
-            projectBoardBootstrapped = true;
+	        const bootstrapProjectBoard = () => {
+	            if (projectBoardBootstrapped) return;
+	            projectBoardBootstrapped = true;
 
-            const saved = readProjectUiState();
-            setSelectValueIfExists(statusFilter, saved.status);
-            setSelectValueIfExists(sortFilter, saved.sort);
-            if (projectSearchInput instanceof HTMLInputElement) {
-                projectSearchInput.value = typeof saved.query === "string" ? saved.query : "";
-            }
-            setSelectValueIfExists(divisionFilter, saved.division);
-            syncActiveProjectDivision(typeof saved.division === "string" ? saved.division : "all");
-            // Some browsers (or cached restores) can paint before the first render finishes.
-            // Force an immediate summary sync so the division cards show counts without a click.
-            try {
-                syncProjectRegistrySummary(buildProjectRecords());
-            } catch (e) {
-                /* ignore */
-            }
+	            const saved = readProjectUiState();
+	            setSelectValueIfExists(statusFilter, saved.status);
+	            setSelectValueIfExists(sortFilter, saved.sort);
+	            if (projectSearchInput instanceof HTMLInputElement) {
+	                projectSearchInput.value = typeof saved.query === "string" ? saved.query : "";
+	            }
+	            try {
+	                syncQuickFilterOptions(buildProjectRecords());
+	            } catch (e) {
+	                /* ignore */
+	            }
+	            setSelectValueIfExists(divisionFilter, saved.division);
+	            setSelectValueIfExists(quickCategoryFilter, saved.category);
+	            setSelectValueIfExists(quickStatusFilter, saved.quick_status);
+	            setSelectValueIfExists(quickMunicipalityFilter, saved.municipality);
+	            setSelectValueIfExists(quickYearFilter, saved.year);
+	            syncActiveProjectDivision(typeof saved.division === "string" ? saved.division : "all");
+	            // Some browsers (or cached restores) can paint before the first render finishes.
+	            // Force an immediate summary sync so the division cards show counts without a click.
+	            try {
+	                const all = buildProjectRecords();
+	                syncQuickFilterOptions(all);
+	                syncProjectRegistrySummary(buildFilteredProjectRecords(all));
+	            } catch (e) {
+	                /* ignore */
+	            }
             enableProjectCardFloat();
             bindProjectBoardListeners();
             tryRestoreConstructionHistoryModal();
@@ -19609,6 +19814,495 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 /* PLANNING_DIVISION_MODAL_SCRIPT_END */
+
+/* CONSTRUCTION_PROPOSAL_SCRIPT_START */
+document.addEventListener("DOMContentLoaded", () => {
+    const dashboard = document.querySelector(".js-construction-proposal-dashboard");
+    if (!(dashboard instanceof HTMLElement)) return;
+
+	    const fileUploadUrl = String(dashboard.dataset.fileUploadUrl || "").trim();
+	    const addButton = dashboard.querySelector(".js-construction-proposal-add");
+	    const deleteSelectedButton = dashboard.querySelector(".js-construction-proposal-delete-selected");
+	    const selectAllCheckbox = dashboard.querySelector(".js-construction-proposal-select-all");
+	    const tableBody = dashboard.querySelector(".js-construction-proposal-table-body");
+	    const metaEl = dashboard.querySelector(".js-construction-proposal-meta");
+
+	    const modal = document.querySelector(".js-construction-proposal-modal");
+	    const form = modal ? modal.querySelector(".js-construction-proposal-form") : null;
+	    const closeButtons = modal ? Array.from(modal.querySelectorAll(".js-close-construction-proposal-modal")) : [];
+	    const modalTitleEl = modal ? modal.querySelector("#construction-proposal-modal-title") : null;
+	    const modalSubmitButton = form ? form.querySelector('button[type="submit"]') : null;
+	    const attachmentInput = form ? form.querySelector('input[name="attachment"]') : null;
+
+		    const STORAGE_KEY = "peo_construction_proposals_v1";
+		    const PLANNING_TARGET_LABEL = "Planning Division";
+		    let editingRecordId = "";
+		    let selectedProposalIds = new Set();
+
+    const getCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getCsrfToken = () => {
+        const tokenFromCookie = getCookie("csrftoken");
+        if (tokenFromCookie) return tokenFromCookie;
+        const tokenFromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenFromDom instanceof HTMLInputElement ? String(tokenFromDom.value || "").trim() : "";
+    };
+
+    const escapeHtml = (value) => {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    };
+
+    const readRecords = () => {
+        try {
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeRecords = (records) => {
+        try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.isArray(records) ? records : []));
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+	    const setMeta = (count) => {
+	        if (!(metaEl instanceof HTMLElement)) return;
+	        metaEl.textContent = `${count} proposal${count === 1 ? "" : "s"}`;
+	    };
+
+	    const getVisibleRowCheckboxes = () => {
+	        if (!(tableBody instanceof HTMLElement)) return [];
+	        return Array.from(tableBody.querySelectorAll(".js-construction-proposal-row-select"))
+	            .filter((el) => el instanceof HTMLInputElement);
+	    };
+
+	    const updateSelectionControls = () => {
+	        if (!(selectAllCheckbox instanceof HTMLInputElement)) return;
+	        const rowCheckboxes = getVisibleRowCheckboxes();
+	        const selectedCount = rowCheckboxes.filter((checkbox) => checkbox.checked).length;
+
+	        if (deleteSelectedButton instanceof HTMLButtonElement) {
+	            deleteSelectedButton.disabled = selectedCount === 0;
+	            deleteSelectedButton.textContent = selectedCount ? `Delete Selected (${selectedCount})` : "Delete Selected";
+	        }
+
+	        if (!rowCheckboxes.length) {
+	            selectAllCheckbox.checked = false;
+	            selectAllCheckbox.indeterminate = false;
+	            return;
+	        }
+
+	        selectAllCheckbox.checked = selectedCount === rowCheckboxes.length;
+	        selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < rowCheckboxes.length;
+	    };
+
+	    const renderTable = () => {
+	        if (!(tableBody instanceof HTMLElement)) return;
+	        const records = readRecords();
+	        setMeta(records.length);
+
+		        if (!records.length) {
+		            tableBody.innerHTML = `
+		                <tr class="construction-empty-row">
+		                    <td colspan="9">No project proposals available yet.</td>
+		                </tr>
+		            `;
+		            selectedProposalIds = new Set();
+		            updateSelectionControls();
+		            return;
+		        }
+
+        const extractMunicipality = (locationText) => {
+            const parts = String(locationText || "")
+                .split(",")
+                .map((part) => part.trim())
+                .filter(Boolean);
+
+            // Expected: Barangay, Municipality, Province
+            if (parts.length >= 3) return parts[1];
+            // Fallback: Municipality, Province
+            if (parts.length === 2) return parts[0];
+            return "";
+        };
+
+	        tableBody.innerHTML = records
+	            .slice()
+		            .sort((a, b) => Number(b?.created_at || 0) - Number(a?.created_at || 0))
+		            .map((record, index) => {
+		                const recordId = String(record?.id || "").trim();
+		                const checked = recordId && selectedProposalIds.has(recordId) ? "checked" : "";
+		                const name = escapeHtml(String(record?.project_name || "-"));
+		                const location = escapeHtml(String(record?.location || "-"));
+		                const municipalityValue = extractMunicipality(record?.location);
+		                const municipality = escapeHtml(municipalityValue || "-");
+		                const contractor = escapeHtml(String(record?.contractor || "-"));
+		                const contractAmount = escapeHtml(String(record?.contract_amount || "-"));
+		                const status = escapeHtml(String(record?.status || "-"));
+		                const fileUrl = String(record?.file?.url || "").trim();
+		                const fileName = escapeHtml(String(record?.file?.original_name || record?.file?.name || "").trim() || "View file");
+		                const fileCell = fileUrl
+		                    ? `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">${fileName}</a>`
+		                    : "-";
+
+		                return `
+		                    <tr data-record-id="${escapeHtml(recordId)}">
+		                        <td class="pa-select-col">
+		                            <input type="checkbox" class="js-construction-proposal-row-select" aria-label="Select proposal" data-record-id="${escapeHtml(recordId)}" ${checked}>
+		                        </td>
+		                        <td style="text-align:center;">${index + 1}</td>
+		                        <td>${name}</td>
+		                        <td>${location}</td>
+		                        <td>${municipality}</td>
+		                        <td>${contractor}</td>
+		                        <td>${contractAmount}</td>
+		                        <td>${fileCell}</td>
+		                        <td style="text-align:center;">${status}</td>
+		                    </tr>
+		                `;
+		            })
+		            .join("");
+		    };
+
+		    updateSelectionControls();
+
+		    const routeApprovedProposalToPlanning = (proposalRecord) => {
+        const router = window.peoProjectRouter;
+        if (!router || typeof router.submitToDivision !== "function") {
+            return { ok: false, error: "Routing is not available right now." };
+        }
+
+        const record = proposalRecord && typeof proposalRecord === "object" ? proposalRecord : {};
+        const file = record.file && typeof record.file === "object" ? record.file : {};
+        const fileUrl = String(file.url || "").trim();
+        const fileName = String(file.original_name || file.name || "").trim();
+        const fileType = String(file.type || file.mimeType || file.mimetype || "").trim();
+
+	        return router.submitToDivision({
+	            sourceDivisionKey: "construction",
+	            sourceRecord: {
+	                __id: String(record.id || "").trim(),
+	                project_name: String(record.project_name || "").trim(),
+	                document_name: String(record.project_name || "").trim(),
+	                location: String(record.location || "").trim(),
+	                contractor: String(record.contractor || "").trim(),
+	                contract_amount: String(record.contract_amount || "").trim(),
+	                remarks: "Construction proposal approved.",
+	                scanned_file_name: fileName,
+	                scanned_file_type: fileType,
+	                scan_url: fileUrl,
+	                status: "For Review",
+	            },
+	            targetDivisionKey: PLANNING_TARGET_LABEL,
+	        });
+	    };
+
+	    const setModalMode = (mode) => {
+	        const safeMode = String(mode || "").trim().toLowerCase() === "edit" ? "edit" : "add";
+	        const isEdit = safeMode === "edit";
+	        if (modalTitleEl instanceof HTMLElement) {
+	            modalTitleEl.textContent = isEdit ? "Edit Proposal" : "Add Proposal";
+	        }
+	        if (modalSubmitButton instanceof HTMLButtonElement) {
+	            modalSubmitButton.textContent = isEdit ? "Update Proposal" : "Save Proposal";
+	        }
+	        if (attachmentInput instanceof HTMLInputElement) {
+	            attachmentInput.required = !isEdit;
+	        }
+	    };
+
+	    const openModal = () => {
+	        if (!(modal instanceof HTMLElement)) return;
+	        modal.hidden = false;
+	        editingRecordId = "";
+	        setModalMode("add");
+	        const first = form ? form.querySelector('input[name="project_name"]') : null;
+	        if (first instanceof HTMLInputElement) {
+	            window.setTimeout(() => first.focus(), 0);
+	        }
+	    };
+
+	    const closeModal = () => {
+	        if (!(modal instanceof HTMLElement)) return;
+	        modal.hidden = true;
+	        if (form instanceof HTMLFormElement) form.reset();
+	        editingRecordId = "";
+	        setModalMode("add");
+	    };
+
+    const uploadFile = async (file) => {
+        if (!fileUploadUrl) {
+            return { ok: false, error: "File upload URL is not configured." };
+        }
+        const csrf = getCsrfToken();
+        if (!csrf) {
+            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
+        }
+
+        const payload = new FormData();
+        payload.append("files", file, file?.name || "file");
+
+        try {
+            const response = await window.fetch(fileUploadUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": csrf,
+                    "Accept": "application/json",
+                },
+                body: payload,
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data || data.ok !== true) {
+                return { ok: false, error: String(data?.error || "Upload failed.") };
+            }
+
+            const stored = Array.isArray(data.files) ? data.files[0] : null;
+            if (!stored || !stored.url) {
+                return { ok: false, error: "Upload succeeded but no file URL was returned." };
+            }
+
+            return { ok: true, file: stored };
+        } catch (error) {
+            return { ok: false, error: "Unable to upload file right now." };
+        }
+    };
+
+		    if (addButton instanceof HTMLButtonElement) {
+		        addButton.addEventListener("click", openModal);
+		    }
+
+		    if (selectAllCheckbox instanceof HTMLInputElement) {
+		        selectAllCheckbox.addEventListener("change", () => {
+		            const rowCheckboxes = getVisibleRowCheckboxes();
+		            const shouldCheck = selectAllCheckbox.checked;
+		            rowCheckboxes.forEach((checkbox) => {
+		                checkbox.checked = shouldCheck;
+		                const id = String(checkbox.dataset.recordId || "").trim();
+		                if (!id) return;
+		                if (shouldCheck) {
+		                    selectedProposalIds.add(id);
+		                } else {
+		                    selectedProposalIds.delete(id);
+		                }
+		            });
+		            updateSelectionControls();
+		        });
+		    }
+
+		    if (deleteSelectedButton instanceof HTMLButtonElement) {
+		        deleteSelectedButton.addEventListener("click", () => {
+		            const ids = Array.from(selectedProposalIds);
+		            if (!ids.length) return;
+		            const ok = window.confirm(`Delete ${ids.length} selected proposal(s)?`);
+		            if (!ok) return;
+		            const remaining = readRecords().filter((record) => !selectedProposalIds.has(String(record?.id || "").trim()));
+		            writeRecords(remaining);
+		            selectedProposalIds = new Set();
+		            renderTable();
+		            showPeoGeneralToast("Selected proposals deleted.", { title: "Construction Proposal", variant: "success" });
+		        });
+		    }
+
+		    if (tableBody instanceof HTMLElement) {
+		        tableBody.addEventListener("change", (event) => {
+		            const target = event.target;
+		            if (!(target instanceof HTMLInputElement)) return;
+		            if (!target.classList.contains("js-construction-proposal-row-select")) return;
+		            const id = String(target.dataset.recordId || "").trim();
+		            if (!id) return;
+		            if (target.checked) {
+		                selectedProposalIds.add(id);
+		            } else {
+		                selectedProposalIds.delete(id);
+		            }
+		            updateSelectionControls();
+		        });
+
+		        tableBody.addEventListener("click", (event) => {
+		            const target = event.target;
+		            if (!(target instanceof Element)) return;
+
+		            // Do not open edit modal when clicking selection checkboxes or file links.
+		            if (target.closest(".js-construction-proposal-row-select")) return;
+		            if (target.closest("a")) return;
+
+		            const rowEl = target.closest("tr");
+		            if (!(rowEl instanceof HTMLTableRowElement)) return;
+		            if (rowEl.classList.contains("construction-empty-row")) return;
+		            const id = String(rowEl.dataset.recordId || "").trim();
+		            if (!id) return;
+
+		            const records = readRecords();
+		            const idx = records.findIndex((item) => String(item?.id || "").trim() === id);
+		            if (idx < 0) {
+		                showPeoGeneralToast("Unable to locate this proposal record.", { title: "Construction Proposal", variant: "warning" });
+		                return;
+		            }
+
+		            const record = records[idx] || {};
+		            if (!(modal instanceof HTMLElement) || !(form instanceof HTMLFormElement)) return;
+
+		            editingRecordId = String(record?.id || "").trim();
+		            form.reset();
+		            setModalMode("edit");
+
+		            const setValue = (name, value) => {
+		                const field = form.querySelector(`[name="${name}"]`);
+		                if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+		                    field.value = String(value ?? "").trim();
+		                }
+		            };
+
+		            setValue("project_name", record?.project_name || "");
+		            setValue("location", record?.location || "");
+		            setValue("contractor", record?.contractor || "");
+		            setValue("contract_amount", record?.contract_amount || "");
+		            setValue("status", record?.status || "");
+
+		            modal.hidden = false;
+		            const first = form.querySelector('input[name="project_name"]');
+		            if (first instanceof HTMLInputElement) {
+		                window.setTimeout(() => first.focus(), 0);
+		            }
+		        });
+		    }
+
+    closeButtons.forEach((btn) => btn.addEventListener("click", closeModal));
+
+    if (modal instanceof HTMLElement) {
+        modal.addEventListener("click", (event) => {
+            if (event.target === modal) closeModal();
+        });
+    }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (modal instanceof HTMLElement && !modal.hidden) closeModal();
+    });
+
+	    if (form instanceof HTMLFormElement) {
+	        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+	            const formData = new FormData(form);
+	            const projectName = String(formData.get("project_name") || "").trim();
+	            const location = String(formData.get("location") || "").trim();
+	            const contractor = String(formData.get("contractor") || "").trim();
+	            const contractAmount = String(formData.get("contract_amount") || "").trim();
+	            const status = String(formData.get("status") || "").trim();
+	            const attachment = formData.get("attachment");
+
+	            const submitButton = modalSubmitButton;
+	            if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+
+	            const records = readRecords();
+	            const now = Date.now();
+	            const isEdit = Boolean(editingRecordId);
+	            const existingIndex = isEdit
+	                ? records.findIndex((item) => String(item?.id || "").trim() === editingRecordId)
+	                : -1;
+	            const existing = existingIndex >= 0 ? (records[existingIndex] || {}) : {};
+
+	            let nextFile = existing?.file || null;
+	            const hasNewAttachment = attachment instanceof File && attachment.name;
+	            if (!isEdit && !hasNewAttachment) {
+	                if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+	                showPeoGeneralToast("Please upload a photo or PDF file.", { title: "Construction Proposal", variant: "warning" });
+	                return;
+	            }
+
+	            if (hasNewAttachment) {
+	                const upload = await uploadFile(attachment);
+	                if (!upload.ok) {
+	                    if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+	                    showPeoGeneralToast(String(upload.error || "Upload failed."), { title: "Construction Proposal", variant: "danger" });
+	                    return;
+	                }
+	                nextFile = upload.file;
+	            }
+
+	            const nextRecord = {
+	                ...(existing && typeof existing === "object" ? existing : {}),
+	                id: isEdit ? editingRecordId : `proposal_${now}_${Math.random().toString(36).slice(2, 8)}`,
+	                project_name: projectName,
+	                location,
+	                contractor,
+	                contract_amount: contractAmount,
+	                status,
+	                file: nextFile,
+	                created_at: isEdit ? Number(existing?.created_at || now) : now,
+	                updated_at: now,
+	            };
+
+	            if (existingIndex >= 0) {
+	                records[existingIndex] = nextRecord;
+	            } else {
+	                records.unshift(nextRecord);
+	            }
+	            writeRecords(records);
+
+	            if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+	            closeModal();
+	            renderTable();
+
+	            const isApproved = String(status || "").trim().toLowerCase() === "approved";
+	            if (isApproved && !nextRecord?.routed_to_planning_at) {
+	                const routed = routeApprovedProposalToPlanning(nextRecord);
+	                if (routed && routed.ok) {
+	                    const updatedRecords = readRecords();
+	                    const routedIndex = updatedRecords.findIndex((item) => String(item?.id || "").trim() === nextRecord.id);
+	                    if (routedIndex >= 0) {
+	                        updatedRecords[routedIndex] = {
+	                            ...updatedRecords[routedIndex],
+	                            routed_to_planning_at: new Date().toISOString(),
+	                        };
+	                        writeRecords(updatedRecords);
+	                        renderTable();
+	                    }
+	                    showPeoGeneralToast("Proposal saved and sent to Planning Division.", { title: "Construction Proposal", variant: "success" });
+	                    return;
+	                }
+	                showPeoGeneralToast(
+	                    `Proposal saved, but sending to Planning failed: ${String(routed?.error || "Unable to route.")}`,
+	                    { title: "Construction Proposal", variant: "warning" }
+	                );
+	                return;
+	            }
+
+	            showPeoGeneralToast(isEdit ? "Proposal updated." : "Proposal saved.", { title: "Construction Proposal", variant: "success" });
+	        });
+	    }
+
+    renderTable();
+});
+/* CONSTRUCTION_PROPOSAL_SCRIPT_END */
 
 const peoEscapeHtml = (value) => String(value || "")
     .replaceAll("&", "&amp;")
@@ -21625,13 +22319,12 @@ if (document.readyState === "loading") {
 	                <div class="project-history-details-table-wrap">
 	                    <table class="road-table project-history-details-table">
 	                        <thead>
-	                            <tr>
-	                                <th>Project Name</th>
-	                                <th>Roads in Road (km)</th>
-	                                <th>Location</th>
-	                                <th>Municipality</th>
-	                                <th>Contract Cost</th>
-	                                <th>C.D.</th>
+		                            <tr>
+		                                <th>Project Name</th>
+		                                <th>Location</th>
+		                                <th>Municipality</th>
+		                                <th>Contract Cost</th>
+		                                <th>C.D.</th>
 		                                <th>NTP Date</th>
 		                                <th>Target Completion Date (Original)</th>
 		                                <th>Revised Completion Date</th>
@@ -21641,13 +22334,12 @@ if (document.readyState === "loading") {
 		                            </tr>
 	                        </thead>
 	                        <tbody>
-	                            <tr>
-	                                <td>${escapeHtml(toDisplay(record?.project_name))}</td>
-	                                <td>${escapeHtml(toDisplay(record?.road_km))}</td>
-	                                <td>${escapeHtml(toDisplay(record?.location))}</td>
-	                                <td>${escapeHtml(toDisplay(record?.mun))}</td>
-	                                <td>${escapeHtml(formatMoney(record?.contract_cost))}</td>
-	                                <td>${escapeHtml(toDisplay(record?.cd))}</td>
+		                            <tr>
+		                                <td>${escapeHtml(toDisplay(record?.project_name))}</td>
+		                                <td>${escapeHtml(toDisplay(record?.location))}</td>
+		                                <td>${escapeHtml(toDisplay(record?.mun))}</td>
+		                                <td>${escapeHtml(formatMoney(record?.contract_cost))}</td>
+		                                <td>${escapeHtml(toDisplay(record?.cd))}</td>
 		                                <td>${escapeHtml(formatDate(record?.ntp_date))}</td>
 		                                <td>${escapeHtml(formatDate(record?.original_expiry_date))}</td>
 		                                <td>${escapeHtml(formatDate(record?.revised_expiry_date))}</td>

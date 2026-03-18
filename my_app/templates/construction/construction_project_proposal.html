@@ -1,0 +1,130 @@
+<section class="road-dashboard-head" aria-label="Construction project proposal overview">
+    <div class="road-dashboard-copy">
+        <h1>Construction Project Proposal</h1>
+        <p>Upload project proposal files and track approval status.</p>
+    </div>
+</section>
+
+<div class="construction-modal js-construction-proposal-modal" hidden>
+    <div class="construction-modal-backdrop js-close-construction-proposal-modal"></div>
+    <div class="construction-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="construction-proposal-modal-title">
+        <div class="construction-modal-header">
+            <div class="construction-modal-heading">
+                <span class="construction-modal-kicker">Construction Proposal</span>
+                <h3 id="construction-proposal-modal-title">Add Proposal</h3>
+                <p>Provide the project details and upload a photo or PDF file.</p>
+            </div>
+            <button type="button" class="construction-modal-close js-close-construction-proposal-modal" aria-label="Close form">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </div>
+
+        <form class="construction-form js-construction-proposal-form" enctype="multipart/form-data">
+            <div class="construction-form-section">
+                <div class="construction-form-section-head">
+                    <div class="construction-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">description</span>
+                    </div>
+                    <div>
+                        <h4>Proposal Details</h4>
+                        <p>All fields are stored locally on this device.</p>
+                    </div>
+                </div>
+
+	                <div class="construction-form-grid">
+	                    <label class="construction-field construction-field--wide">
+	                        <span>Project Name *</span>
+	                        <input type="text" name="project_name" required placeholder="Project name">
+	                    </label>
+	                    <label class="construction-field">
+	                        <span>Location</span>
+	                        <input type="text" name="location" placeholder="Location">
+	                    </label>
+	                    <label class="construction-field">
+	                        <span>Contractor</span>
+	                        <input type="text" name="contractor" placeholder="Contractor">
+	                    </label>
+	                    <label class="construction-field">
+	                        <span>Contract Amount</span>
+	                        <input type="text" name="contract_amount" placeholder="e.g., PHP 0.00">
+	                    </label>
+	                    <label class="construction-field">
+	                        <span>Status *</span>
+	                        <select name="status" required>
+	                            <option value="" selected disabled>Select status</option>
+	                            <option value="For Review">For Review</option>
+	                            <option value="Approved">Approved</option>
+	                            <option value="Rejected">Rejected</option>
+	                        </select>
+	                    </label>
+	                    <label class="construction-field construction-field--wide">
+	                        <span>Upload Photo / PDF *</span>
+	                        <input type="file" name="attachment" required accept=".pdf,.png,.jpg,.jpeg,.webp,.gif">
+	                        <small class="peo-route-file-help">Accepted: PDF or image files (max 8MB).</small>
+	                    </label>
+	                </div>
+            </div>
+
+            <div class="construction-modal-actions">
+                <button type="button" class="construction-btn construction-btn-secondary js-close-construction-proposal-modal">Cancel</button>
+                <button type="submit" class="construction-btn construction-btn-primary">Save Proposal</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<section class="road-filter-panel js-construction-proposal-dashboard" aria-label="Construction project proposals"
+    data-file-upload-url="{% url 'construction_photo_upload' %}"
+>
+	    <div class="schedule-toolbar-row">
+	        <div></div>
+	        <div class="schedule-toolbar-actions">
+	            <button type="button" class="equipment-add-btn js-construction-proposal-add">
+	                <span aria-hidden="true">+</span>
+	                <span>Add Proposal</span>
+	            </button>
+	            <button type="button" class="pa-bulk-delete js-construction-proposal-delete-selected" disabled>Delete Selected</button>
+	        </div>
+	    </div>
+
+    <div class="road-table-wrap construction-table-wrap">
+        <div class="road-table-head">
+            <h3>Project Proposals</h3>
+            <span class="js-construction-proposal-meta">0 proposals</span>
+        </div>
+
+		        <table class="road-table construction-proposal-table">
+		            <colgroup>
+		                <col style="width:44px;">
+		                <col style="width:52px;">
+		                <col style="width:260px;">
+		                <col style="width:240px;">
+		                <col style="width:160px;">
+		                <col style="width:200px;">
+		                <col style="width:160px;">
+		                <col style="width:260px;">
+		                <col style="width:120px;">
+		            </colgroup>
+		            <thead>
+		                <tr>
+		                    <th class="pa-select-col">
+		                        <input type="checkbox" class="js-construction-proposal-select-all" aria-label="Select all project proposals">
+		                    </th>
+		                    <th>#</th>
+		                    <th>Project Name</th>
+		                    <th>Location</th>
+		                    <th>Municipality</th>
+		                    <th>Contractor</th>
+		                    <th>Contract Amount</th>
+		                    <th>Upload (Photo / PDF)</th>
+		                    <th>Status</th>
+		                </tr>
+		            </thead>
+		            <tbody class="js-construction-proposal-table-body">
+		                <tr class="construction-empty-row">
+		                    <td colspan="9">No project proposals available yet.</td>
+		                </tr>
+		            </tbody>
+		        </table>
+	    </div>
+	</section>
