@@ -67,17 +67,42 @@
                     <span class="material-symbols-outlined">folder_open</span>
                     <span>Projects</span>
                 </a>
-                <a
-                    href="{% url 'construction_division_dashboard' %}"
-                    class="nav-item {% if current_section == 'construction' %}nav-item-active{% endif %}"
-                    data-peo-toast-message="Construction Division workspace loaded from the sidebar."
-                    data-peo-toast-title="Sidebar Navigation"
-                    data-peo-toast-variant="info"
-                    data-peo-toast-persist="navigation"
-                >
-                    <span class="material-symbols-outlined">construction</span>
-                    <span>Construction Division</span>
-                </a>
+                <div class="nav-construction {% if current_section == 'construction' %}is-open{% endif %}">
+                    <button
+                        type="button"
+                        class="nav-item nav-item-button js-construction-toggle {% if current_section == 'construction' %}nav-item-active{% endif %}"
+                        aria-expanded="{% if current_section == 'construction' %}true{% else %}false{% endif %}"
+                        data-construction-open="{% if current_section == 'construction' %}true{% else %}false{% endif %}"
+                    >
+                        <span class="nav-item-label">
+                            <span class="material-symbols-outlined">construction</span>
+                            <span>Construction Division</span>
+                        </span>
+                        <span class="material-symbols-outlined nav-caret">expand_more</span>
+                    </button>
+                    <div class="nav-submenu js-construction-menu">
+                        <a
+                            href="{% url 'construction_division_dashboard' %}"
+                            class="nav-subitem {% if current_construction == 'table' %}nav-subitem-active{% endif %}"
+                            data-peo-toast-message="Construction Project Table opened from the sidebar."
+                            data-peo-toast-title="Sidebar Navigation"
+                            data-peo-toast-variant="info"
+                            data-peo-toast-persist="navigation"
+                        >
+                            Construction Project Table
+                        </a>
+                        <a
+                            href="{% url 'construction_division_submissions' %}"
+                            class="nav-subitem {% if current_construction == 'proposal' %}nav-subitem-active{% endif %}"
+                            data-peo-toast-message="Construction Project Proposal opened from the sidebar."
+                            data-peo-toast-title="Sidebar Navigation"
+                            data-peo-toast-variant="info"
+                            data-peo-toast-persist="navigation"
+                        >
+                            Construction Project Proposal
+                        </a>
+                    </div>
+                </div>
                 <a
                     href="{% url 'quality_division_dashboard' %}"
                     class="nav-item {% if current_section == 'quality' %}nav-item-active{% endif %}"

@@ -1638,6 +1638,7 @@ def construction_division_dashboard(request):
         _build_dashboard_context(
             request,
             current_section='construction',
+            current_construction='table',
             page_heading='Construction Division',
             construction_template='construction/construction.html',
         ),
@@ -1652,6 +1653,7 @@ def construction_project_dashboard(request):
         _build_dashboard_context(
             request,
             current_section='construction',
+            current_construction='project',
             page_heading='Construction Project Dashboard',
             construction_template='construction/construction_project_dashboard.html',
         ),
@@ -1813,6 +1815,7 @@ def construction_division_submissions(request):
         _build_dashboard_context(
             request,
             current_section='construction',
+            current_construction='proposal',
             page_heading='Construction Division Submissions',
             construction_template='shared/division_submissions.html',
             submissions_division_key='construction',

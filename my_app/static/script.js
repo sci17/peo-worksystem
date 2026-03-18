@@ -2554,6 +2554,8 @@ const portalDomReady = () => {
     const projectDashboardButton = document.querySelector(".js-project-dashboard-button");
     const maintenanceToggle = document.querySelector(".js-maintenance-toggle");
     const maintenanceMenu = document.querySelector(".js-maintenance-menu");
+    const constructionToggle = document.querySelector(".js-construction-toggle");
+    const constructionMenu = document.querySelector(".js-construction-menu");
     const topbarNotificationsRoot = document.querySelector(".topbar-notifications-menu");
     const topbarNotificationsToggle = document.querySelector("[data-topbar-notifications-toggle]");
     const topbarNotificationsMenu = document.querySelector("[data-topbar-notifications-menu]");
@@ -2652,6 +2654,9 @@ const portalDomReady = () => {
                 if (item.classList.contains("js-maintenance-toggle")) {
                     return;
                 }
+                if (item.classList.contains("js-construction-toggle")) {
+                    return;
+                }
                 if (window.matchMedia("(max-width: 1024px)").matches) {
                     closeSidebar();
                 }
@@ -2709,6 +2714,32 @@ const portalDomReady = () => {
             if (willOpen) {
                 showPeoGeneralToast("Maintenance Division tools are available below in the sidebar.", {
                     title: "Maintenance Division",
+                    variant: "info",
+                });
+            }
+        });
+    }
+
+    if (constructionToggle && constructionMenu) {
+        const constructionContainer = constructionToggle.closest(".nav-construction");
+
+        const setConstructionOpen = (open) => {
+            constructionToggle.setAttribute("aria-expanded", String(open));
+            if (constructionContainer) {
+                constructionContainer.classList.toggle("is-open", open);
+            }
+        };
+
+        setConstructionOpen(constructionToggle.dataset.constructionOpen === "true");
+
+        constructionToggle.addEventListener("click", (event) => {
+            event.preventDefault();
+            const isOpen = constructionToggle.getAttribute("aria-expanded") === "true";
+            const willOpen = !isOpen;
+            setConstructionOpen(willOpen);
+            if (willOpen) {
+                showPeoGeneralToast("Construction Division tools are available below in the sidebar.", {
+                    title: "Construction Division",
                     variant: "info",
                 });
             }

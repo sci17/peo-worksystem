@@ -694,7 +694,8 @@ body {
     transition: transform 160ms ease;
 }
 
-.nav-maintenance.is-open .nav-caret {
+.nav-maintenance.is-open .nav-caret,
+.nav-construction.is-open .nav-caret {
     transform: rotate(180deg);
 }
 
@@ -710,7 +711,8 @@ body {
     transition: max-height 220ms ease, opacity 160ms ease, transform 220ms ease;
 }
 
-.nav-maintenance.is-open .nav-submenu {
+.nav-maintenance.is-open .nav-submenu,
+.nav-construction.is-open .nav-submenu {
     margin: 2px 0 6px 28px;
     max-height: 180px;
     opacity: 1;
