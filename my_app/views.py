@@ -814,7 +814,7 @@ def _build_overview_context(user):
         return payload
 
     leadership_executive = _leader_profile(
-        name='Amy Roa Alvarez',
+        name='Hon. Amy Roa Alvarez',
         title='Governor',
         tag='Executive Office',
     )
