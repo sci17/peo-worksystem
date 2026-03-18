@@ -694,7 +694,8 @@ body {
     transition: transform 160ms ease;
 }
 
-.nav-maintenance.is-open .nav-caret {
+.nav-maintenance.is-open .nav-caret,
+.nav-construction.is-open .nav-caret {
     transform: rotate(180deg);
 }
 
@@ -710,7 +711,8 @@ body {
     transition: max-height 220ms ease, opacity 160ms ease, transform 220ms ease;
 }
 
-.nav-maintenance.is-open .nav-submenu {
+.nav-maintenance.is-open .nav-submenu,
+.nav-construction.is-open .nav-submenu {
     margin: 2px 0 6px 28px;
     max-height: 180px;
     opacity: 1;
@@ -1889,7 +1891,7 @@ body {
     margin: 0;
     border-radius: 14px;
     border: 2px solid rgba(20, 32, 51, 0.22);
-    background: #ffffff;
+    background: #f3f6fb;
     color: var(--org-ink);
     font-weight: 800;
     box-shadow: 0 14px 24px rgba(16, 24, 40, 0.12);
@@ -1920,7 +1922,7 @@ body {
 .leadership-section.is-orgchart .leader-avatar img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
     display: block;
 
