@@ -15186,11 +15186,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <input type="checkbox" aria-label="Select row" ${record?.__id ? `data-record-id="${escapeHtml(record.__id)}"` : ""}>
                     </td>
                     <td>${index + 1}</td>
-                    <td>
-                        ${constructionId
-                            ? `<button type="button" class="construction-link-button js-task-project-link" data-construction-id="${escapeHtml(constructionId)}">${escapeHtml(toDisplay(taskName))}</button>`
-                            : escapeHtml(toDisplay(taskName))}
-                    </td>
+                    <td>${escapeHtml(toDisplay(taskName))}</td>
                     <td>${escapeHtml(toDisplay(assignedTo))}</td>
                     <td>${escapeHtml(formatDate(dateReceived))}</td>
                     <td>${escapeHtml(toDisplay(status))}</td>
@@ -15212,78 +15208,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("construction-tasks-updated", render);
     window.addEventListener("focus", render);
 
-    const showTaskList = () => {
-        if (listView) listView.hidden = false;
-        if (detailView) detailView.hidden = true;
-    };
-
-    const openProjectDetail = (constructionId) => {
-        if (!detailBody || !detailView || !listView) return;
-        const records = readConstructionRecords();
-        const record = records.find((item) => String(item?.__id || "") === constructionId);
-
-        if (detailTitle) {
-            detailTitle.textContent = record?.project_name
-                ? `Project: ${record.project_name}`
-                : "Project Details";
-        }
-
-        if (!record) {
-            detailBody.innerHTML = `
-                <tr class="construction-empty-row">
-                    <td colspan="19">Project not found in local storage.</td>
-                </tr>
-            `;
-        } else {
-            detailBody.innerHTML = `
-                <tr>
-                    <td class="pa-select-col"></td>
-                    <td>1</td>
-                    <td>${escapeHtml(toDisplay(record.project_name))}</td>
-                    <td>${escapeHtml(toDisplay(record.location))}</td>
-                    <td>${escapeHtml(toDisplay(record.mun))}</td>
-                    <td>${escapeHtml(toDisplay(record.contractor))}</td>
-                    <td>${escapeHtml(formatMoney(record.contract_cost))}</td>
-                    <td>${escapeHtml(formatDate(record.ntp_date))}</td>
-                    <td>${escapeHtml(toDisplay(record.cd))}</td>
-                    <td>${escapeHtml(formatDate(record.original_expiry_date))}</td>
-                    <td>${escapeHtml(toDisplay(record.addl_cd))}</td>
-                    <td>${escapeHtml(formatDate(record.revised_expiry_date))}</td>
-                    <td>${escapeHtml(formatDate(record.date_completed))}</td>
-                    <td>${escapeHtml(formatMoney(record.revised_contract_cost))}</td>
-                    <td>${escapeHtml(formatPercent(record.status_previous, { decimals: 0 }))}</td>
-                    <td>${escapeHtml(formatPercent(record.status_current, { decimals: 0 }))}</td>
-                    <td>${escapeHtml(formatPercent(record.time_elapsed, { decimals: 0 }))}</td>
-                    <td>${escapeHtml(formatPercent(record.slippage, { signed: true, decimals: 0 }))}</td>
-                    <td>${escapeHtml(toDisplay(record.remarks))}</td>
-                </tr>
-            `;
-        }
-
-        listView.hidden = true;
-        detailView.hidden = false;
-    };
-
-    if (tableBody) {
-        tableBody.addEventListener("click", (event) => {
-            const target = event.target instanceof HTMLElement
-                ? event.target.closest(".js-task-project-link")
-                : null;
-            if (!target) return;
-            const constructionId = String(target.dataset.constructionId || "").trim();
-            if (!constructionId) return;
-            if (projectDashboardUrl) {
-                const url = `${projectDashboardUrl}?id=${encodeURIComponent(constructionId)}`;
-                window.location.assign(url);
-            } else {
-                openProjectDetail(constructionId);
-            }
-        });
-    }
-
-    if (backButton) {
-        backButton.addEventListener("click", showTaskList);
-    }
+    // Project-name click no longer changes the table view.
 
     render();
 });
