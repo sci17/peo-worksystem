@@ -3,19 +3,6 @@
         <h1>Construction Division</h1>
         <p>Project implementation and supervision dashboard</p>
     </div>
-    <div class="division-page-switcher" aria-label="Construction division page switcher">
-        <span class="division-page-switcher__label">Construction division page</span>
-        <select
-            id="construction-division-page-switcher"
-            class="pa-select division-page-switcher__select"
-            data-division-page-switcher
-            data-main-url="{% url 'construction_division_dashboard' %}"
-            data-submissions-url="{% url 'construction_division_submissions' %}"
-        >
-            <option value="{% url 'construction_division_dashboard' %}" selected>Main</option>
-            <option value="{% url 'construction_division_submissions' %}">Incoming Task</option>
-        </select>
-    </div>
 </section>
 
 <div class="construction-modal js-construction-modal" hidden>
@@ -69,6 +56,36 @@
                         <span>Revised Contract Cost</span>
                         <input type="text" name="revised_contract_cost" placeholder="PHP 0.00">
                     </label>
+                </div>
+            </div>
+
+            <div class="construction-form-section">
+                <div class="construction-form-section-head">
+                    <div class="construction-form-section-icon" aria-hidden="true">
+                        <span class="material-symbols-outlined">groups</span>
+                    </div>
+                    <div>
+                        <h4>Personnel</h4>
+                        <p>Add personnel assigned to this project record.</p>
+                    </div>
+                </div>
+
+                <div class="construction-personnel">
+                    <div class="construction-personnel-head">
+                        <div>
+                            <p class="construction-personnel-copy">Capture the names and roles of the assigned personnel.</p>
+                            <p class="construction-personnel-meta js-construction-personnel-meta">0 personnel</p>
+                        </div>
+                        <button type="button" class="construction-btn construction-btn-secondary construction-btn-icon js-construction-add-personnel">
+                            <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
+                            <span>Add Personnel</span>
+                        </button>
+                    </div>
+                    <div class="construction-personnel-list js-construction-personnel-list"></div>
+                    <div class="construction-personnel-empty js-construction-personnel-empty" role="status" aria-live="polite">
+                        <span class="material-symbols-outlined" aria-hidden="true">badge</span>
+                        <span>No personnel added yet.</span>
+                    </div>
                 </div>
             </div>
 

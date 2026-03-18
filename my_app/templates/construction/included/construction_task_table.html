@@ -1,0 +1,120 @@
+<section
+    class="road-filter-panel js-construction-task-dashboard"
+    aria-label="Construction task table"
+    data-project-dashboard-url="{% url 'construction_project_dashboard' %}"
+>
+    <div class="js-construction-task-list-view">
+        <div class="road-table-wrap construction-table-wrap">
+            <div class="road-table-head">
+                <div>
+                    <h3 style="margin-bottom:4px;">Construction Task Table</h3>
+                    <p style="margin:0; font-size:13px; color:#6b7280;">Statuses: pending, on process, draft, completed task</p>
+                </div>
+                <span class="js-construction-task-record-meta">0 tasks</span>
+            </div>
+
+            <table class="road-table construction-table">
+                <colgroup>
+                    <col style="width:44px;">
+                    <col style="width:52px;">
+                    <col style="width:320px;">
+                    <col style="width:240px;">
+                    <col style="width:160px;">
+                    <col style="width:180px;">
+                    <col style="width:200px;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th class="pa-select-col">
+                            <input type="checkbox" aria-label="Select all construction tasks">
+                        </th>
+                        <th>#</th>
+                        <th>Task / Project Name</th>
+                        <th>Assign To (Personnel)</th>
+                        <th>Date Receive</th>
+                        <th>Status (On Process, Pending, Draft, Completed, In Complete)</th>
+                        <th>Remarks (Completed / In Complete)</th>
+                    </tr>
+                </thead>
+                <tbody class="js-construction-task-table-body">
+                    <tr class="construction-empty-row">
+                        <td colspan="7">No construction tasks available yet.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="construction-pagination" aria-label="Construction task table pagination">
+            <button type="button" class="construction-page-btn" disabled>Previous</button>
+            <span class="construction-page-meta">Page 1 of 1</span>
+            <button type="button" class="construction-page-btn" disabled>Next</button>
+        </div>
+    </div>
+
+    <div class="js-construction-task-detail-view" hidden>
+        <div class="road-table-wrap construction-table-wrap">
+            <div class="road-table-head">
+                <div>
+                    <p style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#6b7280;">Construction Project</p>
+                    <h3 class="js-construction-task-detail-title" style="margin:2px 0 0;">Project Details</h3>
+                </div>
+                <button type="button" class="construction-btn construction-btn-secondary js-construction-task-back">Back to Task Table</button>
+            </div>
+            <table class="road-table construction-table construction-task-detail-table">
+                <colgroup>
+                    <col style="width:44px;">
+                    <col style="width:52px;">
+                    <col style="width:300px;">
+                    <col style="width:150px;">
+                    <col style="width:80px;">
+                    <col style="width:160px;">
+                    <col style="width:140px;">
+                    <col style="width:110px;">
+                    <col style="width:75px;">
+                    <col style="width:130px;">
+                    <col style="width:90px;">
+                    <col style="width:110px;">
+                    <col style="width:120px;">
+                    <col style="width:160px;">
+                    <col style="width:92px;">
+                    <col style="width:92px;">
+                    <col style="width:120px;">
+                    <col style="width:95px;">
+                    <col style="width:280px;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="pa-select-col"></th>
+                        <th rowspan="2">#</th>
+                        <th rowspan="2">Project Name</th>
+                        <th rowspan="2">Location</th>
+                        <th rowspan="2">MUN</th>
+                        <th rowspan="2">Contractor</th>
+                        <th rowspan="2">Contract Cost</th>
+                        <th rowspan="2">NTP Date</th>
+                        <th rowspan="2">C.D</th>
+                        <th colspan="3">Contract Period</th>
+                        <th rowspan="2">Date Completed</th>
+                        <th rowspan="2">Revised Contract Cost</th>
+                        <th colspan="2">Status (%)</th>
+                        <th rowspan="2">% of Time Elapsed</th>
+                        <th rowspan="2">Slippage (+) (-) %</th>
+                        <th rowspan="2">Remarks</th>
+                    </tr>
+                    <tr>
+                        <th>Original Expiry Date</th>
+                        <th>Add'l. C.D</th>
+                        <th>Revised Expiry Date</th>
+                        <th>Previous</th>
+                        <th>Current</th>
+                    </tr>
+                </thead>
+                <tbody class="js-construction-task-detail-body">
+                    <tr class="construction-empty-row">
+                        <td colspan="19">Select a project to view details.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

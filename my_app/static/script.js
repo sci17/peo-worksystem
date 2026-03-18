@@ -1461,17 +1461,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!(select instanceof HTMLSelectElement)) return;
         const mainUrl = String(select.dataset.mainUrl || "").trim();
         const submissionsUrl = String(select.dataset.submissionsUrl || "").trim();
-        if (!mainUrl && !submissionsUrl) return;
+        const tasksUrl = String(select.dataset.tasksUrl || "").trim();
+        const candidates = [mainUrl, submissionsUrl, tasksUrl].filter(Boolean);
+        if (!candidates.length) return;
 
         const current = window.location.pathname;
         const normalizedCurrent = current.endsWith("/") ? current : `${current}/`;
-        const normalizedSubmissions = submissionsUrl && (submissionsUrl.endsWith("/") ? submissionsUrl : `${submissionsUrl}/`);
-        const normalizedMain = mainUrl && (mainUrl.endsWith("/") ? mainUrl : `${mainUrl}/`);
+        const normalizeUrl = (value) => {
+            const url = String(value || "").trim();
+            if (!url) return "";
+            return url.endsWith("/") ? url : `${url}/`;
+        };
 
-        if (normalizedSubmissions && normalizedCurrent === normalizedSubmissions) {
-            select.value = submissionsUrl;
-        } else if (normalizedMain && normalizedCurrent === normalizedMain) {
-            select.value = mainUrl;
+        const normalizedMap = new Map(candidates.map((url) => [normalizeUrl(url), url]));
+        const matched = normalizedMap.get(normalizedCurrent);
+        if (matched) {
+            select.value = matched;
         }
 
         select.addEventListener("change", () => {
@@ -12552,11 +12557,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
     const constructionRouteFileInput = constructionModal ? constructionModal.querySelector(".js-construction-route-file") : null;
     const constructionRouteFiles = constructionModal ? constructionModal.querySelector(".js-construction-route-files") : null;
+    const constructionPersonnelList = constructionModal ? constructionModal.querySelector(".js-construction-personnel-list") : null;
+    const constructionPersonnelEmpty = constructionModal ? constructionModal.querySelector(".js-construction-personnel-empty") : null;
+    const constructionPersonnelMeta = constructionModal ? constructionModal.querySelector(".js-construction-personnel-meta") : null;
+    const addConstructionPersonnelButton = constructionModal ? constructionModal.querySelector(".js-construction-add-personnel") : null;
     const closeConstructionModalButtons = constructionModal
         ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
         : [];
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
@@ -13149,6 +13159,29 @@ document.addEventListener("DOMContentLoaded", () => {
         const nextImages = normalizeImagesForCompare(nextRecord?.accomplishment_images);
         if (prevImages.join("|") !== nextImages.join("|")) {
             changed.push("accomplishment_images");
+        }
+
+        const normalizePersonnelForCompare = (value) => {
+            const list = Array.isArray(value) ? value : [];
+            return list
+                .map((item) => (item && typeof item === "object" ? item : {}))
+                .map((item) => ({
+                    name: String(item.name || item.personnel_name || "").trim().toLowerCase(),
+                    role: String(item.role || item.position || "").trim().toLowerCase(),
+                    contact: String(item.contact || "").trim().toLowerCase(),
+                }))
+                .filter((item) => item.name || item.role || item.contact)
+                .sort((a, b) => {
+                    const aKey = `${a.name}|${a.role}|${a.contact}`;
+                    const bKey = `${b.name}|${b.role}|${b.contact}`;
+                    return aKey.localeCompare(bKey);
+                });
+        };
+
+        const prevPersonnel = normalizePersonnelForCompare(previousRecord?.personnel);
+        const nextPersonnel = normalizePersonnelForCompare(nextRecord?.personnel);
+        if (JSON.stringify(prevPersonnel) !== JSON.stringify(nextPersonnel)) {
+            changed.push("personnel");
         }
 
         return changed;
@@ -13921,6 +13954,167 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const normalizeConstructionPersonnelRow = (value) => {
+        const row = value && typeof value === "object" ? value : {};
+        return {
+            name: String(row.name || row.personnel_name || row.full_name || "").trim(),
+            role: String(row.role || row.position || row.title || "").trim(),
+            contact: String(row.contact || row.phone || row.email || "").trim(),
+        };
+    };
+
+    const getConstructionPersonnelRows = () => {
+        if (!(constructionPersonnelList instanceof HTMLElement)) return [];
+        return Array.from(constructionPersonnelList.querySelectorAll("[data-construction-personnel-row]"))
+            .filter((row) => row instanceof HTMLElement);
+    };
+
+    const readConstructionTasks = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_TASK_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeConstructionTasks = (items) => {
+        const safeItems = Array.isArray(items) ? items : [];
+        try {
+            window.localStorage.setItem(CONSTRUCTION_TASK_STORAGE_KEY, JSON.stringify(safeItems));
+            window.dispatchEvent(new Event("construction-tasks-updated"));
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const getTodayIso = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+    };
+
+    const getConstructionPersonnelNames = (record) => {
+        const personnel = Array.isArray(record?.personnel) ? record.personnel : [];
+        const names = personnel
+            .map((row) => String(row?.name || "").trim())
+            .filter(Boolean);
+        return names.join(", ");
+    };
+
+    const upsertConstructionTaskFromRecord = (record) => {
+        const constructionId = String(record?.__id || "").trim();
+        if (!constructionId) return;
+        const tasks = readConstructionTasks();
+        const existingIndex = tasks.findIndex((task) => String(task?.construction_id || task?.__id || "") === constructionId);
+        const existing = existingIndex >= 0 ? tasks[existingIndex] : null;
+        const payload = {
+            __id: existing?.__id || constructionId,
+            construction_id: constructionId,
+            task_name: String(record?.project_name || "").trim(),
+            assigned_to: getConstructionPersonnelNames(record),
+            date_received: existing?.date_received || getTodayIso(),
+            status: "",
+            remarks: "",
+        };
+        if (existingIndex >= 0) {
+            tasks[existingIndex] = { ...existing, ...payload };
+        } else {
+            tasks.unshift(payload);
+        }
+        writeConstructionTasks(tasks);
+    };
+
+    const syncConstructionPersonnelUi = () => {
+        const rows = getConstructionPersonnelRows();
+        const count = rows.length;
+        if (constructionPersonnelEmpty instanceof HTMLElement) {
+            constructionPersonnelEmpty.hidden = count > 0;
+        }
+        if (constructionPersonnelMeta instanceof HTMLElement) {
+            constructionPersonnelMeta.textContent = `${count} personnel${count === 1 ? "" : "s"}`;
+        }
+        rows.forEach((row, index) => {
+            const title = row.querySelector(".js-construction-personnel-row-title");
+            if (title) {
+                title.textContent = `Personnel #${index + 1}`;
+            }
+        });
+    };
+
+    const addConstructionPersonnelRow = (seed = {}, options = {}) => {
+        if (!(constructionPersonnelList instanceof HTMLElement)) return;
+        const person = normalizeConstructionPersonnelRow(seed);
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "construction-personnel-row";
+        wrapper.dataset.constructionPersonnelRow = "1";
+        wrapper.innerHTML = `
+            <div class="construction-personnel-row-head">
+                <p class="construction-personnel-row-title js-construction-personnel-row-title">Personnel</p>
+                <button type="button" class="construction-personnel-remove-btn js-construction-remove-personnel" aria-label="Remove personnel">
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                </button>
+            </div>
+            <div class="construction-personnel-grid">
+                <label class="construction-field">
+                    <span>Personnel Name</span>
+                    <input type="text" data-personnel-name placeholder="Full name" value="${escapeHtml(person.name)}">
+                </label>
+                <label class="construction-field">
+                    <span>Role / Position</span>
+                    <input type="text" data-personnel-role placeholder="Role or position" value="${escapeHtml(person.role)}">
+                </label>
+                <label class="construction-field">
+                    <span>Contact (optional)</span>
+                    <input type="text" data-personnel-contact placeholder="Contact number or email" value="${escapeHtml(person.contact)}">
+                </label>
+            </div>
+        `;
+
+        constructionPersonnelList.appendChild(wrapper);
+        if (!options.skipSync) {
+            syncConstructionPersonnelUi();
+        }
+
+        if (options.focus !== false) {
+            const firstInput = wrapper.querySelector("[data-personnel-name]");
+            if (firstInput instanceof HTMLInputElement) {
+                firstInput.focus();
+            }
+        }
+    };
+
+    const renderConstructionPersonnel = (list) => {
+        if (!(constructionPersonnelList instanceof HTMLElement)) return;
+        constructionPersonnelList.innerHTML = "";
+
+        const items = Array.isArray(list) ? list : [];
+        items
+            .map((item) => normalizeConstructionPersonnelRow(item))
+            .filter((item) => item.name || item.role || item.contact)
+            .forEach((item) => addConstructionPersonnelRow(item, { skipSync: true, focus: false }));
+
+        syncConstructionPersonnelUi();
+    };
+
+    const readConstructionPersonnelFromForm = () => {
+        const rows = getConstructionPersonnelRows();
+        const personnel = rows
+            .map((row) => {
+                const name = String(row.querySelector("[data-personnel-name]")?.value || "").trim();
+                const role = String(row.querySelector("[data-personnel-role]")?.value || "").trim();
+                const contact = String(row.querySelector("[data-personnel-contact]")?.value || "").trim();
+                return { name, role, contact };
+            })
+            .filter((item) => item.name || item.role || item.contact);
+        return personnel;
+    };
+
     const fillConstructionForm = (record) => {
         if (!constructionForm || !record) return;
         CONSTRUCTION_FIELDS.forEach((field) => {
@@ -13940,6 +14134,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 fillConstructionForm(record);
             }
         }
+        renderConstructionPersonnel(mode === "edit" && record ? record.personnel : []);
         setConstructionProjectOverviewReadonly(mode === "edit");
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
@@ -13976,6 +14171,7 @@ document.addEventListener("DOMContentLoaded", () => {
         editingRecordId = null;
         setConstructionFormMode("create");
         if (constructionForm) constructionForm.reset();
+        renderConstructionPersonnel([]);
         setConstructionProjectOverviewReadonly(false);
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
@@ -13993,6 +14189,28 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         syncConstructionRouteControls();
     };
+
+    syncConstructionPersonnelUi();
+
+    if (addConstructionPersonnelButton instanceof HTMLButtonElement) {
+        addConstructionPersonnelButton.addEventListener("click", () => {
+            addConstructionPersonnelRow({}, { focus: true });
+            syncConstructionRouteControls();
+        });
+    }
+
+    if (constructionPersonnelList instanceof HTMLElement) {
+        constructionPersonnelList.addEventListener("click", (event) => {
+            const target = event.target instanceof Element ? event.target.closest(".js-construction-remove-personnel") : null;
+            if (!target) return;
+            const row = target.closest("[data-construction-personnel-row]");
+            if (row) {
+                row.remove();
+                syncConstructionPersonnelUi();
+                syncConstructionRouteControls();
+            }
+        });
+    }
 
     const buildRecordFromForm = () => {
         if (!constructionForm) return null;
@@ -14019,6 +14237,7 @@ document.addEventListener("DOMContentLoaded", () => {
             time_elapsed: getTrimmedFormValue(formData, "time_elapsed"),
             slippage: getTrimmedFormValue(formData, "slippage"),
             remarks: getTrimmedFormValue(formData, "remarks"),
+            personnel: readConstructionPersonnelFromForm(),
         };
     };
 
@@ -14634,13 +14853,16 @@ document.addEventListener("DOMContentLoaded", () => {
                         : nextRecord;
                     records[index] = updatedRecord;
                     syncConstructionStatusToAdmin(updatedRecord);
+                    upsertConstructionTaskFromRecord(updatedRecord);
                 }
             } else {
                 const created = initializeConstructionRecord(nextFormRecord, {
                     updateType: "created",
                     changedBy: getConstructionCurrentUser(),
                 });
-                records.unshift(appendConstructionMonthlySnapshot(created, { savedAt: created.__created_at }));
+                const withHistory = appendConstructionMonthlySnapshot(created, { savedAt: created.__created_at });
+                records.unshift(withHistory);
+                upsertConstructionTaskFromRecord(withHistory);
             }
             currentPage = 1;
             writeStoredRecords(records);
@@ -14844,6 +15066,229 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 /* CONSTRUCTION_DIVISION_SCRIPT_END */
 
+/* CONSTRUCTION_TASK_TABLE_SCRIPT_START */
+document.addEventListener("DOMContentLoaded", () => {
+    const taskDashboard = document.querySelector(".js-construction-task-dashboard");
+    if (!taskDashboard) return;
+
+    const tableBody = taskDashboard.querySelector(".js-construction-task-table-body");
+    const recordMeta = taskDashboard.querySelector(".js-construction-task-record-meta");
+    const listView = taskDashboard.querySelector(".js-construction-task-list-view");
+    const detailView = taskDashboard.querySelector(".js-construction-task-detail-view");
+    const detailBody = detailView ? detailView.querySelector(".js-construction-task-detail-body") : null;
+    const detailTitle = detailView ? detailView.querySelector(".js-construction-task-detail-title") : null;
+    const backButton = detailView ? detailView.querySelector(".js-construction-task-back") : null;
+    const projectDashboardUrl = String(taskDashboard.dataset.projectDashboardUrl || "").trim();
+
+    const TASK_STORAGE_KEY = "peo_construction_tasks_v1";
+    const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+
+    const escapeHtml = (value) => String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const toDisplay = (value) => {
+        const text = String(value ?? "").trim();
+        return text ? text : "-";
+    };
+
+    const formatDate = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+            const parsed = new Date(text);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+            }
+            return text;
+        }
+        const parsed = new Date(text);
+        if (!Number.isNaN(parsed.getTime())) {
+            return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+        }
+        return text;
+    };
+
+    const formatMoney = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+        const numeric = Number(text.replace(/[^0-9.-]+/g, ""));
+        if (!Number.isFinite(numeric)) return text;
+        return `PHP ${numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const formatPercent = (value, options = {}) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+        const numeric = Number(text.replace(/[^0-9.-]+/g, ""));
+        if (!Number.isFinite(numeric)) return text;
+
+        const signed = Boolean(options.signed);
+        const decimals = Number.isFinite(options.decimals) ? options.decimals : 0;
+        const clamped = signed ? numeric : Math.max(0, Math.min(100, numeric));
+        const formatted = clamped.toLocaleString("en-US", {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+        });
+        if (signed && clamped > 0) return `+${formatted}`;
+        return formatted;
+    };
+
+    const readTasks = () => {
+        try {
+            const raw = window.localStorage.getItem(TASK_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const readConstructionRecords = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const render = () => {
+        if (!tableBody) return;
+        const records = readTasks();
+        tableBody.innerHTML = "";
+
+        const totalCount = records.length;
+        if (!totalCount) {
+            tableBody.innerHTML = `
+                <tr class="construction-empty-row">
+                    <td colspan="7">No construction tasks available yet.</td>
+                </tr>
+            `;
+        } else {
+            records.forEach((record, index) => {
+                const row = document.createElement("tr");
+                row.dataset.recordId = String(record?.__id || "");
+
+                const taskName = record?.task_name || record?.project_name || record?.name || record?.title;
+                const constructionId = record?.construction_id || record?.__id || "";
+                const assignedTo = record?.assigned_to || record?.assign_to || record?.personnel_name || record?.personnel || record?.assignee;
+                const dateReceived = record?.date_received || record?.date_receive || record?.date || record?.received_at;
+                const status = record?.status || record?.task_status;
+                const remarks = record?.remarks || record?.note || record?.comment;
+
+                row.innerHTML = `
+                    <td class="pa-select-col">
+                        <input type="checkbox" aria-label="Select row" ${record?.__id ? `data-record-id="${escapeHtml(record.__id)}"` : ""}>
+                    </td>
+                    <td>${index + 1}</td>
+                    <td>
+                        ${constructionId
+                            ? `<button type="button" class="construction-link-button js-task-project-link" data-construction-id="${escapeHtml(constructionId)}">${escapeHtml(toDisplay(taskName))}</button>`
+                            : escapeHtml(toDisplay(taskName))}
+                    </td>
+                    <td>${escapeHtml(toDisplay(assignedTo))}</td>
+                    <td>${escapeHtml(formatDate(dateReceived))}</td>
+                    <td>${escapeHtml(toDisplay(status))}</td>
+                    <td>${escapeHtml(toDisplay(remarks))}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        if (recordMeta) {
+            recordMeta.textContent = `${totalCount} task${totalCount === 1 ? "" : "s"}`;
+        }
+    };
+
+    window.addEventListener("storage", (event) => {
+        if (String(event.key || "") !== TASK_STORAGE_KEY) return;
+        render();
+    });
+    window.addEventListener("construction-tasks-updated", render);
+    window.addEventListener("focus", render);
+
+    const showTaskList = () => {
+        if (listView) listView.hidden = false;
+        if (detailView) detailView.hidden = true;
+    };
+
+    const openProjectDetail = (constructionId) => {
+        if (!detailBody || !detailView || !listView) return;
+        const records = readConstructionRecords();
+        const record = records.find((item) => String(item?.__id || "") === constructionId);
+
+        if (detailTitle) {
+            detailTitle.textContent = record?.project_name
+                ? `Project: ${record.project_name}`
+                : "Project Details";
+        }
+
+        if (!record) {
+            detailBody.innerHTML = `
+                <tr class="construction-empty-row">
+                    <td colspan="19">Project not found in local storage.</td>
+                </tr>
+            `;
+        } else {
+            detailBody.innerHTML = `
+                <tr>
+                    <td class="pa-select-col"></td>
+                    <td>1</td>
+                    <td>${escapeHtml(toDisplay(record.project_name))}</td>
+                    <td>${escapeHtml(toDisplay(record.location))}</td>
+                    <td>${escapeHtml(toDisplay(record.mun))}</td>
+                    <td>${escapeHtml(toDisplay(record.contractor))}</td>
+                    <td>${escapeHtml(formatMoney(record.contract_cost))}</td>
+                    <td>${escapeHtml(formatDate(record.ntp_date))}</td>
+                    <td>${escapeHtml(toDisplay(record.cd))}</td>
+                    <td>${escapeHtml(formatDate(record.original_expiry_date))}</td>
+                    <td>${escapeHtml(toDisplay(record.addl_cd))}</td>
+                    <td>${escapeHtml(formatDate(record.revised_expiry_date))}</td>
+                    <td>${escapeHtml(formatDate(record.date_completed))}</td>
+                    <td>${escapeHtml(formatMoney(record.revised_contract_cost))}</td>
+                    <td>${escapeHtml(formatPercent(record.status_previous, { decimals: 0 }))}</td>
+                    <td>${escapeHtml(formatPercent(record.status_current, { decimals: 0 }))}</td>
+                    <td>${escapeHtml(formatPercent(record.time_elapsed, { decimals: 0 }))}</td>
+                    <td>${escapeHtml(formatPercent(record.slippage, { signed: true, decimals: 0 }))}</td>
+                    <td>${escapeHtml(toDisplay(record.remarks))}</td>
+                </tr>
+            `;
+        }
+
+        listView.hidden = true;
+        detailView.hidden = false;
+    };
+
+    if (tableBody) {
+        tableBody.addEventListener("click", (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest(".js-task-project-link")
+                : null;
+            if (!target) return;
+            const constructionId = String(target.dataset.constructionId || "").trim();
+            if (!constructionId) return;
+            if (projectDashboardUrl) {
+                const url = `${projectDashboardUrl}?id=${encodeURIComponent(constructionId)}`;
+                window.location.assign(url);
+            } else {
+                openProjectDetail(constructionId);
+            }
+        });
+    }
+
+    if (backButton) {
+        backButton.addEventListener("click", showTaskList);
+    }
+
+    render();
+});
+/* CONSTRUCTION_TASK_TABLE_SCRIPT_END */
+
 /* CONSTRUCTION_PROJECT_DASHBOARD_SCRIPT_START */
 document.addEventListener("DOMContentLoaded", () => {
     const projectDashboard = document.querySelector(".js-construction-project-dashboard");
@@ -14862,11 +15307,72 @@ document.addEventListener("DOMContentLoaded", () => {
     const warningEl = projectDashboard.querySelector(".js-construction-project-warning");
 
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const currentUser = String(projectDashboard.dataset.currentUser || "").trim() || "Local User";
     const recordId = String(new URLSearchParams(window.location.search).get("id") || "").trim();
     const MAX_IMAGE_COUNT = 10;
     const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
     const HISTORY_LIMIT = 12;
+
+    const readConstructionTasks = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_TASK_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const writeConstructionTasks = (items) => {
+        const safeItems = Array.isArray(items) ? items : [];
+        try {
+            window.localStorage.setItem(CONSTRUCTION_TASK_STORAGE_KEY, JSON.stringify(safeItems));
+            window.dispatchEvent(new Event("construction-tasks-updated"));
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const getConstructionPersonnelNames = (record) => {
+        const personnel = Array.isArray(record?.personnel) ? record.personnel : [];
+        const names = personnel
+            .map((row) => String(row?.name || "").trim())
+            .filter(Boolean);
+        return names.join(", ");
+    };
+
+    const getTodayIso = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+    };
+
+    const upsertConstructionTaskFromRecord = (record) => {
+        const constructionId = String(record?.__id || "").trim();
+        if (!constructionId) return;
+        const tasks = readConstructionTasks();
+        const existingIndex = tasks.findIndex((task) => String(task?.construction_id || task?.__id || "") === constructionId);
+        const existing = existingIndex >= 0 ? tasks[existingIndex] : null;
+        const payload = {
+            __id: existing?.__id || constructionId,
+            construction_id: constructionId,
+            task_name: String(record?.project_name || "").trim(),
+            assigned_to: getConstructionPersonnelNames(record),
+            date_received: existing?.date_received || getTodayIso(),
+            status: existing?.status || "",
+            remarks: existing?.remarks || "",
+        };
+        if (existingIndex >= 0) {
+            tasks[existingIndex] = { ...existing, ...payload };
+        } else {
+            tasks.unshift(payload);
+        }
+        writeConstructionTasks(tasks);
+    };
 
     const showWarning = (message) => {
         if (!warningEl) return;
@@ -15336,6 +15842,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             toast("Project details saved.", { title: "Construction Project", variant: "success" });
+            upsertConstructionTaskFromRecord(nextRecord);
         });
     }
 });

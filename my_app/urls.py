@@ -17,6 +17,7 @@ urlpatterns = [
     path('construction-division/', views.construction_division_dashboard, name='construction_division_dashboard'),
     path('construction-division/submissions/', views.construction_division_submissions, name='construction_division_submissions'),
     path('construction-division/project/', views.construction_project_dashboard, name='construction_project_dashboard'),
+    path('construction-division/tasks/', views.construction_task_table, name='construction_task_table'),
     path('maintenance/road-management/', views.road_management, name='road_management'),
     path('maintenance/contractor-management/', views.contractor_management, name='contractor_management'),
     path('maintenance/task-management/', views.task_management, name='task_management'),
