@@ -127,9 +127,6 @@ def _store_write_mode(user, store_key):
     if store_key == KEY_ADMIN and user_division in {KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE}:
         return "restricted_admin_submit"
 
-    if user_division == KEY_ADMIN and store_key in {KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY}:
-        return "append_only"
-
     return ""
 
 
@@ -140,54 +137,67 @@ def _json_record_id(record):
 
 
 def _enforce_admin_submit_payload(user_division, existing_data, incoming_data):
+    """
+    Non-admin divisions can write to the shared Admin store, but only for:
+      - Creating new records they submit/rout to another division
+      - Updating records currently assigned to their division (based on the record's `division` field)
+
+    Deletions are not allowed for non-admin divisions (existing records are always preserved).
+    """
+
     existing_records = existing_data if isinstance(existing_data, list) else []
     incoming_records = incoming_data if isinstance(incoming_data, list) else []
 
-    def normalize_sender(record):
+    def normalize_assigned_division(record):
         if not isinstance(record, dict):
             return ""
-        return _normalize_division_key(record.get("__submitted_from_division"))
+        return _normalize_division_key(record.get("division"))
 
     existing_by_id = {}
-    existing_owned_ids = set()
-    other_existing = []
     for record in existing_records:
         record_id = _json_record_id(record)
         if record_id:
             existing_by_id[record_id] = record
-        if normalize_sender(record) == user_division and record_id:
-            existing_owned_ids.add(record_id)
-        else:
-            other_existing.append(record)
 
+    accepted_updates = {}
+    accepted_new = []
     seen_ids = set()
-    next_owned_records = []
     for record in incoming_records:
         if not isinstance(record, dict):
             continue
+
         record_id = _json_record_id(record) or uuid.uuid4().hex
         if record_id in seen_ids:
             continue
         seen_ids.add(record_id)
 
-        sender = normalize_sender(record) or user_division
-        if sender != user_division:
+        if record_id in existing_by_id:
+            existing = existing_by_id[record_id]
+            existing_division = normalize_assigned_division(existing)
+            if existing_division != user_division:
+                continue
+
+            next_record = dict(record)
+            next_record["__record_id"] = record_id
+            next_record["__submitted_from_division"] = user_division
+            accepted_updates[record_id] = next_record
             continue
 
         next_record = dict(record)
         next_record["__record_id"] = record_id
         next_record["__submitted_from_division"] = user_division
-        next_owned_records.append(next_record)
+        accepted_new.append(next_record)
 
-    # Prevent deletions: keep any previously submitted records even if omitted from the payload.
-    missing_owned = []
-    for record_id in existing_owned_ids:
-        if record_id not in seen_ids:
-            existing_record = existing_by_id.get(record_id)
-            if isinstance(existing_record, dict):
-                missing_owned.append(existing_record)
+    merged = []
+    for record in existing_records:
+        record_id = _json_record_id(record)
+        if record_id and record_id in accepted_updates:
+            merged.append(accepted_updates[record_id])
+        else:
+            merged.append(record)
 
-    return next_owned_records + missing_owned + other_existing
+    # Mirror the UI behavior that prepends newly submitted records.
+    return accepted_new + merged
 
 
 def _enforce_append_only_payload(existing_data, incoming_data):
@@ -1685,16 +1695,55 @@ def project_dashboard(request):
     }
     project_store_seed = dict(store_defaults)
 
-    try:
-        store_iter = SharedDivisionStore.objects.filter(key__in=store_defaults.keys())
-    except (OperationalError, ProgrammingError):
-        store_iter = DivisionStore.objects.filter(user=request.user, key__in=store_defaults.keys())
+    def is_empty_payload(key, payload):
+        if key == KEY_MAINTENANCE:
+            if not isinstance(payload, dict):
+                return True
+            for list_key in (
+                "roadRecords",
+                "equipmentRows",
+                "scheduleRows",
+                "taskRows",
+                "personnelRecords",
+                "contractorRecords",
+            ):
+                if isinstance(payload.get(list_key), list) and payload.get(list_key):
+                    return False
+            return True
 
-    for store in store_iter:
-        if store.key == KEY_MAINTENANCE:
-            project_store_seed[store.key] = store.data if isinstance(store.data, dict) else {}
+        return not (isinstance(payload, list) and len(payload) > 0)
+
+    try:
+        for key in store_defaults.keys():
+            shared_store, _ = SharedDivisionStore.objects.get_or_create(key=key)
+            if is_empty_payload(key, shared_store.data):
+                candidate = (
+                    DivisionStore.objects.filter(key=key)
+                    .order_by("-updated_at")
+                    .first()
+                )
+                if candidate and not is_empty_payload(key, candidate.data):
+                    shared_store.data = candidate.data
+                    shared_store.save(update_fields=["data", "updated_at"])
+
+            project_store_seed[key] = shared_store.data
+    except (OperationalError, ProgrammingError):
+        # Backward-compat if SharedDivisionStore isn't migrated yet.
+        for key, fallback in store_defaults.items():
+            candidate = (
+                DivisionStore.objects.filter(key=key)
+                .order_by("-updated_at")
+                .first()
+            )
+            project_store_seed[key] = candidate.data if candidate else fallback
+
+    # Normalize seed types for the client.
+    for key in store_defaults.keys():
+        data = project_store_seed.get(key)
+        if key == KEY_MAINTENANCE:
+            project_store_seed[key] = data if isinstance(data, dict) else {}
         else:
-            project_store_seed[store.key] = store.data if isinstance(store.data, list) else []
+            project_store_seed[key] = data if isinstance(data, list) else []
 
     return render(
         request,
@@ -1704,6 +1753,20 @@ def project_dashboard(request):
             current_section='project',
             page_heading='Project Database',
             project_store_seed=project_store_seed,
+        ),
+    )
+
+
+@login_required
+def project_construction_history(request, source_id):
+    return render(
+        request,
+        "Dashboard/dashboard.html",
+        _build_dashboard_context(
+            request,
+            current_section="project",
+            page_heading="Construction Monthly History",
+            project_history_source_id=str(source_id or "").strip(),
         ),
     )
 
@@ -1855,8 +1918,6 @@ def division_store_api(request, key):
         if not user_division:
             return JsonResponse({"error": "Division is not configured for this account."}, status=403)
         store.data = _enforce_admin_submit_payload(user_division, store.data, payload)
-    elif write_mode == "append_only":
-        store.data = _enforce_append_only_payload(store.data, payload)
     else:
         store.data = payload
     store.save()
@@ -1872,6 +1933,11 @@ def division_store_api(request, key):
 @login_required
 @require_http_methods(["POST"])
 def construction_photo_upload(request):
+    if not request.user.is_superuser:
+        user_division = _get_user_division_key(request.user)
+        if user_division != KEY_CONSTRUCTION:
+            return JsonResponse({"error": "Read-only access for construction uploads."}, status=403)
+
     files = request.FILES.getlist("photos") or request.FILES.getlist("photo") or request.FILES.getlist("accomplishment_photos")
     if not files:
         return JsonResponse({"error": "No files uploaded."}, status=400)

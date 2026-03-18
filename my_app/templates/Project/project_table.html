@@ -1,3 +1,28 @@
+{% if project_history_source_id %}
+    {{ project_history_source_id|json_script:"peo-project-history-source-id" }}
+    <section class="project-history-page" data-project-construction-history-page>
+        <header class="project-header">
+            <div class="project-header-copy">
+                <h2>Construction Monthly History</h2>
+                <p class="js-project-history-page-subtitle">Monthly snapshots and uploaded images for this project.</p>
+            </div>
+        </header>
+
+        <div class="project-modal project-history-modal project-history-page-modal" role="region" aria-label="Construction monthly history">
+            <div class="project-modal-head">
+                <div>
+                    <h4>History</h4>
+                    <p class="js-project-history-page-meta">Loading history…</p>
+                </div>
+                <a href="{% url 'project_dashboard' %}" class="project-modal-close project-history-back" aria-label="Back to projects">←</a>
+            </div>
+
+            <div class="project-history-body">
+                <div class="project-history-cards js-project-history-page-cards"></div>
+            </div>
+        </div>
+    </section>
+{% else %}
 <section class="project-board">
     {{ project_store_seed|json_script:"peo-project-store-seed" }}
     <header class="project-header">
@@ -346,3 +371,4 @@
         </div>
     </div>
 </section>
+{% endif %}
