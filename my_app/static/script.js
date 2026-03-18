@@ -1664,6 +1664,17 @@ document.addEventListener("DOMContentLoaded", () => {
         openModal(data);
     });
 
+    // Allow deep-linking from notifications: /tracking-details/?record=<admin_id>
+    try {
+        const params = new URLSearchParams(window.location.search || "");
+        const deepLinkId = String(params.get("record") || params.get("admin_id") || params.get("id") || "").trim();
+        if (deepLinkId && payload[deepLinkId]) {
+            openModal(payload[deepLinkId]);
+        }
+    } catch (error) {
+        // ignore
+    }
+
     const searchInput = document.querySelector(".js-tracking-search");
     const allRows = Array.from(document.querySelectorAll(".js-tracking-row"));
     const emptyRow = document.querySelector(".js-tracking-empty-row");
