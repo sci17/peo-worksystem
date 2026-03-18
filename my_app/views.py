@@ -351,12 +351,17 @@ def _parse_loose_datetime(value):
 
     # Prefer ISO-ish parsing first.
     try:
-        return datetime.fromisoformat(text)
+        normalized = text.replace("Z", "+00:00") if text.endswith("Z") else text
+        return datetime.fromisoformat(normalized)
     except ValueError:
         pass
 
     patterns = (
         '%Y-%m-%d',
+        '%Y-%m-%d %H:%M',
+        '%Y-%m-%d %H:%M:%S',
+        '%m/%d/%Y %H:%M',
+        '%m/%d/%Y %I:%M %p',
         '%m/%d/%Y',
         '%d/%m/%Y',
         '%b %d, %Y',
@@ -809,7 +814,7 @@ def _build_overview_context(user):
         return payload
 
     leadership_executive = _leader_profile(
-        name='Amy Roa Alvarez',
+        name='Hon. Amy Roa Alvarez',
         title='Governor',
         tag='Executive Office',
     )
@@ -1378,6 +1383,112 @@ def _build_tracking_payload(user):
 
 
 def _build_dashboard_notifications(request, profile, current_section='', page_heading='', current_maintenance=''):
+    def parse_event_datetime(value):
+        parsed = _parse_loose_datetime(value)
+        if not parsed:
+            return None
+        if timezone.is_aware(parsed):
+            return parsed
+        try:
+            return timezone.make_aware(parsed, timezone.get_current_timezone())
+        except Exception:
+            return None
+
+    def format_absolute_time(value):
+        parsed = parse_event_datetime(value) if not isinstance(value, datetime) else value
+        if not parsed:
+            return ""
+        local_value = timezone.localtime(parsed)
+        return local_value.strftime("%b %d, %Y %I:%M %p").replace(" 0", " ")
+
+    def normalize_division_label(value):
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        key = _normalize_division_key(raw)
+        return _division_label_for_key(key) or raw
+
+    def build_document_notifications():
+        # Pull document routing history from the Admin shared store, since routed records are centralized there.
+        stores = _load_shared_stores(request.user)
+        admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
+
+        user_division = _get_user_division_key(request.user)
+        is_super = bool(getattr(request.user, "is_superuser", False))
+
+        events = []
+        for record in admin_records:
+            if not isinstance(record, dict):
+                continue
+            admin_id = str(record.get("__record_id") or "").strip()
+            if not admin_id:
+                continue
+
+            doc_name = str(record.get("document_name") or record.get("project_name") or record.get("title") or "Untitled Document").strip() or "Untitled Document"
+            slip_no = str(record.get("slip_no") or "").strip()
+            title = f"{slip_no} • {doc_name}" if slip_no else doc_name
+
+            raw_events = record.get("__tracking_events")
+            if not isinstance(raw_events, list):
+                raw_events = []
+
+            for ev in raw_events:
+                if not isinstance(ev, dict):
+                    continue
+                at_raw = ev.get("at") or ev.get("timestamp") or ev.get("date")
+                at_dt = (
+                    parse_event_datetime(at_raw)
+                    or parse_event_datetime(record.get("__submitted_at"))
+                    or parse_event_datetime(record.get("date_received") or record.get("date"))
+                    or timezone.now()
+                )
+                action = str(ev.get("action") or "Update").strip() or "Update"
+                from_label = normalize_division_label(ev.get("from") or ev.get("from_division"))
+                to_label = normalize_division_label(ev.get("to") or ev.get("to_division"))
+                by_label = normalize_division_label(ev.get("by") or ev.get("submitted_by"))
+
+                from_key = _normalize_division_key(from_label)
+                to_key = _normalize_division_key(to_label)
+                by_key = _normalize_division_key(by_label)
+
+                if not is_super and user_division:
+                    if user_division not in {from_key, to_key, by_key}:
+                        continue
+
+                if to_label and from_label:
+                    message = f"{action} to {to_label} (from {from_label})"
+                elif to_label:
+                    message = f"{action} to {to_label}"
+                elif from_label:
+                    message = f"{action} from {from_label}"
+                else:
+                    message = action or "Document update"
+                if by_label and by_label not in (from_label, to_label):
+                    message = f"{message} (By {by_label})"
+
+                meta_parts = []
+                abs_stamp = format_absolute_time(at_dt)
+                if abs_stamp:
+                    meta_parts.append(abs_stamp)
+                meta_parts.append(_format_notification_time(at_dt, fallback="Recently updated"))
+                meta = " • ".join([part for part in meta_parts if part])
+
+                events.append(
+                    {
+                        "at": at_dt,
+                        "icon": "forward_to_inbox",
+                        "title": title,
+                        "message": message,
+                        "meta": meta,
+                        "href": f"{reverse('tracking_details')}?record={admin_id}",
+                    }
+                )
+
+        events.sort(key=lambda item: item.get("at") or timezone.now(), reverse=True)
+        return events[:8]
+
+    document_notifications = build_document_notifications()
+
     section_updates = {
         'workflow': {
             'icon': 'dashboard_customize',
@@ -1465,6 +1576,7 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
 
     last_login = request.user.last_login or request.user.date_joined
     notifications = [
+        *document_notifications,
         {
             'icon': section_updates.get(current_section, section_updates['workflow'])['icon'],
             'title': section_updates.get(current_section, section_updates['workflow'])['title'],
@@ -1504,8 +1616,8 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
 
     return {
         'dashboard_notifications': notifications,
-        'dashboard_notification_count': len(notifications),
-        'dashboard_has_notifications': bool(notifications),
+        'dashboard_notification_count': len(document_notifications),
+        'dashboard_has_notifications': bool(document_notifications),
     }
 
 
