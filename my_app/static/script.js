@@ -12559,15 +12559,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
-    const CONSTRUCTION_MAX_IMAGE_COUNT = 10;
-    const CONSTRUCTION_FIELDS = [
-        "project_name",
-        "location",
-        "mun",
-        "contractor",
-        "contract_cost",
-        "ntp_date",
-        "cd",
+	    const CONSTRUCTION_MAX_IMAGE_COUNT = 10;
+	    const CONSTRUCTION_FIELDS = [
+	        "project_name",
+	        "location",
+	        "mun",
+	        "road_km",
+	        "contractor",
+	        "contract_cost",
+	        "ntp_date",
+	        "cd",
         "original_expiry_date",
         "addl_cd",
         "revised_expiry_date",
@@ -12579,14 +12580,15 @@ document.addEventListener("DOMContentLoaded", () => {
         "slippage",
         "remarks",
     ];
-    const CONSTRUCTION_FIELD_ALIASES = {
-        project_name: ["project_name", "project name"],
-        location: ["location"],
-        mun: ["mun", "municipality"],
-        contractor: ["contractor"],
-        contract_cost: ["contract_cost", "contract cost"],
-        ntp_date: ["ntp_date", "ntp date", "ntp"],
-        cd: ["cd", "c.d", "contract duration", "cal days", "calendar days", "contract period c.d", "contract period cd"],
+	    const CONSTRUCTION_FIELD_ALIASES = {
+	        project_name: ["project_name", "project name"],
+	        location: ["location"],
+	        mun: ["mun", "municipality"],
+	        road_km: ["road_km", "road km", "road (km)", "roads in road (km)", "length (km)", "length km", "distance (km)"],
+	        contractor: ["contractor"],
+	        contract_cost: ["contract_cost", "contract cost"],
+	        ntp_date: ["ntp_date", "ntp date", "ntp"],
+	        cd: ["cd", "c.d", "contract duration", "cal days", "calendar days", "contract period c.d", "contract period cd"],
         original_expiry_date: ["original_expiry_date", "original expiry date"],
         addl_cd: ["addl_cd", "addl c d", "add'l. c.d", "additional cd", "addl. c.d", "contract period add'l. c.d", "contract period addl. c.d", "contract period addl c d"],
         revised_expiry_date: ["revised_expiry_date", "revised expiry date"],
@@ -12598,14 +12600,15 @@ document.addEventListener("DOMContentLoaded", () => {
         slippage: ["slippage", "slippage (+) (-) %"],
         remarks: ["remarks"],
     };
-    const CONSTRUCTION_FIELD_TOKENS = {
-        project_name: ["project", "name"],
-        location: ["location"],
-        mun: ["mun"],
-        contractor: ["contractor"],
-        contract_cost: ["contract", "cost"],
-        ntp_date: ["ntp", "date"],
-        cd: ["c", "d"],
+	    const CONSTRUCTION_FIELD_TOKENS = {
+	        project_name: ["project", "name"],
+	        location: ["location"],
+	        mun: ["mun"],
+	        road_km: ["road", "km"],
+	        contractor: ["contractor"],
+	        contract_cost: ["contract", "cost"],
+	        ntp_date: ["ntp", "date"],
+	        cd: ["c", "d"],
         original_expiry_date: ["original", "expiry", "date"],
         addl_cd: ["add", "l", "c", "d"],
         revised_expiry_date: ["revised", "expiry", "date"],
@@ -12882,14 +12885,15 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${prefix}${normalizedValue.toFixed(decimals)}%`;
     };
 
-    const CONSTRUCTION_FIELD_LABELS = {
-        project_name: "Project Name",
-        location: "Location",
-        mun: "MUN",
-        contractor: "Contractor",
-        contract_cost: "Contract Cost",
-        ntp_date: "NTP Date",
-        cd: "C.D",
+	    const CONSTRUCTION_FIELD_LABELS = {
+	        project_name: "Project Name",
+	        location: "Location",
+	        mun: "MUN",
+	        road_km: "Road (km)",
+	        contractor: "Contractor",
+	        contract_cost: "Contract Cost",
+	        ntp_date: "NTP Date",
+	        cd: "C.D",
         original_expiry_date: "Original Expiry Date",
         addl_cd: "Add'l. C.D",
         revised_expiry_date: "Revised Expiry Date",
@@ -13757,13 +13761,13 @@ document.addEventListener("DOMContentLoaded", () => {
 	        const pageStartIndex = (currentPage - 1) * CONSTRUCTION_PAGE_SIZE;
 	        const totalCount = getVisibleRecords().length;
 
-	        if (!totalCount) {
-	            constructionTableBody.innerHTML = `
-	                <tr class="construction-empty-row">
-	                    <td colspan="19">No construction records available yet.</td>
-	                </tr>
-	            `;
-	        } else {
+		        if (!totalCount) {
+		            constructionTableBody.innerHTML = `
+		                <tr class="construction-empty-row">
+		                    <td colspan="20">No construction records available yet.</td>
+		                </tr>
+		            `;
+		        } else {
 	            pagedRecords.forEach((record, index) => {
 	                const row = document.createElement("tr");
 	                row.dataset.recordId = record.__id;
@@ -13779,17 +13783,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     const projectCell = ageBadge
                         ? `<span class="peo-doc-title-inline">${projectLabel}${ageBadge}</span>`
                         : projectLabel;
-	                row.innerHTML = `
-	                    <td class="pa-select-col">
-	                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}">
-	                    </td>
-	                    <td>${pageStartIndex + index + 1}</td>
-	                    <td>${projectCell}</td>
-	                    <td>${escapeHtml(toDisplay(record.location))}</td>
-	                    <td>${escapeHtml(toDisplay(record.mun))}</td>
-                    <td>${escapeHtml(toDisplay(record.contractor))}</td>
-                    <td>${escapeHtml(formatMoney(record.contract_cost))}</td>
-                    <td>${escapeHtml(formatDate(record.ntp_date))}</td>
+		                row.innerHTML = `
+		                    <td class="pa-select-col">
+		                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}">
+		                    </td>
+		                    <td>${pageStartIndex + index + 1}</td>
+		                    <td>${projectCell}</td>
+		                    <td>${escapeHtml(toDisplay(record.location))}</td>
+		                    <td>${escapeHtml(toDisplay(record.mun))}</td>
+		                    <td>${escapeHtml(toDisplay(record.road_km))}</td>
+	                    <td>${escapeHtml(toDisplay(record.contractor))}</td>
+	                    <td>${escapeHtml(formatMoney(record.contract_cost))}</td>
+	                    <td>${escapeHtml(formatDate(record.ntp_date))}</td>
                     <td>${escapeHtml(toDisplay(record.cd))}</td>
                     <td>${escapeHtml(formatDate(record.original_expiry_date))}</td>
                     <td>${escapeHtml(toDisplay(record.addl_cd))}</td>
@@ -14625,7 +14630,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         });
                         return;
                     }
-                    const shouldSnapshot = ["project_name", "location", "contractor", "status_current"].some((field) => changedFields.includes(field));
+                    const shouldSnapshot = ["project_name", "location", "contractor", "status_current", "accomplishment_images"].some((field) =>
+                        changedFields.includes(field)
+                    );
                     const updatedRecord = shouldSnapshot
                         ? appendConstructionMonthlySnapshot(nextRecord, { savedAt: nextRecord.__updated_at })
                         : nextRecord;
@@ -18235,15 +18242,21 @@ document.addEventListener("DOMContentLoaded", () => {
         const constructionHistoryTitle = projectBoard.querySelector("#project-construction-history-title");
         const constructionHistorySubtitle = projectBoard.querySelector(".js-project-construction-history-subtitle");
         const projectForm = projectBoard.querySelector("[data-project-form]");
-        const projectTableBody = projectBoard.querySelector("[data-project-table-body]");
-        const projectResultsSummary = projectBoard.querySelector("[data-project-results-summary]");
-        const projectSearchInput = projectBoard.querySelector("[data-project-search]");
-        const projectSearchButton = projectBoard.querySelector(".project-search-submit");
-        const projectPanelTitle = projectBoard.querySelector(".js-project-panel-title");
-        const projectPanelSubtitle = projectBoard.querySelector(".js-project-panel-subtitle");
-        const divisionFilter = projectBoard.querySelector('[data-project-filter="division"]');
-        const statusFilter = projectBoard.querySelector('[data-project-filter="status"]');
-        const sortFilter = projectBoard.querySelector('[data-project-filter="sort"]');
+	        const projectTableBody = projectBoard.querySelector("[data-project-table-body]");
+	        const projectResultsSummary = projectBoard.querySelector("[data-project-results-summary]");
+	        const projectPrevButton = projectBoard.querySelector("[data-project-prev]");
+	        const projectNextButton = projectBoard.querySelector("[data-project-next]");
+	        const projectPageLabel = projectBoard.querySelector("[data-project-page-label]");
+	        const projectSearchInput = projectBoard.querySelector("[data-project-search]");
+	        const projectSearchButton = projectBoard.querySelector(".project-search-submit");
+	        const projectHome = projectBoard.querySelector("[data-project-home]");
+	        const projectShell = projectBoard.querySelector("[data-project-shell]");
+	        const projectBackHomeButton = projectBoard.querySelector("[data-project-back-home]");
+	        const projectPanelTitle = projectBoard.querySelector(".js-project-panel-title");
+	        const projectPanelSubtitle = projectBoard.querySelector(".js-project-panel-subtitle");
+	        const divisionFilter = projectBoard.querySelector('[data-project-filter="division"]');
+	        const statusFilter = projectBoard.querySelector('[data-project-filter="status"]');
+	        const sortFilter = projectBoard.querySelector('[data-project-filter="sort"]');
         const projectFilterSelects = projectBoard.querySelectorAll(".project-filter select[data-project-filter]");
         const projectTotalSummary = projectBoard.querySelector('[data-project-summary="total"]');
         const projectBudgetSummary = projectBoard.querySelector('[data-project-summary="budget"]');
@@ -18258,36 +18271,54 @@ document.addEventListener("DOMContentLoaded", () => {
         const projectFloatCards = projectBoard.querySelectorAll(".project-float-card");
         const openProjectButtons = projectBoard.querySelectorAll(".js-project-open-modal");
         const closeProjectButtons = projectBoard.querySelectorAll(".js-project-close-modal");
-        const closeDeleteButtons = projectBoard.querySelectorAll(".js-project-close-delete-modal");
-        const closeConstructionHistoryButtons = projectBoard.querySelectorAll(".js-project-close-construction-history");
-        const projectFilterDropdownSyncers = [];
-        const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
-        const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
-        const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
-        const QUALITY_STORAGE_KEY = "peo_quality_records_v1";
-        const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
-        const PROJECT_UI_STATE_STORAGE_KEY = "peo_project_registry_ui_state_v1";
+	        const closeDeleteButtons = projectBoard.querySelectorAll(".js-project-close-delete-modal");
+	        const closeConstructionHistoryButtons = projectBoard.querySelectorAll(".js-project-close-construction-history");
+	        const projectFilterDropdownSyncers = [];
+		        const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
+		        const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+		        const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
+		        const PROJECT_UI_STATE_STORAGE_KEY = "peo_project_registry_ui_state_v1";
 
-        const seedProjectRegistryStores = () => {
-            const seedNode = document.getElementById("peo-project-store-seed");
-            if (!seedNode) return;
+		        let projectStoreSeedCache = null;
+		        const readProjectStoreSeed = () => {
+		            if (projectStoreSeedCache !== null) return projectStoreSeedCache;
+		            const seedNode = document.getElementById("peo-project-store-seed");
+		            if (!seedNode) {
+		                projectStoreSeedCache = {};
+		                return projectStoreSeedCache;
+		            }
 
-            let seed = null;
-            try {
-                seed = JSON.parse(seedNode.textContent || "null");
-            } catch (error) {
-                seed = null;
-            }
+		            let seed = null;
+		            try {
+		                seed = JSON.parse(seedNode.textContent || "null");
+		            } catch (error) {
+		                seed = null;
+		            }
+		            projectStoreSeedCache = seed && typeof seed === "object" ? seed : {};
+		            return projectStoreSeedCache;
+		        };
 
-            if (!seed || typeof seed !== "object") return;
+		        const readSeedArray = (storeKey) => {
+		            const seed = readProjectStoreSeed();
+		            const data = seed && typeof seed === "object" ? seed[storeKey] : null;
+		            return Array.isArray(data) ? data : [];
+		        };
 
-            const defs = [
-                { storeKey: "admin", storageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
-                { storeKey: "planning", storageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
-                { storeKey: "construction", storageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
-                { storeKey: "quality", storageKey: QUALITY_STORAGE_KEY, type: "array" },
-                { storeKey: "maintenance", storageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
-            ];
+		        const readSeedObject = (storeKey) => {
+		            const seed = readProjectStoreSeed();
+		            const data = seed && typeof seed === "object" ? seed[storeKey] : null;
+		            return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+		        };
+
+		        const seedProjectRegistryStores = () => {
+		            const seed = readProjectStoreSeed();
+		            if (!seed || typeof seed !== "object") return;
+
+		            const defs = [
+		                { storeKey: "planning", storageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
+		                { storeKey: "construction", storageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+	                { storeKey: "maintenance", storageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
+	            ];
 
             const safeLocalStorageGet = (key) => {
                 try {
@@ -18314,10 +18345,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             };
 
-            defs.forEach((def) => {
-                const serverData = seed[def.storeKey];
-                const localRaw = safeLocalStorageGet(def.storageKey);
-                const localParsed = localRaw ? safeJsonParse(localRaw) : null;
+		            defs.forEach((def) => {
+		                const serverData = def.type === "object" ? readSeedObject(def.storeKey) : readSeedArray(def.storeKey);
+		                const localRaw = safeLocalStorageGet(def.storageKey);
+		                const localParsed = localRaw ? safeJsonParse(localRaw) : null;
 
                 if (def.type === "object") {
                     const localCount = localParsed && typeof localParsed === "object" && !Array.isArray(localParsed)
@@ -18659,16 +18690,23 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         };
 
-        const syncActiveProjectDivision = (divisionName) => {
-            const selection = String(divisionName || "").trim();
-            const selectionLower = selection.toLowerCase();
-            const isAllDivisions = !selection || selectionLower === "all divisions" || selectionLower === "all";
-            const effectiveDivision = isAllDivisions ? "all" : normalizeDivisionName(selection);
+	        const syncActiveProjectDivision = (divisionName) => {
+	            const selection = String(divisionName || "").trim();
+	            const selectionLower = selection.toLowerCase();
+	            const isAllDivisions = !selection || selectionLower === "all divisions" || selectionLower === "all";
+	            const effectiveDivision = isAllDivisions ? "all" : normalizeDivisionName(selection);
 
-            if (projectPanelTitle instanceof HTMLElement) {
-                projectPanelTitle.textContent = isAllDivisions
-                    ? "All Division Projects"
-                    : `${effectiveDivision} Projects`;
+	            if (projectHome instanceof HTMLElement) {
+	                projectHome.hidden = !isAllDivisions;
+	            }
+	            if (projectShell instanceof HTMLElement) {
+	                projectShell.hidden = isAllDivisions;
+	            }
+
+	            if (projectPanelTitle instanceof HTMLElement) {
+	                projectPanelTitle.textContent = isAllDivisions
+	                    ? "All Division Projects"
+	                    : `${effectiveDivision} Projects`;
             }
 
             if (projectPanelSubtitle instanceof HTMLElement) {
@@ -18683,23 +18721,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 card.classList.toggle("is-active", isActive);
             });
 
-            if (divisionFilter instanceof HTMLSelectElement && divisionFilter.value !== effectiveDivision) {
-                divisionFilter.value = effectiveDivision;
-            }
+	            if (divisionFilter instanceof HTMLSelectElement && divisionFilter.value !== effectiveDivision) {
+	                divisionFilter.value = effectiveDivision;
+	            }
             projectFilterDropdownSyncers.forEach((syncDropdown) => syncDropdown());
             persistCurrentProjectUiState({ division: isAllDivisions ? "all" : effectiveDivision });
-            refreshProjectBoard();
-        };
+	            refreshProjectBoard();
+	        };
 
-        const syncProjectRegistrySummary = (records) => {
-            const projectRecordsList = Array.isArray(records) ? records : [];
-            const divisionCounts = {
-                "Admin Division": 0,
-                "Planning Division": 0,
-                "Construction Division": 0,
-                "Quality Division": 0,
-                "Maintenance Division": 0,
-            };
+	        const syncProjectRegistrySummary = (records) => {
+	            const projectRecordsList = Array.isArray(records) ? records : [];
+	            const divisionCounts = {
+	                "Admin Division": 0,
+	                "Planning Division": 0,
+	                "Construction Division": 0,
+	                "Quality Division": 0,
+	                "Maintenance Division": 0,
+	            };
             let totalBudget = 0;
             let approvedCount = 0;
             let planningCount = 0;
@@ -18707,22 +18745,14 @@ document.addEventListener("DOMContentLoaded", () => {
             let completedCount = 0;
             let onHoldCount = 0;
 
-            const isActiveProjectStatus = (rawStatus) => {
-                const status = String(rawStatus || "").trim().toLowerCase();
-                if (!status) return true;
-                if (status.includes("completed")) return false;
-                if (status.includes("on hold")) return false;
-                return true;
-            };
+	            projectRecordsList.forEach((record) => {
+	                const divisionValue = String(record.division || "").trim();
+	                const amountValue = Number(record.allocatedAmount) || 0;
+	                const statusValue = String(record.status || "").trim().toLowerCase();
 
-            projectRecordsList.forEach((record) => {
-                const divisionValue = String(record.division || "").trim();
-                const amountValue = Number(record.allocatedAmount) || 0;
-                const statusValue = String(record.status || "").trim().toLowerCase();
-
-                if (divisionValue in divisionCounts && isActiveProjectStatus(statusValue)) {
-                    divisionCounts[divisionValue] += 1;
-                }
+	                if (divisionValue in divisionCounts) {
+	                    divisionCounts[divisionValue] += 1;
+	                }
                 totalBudget += amountValue;
                 if (statusValue.includes("approved")) {
                     approvedCount += 1;
@@ -18771,110 +18801,61 @@ document.addEventListener("DOMContentLoaded", () => {
                     : "No project records available.";
             }
 
-            divisionSummaryCards.forEach((card) => {
-                const divisionName = String(card.getAttribute("data-project-division-count") || "").trim();
-                const count = divisionCounts[divisionName] || 0;
-                card.textContent = `${count} active project${count === 1 ? "" : "s"}`;
-            });
-        };
+	            divisionSummaryCards.forEach((card) => {
+	                const divisionName = String(card.getAttribute("data-project-division-count") || "").trim();
+	                const count = divisionCounts[divisionName] || 0;
+	                card.textContent = `${count} project${count === 1 ? "" : "s"}`;
+	            });
+	        };
 
-        const buildProjectRecords = () => {
-            const adminRecords = readJsonArray(ADMIN_DIVISION_STORAGE_KEY);
-            const planningDocs = readJsonArray(PLANNING_DOCUMENT_STORAGE_KEY);
-            const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
-            const qualityRecords = readJsonArray(QUALITY_STORAGE_KEY);
-            const maintenanceState = readJsonObject(MAINTENANCE_STORAGE_KEY);
-            const maintenanceTasks = Array.isArray(maintenanceState.taskRows) ? maintenanceState.taskRows : [];
-            const maintenanceRoads = Array.isArray(maintenanceState.roadRecords) ? maintenanceState.roadRecords : [];
+		        const buildProjectRecords = () => {
+		            const planningDocsLocal = readJsonArray(PLANNING_DOCUMENT_STORAGE_KEY);
+		            const constructionRecordsLocal = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+		            const maintenanceStateLocal = readJsonObject(MAINTENANCE_STORAGE_KEY);
 
-            // Avoid duplicates when an Admin record is already routed into another division's local storage.
-            // Example: Admin record assigned to Construction appears both in Admin list and Construction list.
-            const routedAdminRecordIds = new Set();
-            const registerRoutedAdminId = (value) => {
-                const id = String(value || "").trim();
-                if (id) routedAdminRecordIds.add(id);
-            };
+		            const planningDocs = planningDocsLocal.length ? planningDocsLocal : readSeedArray("planning");
+		            const constructionRecords = constructionRecordsLocal.length ? constructionRecordsLocal : readSeedArray("construction");
+		            const seededMaintenance = readSeedObject("maintenance");
+		            const maintenanceState = Object.keys(maintenanceStateLocal || {}).length ? maintenanceStateLocal : seededMaintenance;
+		            const maintenanceTasks = Array.isArray(maintenanceState.taskRows) ? maintenanceState.taskRows : [];
+		            const maintenanceRoads = Array.isArray(maintenanceState.roadRecords) ? maintenanceState.roadRecords : [];
 
-            (Array.isArray(constructionRecords) ? constructionRecords : []).forEach((record) => {
-                if (String(record?.__admin_source || "") !== "admin_document") return;
-                registerRoutedAdminId(record?.__admin_source_id);
-            });
-
-            (Array.isArray(planningDocs) ? planningDocs : []).forEach((record) => {
-                if (String(record?.__admin_source || "") !== "admin_document") return;
-                registerRoutedAdminId(record?.__admin_source_id);
-            });
-
-            (Array.isArray(qualityRecords) ? qualityRecords : []).forEach((record) => {
-                if (String(record?.__admin_source || "") !== "admin_document") return;
-                registerRoutedAdminId(record?.__admin_source_id);
-            });
-
-            const mappedAdmin = adminRecords
-                .filter((item) => {
-                    const recordId = String(item?.__record_id || "").trim();
-                    const documentName = String(item?.document_name || "").trim();
-                    const slipNo = String(item?.slip_no || "").trim();
-                    if (!Boolean(recordId || documentName || slipNo)) return false;
-                    if (recordId && routedAdminRecordIds.has(recordId)) return false;
-                    return true;
-                })
-                .map((item, index) => ({
-                    id: `admin_${String(item?.__record_id || item?.slip_no || item?.document_name || index).trim()}`,
-                    projectName: String(item?.document_name || item?.slip_no || `Admin Project ${index + 1}`).trim(),
-                    // Keep Admin records under Admin Division to avoid duplicates when the same
-                    // document is routed into another division's local storage (e.g. Construction).
-                    division: "Admin Division",
-                    fundSource: String(item?.doc_type || item?.billing_type || "Admin Record").trim() || "Admin Record",
-                    allocatedAmount: parseProjectAmount(item?.revised_contract_amount || item?.contract_amount || 0),
-                    status: mapAdminStatusToProjectStatus(item?.doc_status || item?.status),
-                    createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
-                }));
-
-            const mappedPlanning = planningDocs
-                .filter((item) => String(item?.id || "").trim())
-                .map((item, index) => ({
-                    id: `planning_${String(item.id).trim()}`,
-                    projectName: String(item?.document_name || item?.slip_no || `Planning Project ${index + 1}`).trim(),
+	            const mappedPlanning = planningDocs
+	                .filter((item) => String(item?.id || "").trim())
+		                .map((item, index) => ({
+	                    id: `planning_${String(item.id).trim()}`,
+	                    projectName: String(item?.document_name || item?.slip_no || `Planning Project ${index + 1}`).trim(),
                     division: "Planning Division",
-                    fundSource: String(item?.budget_allocation || "Planning Allocation").trim() || "Planning Allocation",
-                    allocatedAmount: parseProjectAmount(item?.amount || 0),
-                    status: mapPlanningStatusToProjectStatus(item?.status),
-                    createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
-                }));
+	                    fundSource: String(item?.budget_allocation || "Planning Allocation").trim() || "Planning Allocation",
+	                    allocatedAmount: parseProjectAmount(item?.amount || 0),
+	                    status: mapPlanningStatusToProjectStatus(item?.status),
+	                    statusDisplay: mapPlanningStatusToProjectStatus(item?.status),
+	                    createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
+	                }));
 
-            const mappedConstruction = constructionRecords
-                .filter((item) => String(item?.__id || item?.project_name || "").trim())
-                .map((item, index) => {
-                    const progress = Number.parseFloat(String(item?.status_current || "").replace(/[^0-9.-]/g, ""));
-                    const mappedStatus = Number.isFinite(progress) && progress >= 100
-                        ? "Completed"
-                        : Number.isFinite(progress) && progress > 0
-                            ? "Ongoing"
-                            : "In Planning";
-                    return {
-                        id: `construction_${String(item?.__id || `${index}`).trim()}`,
-                        sourceRecordId: String(item?.__id || "").trim(),
-                        projectName: String(item?.project_name || `Construction Project ${index + 1}`).trim(),
-                        division: "Construction Division",
-                        fundSource: String(item?.contractor || "Construction Contract").trim() || "Construction Contract",
-                        allocatedAmount: parseProjectAmount(item?.revised_contract_cost || item?.contract_cost || 0),
-                        status: mappedStatus,
-                        createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
-                    };
-                });
-
-            const mappedQuality = qualityRecords
-                .filter((item) => String(item?.__id || item?.project_location || "").trim())
-                .map((item, index) => ({
-                    id: `quality_${String(item?.__id || `${index}`).trim()}`,
-                    projectName: String(item?.project_location || item?.doc_no || `Quality Project ${index + 1}`).trim(),
-                    division: "Quality Division",
-                    fundSource: String(item?.particulars || "Quality Record").trim() || "Quality Record",
-                    allocatedAmount: 0,
-                    status: mapQualityStatusToProjectStatus(item?.status),
-                    createdAt: Number(item?.created_at || item?.createdAt || Date.now()),
-                }));
+		            const mappedConstruction = constructionRecords
+		                .filter((item) => String(item?.__id || item?.id || item?.project_name || item?.projectName || "").trim())
+		                .map((item, index) => {
+		                    const progress = Number.parseFloat(String(item?.status_current ?? item?.statusCurrent ?? "").replace(/[^0-9.-]/g, ""));
+		                    const mappedStatus = Number.isFinite(progress) && progress >= 100
+		                        ? "Completed"
+		                        : Number.isFinite(progress) && progress > 0
+		                            ? "Ongoing"
+		                            : "In Planning";
+		                    const remarksText = String(item?.remarks || "").trim();
+		                    const sourceId = String(item?.__id || item?.id || "").trim();
+		                    return {
+		                        id: `construction_${sourceId || String(index)}`,
+		                        sourceRecordId: sourceId,
+		                        projectName: String(item?.project_name || item?.projectName || `Construction Project ${index + 1}`).trim(),
+		                        division: "Construction Division",
+		                        fundSource: String(item?.contractor || item?.fundSource || "Construction Contract").trim() || "Construction Contract",
+		                        allocatedAmount: parseProjectAmount(item?.revised_contract_cost || item?.revisedContractCost || item?.contract_cost || item?.contractCost || 0),
+		                        status: mappedStatus,
+			                        statusDisplay: remarksText || mappedStatus,
+			                        createdAt: Number(item?.created_at || item?.createdAt || item?.__created_at || Date.now()),
+			                    };
+			                });
 
             const mappedMaintenanceTasks = maintenanceTasks
                 .filter((item) => String(item?.title || item?.taskTitle || "").trim())
@@ -18902,14 +18883,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     }))
                 : [];
 
-            const merged = [
-                ...mappedAdmin,
-                ...mappedPlanning,
-                ...mappedConstruction,
-                ...mappedQuality,
-                ...mappedMaintenanceTasks,
-                ...mappedMaintenanceRoads,
-            ].filter((item) => item.projectName);
+	            const merged = [
+	                ...mappedPlanning,
+	                ...mappedConstruction,
+	                ...mappedMaintenanceTasks,
+	                ...mappedMaintenanceRoads,
+	            ].filter((item) => item.projectName);
 
             const dedupedById = new Map();
             merged.forEach((item) => {
@@ -18926,13 +18905,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const sortValue = sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest";
             const query = projectSearchInput instanceof HTMLInputElement ? normalizeText(projectSearchInput.value) : "";
 
-            const filtered = (Array.isArray(records) ? records : []).filter((record) => {
-                const matchesDivision = divisionValue === "all" || record.division === divisionValue;
-                const matchesStatus = statusValue === "all" || record.status === statusValue;
-                const haystack = normalizeText(`${record.projectName} ${record.division} ${record.fundSource} ${record.status}`);
-                const matchesQuery = !query || haystack.includes(query);
-                return matchesDivision && matchesStatus && matchesQuery;
-            });
+	            const filtered = (Array.isArray(records) ? records : []).filter((record) => {
+	                const matchesDivision = divisionValue === "all" || record.division === divisionValue;
+	                const matchesStatus = statusValue === "all" || record.status === statusValue;
+	                const haystack = normalizeText(`${record.projectName} ${record.division} ${record.fundSource} ${record.status} ${record.statusDisplay || ""}`);
+	                const matchesQuery = !query || haystack.includes(query);
+	                return matchesDivision && matchesStatus && matchesQuery;
+	            });
 
             filtered.sort((left, right) => {
                 if (sortValue === "name_asc") return String(left.projectName).localeCompare(String(right.projectName));
@@ -18944,17 +18923,17 @@ document.addEventListener("DOMContentLoaded", () => {
             return filtered;
         };
 
-        const renderProjectTable = (records) => {
-            if (!(projectTableBody instanceof HTMLElement)) return;
-            const list = Array.isArray(records) ? records : [];
-            if (!list.length) {
-                projectTableBody.innerHTML = `
-                    <tr class="project-empty-row" data-project-empty-row="true">
-                        <td colspan="6">
-                            <div class="project-empty-state">
-                                <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
-                                <div>
-                                    <strong>No project records yet</strong>
+	        const renderProjectTable = (records) => {
+	            if (!(projectTableBody instanceof HTMLElement)) return;
+	            const list = Array.isArray(records) ? records : [];
+	            if (!list.length) {
+	                projectTableBody.innerHTML = `
+	                    <tr class="project-empty-row" data-project-empty-row="true">
+	                        <td colspan="5">
+	                            <div class="project-empty-state">
+	                                <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+	                                <div>
+	                                    <strong>No project records yet</strong>
                                     <p>No projects matched the selected filters.</p>
                                 </div>
                             </div>
@@ -18964,36 +18943,68 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            projectTableBody.innerHTML = list.map((record) => {
-                const isConstruction = String(record.division || "").trim() === "Construction Division";
-                const sourceId = String(record.sourceRecordId || "").trim();
-                const projectName = escapeProjectHtml(record.projectName || "-");
-                const projectNameCell = isConstruction && sourceId
-                    ? `<button type="button" class="project-name-link js-project-open-construction-history" data-construction-source-id="${escapeProjectHtml(sourceId)}">${projectName}</button>`
-                    : projectName;
+	            projectTableBody.innerHTML = list.map((record) => {
+	                const isConstruction = String(record.division || "").trim() === "Construction Division";
+	                const sourceId = String(record.sourceRecordId || "").trim();
+	                const projectName = escapeProjectHtml(record.projectName || "-");
+	                const projectNameCell = isConstruction && sourceId
+	                    ? `<button type="button" class="project-name-link js-project-open-construction-history" data-construction-source-id="${escapeProjectHtml(sourceId)}">${projectName}</button>`
+	                    : projectName;
+	                const statusText = escapeProjectHtml(record.statusDisplay || record.status || "In Planning");
 
-                return `
-                <tr>
-                    <td>${projectNameCell}</td>
-                    <td>${escapeProjectHtml(record.division || "-")}</td>
-                    <td>${escapeProjectHtml(record.fundSource || "-")}</td>
-                    <td>${escapeProjectHtml(formatProjectCurrency(Number(record.allocatedAmount) || 0))}</td>
-                    <td>${escapeProjectHtml(record.status || "In Planning")}</td>
-                    <td class="project-align-center">-</td>
-                </tr>
-                `;
-            }).join("");
-        };
+	                return `
+	                <tr>
+	                    <td>${projectNameCell}</td>
+	                    <td>${escapeProjectHtml(record.division || "-")}</td>
+	                    <td>${escapeProjectHtml(record.fundSource || "-")}</td>
+	                    <td>${escapeProjectHtml(formatProjectCurrency(Number(record.allocatedAmount) || 0))}</td>
+	                    <td>${statusText}</td>
+	                </tr>
+	                `;
+	            }).join("");
+	        };
 
-        let projectRecords = [];
-        let visibleProjectRecords = [];
+	        let projectRecords = [];
+	        let visibleProjectRecords = [];
+	        let currentProjectPage = 1;
+	        const PROJECT_PAGE_SIZE = 10;
 
-        const refreshProjectBoard = () => {
-            projectRecords = buildProjectRecords();
-            visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
-            renderProjectTable(visibleProjectRecords);
-            syncProjectRegistrySummary(projectRecords);
-        };
+	        const renderProjectPagination = () => {
+	            const totalCount = Array.isArray(visibleProjectRecords) ? visibleProjectRecords.length : 0;
+	            const totalPages = Math.max(1, Math.ceil(totalCount / PROJECT_PAGE_SIZE));
+	            if (currentProjectPage > totalPages) currentProjectPage = totalPages;
+	            if (currentProjectPage < 1) currentProjectPage = 1;
+
+	            if (projectPageLabel instanceof HTMLElement) {
+	                projectPageLabel.textContent = `Page ${currentProjectPage} of ${totalPages}`;
+	            }
+	            if (projectPrevButton instanceof HTMLButtonElement) {
+	                projectPrevButton.disabled = currentProjectPage <= 1;
+	            }
+	            if (projectNextButton instanceof HTMLButtonElement) {
+	                projectNextButton.disabled = currentProjectPage >= totalPages;
+	            }
+	        };
+
+	        const renderProjectBoardPage = () => {
+	            const list = Array.isArray(visibleProjectRecords) ? visibleProjectRecords : [];
+	            const totalPages = Math.max(1, Math.ceil(list.length / PROJECT_PAGE_SIZE));
+	            if (currentProjectPage > totalPages) currentProjectPage = totalPages;
+	            if (currentProjectPage < 1) currentProjectPage = 1;
+
+	            const start = (currentProjectPage - 1) * PROJECT_PAGE_SIZE;
+	            const end = start + PROJECT_PAGE_SIZE;
+	            renderProjectTable(list.slice(start, end));
+	            renderProjectPagination();
+	        };
+
+	        const refreshProjectBoard = () => {
+	            projectRecords = buildProjectRecords();
+	            visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
+	            currentProjectPage = 1;
+	            renderProjectBoardPage();
+	            syncProjectRegistrySummary(projectRecords);
+	        };
 
         const enableProjectCardFloat = () => {
             if (!projectFloatCards.length) return;
@@ -19076,14 +19087,115 @@ document.addEventListener("DOMContentLoaded", () => {
             syncProjectModalState();
         };
 
-        const buildConstructionMonthlyHistoryCards = (constructionRecord) => {
-            const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
-            const snapshots = normalizeConstructionSnapshots(record);
+	        const buildConstructionMonthlyHistoryCards = (constructionRecord) => {
+	            const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
+	            const snapshots = normalizeConstructionSnapshots(record);
 
-            const ensureFallbackSnapshot = () => {
-                const images = Array.isArray(record.accomplishment_images)
-                    ? record.accomplishment_images
-                        .map((img) => ({
+	            const toDisplay = (value) => {
+	                const text = String(value ?? "").trim();
+	                return text || "-";
+	            };
+
+	            const formatMoney = (value) => {
+	                const text = String(value ?? "").trim();
+	                if (!text) return "-";
+	                if (/php|â‚±/i.test(text)) return text;
+	                const numeric = Number(text.replace(/,/g, ""));
+	                if (Number.isNaN(numeric)) return text;
+	                return `PHP ${numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+	            };
+
+	            const formatDate = (value) => {
+	                if (value === null || value === undefined || value === "") return "-";
+	                const text = String(value).trim();
+	                if (!text) return "-";
+	                const isoDateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	                if (isoDateOnlyMatch) {
+	                    const year = Number(isoDateOnlyMatch[1]);
+	                    const month = Number(isoDateOnlyMatch[2]);
+	                    const day = Number(isoDateOnlyMatch[3]);
+	                    const parsed = new Date(year, month - 1, day);
+	                    if (!Number.isNaN(parsed.getTime())) {
+	                        return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+	                    }
+	                }
+	                const date = new Date(text);
+	                if (Number.isNaN(date.getTime())) return text;
+	                return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+	            };
+
+		            const formatMonthYear = (value) => {
+		                const text = String(value ?? "").trim();
+		                if (!text) return "-";
+		                const date = new Date(text);
+		                if (Number.isNaN(date.getTime())) return text;
+		                return date.toLocaleDateString("en-US", { year: "numeric", month: "long" });
+		            };
+
+			            const formatStatusPercent = (value) => {
+			                const text = String(value ?? "").trim();
+			                if (!text) return "-";
+			                const numericRaw = Number.parseFloat(text.replace(/[^0-9.-]/g, ""));
+			                if (!Number.isFinite(numericRaw)) return text.includes("%") ? text : `${text}%`;
+			                const hasPercentSign = /%/.test(text);
+			                const normalized = (!hasPercentSign && Math.abs(numericRaw) <= 1) ? (numericRaw * 100) : numericRaw;
+			                return `${normalized.toFixed(0)}%`;
+			            };
+	
+			            const asOfMonthYear = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long" });
+			            const statusPercent = formatStatusPercent(record.status_current);
+			            const asOfHeader = `As of (${asOfMonthYear})`;
+			            const detailsCard = `
+			                <article class="project-history-month-card project-history-details-card">
+	                    <div class="project-history-month-head">
+	                        <div>
+	                            <h5>Project Details</h5>
+	                            <div class="project-history-month-meta">Read-only from Construction Division register</div>
+	                        </div>
+	                    </div>
+	                    <div class="project-history-details-table-wrap">
+	                        <table class="road-table project-history-details-table">
+	                            <thead>
+	                                <tr>
+	                                    <th>Project Name</th>
+	                                    <th>Roads in Road (km)</th>
+	                                    <th>Location</th>
+	                                    <th>Municipality</th>
+	                                    <th>Contract Cost</th>
+	                                    <th>C.D.</th>
+	                                    <th>NTP Date</th>
+	                                    <th>Target Completion Date (Original)</th>
+	                                    <th>Revised Completion Date</th>
+		                                        <th>${escapeProjectHtml(asOfHeader)}</th>
+		                                        <th>General Remarks</th>
+		                                        <th>Project Contractor</th>
+		                                    </tr>
+	                            </thead>
+	                            <tbody>
+	                                <tr>
+	                                    <td>${escapeProjectHtml(toDisplay(record.project_name))}</td>
+	                                    <td>${escapeProjectHtml(toDisplay(record.road_km))}</td>
+	                                    <td>${escapeProjectHtml(toDisplay(record.location))}</td>
+	                                    <td>${escapeProjectHtml(toDisplay(record.mun))}</td>
+	                                    <td>${escapeProjectHtml(formatMoney(record.contract_cost))}</td>
+	                                    <td>${escapeProjectHtml(toDisplay(record.cd))}</td>
+	                                    <td>${escapeProjectHtml(formatDate(record.ntp_date))}</td>
+	                                    <td>${escapeProjectHtml(formatDate(record.original_expiry_date))}</td>
+	                                    <td>${escapeProjectHtml(formatDate(record.revised_expiry_date))}</td>
+		                                        <td>${escapeProjectHtml(statusPercent)}</td>
+		                                        <td>${escapeProjectHtml(toDisplay(record.remarks))}</td>
+		                                        <td>${escapeProjectHtml(toDisplay(record.contractor))}</td>
+		                                    </tr>
+	                            </tbody>
+	                        </table>
+	                    </div>
+	                </article>
+	            `;
+
+	            const ensureFallbackSnapshot = () => {
+	                const images = Array.isArray(record.accomplishment_images)
+	                    ? record.accomplishment_images
+	                        .map((img) => ({
                             dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
                             name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
                         }))
@@ -19103,10 +19215,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }];
             };
 
-            const effectiveSnapshots = snapshots.length ? snapshots : ensureFallbackSnapshot();
-            if (!effectiveSnapshots.length) {
-                return `<div style="color:#64748b;">No monthly history found for this project yet.</div>`;
-            }
+	            const effectiveSnapshots = snapshots.length ? snapshots : ensureFallbackSnapshot();
+	            if (!effectiveSnapshots.length) {
+	                return `${detailsCard}<div style="color:#64748b;">No monthly history found for this project yet.</div>`;
+	            }
 
             const grouped = new Map();
             effectiveSnapshots.forEach((snap) => {
@@ -19123,11 +19235,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const monthGroups = Array.from(grouped.values()).sort((a, b) => String(b.month).localeCompare(String(a.month)));
 
-            return monthGroups.map((group) => {
-                group.snapshots.sort((a, b) => String(b.saved_at).localeCompare(String(a.saved_at)));
-                const latest = group.snapshots[0] || {};
-                const projectName = String(latest.project_name || record.project_name || "Construction Project").trim();
-                const location = String(latest.location || record.location || "").trim();
+	            return detailsCard + monthGroups.map((group) => {
+	                group.snapshots.sort((a, b) => String(b.saved_at).localeCompare(String(a.saved_at)));
+	                const latest = group.snapshots[0] || {};
+	                const projectName = String(latest.project_name || record.project_name || "Construction Project").trim();
+	                const location = String(latest.location || record.location || "").trim();
                 const contractor = String(latest.contractor || record.contractor || "").trim();
                 const percent = String(latest.status_current ?? "").trim();
 
@@ -19292,16 +19404,43 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
 
-        if (divisionFilter instanceof HTMLSelectElement) {
-            divisionFilter.addEventListener("change", () => {
-                syncActiveProjectDivision(divisionFilter.value);
-            });
-        }
+	        if (divisionFilter instanceof HTMLSelectElement) {
+	            divisionFilter.addEventListener("change", () => {
+	                syncActiveProjectDivision(divisionFilter.value);
+	            });
+	        }
 
-        if (statusFilter instanceof HTMLSelectElement) {
-            statusFilter.addEventListener("change", () => {
-                persistCurrentProjectUiState();
-                refreshProjectBoard();
+	        if (projectPrevButton instanceof HTMLButtonElement) {
+	            projectPrevButton.addEventListener("click", () => {
+	                currentProjectPage = Math.max(1, currentProjectPage - 1);
+	                renderProjectBoardPage();
+	            });
+	        }
+
+	        if (projectNextButton instanceof HTMLButtonElement) {
+	            projectNextButton.addEventListener("click", () => {
+	                const totalCount = Array.isArray(visibleProjectRecords) ? visibleProjectRecords.length : 0;
+	                const totalPages = Math.max(1, Math.ceil(totalCount / PROJECT_PAGE_SIZE));
+	                currentProjectPage = Math.min(totalPages, currentProjectPage + 1);
+	                renderProjectBoardPage();
+	            });
+	        }
+
+	        if (projectBackHomeButton instanceof HTMLButtonElement) {
+	            projectBackHomeButton.addEventListener("click", () => {
+	                syncActiveProjectDivision("all");
+	                try {
+	                    window.scrollTo({ top: 0, behavior: "smooth" });
+	                } catch (error) {
+	                    window.scrollTo(0, 0);
+	                }
+	            });
+	        }
+
+	        if (statusFilter instanceof HTMLSelectElement) {
+	            statusFilter.addEventListener("change", () => {
+	                persistCurrentProjectUiState();
+	                refreshProjectBoard();
             });
         }
 
@@ -19344,18 +19483,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             }
 
-            window.addEventListener("focus", refreshProjectBoard);
-            window.addEventListener("storage", (event) => {
-                const key = String(event.key || "");
-                if (![
-                    ADMIN_DIVISION_STORAGE_KEY,
-                    PLANNING_DOCUMENT_STORAGE_KEY,
-                    CONSTRUCTION_STORAGE_KEY,
-                    QUALITY_STORAGE_KEY,
-                    MAINTENANCE_STORAGE_KEY,
-                ].includes(key)) {
-                    return;
-                }
+	            window.addEventListener("focus", refreshProjectBoard);
+	            window.addEventListener("storage", (event) => {
+	                const key = String(event.key || "");
+	                if (![
+	                    PLANNING_DOCUMENT_STORAGE_KEY,
+	                    CONSTRUCTION_STORAGE_KEY,
+	                    MAINTENANCE_STORAGE_KEY,
+	                ].includes(key)) {
+	                    return;
+	                }
                 refreshProjectBoard();
             });
         };
@@ -19402,13 +19539,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const initialLocalProjectCount = buildProjectRecords().length;
 
-            const definitions = [
-                { storeKey: "admin", localStorageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
-                { storeKey: "planning", localStorageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
-                { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
-                { storeKey: "quality", localStorageKey: QUALITY_STORAGE_KEY, type: "array" },
-                { storeKey: "maintenance", localStorageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
-            ];
+	            const definitions = [
+	                { storeKey: "planning", localStorageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
+	                { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+	                { storeKey: "maintenance", localStorageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
+	            ];
 
             const results = await Promise.all(definitions.map(async (def) => {
                 const payload = await window.peoDivisionStore.fetchStore(def.storeKey);
@@ -21409,22 +21544,141 @@ if (document.readyState === "loading") {
         }
     };
 
-    const formatMonthLabel = (monthKey) => {
-        const text = String(monthKey || "").trim();
-        const match = text.match(/^(\d{4})-(\d{2})$/);
-        if (!match) return text || "Unknown Month";
-        const year = Number(match[1]);
-        const monthIndex = Number(match[2]) - 1;
-        const date = new Date(year, monthIndex, 1);
-        if (Number.isNaN(date.getTime())) return text;
-        return date.toLocaleString(undefined, { month: "long", year: "numeric" });
-    };
+	    const formatMonthLabel = (monthKey) => {
+	        const text = String(monthKey || "").trim();
+	        const match = text.match(/^(\d{4})-(\d{2})$/);
+	        if (!match) return text || "Unknown Month";
+	        const year = Number(match[1]);
+	        const monthIndex = Number(match[2]) - 1;
+	        const date = new Date(year, monthIndex, 1);
+	        if (Number.isNaN(date.getTime())) return text;
+	        return date.toLocaleString(undefined, { month: "long", year: "numeric" });
+	    };
 
-    const buildMonthlyHistoryCards = (record) => {
-        const raw = Array.isArray(record?.accomplishment_history) ? record.accomplishment_history : [];
-        if (!raw.length) {
-            return `<div style="color:#64748b;">No monthly history found for this project yet.</div>`;
-        }
+	    const toDisplay = (value) => {
+	        const text = String(value ?? "").trim();
+	        return text || "-";
+	    };
+
+	    const formatMoney = (value) => {
+	        const text = String(value ?? "").trim();
+	        if (!text) return "-";
+	        if (/php|â‚±/i.test(text)) return text;
+	        const numeric = Number(text.replace(/,/g, ""));
+	        if (Number.isNaN(numeric)) return text;
+	        return `PHP ${numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+	    };
+
+	    const formatDate = (value) => {
+	        if (value === null || value === undefined || value === "") return "-";
+
+	        const toLabel = (date) => {
+	            return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+	        };
+
+	        if (typeof value === "number" && Number.isFinite(value)) {
+	            if (value > 59) {
+	                const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+	                const parsed = new Date(excelEpoch.getTime() + (value * 86400000));
+	                if (!Number.isNaN(parsed.getTime())) return toLabel(parsed);
+	            }
+	            return String(value);
+	        }
+
+	        const text = String(value).trim();
+	        if (!text) return "-";
+
+	        const isoDateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	        if (isoDateOnlyMatch) {
+	            const year = Number(isoDateOnlyMatch[1]);
+	            const month = Number(isoDateOnlyMatch[2]);
+	            const day = Number(isoDateOnlyMatch[3]);
+	            const parsed = new Date(year, month - 1, day);
+	            if (!Number.isNaN(parsed.getTime())) return toLabel(parsed);
+	        }
+
+	        const date = new Date(text);
+	        if (Number.isNaN(date.getTime())) return text;
+	        return toLabel(date);
+	    };
+
+		    const formatMonthYear = (value) => {
+		        const text = String(value ?? "").trim();
+		        if (!text) return "-";
+		        const date = new Date(text);
+		        if (Number.isNaN(date.getTime())) return text;
+		        return date.toLocaleString(undefined, { month: "long", year: "numeric" });
+		    };
+
+			    const formatStatusPercent = (value) => {
+			        const text = String(value ?? "").trim();
+			        if (!text) return "-";
+			        const numericRaw = Number.parseFloat(text.replace(/[^0-9.-]/g, ""));
+			        if (!Number.isFinite(numericRaw)) return text.includes("%") ? text : `${text}%`;
+			        const hasPercentSign = /%/.test(text);
+			        const normalized = (!hasPercentSign && Math.abs(numericRaw) <= 1) ? (numericRaw * 100) : numericRaw;
+			        return `${normalized.toFixed(0)}%`;
+			    };
+		
+			    const buildProjectDetailsCard = (record) => {
+			        const asOfMonthYear = new Date().toLocaleString(undefined, { month: "long", year: "numeric" });
+			        const statusPercent = formatStatusPercent(record?.status_current);
+			        const asOfHeader = `As of (${asOfMonthYear})`;
+	
+		        return `
+		            <article class="project-history-month-card project-history-details-card">
+	                <div class="project-history-month-head">
+	                    <div>
+	                        <h5>Project Details</h5>
+	                        <div class="project-history-month-meta">Read-only from Construction Division register</div>
+	                    </div>
+	                </div>
+	                <div class="project-history-details-table-wrap">
+	                    <table class="road-table project-history-details-table">
+	                        <thead>
+	                            <tr>
+	                                <th>Project Name</th>
+	                                <th>Roads in Road (km)</th>
+	                                <th>Location</th>
+	                                <th>Municipality</th>
+	                                <th>Contract Cost</th>
+	                                <th>C.D.</th>
+		                                <th>NTP Date</th>
+		                                <th>Target Completion Date (Original)</th>
+		                                <th>Revised Completion Date</th>
+		                                <th>${escapeHtml(asOfHeader)}</th>
+		                                <th>General Remarks</th>
+		                                <th>Project Contractor</th>
+		                            </tr>
+	                        </thead>
+	                        <tbody>
+	                            <tr>
+	                                <td>${escapeHtml(toDisplay(record?.project_name))}</td>
+	                                <td>${escapeHtml(toDisplay(record?.road_km))}</td>
+	                                <td>${escapeHtml(toDisplay(record?.location))}</td>
+	                                <td>${escapeHtml(toDisplay(record?.mun))}</td>
+	                                <td>${escapeHtml(formatMoney(record?.contract_cost))}</td>
+	                                <td>${escapeHtml(toDisplay(record?.cd))}</td>
+		                                <td>${escapeHtml(formatDate(record?.ntp_date))}</td>
+		                                <td>${escapeHtml(formatDate(record?.original_expiry_date))}</td>
+		                                <td>${escapeHtml(formatDate(record?.revised_expiry_date))}</td>
+		                                <td>${escapeHtml(statusPercent)}</td>
+		                                <td>${escapeHtml(toDisplay(record?.remarks))}</td>
+		                                <td>${escapeHtml(toDisplay(record?.contractor))}</td>
+		                            </tr>
+	                        </tbody>
+	                    </table>
+	                </div>
+	            </article>
+	        `;
+	    };
+
+	    const buildMonthlyHistoryCards = (record) => {
+	        const detailsCard = buildProjectDetailsCard(record);
+	        const raw = Array.isArray(record?.accomplishment_history) ? record.accomplishment_history : [];
+	        if (!raw.length) {
+	            return `${detailsCard}<div style="color:#64748b;">No monthly history found for this project yet.</div>`;
+	        }
 
         const buckets = new Map();
         raw.forEach((entry) => {
@@ -21439,12 +21693,12 @@ if (document.readyState === "loading") {
         const months = Array.from(buckets.keys()).sort().reverse();
         const projectName = String(record?.project_name || "Construction Project").trim();
 
-        return months
-            .map((month) => {
-                const entries = buckets.get(month) || [];
-                const latest = entries[0] && typeof entries[0] === "object" ? entries[0] : {};
-                const location = String(latest.location || record.location || "").trim();
-                const contractor = String(latest.contractor || record.contractor || "").trim();
+	        return detailsCard + months
+	            .map((month) => {
+	                const entries = buckets.get(month) || [];
+	                const latest = entries[0] && typeof entries[0] === "object" ? entries[0] : {};
+	                const location = String(latest.location || record.location || "").trim();
+	                const contractor = String(latest.contractor || record.contractor || "").trim();
                 const percent = String(latest.status_current || record.status_current || "").trim();
 
                 const seen = new Set();

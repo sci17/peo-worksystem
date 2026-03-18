@@ -45,59 +45,40 @@
         >
             Search
         </button>
-    </div>
+	    </div>
 
-    <section class="project-division-section" aria-label="Division project overview">
-        <div class="project-division-grid">
-            <article class="project-division-card project-float-card is-admin" data-project-division-card="Admin Division">
-                <div class="project-division-icon" aria-hidden="true">
-                    <span class="material-symbols-outlined">account_balance</span>
-                </div>
+	    <div data-project-home>
+		    <section class="project-division-section" aria-label="Division project overview">
+		        <div class="project-division-grid">
+	            <article class="project-division-card project-float-card is-planning" data-project-division-card="Planning Division">
+	                <div class="project-division-icon" aria-hidden="true">
+	                    <span class="material-symbols-outlined">architecture</span>
+	                </div>
                 <div class="project-division-copy">
-                    <strong>Admin Division</strong>
-                    <span data-project-division-count="Admin Division">0 active projects</span>
-                </div>
-            </article>
+	                    <strong>Planning Division</strong>
+	                    <span data-project-division-count="Planning Division">0 projects</span>
+	                </div>
+	            </article>
 
-            <article class="project-division-card project-float-card is-planning" data-project-division-card="Planning Division">
-                <div class="project-division-icon" aria-hidden="true">
-                    <span class="material-symbols-outlined">architecture</span>
-                </div>
+	            <article class="project-division-card project-float-card is-construction" data-project-division-card="Construction Division">
+	                <div class="project-division-icon" aria-hidden="true">
+	                    <span class="material-symbols-outlined">domain</span>
+	                </div>
                 <div class="project-division-copy">
-                    <strong>Planning Division</strong>
-                    <span data-project-division-count="Planning Division">0 active projects</span>
-                </div>
-            </article>
+	                    <strong>Construction Division</strong>
+	                    <span data-project-division-count="Construction Division">0 projects</span>
+	                </div>
+	            </article>
 
-            <article class="project-division-card project-float-card is-construction" data-project-division-card="Construction Division">
-                <div class="project-division-icon" aria-hidden="true">
-                    <span class="material-symbols-outlined">domain</span>
-                </div>
+	            <article class="project-division-card project-float-card is-maintenance" data-project-division-card="Maintenance Division">
+	                <div class="project-division-icon" aria-hidden="true">
+	                    <span class="material-symbols-outlined">precision_manufacturing</span>
+	                </div>
                 <div class="project-division-copy">
-                    <strong>Construction Division</strong>
-                    <span data-project-division-count="Construction Division">0 active projects</span>
-                </div>
-            </article>
-
-            <article class="project-division-card project-float-card is-quality" data-project-division-card="Quality Division">
-                <div class="project-division-icon" aria-hidden="true">
-                    <span class="material-symbols-outlined">settings</span>
-                </div>
-                <div class="project-division-copy">
-                    <strong>Quality Division</strong>
-                    <span data-project-division-count="Quality Division">0 active projects</span>
-                </div>
-            </article>
-
-            <article class="project-division-card project-float-card is-maintenance" data-project-division-card="Maintenance Division">
-                <div class="project-division-icon" aria-hidden="true">
-                    <span class="material-symbols-outlined">precision_manufacturing</span>
-                </div>
-                <div class="project-division-copy">
-                    <strong>Maintenance Division</strong>
-                    <span data-project-division-count="Maintenance Division">0 active projects</span>
-                </div>
-            </article>
+	                    <strong>Maintenance Division</strong>
+	                    <span data-project-division-count="Maintenance Division">0 projects</span>
+	                </div>
+	            </article>
         </div>
     </section>
 
@@ -156,15 +137,20 @@
                     <strong id="project-summary-onhold">0</strong>
                 </div>
             </div>
-        </article>
-    </section>
+	        </article>
+	    </section>
+	    </div>
 
-    <section class="project-shell">
-        <div class="project-shell-head">
-            <div>
-                <h3 class="js-project-panel-title">All Division Projects</h3>
-                <p class="js-project-panel-subtitle">Showing project records and activity across all divisions.</p>
-            </div>
+	    <section class="project-shell" data-project-shell hidden>
+	        <div class="project-shell-head">
+	            <div>
+	                <button type="button" class="project-back-btn" data-project-back-home aria-label="Back to divisions">
+	                    <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+	                    <span>Divisions</span>
+	                </button>
+	                <h3 class="js-project-panel-title">All Division Projects</h3>
+	                <p class="js-project-panel-subtitle">Showing project records and activity across all divisions.</p>
+	            </div>
             <div class="project-shell-actions">
                 <button
                     type="button"
@@ -188,17 +174,15 @@
         </div>
 
         <div class="project-toolbar">
-            <label class="project-filter">
-                <span>Division</span>
-                <select data-project-filter="division">
-                    <option value="all" selected>All Divisions</option>
-                    <option value="Admin Division">Admin Division</option>
-                    <option value="Planning Division">Planning Division</option>
-                    <option value="Construction Division">Construction Division</option>
-                    <option value="Quality Division">Quality Division</option>
-                    <option value="Maintenance Division">Maintenance Division</option>
-                </select>
-            </label>
+	            <label class="project-filter">
+	                <span>Division</span>
+	                <select data-project-filter="division">
+	                    <option value="all" selected>All Divisions</option>
+	                    <option value="Planning Division">Planning Division</option>
+	                    <option value="Construction Division">Construction Division</option>
+	                    <option value="Maintenance Division">Maintenance Division</option>
+	                </select>
+	            </label>
 
             <label class="project-filter">
                 <span>Status</span>
@@ -224,23 +208,22 @@
         </div>
 
         <div class="project-table-wrap">
-            <table class="project-table">
-                <thead>
-                    <tr>
-                        <th>Project Name</th>
-                        <th>Division</th>
-                        <th>Contractor</th>
-                        <th>Allocated Amount</th>
-                        <th>Status</th>
-                        <th class="project-align-center">Action</th>
-                    </tr>
-                </thead>
-                <tbody data-project-table-body>
-                    <tr class="project-empty-row" data-project-empty-row="true">
-                        <td colspan="6">
-                            <div class="project-empty-state">
-                                <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
-                                <div>
+	            <table class="project-table">
+	                <thead>
+	                    <tr>
+	                        <th>Project Name</th>
+	                        <th>Division</th>
+	                        <th>Contractor</th>
+	                        <th>Allocated Amount</th>
+	                        <th>Status</th>
+	                    </tr>
+	                </thead>
+	                <tbody data-project-table-body>
+	                    <tr class="project-empty-row" data-project-empty-row="true">
+	                        <td colspan="5">
+	                            <div class="project-empty-state">
+	                                <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+	                                <div>
                                     <strong>No project records yet</strong>
                                     <p>Create your first project to populate this table.</p>
                                 </div>
@@ -287,16 +270,14 @@
                 </div>
 
                 <div class="project-form-grid">
-                    <label class="project-form-field">
-                        <span>Division</span>
-                        <select name="division" required>
-                            <option value="Admin Division">Admin Division</option>
-                            <option value="Planning Division">Planning Division</option>
-                            <option value="Construction Division">Construction Division</option>
-                            <option value="Quality Division">Quality Division</option>
-                            <option value="Maintenance Division">Maintenance Division</option>
-                        </select>
-                    </label>
+	                    <label class="project-form-field">
+	                        <span>Division</span>
+	                        <select name="division" required>
+	                            <option value="Planning Division">Planning Division</option>
+	                            <option value="Construction Division">Construction Division</option>
+	                            <option value="Maintenance Division">Maintenance Division</option>
+	                        </select>
+	                    </label>
 
                     <label class="project-form-field">
                         <span>Status</span>
