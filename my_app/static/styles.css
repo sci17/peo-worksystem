@@ -8291,6 +8291,132 @@ body.construction-modal-open {
     gap: 12px;
 }
 
+.construction-personnel {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #e4ebf3;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%);
+}
+
+.construction-personnel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.construction-personnel-copy {
+    margin: 0;
+    color: #70829a;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.construction-personnel-meta {
+    margin: 4px 0 0;
+    color: #6b7f97;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.construction-btn-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.construction-btn-icon .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.construction-personnel-list {
+    display: grid;
+    gap: 12px;
+}
+
+.construction-personnel-row {
+    padding: 14px;
+    border: 1px solid #e6edf6;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 10px 20px rgba(21, 41, 74, 0.06);
+    transition: box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.construction-personnel-row:focus-within {
+    border-color: #8cb6ff;
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.12);
+}
+
+.construction-personnel-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.construction-personnel-row-title {
+    margin: 0;
+    color: #132845;
+    font-size: 0.86rem;
+    font-weight: 900;
+}
+
+.construction-personnel-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 720px) {
+    .construction-personnel-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.construction-personnel-remove-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid #e6edf6;
+    background: #f7f9fc;
+    color: #627a95;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.construction-personnel-remove-btn:hover {
+    background: #eef3f8;
+    border-color: #d9e5f3;
+    color: #365574;
+}
+
+.construction-personnel-remove-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.construction-personnel-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px dashed #d7e2ef;
+    background: #fbfcfe;
+    color: #70829a;
+    font-size: 0.86rem;
+}
+
 .construction-field {
     display: flex;
     flex-direction: column;
@@ -8479,16 +8605,203 @@ body.construction-modal-open {
     background: #ffffff;
 }
 
+.js-construction-task-dashboard .construction-table-wrap {
+    margin-top: 12px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+}
+
+.js-construction-task-dashboard .construction-table {
+    width: 100%;
+    min-width: 960px;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #c8d4e4;
+    background: #ffffff;
+}
+
+.js-construction-task-dashboard .construction-table thead th {
+    font-size: 0.71rem;
+    line-height: 1.25;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    white-space: normal;
+    text-align: center;
+    font-weight: 700;
+    color: #1f3550;
+    background: #e8eef6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+}
+
+.js-construction-task-dashboard .construction-table th,
+.js-construction-task-dashboard .construction-table td {
+    padding: 7px 8px;
+    font-size: 0.72rem;
+    vertical-align: middle;
+    border-right: 1px solid #cfd9e6;
+    border-bottom: 1px solid #cfd9e6;
+    line-height: 1.3;
+}
+
+.js-construction-task-dashboard .construction-table th:last-child,
+.js-construction-task-dashboard .construction-table td:last-child {
+    border-right: 0;
+}
+
+.js-construction-task-dashboard .construction-table td {
+    text-align: left;
+    color: #2f4258;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.js-construction-task-dashboard .construction-table td:nth-child(3),
+.js-construction-task-dashboard .construction-table td:nth-child(7) {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.22;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.js-construction-task-dashboard .construction-table th:nth-child(3),
+.js-construction-task-dashboard .construction-table td:nth-child(3) {
+    min-width: 260px;
+}
+
+.js-construction-task-dashboard .construction-table th:nth-child(4),
+.js-construction-task-dashboard .construction-table td:nth-child(4) {
+    width: 200px;
+    max-width: 240px;
+}
+
+.js-construction-task-dashboard .construction-table th:nth-child(5),
+.js-construction-task-dashboard .construction-table td:nth-child(5) {
+    width: 130px;
+}
+
+.js-construction-task-dashboard .construction-table th:nth-child(6),
+.js-construction-task-dashboard .construction-table td:nth-child(6) {
+    width: 200px;
+    text-align: center;
+}
+
+.js-construction-task-dashboard .construction-table th:nth-child(7),
+.js-construction-task-dashboard .construction-table td:nth-child(7) {
+    min-width: 220px;
+}
+
+.construction-task-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.construction-task-modal[hidden] {
+    display: none;
+}
+
+.construction-task-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.38);
+    backdrop-filter: blur(2px);
+}
+
+.construction-task-modal__dialog {
+    position: relative;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+    width: 96vw;
+    max-width: 1360px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.construction-task-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.construction-task-modal__kicker {
+    margin: 0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    font-weight: 700;
+}
+
+.construction-task-modal__title {
+    margin: 2px 0 0;
+    color: #0f172a;
+    font-size: 1.05rem;
+}
+
+.construction-task-modal__close {
+    background: none;
+    border: 0;
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #1f2937;
+}
+
+.construction-task-modal__close:hover {
+    background: #f3f4f6;
+}
+
+.construction-task-modal__body {
+    position: relative;
+    padding: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
+.construction-task-modal__frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.construction-task-detail-table {
+    min-width: 2400px;
+}
+
 .js-construction-dashboard .construction-table thead th {
     font-size: 0.71rem;
     line-height: 1.25;
     text-transform: none;
     letter-spacing: 0.01em;
-    white-space: nowrap;
+    white-space: normal;
     text-align: center;
     font-weight: 700;
     color: #1f3550;
     background: #e8eef6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    hyphens: auto;
 }
 
 .js-construction-admin-assigned .construction-table thead th {
@@ -8496,11 +8809,16 @@ body.construction-modal-open {
     line-height: 1.25;
     text-transform: none;
     letter-spacing: 0.01em;
-    white-space: nowrap;
+    white-space: normal;
     text-align: center;
     font-weight: 700;
     color: #1f3550;
     background: #e8eef6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    hyphens: auto;
 }
 
 .js-construction-dashboard .construction-table th,
@@ -8508,7 +8826,6 @@ body.construction-modal-open {
     padding: 7px 8px;
     font-size: 0.72rem;
     vertical-align: middle;
-    white-space: nowrap;
     border-right: 1px solid #cfd9e6;
     border-bottom: 1px solid #cfd9e6;
     line-height: 1.3;
@@ -8519,7 +8836,6 @@ body.construction-modal-open {
     padding: 7px 8px;
     font-size: 0.72rem;
     vertical-align: middle;
-    white-space: nowrap;
     border-right: 1px solid #cfd9e6;
     border-bottom: 1px solid #cfd9e6;
     line-height: 1.3;
@@ -8535,16 +8851,28 @@ body.construction-modal-open {
     border-right: 0;
 }
 
+/* Keep the right divider after "Current" (Status %) even though it is the last DOM cell on header row 2. */
+.js-construction-dashboard .construction-table thead tr:nth-child(2) th:last-child,
+.js-construction-admin-assigned .construction-table thead tr:nth-child(2) th:last-child {
+    border-right: 1px solid #cfd9e6;
+}
+
 .js-construction-dashboard .construction-table td {
     text-align: left;
     color: #2f4258;
     background: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .js-construction-admin-assigned .construction-table td {
     text-align: left;
     color: #2f4258;
     background: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .js-construction-dashboard .construction-table tbody tr:nth-child(even) td {
@@ -8598,6 +8926,8 @@ body.construction-modal-open {
     white-space: normal;
     word-break: break-word;
     line-height: 1.22;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .js-construction-admin-assigned .construction-table td:nth-child(3),
@@ -8605,6 +8935,8 @@ body.construction-modal-open {
     white-space: normal;
     word-break: break-word;
     line-height: 1.22;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .js-construction-dashboard .construction-table th:nth-child(3),
@@ -8705,6 +9037,25 @@ body.construction-modal-open {
     word-break: break-word;
     overflow-wrap: anywhere;
     line-height: 1.22;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.js-construction-dashboard .construction-table td:nth-child(6),
+.js-construction-admin-assigned .construction-table td:nth-child(6) {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.22;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.construction-task-personnel-summary {
+    margin-top: 4px;
+    font-size: 0.7rem;
+    line-height: 1.25;
+    color: #5a6f88;
 }
 
 .construction-actions {

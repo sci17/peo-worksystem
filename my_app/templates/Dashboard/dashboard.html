@@ -101,6 +101,16 @@
                         >
                             Construction Project Proposal
                         </a>
+                        <a
+                            href="{% url 'construction_task_table' %}"
+                            class="nav-subitem {% if current_construction == 'task' %}nav-subitem-active{% endif %}"
+                            data-peo-toast-message="Construction Task Table opened from the sidebar."
+                            data-peo-toast-title="Sidebar Navigation"
+                            data-peo-toast-variant="info"
+                            data-peo-toast-persist="navigation"
+                        >
+                            Construction Task Table
+                        </a>
                     </div>
                 </div>
                 <a

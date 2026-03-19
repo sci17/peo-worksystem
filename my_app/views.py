@@ -1773,6 +1773,21 @@ def construction_project_dashboard(request):
 
 
 @login_required
+def construction_task_table(request):
+    return render(
+        request,
+        'Dashboard/dashboard.html',
+        _build_dashboard_context(
+            request,
+            current_section='construction',
+            current_construction='task',
+            page_heading='Construction Task Table',
+            construction_template='construction/construction_task_table.html',
+        ),
+    )
+
+
+@login_required
 def planning_division_dashboard(request):
     return render(
         request,
