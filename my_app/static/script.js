@@ -15233,6 +15233,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     window.addEventListener("focus", resyncAdminAssignedProjects);
+    window.addEventListener("construction-records-updated", resyncAdminAssignedProjects);
     window.addEventListener("storage", (event) => {
         const key = String(event.key || "");
         if (key !== ADMIN_DIVISION_STORAGE_KEY && key !== CONSTRUCTION_STORAGE_KEY) return;
@@ -15334,6 +15335,162 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const writeTasks = (items) => {
+        const safeItems = Array.isArray(items) ? items : [];
+        try {
+            window.localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(safeItems));
+            window.dispatchEvent(new Event("construction-tasks-updated"));
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const writeConstructionRecords = (items) => {
+        const safeItems = Array.isArray(items) ? items : [];
+        try {
+            window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(safeItems));
+            window.dispatchEvent(new Event("construction-records-updated"));
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const FORM_FIELDS = [
+        "project_name",
+        "location",
+        "mun",
+        "contractor",
+        "contract_cost",
+        "revised_contract_cost",
+        "ntp_date",
+        "cd",
+        "original_expiry_date",
+        "addl_cd",
+        "revised_expiry_date",
+        "date_completed",
+        "status_previous",
+        "status_current",
+        "time_elapsed",
+        "slippage",
+        "remarks",
+    ];
+
+    const formModal = taskDashboard.querySelector(".js-construction-task-modal");
+    const form = formModal ? formModal.querySelector(".js-construction-task-form") : null;
+    const modalDialog = formModal ? formModal.querySelector(".construction-modal-dialog") : null;
+    const modalBackdrop = formModal ? formModal.querySelector(".construction-modal-backdrop") : null;
+    const closeModalButtons = formModal ? Array.from(formModal.querySelectorAll(".js-close-construction-task-modal")) : [];
+
+    const fillForm = (record = {}) => {
+        if (!form) return;
+        form.reset();
+        FORM_FIELDS.forEach((field) => {
+            const input = form.querySelector(`[name="${field}"]`);
+            if (!input) return;
+            const value = record[field] ?? "";
+            input.value = value;
+        });
+        form.dataset.recordId = String(record.__id || record.construction_id || record.id || "");
+    };
+
+    const openModal = (record = {}) => {
+        if (!formModal) return;
+        fillForm(record);
+        formModal.hidden = false;
+        document.body.classList.add("construction-task-modal-open");
+        if (modalDialog) {
+            modalDialog.focus({ preventScroll: true });
+        }
+    };
+
+    const closeModal = () => {
+        if (!formModal) return;
+        formModal.hidden = true;
+        document.body.classList.remove("construction-task-modal-open");
+    };
+
+    closeModalButtons.forEach((button) => {
+        button.addEventListener("click", closeModal);
+    });
+    if (modalBackdrop) {
+        modalBackdrop.addEventListener("click", closeModal);
+    }
+
+    const saveFormToStorage = () => {
+        if (!form) return "";
+        const recordId = String(form.dataset.recordId || "").trim() || `construction-${Date.now()}`;
+        const data = FORM_FIELDS.reduce((acc, field) => {
+            const input = form.querySelector(`[name="${field}"]`);
+            acc[field] = input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement
+                ? String(input.value || "").trim()
+                : "";
+            return acc;
+        }, {});
+
+        const records = readConstructionRecords();
+        const existingIndex = records.findIndex((item) => String(item?.__id || item?.construction_id || "") === recordId);
+        const baseRecord = existingIndex >= 0 ? records[existingIndex] : {};
+        const updatedRecord = {
+            ...baseRecord,
+            ...data,
+            __id: baseRecord.__id || recordId,
+            construction_id: baseRecord.construction_id || recordId,
+        };
+        if (existingIndex >= 0) {
+            records[existingIndex] = updatedRecord;
+        } else {
+            records.unshift(updatedRecord);
+        }
+        writeConstructionRecords(records);
+
+        const tasks = readTasks();
+        const existingTaskIndex = tasks.findIndex((task) => String(task?.construction_id || task?.__id || "") === recordId);
+        const taskPayload = {
+            __id: updatedRecord.construction_id || updatedRecord.__id || recordId,
+            construction_id: updatedRecord.construction_id || updatedRecord.__id || recordId,
+            task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
+            assigned_to: existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : "",
+            date_received: existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : "",
+            status: existingTaskIndex >= 0 ? tasks[existingTaskIndex].status : "",
+            remarks: existingTaskIndex >= 0 ? tasks[existingTaskIndex].remarks : "",
+        };
+        if (existingTaskIndex >= 0) {
+            tasks[existingTaskIndex] = { ...tasks[existingTaskIndex], ...taskPayload };
+        } else {
+            tasks.unshift(taskPayload);
+        }
+        writeTasks(tasks);
+        return recordId;
+    };
+
+    if (form) {
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            saveFormToStorage();
+            closeModal();
+            render();
+        });
+    }
+
+    if (tableBody) {
+        tableBody.addEventListener("click", (event) => {
+            const trigger = event.target.closest(".js-open-construction-task-modal");
+            if (!trigger) return;
+            event.preventDefault();
+            const recordId = String(trigger.dataset.recordId || "").trim();
+            const tasks = readTasks();
+            const taskRecord = recordId
+                ? tasks.find((task) => String(task?.construction_id || task?.__id || "") === recordId)
+                : null;
+            const constructionRecords = readConstructionRecords();
+            const constructionRecord = recordId
+                ? constructionRecords.find((item) => String(item?.__id || item?.construction_id || "") === recordId)
+                : null;
+            openModal(constructionRecord || taskRecord || {});
+        });
+    }
     const render = () => {
         if (!tableBody) return;
         const records = readTasks();
@@ -15363,7 +15520,16 @@ document.addEventListener("DOMContentLoaded", () => {
                         <input type="checkbox" aria-label="Select row" ${record?.__id ? `data-record-id="${escapeHtml(record.__id)}"` : ""}>
                     </td>
                     <td>${index + 1}</td>
-                    <td>${escapeHtml(toDisplay(taskName))}</td>
+                    <td>
+                        <button
+                            type="button"
+                            class="construction-link-btn js-open-construction-task-modal"
+                            data-record-id="${escapeHtml(constructionId)}"
+                            style="background:none;border:none;padding:0;color:#2563eb;font-weight:600;cursor:pointer;"
+                        >
+                            ${escapeHtml(toDisplay(taskName))}
+                        </button>
+                    </td>
                     <td>${escapeHtml(toDisplay(assignedTo))}</td>
                     <td>${escapeHtml(formatDate(dateReceived))}</td>
                     <td>${escapeHtml(toDisplay(status))}</td>
@@ -15385,7 +15551,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("construction-tasks-updated", render);
     window.addEventListener("focus", render);
 
-    // Project-name click no longer changes the table view.
+    // Project-name click now opens the inline construction form modal.
 
     render();
 });
