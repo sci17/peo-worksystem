@@ -17,6 +17,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import get_valid_filename
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
 from .forms import AccountSettingsForm
@@ -1814,6 +1815,7 @@ def quality_division_dashboard(request):
 
 
 @login_required
+@ensure_csrf_cookie
 def project_dashboard(request):
     store_defaults = {
         KEY_ADMIN: [],
@@ -2055,6 +2057,37 @@ def division_store_api(request, key):
             "updated_at": store.updated_at.isoformat() if store.updated_at else None,
         }
     )
+
+
+@login_required
+@require_http_methods(["POST"])
+def division_store_clear_all_api(request):
+    user_division = _get_user_division_key(request.user)
+    if not request.user.is_superuser and user_division != KEY_ADMIN:
+        return JsonResponse({"error": "Forbidden."}, status=403)
+
+    allowed_keys = {choice[0] for choice in SharedDivisionStore.KEY_CHOICES}
+
+    cleared = []
+    for key in allowed_keys:
+        empty_payload = {} if key == KEY_MAINTENANCE else []
+        try:
+            store, _ = SharedDivisionStore.objects.get_or_create(key=key)
+            store.data = empty_payload
+            store.save(update_fields=["data", "updated_at"])
+            cleared.append(key)
+        except (OperationalError, ProgrammingError):
+            # Shared store not available; fall back to wiping per-user stores below.
+            pass
+
+    # Remove any per-user stores so the shared store can't be re-bootstrapped from old data.
+    try:
+        DivisionStore.objects.filter(key__in=allowed_keys).delete()
+    except Exception:
+        # Ignore database issues; clearing shared stores is still best-effort.
+        pass
+
+    return JsonResponse({"ok": True, "cleared": sorted(cleared)})
 
 
 @login_required

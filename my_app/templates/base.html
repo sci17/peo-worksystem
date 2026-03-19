@@ -47,7 +47,7 @@
     {# Ensures a CSRF token is always present in the DOM for JSON fetch helpers. #}
     <form id="csrf-token-probe" style="display:none">{% csrf_token %}</form>
 
-    <script src="{% static 'script.js' %}?v=20260318_1"></script>
+    <script src="{% static 'script.js' %}?v=20260319_3"></script>
     {% block extra_scripts %}{% endblock %}
     <script>
         window.addEventListener("load", function () {

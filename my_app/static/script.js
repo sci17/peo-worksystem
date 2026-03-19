@@ -259,6 +259,77 @@
         divisionKey,
     };
 
+    const getCookieValue = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    window.peoClearLocalAppData = () => {
+        try {
+            const storage = window.localStorage;
+            if (!storage) return { ok: false, error: "Local storage is not available." };
+            const keysToRemove = [];
+            for (let index = storage.length - 1; index >= 0; index -= 1) {
+                const key = storage.key(index);
+                if (!key) continue;
+                if (key.startsWith("peo_") || key.startsWith("__peo_") || key.startsWith("peo_division_store_meta_v1:")) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach((key) => storage.removeItem(key));
+            return { ok: true, removed: keysToRemove.length };
+        } catch (error) {
+            return { ok: false, error: String(error?.message || error) };
+        }
+    };
+
+    window.peoResetSystemProjects = async () => {
+        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+        const isAdmin = String(access.divisionKey || "").trim().toLowerCase() === "admin";
+        if (!isAdmin) {
+            return { ok: false, error: "Only Admin Division accounts can reset the system projects." };
+        }
+        if (access.readOnly) {
+            return { ok: false, error: "This dashboard is read-only for your account." };
+        }
+
+        const csrfToken = getCookieValue("csrftoken");
+        if (!csrfToken) {
+            return { ok: false, error: "Missing CSRF token. Please refresh and try again." };
+        }
+
+        try {
+            const response = await window.fetch("/api/division-store-clear-all/", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken,
+                    "Accept": "application/json",
+                },
+                body: JSON.stringify({}),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                return { ok: false, error: String(data?.error || "Reset failed.") };
+            }
+
+            window.peoClearLocalAppData();
+            window.location.reload();
+            return { ok: true, data };
+        } catch (error) {
+            return { ok: false, error: String(error?.message || error) };
+        }
+    };
+
     if (!readOnly) return;
 
     const protectedKeys = new Set([
@@ -980,7 +1051,7 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
 
             const shouldWrite = force
                 || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs))
-                || (serverCount > localCount);
+                || (serverCount !== localCount);
 
             if (!shouldWrite) continue;
 
@@ -1037,9 +1108,12 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         const store = window.peoDivisionStore;
         if (!store || typeof store.syncToLocalStorage !== "function") return;
 
+        const isProjectRegistry = Boolean(document.querySelector(".project-board"));
         const divisionKey = getDivisionKey();
-        const defs = [STORE_DEFS.admin];
-        if (divisionKey && STORE_DEFS[divisionKey] && divisionKey !== "admin") {
+        const defs = isProjectRegistry
+            ? Object.values(STORE_DEFS)
+            : [STORE_DEFS.admin];
+        if (!isProjectRegistry && divisionKey && STORE_DEFS[divisionKey] && divisionKey !== "admin") {
             defs.push(STORE_DEFS[divisionKey]);
         }
 
@@ -1124,9 +1198,17 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         window.peoDivisionStore.queueSync("admin", safeRecords, 0);
     };
 
+    const dispatchDivisionStoreUpdated = (storeKey) => {
+        if (typeof window.CustomEvent !== "function") return;
+        window.dispatchEvent(new CustomEvent("peo:division-store-updated", {
+            detail: { storeKey: String(storeKey || "").trim().toLowerCase() },
+        }));
+    };
+
     const writeAdminRecords = (records) => {
         writeJson(ADMIN_STORAGE_KEY, records);
         queueAdminSync(records);
+        dispatchDivisionStoreUpdated("admin");
     };
 
     const normalizeMaintenanceState = (state) => {
@@ -1811,6 +1893,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // ignore
         }
         queueAdminSync(records);
+        if (typeof window.CustomEvent === "function") {
+            window.dispatchEvent(new CustomEvent("peo:division-store-updated", {
+                detail: { storeKey: "admin" },
+            }));
+        }
     };
 
     const ensureAdminStore = async () => {
@@ -2535,6 +2622,56 @@ document.addEventListener("DOMContentLoaded", () => {
             nextButton.addEventListener("click", () => {
                 currentPage = currentPage + 1;
                 render();
+            });
+        }
+
+        if (!root.dataset.submissionsStoreBound) {
+            root.dataset.submissionsStoreBound = "true";
+
+            const handleAdminStoreUpdate = () => {
+                adminRecords = reconcileMaintenanceOutgoingSubmissions(readAdminStore());
+                refreshRows();
+                if (editingRecordId) {
+                    const stillExists = allRows.some((row) => row.id === editingRecordId);
+                    if (!stillExists) {
+                        closeEditModal();
+                    }
+                }
+                render();
+                renderRouteFiles();
+                syncRouteControls();
+            };
+
+            window.addEventListener("storage", (event) => {
+                if (String(event.key || "") !== "peo_admin_division_records_v1") return;
+                handleAdminStoreUpdate();
+            });
+
+            window.addEventListener("peo:division-store-updated", (event) => {
+                const detail = event && typeof event === "object" ? event.detail : null;
+                const storeKey = String(detail?.storeKey || "").trim().toLowerCase();
+                if (storeKey !== "admin") return;
+                handleAdminStoreUpdate();
+            });
+
+            const poll = async () => {
+                if (document.visibilityState === "hidden") return;
+                const store = window.peoDivisionStore;
+                if (!store || typeof store.syncToLocalStorage !== "function") return;
+                const didWrite = await store.syncToLocalStorage([
+                    { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
+                ]);
+                if (didWrite) {
+                    handleAdminStoreUpdate();
+                }
+            };
+
+            const pollTimer = window.setInterval(poll, 12000);
+            window.addEventListener("pagehide", () => window.clearInterval(pollTimer), { once: true });
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState !== "hidden") {
+                    poll();
+                }
             });
         }
 
@@ -4112,6 +4249,12 @@ const portalDomReady = () => {
 	    };
 
 	    const openEditModalForRecord = (recordId, tableType = "documents") => {
+	        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+	        if (access.readOnly) {
+	            showAdminStatusToast("Read-only access: you cannot edit records on this dashboard.", "info");
+	            return;
+	        }
+
 	        const record = readAdminDivisionRecords().find((item) => item.__record_id === recordId);
 	        if (!record) return;
 
@@ -4433,6 +4576,11 @@ const portalDomReady = () => {
 
 	    const createRecordsFromForm = async (form, options = {}) => {
 	        if (!form) return false;
+            const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+            if (access.readOnly) {
+                showAdminStatusToast("Read-only access: changes cannot be saved on this dashboard.", "info");
+                return false;
+            }
 	        if (!form.checkValidity()) {
 	            form.reportValidity();
 	            showAdminStatusToast("Please complete the required fields before saving.", "info");
@@ -4869,6 +5017,12 @@ const portalDomReady = () => {
 
     if (newDocumentButton) {
         newDocumentButton.addEventListener("click", () => {
+            const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+            if (access.readOnly) {
+                showAdminStatusToast("Read-only access: you cannot create records on this dashboard.", "info");
+                return;
+            }
+
             const modal = buildNewDocumentModal();
             const form = modal.querySelector("#admin-new-document-form");
             const title = modal.querySelector("#admin-new-document-title");
@@ -4964,6 +5118,11 @@ const portalDomReady = () => {
     }
     if (documentBulkDeleteButton) {
         documentBulkDeleteButton.addEventListener("click", async () => {
+            const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+            if (access.readOnly) {
+                showAdminStatusToast("Read-only access: you cannot delete records on this dashboard.", "info");
+                return;
+            }
             const selected = getSelectedRecordIds(documentsTableBody, "pa-empty-documents");
             if (!selected.length) return;
             const shouldDelete = await showAdminConfirmToast({
@@ -4981,6 +5140,11 @@ const portalDomReady = () => {
     }
     if (billingBulkDeleteButton) {
         billingBulkDeleteButton.addEventListener("click", async () => {
+            const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+            if (access.readOnly) {
+                showAdminStatusToast("Read-only access: you cannot delete records on this dashboard.", "info");
+                return;
+            }
             const selected = getSelectedRecordIds(billingTableBody, "pa-empty-billing");
             if (!selected.length) return;
             const shouldDelete = await showAdminConfirmToast({
@@ -5037,6 +5201,11 @@ const portalDomReady = () => {
                 return;
             }
             if (action === "delete") {
+                const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+                if (access.readOnly) {
+                    showAdminStatusToast("Read-only access: you cannot delete records on this dashboard.", "info");
+                    return;
+                }
                 const shouldDelete = await showAdminConfirmToast({
                     title: "Delete Data",
                     message: "Are you sure to delete this data?",
@@ -5068,6 +5237,11 @@ const portalDomReady = () => {
                 return;
             }
             if (action === "delete") {
+                const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+                if (access.readOnly) {
+                    showAdminStatusToast("Read-only access: you cannot delete records on this dashboard.", "info");
+                    return;
+                }
                 const shouldDelete = await showAdminConfirmToast({
                     title: "Delete Data",
                     message: "Are you sure to delete this data?",
@@ -14369,6 +14543,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
  	            records = syncAdminRoutedConstructionRecords(records).map((record) => normalizeConstructionRecord(record));
  	            writeStoredRecords(records);
+                if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                    window.peoDivisionStore.flushSync();
+                }
  	            renderTable();
                 if (constructionRouteFileInput instanceof HTMLInputElement) {
                     constructionRouteFileInput.value = "";
@@ -18353,6 +18530,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	            planningDocumentRecords = syncAdminToPlanningDocuments(planningDocumentRecords);
 	            writeStoredPlanningDocuments(planningDocumentRecords);
+                if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                    window.peoDivisionStore.flushSync();
+                }
 	            renderPlanningDocumentsTable(planningDocumentRecords);
 	            closePlanningDocModal();
 
@@ -18832,7 +19012,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (projectBoard) {
         const projectBody = document.body;
         const projectModal = projectBoard.querySelector(".js-project-modal");
-        const deleteModal = projectBoard.querySelector(".js-project-delete-modal");
         const constructionHistoryModal = projectBoard.querySelector(".js-project-construction-history-modal");
         const constructionHistoryCards = projectBoard.querySelector(".js-project-construction-history-cards");
         const constructionHistoryTitle = projectBoard.querySelector("#project-construction-history-title");
@@ -18852,6 +19031,12 @@ document.addEventListener("DOMContentLoaded", () => {
 	        const quickStatusFilter = projectBoard.querySelector('[data-project-quick-filter="status"]');
 	        const quickYearFilter = projectBoard.querySelector('[data-project-quick-filter="year"]');
 	        const projectHome = projectBoard.querySelector("[data-project-home]");
+	        const projectDivisionSection = projectBoard.querySelector(".project-division-section");
+	        const projectCatalogList = projectBoard.querySelector("[data-project-catalog-list]");
+	        const projectCatalogMeta = projectBoard.querySelector("[data-project-catalog-meta]");
+	        const projectCatalogPrevButton = projectBoard.querySelector("[data-project-catalog-prev]");
+	        const projectCatalogNextButton = projectBoard.querySelector("[data-project-catalog-next]");
+	        const projectCatalogPageLabel = projectBoard.querySelector("[data-project-catalog-page-label]");
 	        const projectShell = projectBoard.querySelector("[data-project-shell]");
 	        const projectBackHomeButton = projectBoard.querySelector("[data-project-back-home]");
 	        const projectPanelTitle = projectBoard.querySelector(".js-project-panel-title");
@@ -18871,15 +19056,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const divisionSummaryCards = projectBoard.querySelectorAll("[data-project-division-count]");
         const divisionCards = projectBoard.querySelectorAll("[data-project-division-card]");
         const projectFloatCards = projectBoard.querySelectorAll(".project-float-card");
-        const openProjectButtons = projectBoard.querySelectorAll(".js-project-open-modal");
-        const closeProjectButtons = projectBoard.querySelectorAll(".js-project-close-modal");
-	        const closeDeleteButtons = projectBoard.querySelectorAll(".js-project-close-delete-modal");
+	        const openProjectButtons = projectBoard.querySelectorAll(".js-project-open-modal");
+	        const closeProjectButtons = projectBoard.querySelectorAll(".js-project-close-modal");
 	        const closeConstructionHistoryButtons = projectBoard.querySelectorAll(".js-project-close-construction-history");
+	        const projectDetailModal = projectBoard.querySelector(".js-project-detail-modal");
+	        const projectDetailContent = projectBoard.querySelector(".js-project-detail-content");
 	        const projectFilterDropdownSyncers = [];
-		        const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
-		        const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
-		        const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
-		        const PROJECT_UI_STATE_STORAGE_KEY = "peo_project_registry_ui_state_v1";
+			        const PLANNING_DOCUMENT_STORAGE_KEY = "peo_planning_document_records_v1";
+			        const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+			        const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
+			        const QUALITY_STORAGE_KEY = "peo_quality_records_v1";
+			        const MAINTENANCE_STORAGE_KEY = "peo_maintenance_state_v1";
+			        const PROJECT_UI_STATE_STORAGE_KEY = "peo_project_registry_ui_state_v1";
+                    const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
+                    const PLANNING_DELETED_ADMIN_IDS_KEY = "peo_planning_deleted_admin_ids_v1";
 
 		        let projectStoreSeedCache = null;
 		        const readProjectStoreSeed = () => {
@@ -18912,15 +19102,17 @@ document.addEventListener("DOMContentLoaded", () => {
 		            return data && typeof data === "object" && !Array.isArray(data) ? data : {};
 		        };
 
-		        const seedProjectRegistryStores = () => {
-		            const seed = readProjectStoreSeed();
-		            if (!seed || typeof seed !== "object") return;
-
-		            const defs = [
-		                { storeKey: "planning", storageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
-		                { storeKey: "construction", storageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
-	                { storeKey: "maintenance", storageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
-	            ];
+			        const seedProjectRegistryStores = () => {
+			            const seed = readProjectStoreSeed();
+			            if (!seed || typeof seed !== "object") return;
+			
+			            const defs = [
+			                { storeKey: "admin", storageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
+			                { storeKey: "planning", storageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
+			                { storeKey: "construction", storageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+			                { storeKey: "quality", storageKey: QUALITY_STORAGE_KEY, type: "array" },
+			                { storeKey: "maintenance", storageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
+			            ];
 
             const safeLocalStorageGet = (key) => {
                 try {
@@ -19064,18 +19256,65 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
 
+        const writeJsonValue = (storageKey, value) => {
+            try {
+                window.localStorage.setItem(storageKey, JSON.stringify(value));
+                return true;
+            } catch (error) {
+                return false;
+            }
+        };
+
+        const queueStoreSync = (storeKey, payload) => {
+            const store = window.peoDivisionStore;
+            if (!store || typeof store.queueSync !== "function") return;
+            try {
+                store.queueSync(String(storeKey || "").trim(), payload, 0);
+                if (typeof store.flushSync === "function") {
+                    store.flushSync();
+                }
+            } catch (error) {
+                // Ignore sync errors; local deletion still applies for this session.
+            }
+        };
+
         const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
-        const normalizeDivisionName = (value) => {
-            const raw = normalizeText(value);
-            if (!raw) return "Admin Division";
-            if (raw.includes("planning")) return "Planning Division";
-            if (raw.includes("construction")) return "Construction Division";
-            if (raw.includes("quality")) return "Quality Division";
-            if (raw.includes("maintenance")) return "Maintenance Division";
-            if (raw.includes("admin")) return "Admin Division";
-            return "Admin Division";
-        };
+	        const normalizeDivisionName = (value) => {
+	            const raw = normalizeText(value);
+	            if (!raw) return "Admin Division";
+	            if (raw.includes("planning")) return "Planning Division";
+	            if (raw.includes("construction")) return "Construction Division";
+	            if (raw.includes("quality")) return "Quality Division";
+	            if (raw.includes("maintenance")) return "Maintenance Division";
+	            if (raw.includes("admin")) return "Admin Division";
+	            return "Admin Division";
+	        };
+
+	        const escapeCardText = (value) => escapeProjectHtml(String(value ?? "").trim() || "-");
+
+	        const splitLocationParts = (locationText) => {
+	            const parts = String(locationText || "")
+	                .split(",")
+	                .map((part) => part.trim())
+	                .filter(Boolean);
+	            if (!parts.length) return { barangay: "", municipality: "", display: "" };
+	            if (parts.length >= 3) {
+	                return { barangay: parts[0], municipality: parts[1], display: `${parts[1]} \u00b7 ${parts[0]}` };
+	            }
+	            if (parts.length === 2) {
+	                return { barangay: parts[1], municipality: parts[0], display: `${parts[0]} \u00b7 ${parts[1]}` };
+	            }
+	            return { barangay: parts[0], municipality: "", display: parts[0] };
+	        };
+
+	        const getStatusVariantClass = (statusText) => {
+	            const raw = normalizeText(statusText);
+	            if (!raw) return "";
+	            if (raw.includes("complete") || raw.includes("completed") || raw.includes("approved")) return "is-good";
+	            if (raw.includes("terminate") || raw.includes("cancel")) return "is-bad";
+	            return "";
+	        };
 
         const mapAdminStatusToProjectStatus = (value) => {
             const raw = normalizeText(value);
@@ -19309,6 +19548,9 @@ document.addEventListener("DOMContentLoaded", () => {
 		            if (quickFiltersPanel instanceof HTMLElement) {
 		                quickFiltersPanel.hidden = true;
 		            }
+		            if (projectDivisionSection instanceof HTMLElement) {
+		                projectDivisionSection.hidden = false;
+		            }
 
 	            if (projectHome instanceof HTMLElement) {
 	                projectHome.hidden = !isAllDivisions;
@@ -19422,17 +19664,21 @@ document.addEventListener("DOMContentLoaded", () => {
 	            });
 	        };
 
-		        const buildProjectRecords = () => {
-		            const planningDocsLocal = readJsonArray(PLANNING_DOCUMENT_STORAGE_KEY);
-		            const constructionRecordsLocal = readJsonArray(CONSTRUCTION_STORAGE_KEY);
-		            const maintenanceStateLocal = readJsonObject(MAINTENANCE_STORAGE_KEY);
-
-		            const planningDocs = planningDocsLocal.length ? planningDocsLocal : readSeedArray("planning");
-		            const constructionRecords = constructionRecordsLocal.length ? constructionRecordsLocal : readSeedArray("construction");
-		            const seededMaintenance = readSeedObject("maintenance");
-		            const maintenanceState = Object.keys(maintenanceStateLocal || {}).length ? maintenanceStateLocal : seededMaintenance;
-			            const maintenanceTasks = Array.isArray(maintenanceState.taskRows) ? maintenanceState.taskRows : [];
-			            const maintenanceRoads = Array.isArray(maintenanceState.roadRecords) ? maintenanceState.roadRecords : [];
+			        const buildProjectRecords = () => {
+			            const adminRecordsLocal = readJsonArray(ADMIN_DIVISION_STORAGE_KEY);
+			            const planningDocsLocal = readJsonArray(PLANNING_DOCUMENT_STORAGE_KEY);
+			            const constructionRecordsLocal = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+			            const qualityRecordsLocal = readJsonArray(QUALITY_STORAGE_KEY);
+			            const maintenanceStateLocal = readJsonObject(MAINTENANCE_STORAGE_KEY);
+			
+			            const adminRecords = adminRecordsLocal.length ? adminRecordsLocal : readSeedArray("admin");
+			            const planningDocs = planningDocsLocal.length ? planningDocsLocal : readSeedArray("planning");
+			            const constructionRecords = constructionRecordsLocal.length ? constructionRecordsLocal : readSeedArray("construction");
+			            const qualityRecords = qualityRecordsLocal.length ? qualityRecordsLocal : readSeedArray("quality");
+			            const seededMaintenance = readSeedObject("maintenance");
+			            const maintenanceState = Object.keys(maintenanceStateLocal || {}).length ? maintenanceStateLocal : seededMaintenance;
+				            const maintenanceTasks = Array.isArray(maintenanceState.taskRows) ? maintenanceState.taskRows : [];
+				            const maintenanceRoads = Array.isArray(maintenanceState.roadRecords) ? maintenanceState.roadRecords : [];
 
 			            const inferCategoryFromProjectName = (projectName) => {
 			                const text = normalizeText(projectName);
@@ -19462,14 +19708,120 @@ document.addEventListener("DOMContentLoaded", () => {
 			                return Number.isFinite(year) ? String(year) : "";
 			            };
 
-		            const mappedPlanning = planningDocs
-		                .filter((item) => String(item?.id || "").trim())
+			            const getAdminRecordId = (record) => String(record?.__record_id || record?.__id || record?.id || "").trim();
+			            const adminRecordIds = new Set(
+			                (Array.isArray(adminRecords) ? adminRecords : [])
+			                    .map((record) => getAdminRecordId(record))
+			                    .filter(Boolean)
+			            );
+			            const adminRecordsById = new Map(
+			                (Array.isArray(adminRecords) ? adminRecords : [])
+			                    .map((record) => [getAdminRecordId(record), record])
+			                    .filter(([recordId]) => recordId)
+			            );
+
+			            const resolveBudgetAllocationLabel = (record) => {
+			                if (!record || typeof record !== "object") return "";
+			                const allocation = String(record?.budget_allocation || record?.budgetAllocation || "").trim();
+			                const otherText = String(record?.budget_allocation_other || record?.budgetAllocationOther || "").trim();
+			                if (!allocation) return "";
+			                if (allocation.toLowerCase() === "others") {
+			                    return otherText || allocation;
+			                }
+			                return allocation;
+			            };
+
+			            const planningAllocationByProjectKey = new Map(
+			                (Array.isArray(planningDocs) ? planningDocs : [])
+			                    .map((doc) => {
+			                        const projectName = String(doc?.document_name || doc?.slip_no || doc?.project_name || doc?.projectName || "").trim();
+			                        const key = normalizeText(projectName);
+			                        const allocation = resolveBudgetAllocationLabel(doc) || String(doc?.budget_allocation || "").trim();
+			                        return [key, allocation];
+			                    })
+			                    .filter(([key, allocation]) => key && allocation)
+			            );
+
+			            const deletedConstructionAdminIds = new Set(
+			                readJsonArray(CONSTRUCTION_DELETED_ADMIN_IDS_KEY)
+			                    .map((id) => String(id || "").trim())
+			                    .filter(Boolean)
+			            );
+			            const deletedPlanningAdminIds = new Set(
+			                readJsonArray(PLANNING_DELETED_ADMIN_IDS_KEY)
+			                    .map((id) => String(id || "").trim())
+			                    .filter(Boolean)
+			            );
+
+			            const mappedAdmin = (Array.isArray(adminRecords) ? adminRecords : [])
+			                .filter((record) => {
+			                    const recordId = getAdminRecordId(record);
+			                    if (!recordId) return false;
+			                    const divisionLabel = normalizeDivisionName(record?.division);
+			                    if (divisionLabel === "Construction Division") {
+			                        return !deletedConstructionAdminIds.has(recordId);
+			                    }
+			                    if (divisionLabel === "Planning Division") {
+			                        return !deletedPlanningAdminIds.has(recordId);
+			                    }
+			                    return true;
+			                })
+			                .filter((record) => getAdminRecordId(record))
+			                .map((record, index) => {
+			                    const recordId = getAdminRecordId(record);
+			                    const projectName = String(record?.document_name || record?.project_name || `Admin Project ${index + 1}`).trim();
+			                    const location = String(record?.location || "").trim();
+			                    const statusText = String(record?.doc_status || record?.status || "").trim();
+			                    const createdAtRaw = String(record?.__submitted_at || record?.date_received || record?.__updated_at || "").trim();
+			                    const createdAt = createdAtRaw || Date.now();
+			                    const divisionLabel = normalizeDivisionName(record?.division);
+			                    const contractAmount = parseProjectAmount(record?.contract_amount || record?.contractAmount || 0);
+			                    const revisedAmount = parseProjectAmount(record?.revised_contract_amount || record?.revisedContractAmount || 0);
+
+			                    return {
+			                        id: `admin_${recordId}`,
+			                        sourceRecordId: recordId,
+			                        projectId: String(record?.slip_no || record?.project_code || "").trim(),
+			                        projectName,
+			                        division: divisionLabel,
+			                        location,
+			                        municipality: extractMunicipalityFromLocation(location),
+			                        category: inferCategoryFromProjectName(projectName),
+			                        fundSource: String(record?.contractor || record?.doc_type || "Admin Record").trim() || "Admin Record",
+			                        allocatedAmount: parseProjectAmount(record?.revised_contract_amount || record?.contract_amount || 0),
+			                        projectCost: contractAmount,
+			                        contractCost: revisedAmount || contractAmount,
+			                        description: String(record?.description || "").trim(),
+			                        contractorName: String(record?.contractor || "").trim(),
+			                        sourceOfFund: String(record?.doc_type || record?.budget_allocation || "").trim(),
+			                        procurementMode: String(record?.procurement_mode || record?.procurementMode || "").trim(),
+			                        calendarDays: String(record?.cd || record?.calendar_days || record?.calendarDays || "").trim(),
+			                        ntpDate: String(record?.ntp_date || record?.ntpDate || "").trim(),
+			                        targetCompletionDate: String(record?.original_expiry_date || record?.target_completion_date || "").trim(),
+			                        revisedCompletionDate: String(record?.revised_expiry_date || record?.revised_completion_date || "").trim(),
+			                        status: mapAdminStatusToProjectStatus(statusText),
+			                        statusDisplay: statusText || mapAdminStatusToProjectStatus(statusText),
+			                        year: getYearFromCreatedAt(createdAt),
+			                        createdAt: Number(new Date(createdAt).getTime()) || Date.now(),
+			                    };
+			                });
+
+			            const mappedPlanning = planningDocs
+			                .filter((item) => String(item?.id || "").trim())
+			                .filter((item) => {
+			                    const sourceId = String(item?.__admin_source_id || item?.__admin_submission_id || "").trim();
+			                    return !sourceId || !adminRecordIds.has(sourceId);
+			                })
 			                .map((item, index) => {
-			                    const createdAt = Number(item?.created_at || item?.createdAt || Date.now());
-			                    const location = String(item?.location || "").trim();
-			                    const projectName = String(item?.document_name || item?.slip_no || `Planning Project ${index + 1}`).trim();
-			                    return ({
+				                    const createdAt = Number(item?.created_at || item?.createdAt || Date.now());
+				                    const location = String(item?.location || "").trim();
+				                    const projectName = String(item?.document_name || item?.slip_no || `Planning Project ${index + 1}`).trim();
+				                    const contractAmount = parseProjectAmount(item?.contract_amount || item?.contractAmount || 0);
+				                    const revisedAmount = parseProjectAmount(item?.revised_contract_amount || item?.revisedContractAmount || 0);
+				                    return ({
 		                    id: `planning_${String(item.id).trim()}`,
+		                    sourceRecordId: String(item?.__admin_source_id || item?.__admin_submission_id || item?.id || "").trim(),
+		                    projectId: String(item?.slip_no || item?.project_code || "").trim(),
 		                    projectName,
 	                    division: "Planning Division",
 		                    location,
@@ -19477,6 +19829,16 @@ document.addEventListener("DOMContentLoaded", () => {
 		                    category: inferCategoryFromProjectName(projectName),
 		                    fundSource: String(item?.budget_allocation || "Planning Allocation").trim() || "Planning Allocation",
 		                    allocatedAmount: parseProjectAmount(item?.amount || 0),
+		                    projectCost: contractAmount,
+		                    contractCost: revisedAmount || contractAmount,
+		                    description: String(item?.description || "").trim(),
+		                    contractorName: String(item?.contractor || "").trim(),
+		                    sourceOfFund: String(item?.budget_allocation || item?.source_fund || item?.sourceOfFund || "").trim(),
+		                    procurementMode: String(item?.procurement_mode || item?.procurementMode || "").trim(),
+		                    calendarDays: String(item?.cd || item?.calendar_days || item?.calendarDays || "").trim(),
+		                    ntpDate: String(item?.ntp_date || item?.ntpDate || "").trim(),
+		                    targetCompletionDate: String(item?.original_expiry_date || item?.target_completion_date || "").trim(),
+		                    revisedCompletionDate: String(item?.revised_expiry_date || item?.revised_completion_date || "").trim(),
 		                    status: mapPlanningStatusToProjectStatus(item?.status),
 		                    statusDisplay: mapPlanningStatusToProjectStatus(item?.status),
 		                    year: getYearFromCreatedAt(createdAt),
@@ -19484,12 +19846,16 @@ document.addEventListener("DOMContentLoaded", () => {
 		                });
 			                });
 
-		            const mappedConstruction = constructionRecords
-		                .filter((item) => String(item?.__id || item?.id || item?.project_name || item?.projectName || "").trim())
-		                .map((item, index) => {
-		                    const progress = Number.parseFloat(String(item?.status_current ?? item?.statusCurrent ?? "").replace(/[^0-9.-]/g, ""));
-		                    const mappedStatus = Number.isFinite(progress) && progress >= 100
-		                        ? "Completed"
+			            const mappedConstruction = constructionRecords
+			                .filter((item) => String(item?.__id || item?.id || item?.project_name || item?.projectName || "").trim())
+			                .filter((item) => {
+			                    const sourceId = String(item?.__admin_source_id || item?.__admin_submission_id || "").trim();
+			                    return !sourceId || !adminRecordIds.has(sourceId);
+			                })
+			                .map((item, index) => {
+			                    const progress = Number.parseFloat(String(item?.status_current ?? item?.statusCurrent ?? "").replace(/[^0-9.-]/g, ""));
+			                    const mappedStatus = Number.isFinite(progress) && progress >= 100
+			                        ? "Completed"
 		                        : Number.isFinite(progress) && progress > 0
 		                            ? "Ongoing"
 		                            : "In Planning";
@@ -19499,9 +19865,18 @@ document.addEventListener("DOMContentLoaded", () => {
 				                    const location = String(item?.location || "").trim();
 				                    const municipality = String(item?.mun || "").trim() || extractMunicipalityFromLocation(location);
 				                    const projectName = String(item?.project_name || item?.projectName || `Construction Project ${index + 1}`).trim();
+				                    const contractAmount = parseProjectAmount(item?.contract_cost || item?.contractCost || 0);
+				                    const revisedAmount = parseProjectAmount(item?.revised_contract_cost || item?.revisedContractCost || 0);
+				                    const adminSourceId = String(item?.__admin_source_id || item?.__admin_submission_id || "").trim();
+				                    const adminRecord = adminSourceId ? adminRecordsById.get(adminSourceId) : null;
+				                    const planningAllocation = resolveBudgetAllocationLabel(adminRecord)
+				                        || planningAllocationByProjectKey.get(normalizeText(projectName))
+				                        || "";
+				                    const sourceOfFundValue = String(item?.source_fund || item?.sourceOfFund || "").trim() || planningAllocation;
 				                    return {
 				                        id: `construction_${sourceId || String(index)}`,
 				                        sourceRecordId: sourceId,
+				                        projectId: String(item?.project_code || item?.projectCode || "").trim(),
 				                        projectName,
 				                        division: "Construction Division",
 				                        location,
@@ -19509,6 +19884,16 @@ document.addEventListener("DOMContentLoaded", () => {
 				                        category: inferCategoryFromProjectName(projectName),
 				                        fundSource: String(item?.contractor || item?.fundSource || "Construction Contract").trim() || "Construction Contract",
 				                        allocatedAmount: parseProjectAmount(item?.revised_contract_cost || item?.revisedContractCost || item?.contract_cost || item?.contractCost || 0),
+				                        projectCost: contractAmount,
+				                        contractCost: revisedAmount || contractAmount,
+				                        description: String(item?.description || "").trim(),
+				                        contractorName: String(item?.contractor || "").trim(),
+				                        sourceOfFund: sourceOfFundValue,
+				                        procurementMode: String(item?.procurement_mode || item?.procurementMode || "").trim(),
+				                        calendarDays: String(item?.cd || item?.calendar_days || item?.calendarDays || "").trim(),
+				                        ntpDate: String(item?.ntp_date || item?.ntpDate || "").trim(),
+				                        targetCompletionDate: String(item?.original_expiry_date || item?.target_completion_date || "").trim(),
+				                        revisedCompletionDate: String(item?.revised_expiry_date || item?.revised_completion_date || "").trim(),
 				                        status: mappedStatus,
 				                        statusDisplay: remarksText || mappedStatus,
 				                        year: getYearFromCreatedAt(createdAt),
@@ -19537,12 +19922,12 @@ document.addEventListener("DOMContentLoaded", () => {
 	                });
 	                });
 
-	            const mappedMaintenanceRoads = !mappedMaintenanceTasks.length
-	                ? maintenanceRoads
-	                    .filter((item) => String(item?.roadName || "").trim())
-	                    .map((item, index) => {
-	                        const createdAt = Number(item?.createdAt || Date.now());
-	                        const projectName = String(item?.roadName || `Maintenance Road ${index + 1}`).trim();
+			            const mappedMaintenanceRoads = !mappedMaintenanceTasks.length
+			                ? maintenanceRoads
+			                    .filter((item) => String(item?.roadName || "").trim())
+		                    .map((item, index) => {
+		                        const createdAt = Number(item?.createdAt || Date.now());
+		                        const projectName = String(item?.roadName || `Maintenance Road ${index + 1}`).trim();
 	                        const location = projectName;
 	                        const municipality = String(item?.municipality || "").trim() || extractMunicipalityFromLocation(location);
 	                        return ({
@@ -19558,15 +19943,45 @@ document.addEventListener("DOMContentLoaded", () => {
 	                        year: getYearFromCreatedAt(createdAt),
 	                        createdAt,
 	                    });
-	                    })
-	                : [];
+			                    })
+			                : [];
 
-	            const merged = [
-	                ...mappedPlanning,
-	                ...mappedConstruction,
-	                ...mappedMaintenanceTasks,
-	                ...mappedMaintenanceRoads,
-	            ].filter((item) => item.projectName);
+		            const mappedQuality = qualityRecords
+		                .filter((item) => String(item?.__id || item?.id || item?.document_name || item?.project_name || "").trim())
+		                .filter((item) => {
+		                    const sourceId = String(item?.__admin_source_id || item?.__admin_submission_id || "").trim();
+		                    return !sourceId || !adminRecordIds.has(sourceId);
+		                })
+		                .map((item, index) => {
+		                    const createdAtRaw = String(item?.__received_at || item?.date_received || item?.__created_at || "").trim();
+		                    const createdAt = createdAtRaw || Date.now();
+		                    const projectName = String(item?.document_name || item?.project_name || `Quality Project ${index + 1}`).trim();
+		                    const location = String(item?.location || "").trim();
+		                    const statusText = String(item?.status || item?.doc_status || "").trim();
+		                    return {
+		                        id: `quality_${String(item?.__id || item?.id || index).trim()}`,
+		                        projectName,
+		                        division: "Quality Division",
+		                        location,
+		                        municipality: extractMunicipalityFromLocation(location),
+		                        category: inferCategoryFromProjectName(projectName),
+		                        fundSource: String(item?.contractor || item?.particulars || item?.doc_type || "Quality").trim() || "Quality",
+		                        allocatedAmount: parseProjectAmount(item?.revised_contract_amount || item?.contract_amount || item?.amount || 0),
+		                        status: mapAdminStatusToProjectStatus(statusText),
+		                        statusDisplay: statusText || mapAdminStatusToProjectStatus(statusText),
+		                        year: getYearFromCreatedAt(createdAt),
+		                        createdAt: Number(new Date(createdAt).getTime()) || Date.now(),
+		                    };
+		                });
+
+		            const merged = [
+		                ...mappedAdmin,
+		                ...mappedPlanning,
+		                ...mappedConstruction,
+		                ...mappedQuality,
+		                ...mappedMaintenanceTasks,
+		                ...mappedMaintenanceRoads,
+		            ].filter((item) => item.projectName);
 
             const dedupedById = new Map();
 			            merged.forEach((item) => {
@@ -19609,13 +20024,21 @@ document.addEventListener("DOMContentLoaded", () => {
 	        };
 
 	        const buildFilteredProjectRecords = (records) => {
-	            const divisionValue = divisionFilter instanceof HTMLSelectElement ? String(divisionFilter.value || "all").trim() : "all";
-	            const statusValue = statusFilter instanceof HTMLSelectElement ? String(statusFilter.value || "all").trim() : "all";
-	            const sortValue = sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest";
-	            const categoryValue = quickCategoryFilter instanceof HTMLSelectElement ? String(quickCategoryFilter.value || "all").trim() : "all";
-	            const quickStatusValue = quickStatusFilter instanceof HTMLSelectElement ? String(quickStatusFilter.value || "all").trim() : "all";
-	            const municipalityValue = quickMunicipalityFilter instanceof HTMLSelectElement ? String(quickMunicipalityFilter.value || "all").trim() : "all";
-	            const yearValue = quickYearFilter instanceof HTMLSelectElement ? String(quickYearFilter.value || "all").trim() : "all";
+	            const isHomeView = projectHome instanceof HTMLElement && projectHome.hidden === false;
+	            const quickFiltersActive = quickFiltersPanel instanceof HTMLElement && quickFiltersPanel.hidden === false;
+	            const divisionValue = isHomeView
+	                ? "all"
+	                : (divisionFilter instanceof HTMLSelectElement ? String(divisionFilter.value || "all").trim() : "all");
+	            const statusValue = isHomeView
+	                ? "all"
+	                : (statusFilter instanceof HTMLSelectElement ? String(statusFilter.value || "all").trim() : "all");
+	            const sortValue = isHomeView
+	                ? "newest"
+	                : (sortFilter instanceof HTMLSelectElement ? String(sortFilter.value || "newest").trim() : "newest");
+	            const categoryValue = quickFiltersActive && quickCategoryFilter instanceof HTMLSelectElement ? String(quickCategoryFilter.value || "all").trim() : "all";
+	            const quickStatusValue = quickFiltersActive && quickStatusFilter instanceof HTMLSelectElement ? String(quickStatusFilter.value || "all").trim() : "all";
+	            const municipalityValue = quickFiltersActive && quickMunicipalityFilter instanceof HTMLSelectElement ? String(quickMunicipalityFilter.value || "all").trim() : "all";
+	            const yearValue = quickFiltersActive && quickYearFilter instanceof HTMLSelectElement ? String(quickYearFilter.value || "all").trim() : "all";
 	            const query = projectSearchInput instanceof HTMLInputElement ? normalizeText(projectSearchInput.value) : "";
 	
 		            const filtered = (Array.isArray(records) ? records : []).filter((record) => {
@@ -19687,6 +20110,221 @@ document.addEventListener("DOMContentLoaded", () => {
 	        let visibleProjectRecords = [];
 	        let currentProjectPage = 1;
 	        const PROJECT_PAGE_SIZE = 10;
+	        let currentCatalogPage = 1;
+	        const PROJECT_CATALOG_PAGE_SIZE = 5;
+
+	        const renderProjectCatalog = (records) => {
+	            if (!(projectCatalogList instanceof HTMLElement)) return;
+	            const list = Array.isArray(records) ? records : [];
+	            const totalPages = Math.max(1, Math.ceil(list.length / PROJECT_CATALOG_PAGE_SIZE));
+	            currentCatalogPage = Math.min(Math.max(1, currentCatalogPage), totalPages);
+	            const start = (currentCatalogPage - 1) * PROJECT_CATALOG_PAGE_SIZE;
+	            const end = start + PROJECT_CATALOG_PAGE_SIZE;
+	            const pageItems = list.slice(start, end);
+	            if (projectCatalogMeta instanceof HTMLElement) {
+	                projectCatalogMeta.textContent = `${list.length} project${list.length === 1 ? "" : "s"}`;
+	            }
+	            if (projectCatalogPageLabel instanceof HTMLElement) {
+	                projectCatalogPageLabel.textContent = `Page ${currentCatalogPage} of ${totalPages}`;
+	            }
+	            if (projectCatalogPrevButton instanceof HTMLButtonElement) {
+	                projectCatalogPrevButton.disabled = currentCatalogPage <= 1;
+	            }
+	            if (projectCatalogNextButton instanceof HTMLButtonElement) {
+	                projectCatalogNextButton.disabled = currentCatalogPage >= totalPages;
+	            }
+	            if (!list.length) {
+	                projectCatalogList.innerHTML = `
+	                    <div class="project-card">
+	                        <strong style="display:block; margin-bottom:6px;">No projects found</strong>
+	                        <span style="color:#6b7a90;">Try adjusting your filters.</span>
+	                    </div>
+	                `;
+	                return;
+	            }
+
+	            projectCatalogList.innerHTML = pageItems.map((record) => {
+	                const category = escapeCardText(record.category || "Other infra projects");
+	                const year = escapeCardText(record.year ? `FY ${record.year}` : "FY -");
+	                const statusLabel = escapeCardText(record.statusDisplay || record.status || "-");
+	                const statusClass = getStatusVariantClass(statusLabel);
+	                const loc = splitLocationParts(record.location || "");
+	                const locationLabel = escapeCardText(loc.display || record.location || record.municipality || "-");
+	                const recordId = escapeProjectHtml(String(record.id || "").trim());
+
+	                return `
+	                    <article class="project-card js-project-catalog-card" data-project-record-id="${recordId}" role="button" tabindex="0" aria-label="View project details">
+	                        <div class="project-card-top">
+	                            <div class="project-card-badges">
+	                                <span class="project-card-pill project-card-pill--category">
+	                                    <span class="material-symbols-outlined" aria-hidden="true">category</span>
+	                                    <span>${category}</span>
+	                                </span>
+	                                <span class="project-card-pill project-card-pill--fy">${year}</span>
+	                            </div>
+	                            <span class="project-card-pill project-card-pill--status ${statusClass}">${statusLabel}</span>
+	                        </div>
+	                        <h4 class="project-card-title">${escapeCardText(record.projectName || "-")}</h4>
+	                        <div class="project-card-location">
+	                            <span class="material-symbols-outlined" aria-hidden="true">location_on</span>
+	                            <span>${locationLabel}</span>
+	                        </div>
+	                    </article>
+	                `;
+	            }).join("");
+	        };
+
+	        const formatLooseDate = (value) => {
+	            const text = String(value ?? "").trim();
+	            if (!text) return "-";
+	            const dateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	            if (dateOnlyMatch) {
+	                const year = Number(dateOnlyMatch[1]);
+	                const month = Number(dateOnlyMatch[2]);
+	                const day = Number(dateOnlyMatch[3]);
+	                const parsed = new Date(year, month - 1, day);
+	                if (!Number.isNaN(parsed.getTime())) {
+	                    return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+	                }
+	            }
+	            const parsed = new Date(text);
+	            if (Number.isNaN(parsed.getTime())) return text;
+	            return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+	        };
+
+	        const openProjectDetail = (recordId) => {
+	            if (!(projectDetailModal instanceof HTMLElement) || !(projectDetailContent instanceof HTMLElement)) return;
+	            const desiredId = String(recordId || "").trim();
+	            if (!desiredId) return;
+
+	            const record = (Array.isArray(projectRecords) ? projectRecords : []).find((item) => String(item?.id || "").trim() === desiredId)
+	                || (Array.isArray(visibleProjectRecords) ? visibleProjectRecords : []).find((item) => String(item?.id || "").trim() === desiredId);
+	            if (!record) return;
+
+	            const loc = splitLocationParts(record.location || "");
+	            const municipality = String(record.municipality || loc.municipality || "").trim();
+	            const barangay = String(loc.barangay || "").trim();
+	            const locationPrimary = escapeProjectHtml(municipality || record.location || "-");
+	            const locationSecondary = escapeProjectHtml(barangay || (municipality ? record.location : "") || "-");
+
+	            const category = escapeProjectHtml(String(record.category || "Other infra projects").trim());
+	            const statusLabel = escapeProjectHtml(String(record.statusDisplay || record.status || "-").trim());
+	            const statusClass = getStatusVariantClass(statusLabel);
+	            const fy = escapeProjectHtml(String(record.year || "-").trim());
+
+	            const projectId = escapeProjectHtml(String(record.projectId || record.sourceRecordId || "-").trim());
+	            const description = escapeProjectHtml(String(record.description || record.statusDisplay || "-").trim());
+
+	            const projectCost = formatProjectCurrency(Number(record.projectCost) || 0);
+	            const contractCost = formatProjectCurrency(Number(record.contractCost ?? record.allocatedAmount) || 0);
+
+	            const sourceOfFund = escapeProjectHtml(String(record.sourceOfFund || record.fundSource || "-").trim() || "-");
+	            const procurementMode = escapeProjectHtml(String(record.procurementMode || "-").trim() || "-");
+	            const calendarDays = escapeProjectHtml(String(record.calendarDays || "-").trim() || "-");
+	            const ntpDate = escapeProjectHtml(formatLooseDate(record.ntpDate));
+	            const targetCompletion = escapeProjectHtml(formatLooseDate(record.targetCompletionDate));
+
+	            const contractorName = escapeProjectHtml(String(record.contractorName || "-").trim() || "-");
+
+	            projectDetailContent.innerHTML = `
+	                <div class="project-detail-top">
+	                    <div class="project-detail-badges">
+	                        <span class="project-card-pill project-card-pill--category">
+	                            <span class="material-symbols-outlined" aria-hidden="true">category</span>
+	                            <span>${category}</span>
+	                        </span>
+	                        <span class="project-card-pill project-card-pill--status ${statusClass}">${statusLabel}</span>
+	                    </div>
+                        <div class="project-detail-actions">
+	                        <button type="button" class="project-detail-close js-project-detail-close" aria-label="Close project details">x</button>
+                        </div>
+	                </div>
+
+	                <h3 id="project-detail-title" class="project-detail-title">${escapeProjectHtml(String(record.projectName || "-"))}</h3>
+	                <p class="project-detail-id">ID: ${projectId}</p>
+
+	                <div class="project-detail-section">
+	                    <h5>Location</h5>
+	                    <div class="project-detail-location">
+	                        <span class="material-symbols-outlined" aria-hidden="true">location_on</span>
+	                        <div>
+	                            <strong>${locationPrimary}</strong>
+	                            <span>${locationSecondary}</span>
+	                        </div>
+	                    </div>
+	                </div>
+
+	                <div class="project-detail-section">
+	                    <h5>Description</h5>
+	                    <div style="color:#17314d; font-size:0.95rem; line-height:1.5;">${description}</div>
+	                </div>
+
+	                <div class="project-detail-divider"></div>
+
+	                <div class="project-detail-metrics">
+	                    <div class="project-detail-metric">
+	                        <span>Project Cost</span>
+	                        <strong>${escapeProjectHtml(projectCost)}</strong>
+	                    </div>
+	                    <div class="project-detail-metric">
+	                        <span>Contract Cost</span>
+	                        <strong>${escapeProjectHtml(contractCost)}</strong>
+	                    </div>
+	                </div>
+
+	                <div class="project-detail-divider"></div>
+
+	                <div class="project-detail-grid">
+	                    <div class="project-detail-grid-item">
+	                        <span>Fiscal Year</span>
+	                        <strong>${fy}</strong>
+	                    </div>
+	                    <div class="project-detail-grid-item">
+	                        <span>Source of Fund</span>
+	                        <strong>${sourceOfFund}</strong>
+	                    </div>
+	                    <div class="project-detail-grid-item">
+	                        <span>Procurement Mode</span>
+	                        <strong>${procurementMode}</strong>
+	                    </div>
+	                    <div class="project-detail-grid-item">
+	                        <span>Calendar Days</span>
+	                        <strong>${calendarDays}</strong>
+	                    </div>
+	                    <div class="project-detail-grid-item">
+	                        <span>NTP Date</span>
+	                        <strong>${ntpDate}</strong>
+	                    </div>
+	                    <div class="project-detail-grid-item">
+	                        <span>Target Completion</span>
+	                        <strong>${targetCompletion}</strong>
+	                    </div>
+	                </div>
+
+	                <div class="project-detail-divider"></div>
+
+	                <div class="project-detail-contractor">
+	                    <span>Contractor</span>
+	                    <strong>${contractorName}</strong>
+	                </div>
+	            `;
+
+	            projectDetailModal.hidden = false;
+	            syncProjectModalState();
+	            const closeBtn = projectDetailContent.querySelector(".js-project-detail-close");
+	            if (closeBtn instanceof HTMLButtonElement) {
+	                window.setTimeout(() => closeBtn.focus(), 0);
+	            }
+	        };
+
+	        const closeProjectDetail = () => {
+	            if (!(projectDetailModal instanceof HTMLElement)) return;
+	            projectDetailModal.hidden = true;
+	            if (projectDetailContent instanceof HTMLElement) {
+	                projectDetailContent.innerHTML = "";
+	            }
+	            syncProjectModalState();
+	        };
 
 	        const renderProjectPagination = () => {
 	            const totalCount = Array.isArray(visibleProjectRecords) ? visibleProjectRecords.length : 0;
@@ -19717,12 +20355,14 @@ document.addEventListener("DOMContentLoaded", () => {
 	            renderProjectPagination();
 	        };
 
-		        const refreshProjectBoard = () => {
-		            projectRecords = buildProjectRecords();
+	        const refreshProjectBoard = () => {
+	            projectRecords = buildProjectRecords();
 		            syncQuickFilterOptions(projectRecords);
 		            visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
 		            currentProjectPage = 1;
+		            currentCatalogPage = 1;
 		            renderProjectBoardPage();
+		            renderProjectCatalog(visibleProjectRecords);
 		            syncProjectRegistrySummary(visibleProjectRecords);
 		        };
 
@@ -19761,7 +20401,7 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         const syncProjectModalState = () => {
-            const hasVisibleModal = [projectModal, deleteModal, constructionHistoryModal].some((modal) => {
+            const hasVisibleModal = [projectModal, constructionHistoryModal, projectDetailModal].some((modal) => {
                 return modal instanceof HTMLElement && !modal.hidden;
             });
             projectBody.classList.toggle("project-modal-open", hasVisibleModal);
@@ -19776,22 +20416,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const openProjectModal = () => {
             if (!(projectModal instanceof HTMLElement)) return;
-            if (deleteModal instanceof HTMLElement) {
-                deleteModal.hidden = true;
-            }
             projectModal.hidden = false;
             syncProjectModalState();
             const firstInput = projectForm?.querySelector('input[name="project_name"]');
             if (firstInput instanceof HTMLInputElement) {
                 window.setTimeout(() => firstInput.focus(), 0);
             }
-        };
-
-        const closeDeleteModal = () => {
-            if (deleteModal instanceof HTMLElement) {
-                deleteModal.hidden = true;
-            }
-            syncProjectModalState();
         };
 
         const closeConstructionHistoryModal = (persistState = true) => {
@@ -20004,7 +20634,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const openConstructionHistoryModal = (constructionRecord) => {
             if (!(constructionHistoryModal instanceof HTMLElement)) return;
             if (projectModal instanceof HTMLElement) projectModal.hidden = true;
-            if (deleteModal instanceof HTMLElement) deleteModal.hidden = true;
 
             const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
             const recordId = String(record.__id || "").trim();
@@ -20028,7 +20657,6 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         closeProjectModal();
-        closeDeleteModal();
         closeConstructionHistoryModal(false);
 
         const tryRestoreConstructionHistoryModal = () => {
@@ -20057,19 +20685,13 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
 
-        closeDeleteButtons.forEach((button) => {
-            button.addEventListener("click", () => {
-                closeDeleteModal();
-            });
-        });
-
         closeConstructionHistoryButtons.forEach((button) => {
             button.addEventListener("click", () => {
                 closeConstructionHistoryModal();
             });
         });
 
-        [projectModal, deleteModal, constructionHistoryModal].forEach((modal) => {
+        [projectModal, constructionHistoryModal, projectDetailModal].forEach((modal) => {
             if (!(modal instanceof HTMLElement)) return;
             modal.addEventListener("click", (event) => {
                 if (event.target !== modal) return;
@@ -20081,20 +20703,23 @@ document.addEventListener("DOMContentLoaded", () => {
                     closeConstructionHistoryModal();
                     return;
                 }
-                closeDeleteModal();
+	                if (modal === projectDetailModal) {
+	                    closeProjectDetail();
+	                    return;
+	                }
             });
         });
 
         document.addEventListener("keydown", (event) => {
             if (event.key !== "Escape") return;
-            if (deleteModal instanceof HTMLElement && !deleteModal.hidden) {
-                closeDeleteModal();
-                return;
-            }
             if (constructionHistoryModal instanceof HTMLElement && !constructionHistoryModal.hidden) {
                 closeConstructionHistoryModal();
                 return;
             }
+	            if (projectDetailModal instanceof HTMLElement && !projectDetailModal.hidden) {
+	                closeProjectDetail();
+	                return;
+	            }
             if (projectModal instanceof HTMLElement && !projectModal.hidden) {
                 closeProjectModal();
             }
@@ -20113,6 +20738,41 @@ document.addEventListener("DOMContentLoaded", () => {
                 window.location.assign(`/projects/construction-history/${encodeURIComponent(sourceId)}/`);
             });
         }
+
+	        if (projectCatalogList instanceof HTMLElement) {
+	            projectCatalogList.addEventListener("click", (event) => {
+	                const target = event.target;
+	                if (!(target instanceof HTMLElement)) return;
+	                const card = target.closest("[data-project-record-id]");
+	                if (!(card instanceof HTMLElement)) return;
+	                const recordId = String(card.getAttribute("data-project-record-id") || "").trim();
+	                if (!recordId) return;
+	                openProjectDetail(recordId);
+	            });
+
+	            projectCatalogList.addEventListener("keydown", (event) => {
+	                const key = event.key;
+	                if (key !== "Enter" && key !== " ") return;
+	                const target = event.target;
+	                if (!(target instanceof HTMLElement)) return;
+	                const card = target.closest("[data-project-record-id]");
+	                if (!(card instanceof HTMLElement)) return;
+	                event.preventDefault();
+	                const recordId = String(card.getAttribute("data-project-record-id") || "").trim();
+	                if (!recordId) return;
+	                openProjectDetail(recordId);
+	            });
+	        }
+
+	        if (projectDetailContent instanceof HTMLElement) {
+	            projectDetailContent.addEventListener("click", (event) => {
+	                const target = event.target;
+	                if (!(target instanceof HTMLElement)) return;
+	                if (target.closest(".js-project-detail-close")) {
+	                    closeProjectDetail();
+	                }
+	            });
+	        }
 
         divisionCards.forEach((card) => {
             card.addEventListener("click", () => {
@@ -20157,28 +20817,46 @@ document.addEventListener("DOMContentLoaded", () => {
 		        }
 
 
-		        if (quickFilterButton instanceof HTMLButtonElement) {
-		            quickFilterButton.addEventListener("click", (event) => {
+			        const resetQuickFiltersToAll = (shouldPersist = true) => {
+			            const setAll = (select) => {
+			                if (!(select instanceof HTMLSelectElement)) return;
+			                const hasAllOption = Array.from(select.options).some((opt) => String(opt.value || "") === "all");
+			                select.value = hasAllOption ? "all" : (select.options[0]?.value ?? "all");
+			            };
+			            setAll(quickCategoryFilter);
+			            setAll(quickMunicipalityFilter);
+			            setAll(quickStatusFilter);
+			            setAll(quickYearFilter);
+			            if (shouldPersist) {
+			                persistCurrentProjectUiState();
+			            }
+			        };
+
+			        if (quickFilterButton instanceof HTMLButtonElement) {
+			            quickFilterButton.addEventListener("click", (event) => {
 		                event.preventDefault();
 		                event.stopPropagation();
 		                if (!(quickFiltersPanel instanceof HTMLElement)) return;
 	
 		                const willOpen = quickFiltersPanel.hidden === true;
-		                if (willOpen) {
-		                    const currentRecords = Array.isArray(projectRecords) && projectRecords.length
-		                        ? projectRecords
-		                        : buildProjectRecords();
-		                    syncQuickFilterOptions(currentRecords);
-	
-		                    if (quickStatusFilter instanceof HTMLSelectElement && statusFilter instanceof HTMLSelectElement) {
-		                        quickStatusFilter.value = String(statusFilter.value || "all");
-		                    }
-		                    if (quickCategoryFilter instanceof HTMLSelectElement && divisionFilter instanceof HTMLSelectElement) {
-		                        quickCategoryFilter.value = String(divisionFilter.value || "all");
-		                    }
-		                }
+			                if (willOpen) {
+			                    const currentRecords = Array.isArray(projectRecords) && projectRecords.length
+			                        ? projectRecords
+			                        : buildProjectRecords();
+			                    syncQuickFilterOptions(currentRecords);
+			                    // Opening the panel should not unexpectedly hide projects due to a persisted filter state.
+			                    resetQuickFiltersToAll(true);
+			                }
 	
 		                quickFiltersPanel.hidden = !willOpen;
+		                if (projectDivisionSection instanceof HTMLElement) {
+		                    projectDivisionSection.hidden = willOpen;
+		                }
+		                if (!willOpen) {
+		                    // Closing the panel restores the "all projects" default view.
+		                    resetQuickFiltersToAll(true);
+		                }
+		                refreshProjectBoard();
 		                if (willOpen) {
 		                    const first = quickFiltersPanel.querySelector("select");
 		                    if (first instanceof HTMLSelectElement) {
@@ -20194,23 +20872,47 @@ document.addEventListener("DOMContentLoaded", () => {
 		            if (quickFiltersPanel.contains(target)) return;
 		            if (quickFilterButton instanceof HTMLElement && quickFilterButton.contains(target)) return;
 		            quickFiltersPanel.hidden = true;
+		            if (projectDivisionSection instanceof HTMLElement) {
+		                projectDivisionSection.hidden = false;
+		            }
+		            resetQuickFiltersToAll(true);
+		            refreshProjectBoard();
 		        });
 
 		        document.addEventListener("keydown", (event) => {
 		            if (event.key !== "Escape") return;
 		            if (!(quickFiltersPanel instanceof HTMLElement) || quickFiltersPanel.hidden) return;
 		            quickFiltersPanel.hidden = true;
+		            if (projectDivisionSection instanceof HTMLElement) {
+		                projectDivisionSection.hidden = false;
+		            }
+		            resetQuickFiltersToAll(true);
+		            refreshProjectBoard();
 		        });
 
 	        if (projectPrevButton instanceof HTMLButtonElement) {
-	            projectPrevButton.addEventListener("click", () => {
+	            projectPrevButton.addEventListener("click", (event) => {
+	                event.stopPropagation();
+	                try {
+	                    projectRecords = buildProjectRecords();
+	                    visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
+	                } catch (e) {
+	                    /* ignore */
+	                }
 	                currentProjectPage = Math.max(1, currentProjectPage - 1);
 	                renderProjectBoardPage();
 	            });
 	        }
 
 	        if (projectNextButton instanceof HTMLButtonElement) {
-	            projectNextButton.addEventListener("click", () => {
+	            projectNextButton.addEventListener("click", (event) => {
+	                event.stopPropagation();
+	                try {
+	                    projectRecords = buildProjectRecords();
+	                    visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
+	                } catch (e) {
+	                    /* ignore */
+	                }
 	                const totalCount = Array.isArray(visibleProjectRecords) ? visibleProjectRecords.length : 0;
 	                const totalPages = Math.max(1, Math.ceil(totalCount / PROJECT_PAGE_SIZE));
 	                currentProjectPage = Math.min(totalPages, currentProjectPage + 1);
@@ -20218,16 +20920,45 @@ document.addEventListener("DOMContentLoaded", () => {
 	            });
 	        }
 
-	        if (projectBackHomeButton instanceof HTMLButtonElement) {
-	            projectBackHomeButton.addEventListener("click", () => {
-	                syncActiveProjectDivision("all");
-	                try {
-	                    window.scrollTo({ top: 0, behavior: "smooth" });
+		        if (projectBackHomeButton instanceof HTMLButtonElement) {
+		            projectBackHomeButton.addEventListener("click", () => {
+		                syncActiveProjectDivision("all");
+		                try {
+		                    window.scrollTo({ top: 0, behavior: "smooth" });
 	                } catch (error) {
 	                    window.scrollTo(0, 0);
 	                }
-	            });
-	        }
+		            });
+		        }
+
+		        if (projectCatalogPrevButton instanceof HTMLButtonElement) {
+		            projectCatalogPrevButton.addEventListener("click", (event) => {
+		                event.stopPropagation();
+		                try {
+		                    projectRecords = buildProjectRecords();
+		                    visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
+		                } catch (e) {
+		                    /* ignore */
+		                }
+		                currentCatalogPage = Math.max(1, currentCatalogPage - 1);
+		                renderProjectCatalog(visibleProjectRecords);
+		            });
+		        }
+
+		        if (projectCatalogNextButton instanceof HTMLButtonElement) {
+		            projectCatalogNextButton.addEventListener("click", (event) => {
+		                event.stopPropagation();
+		                try {
+		                    projectRecords = buildProjectRecords();
+		                    visibleProjectRecords = buildFilteredProjectRecords(projectRecords);
+		                } catch (e) {
+		                    /* ignore */
+		                }
+		                const totalPages = Math.max(1, Math.ceil((visibleProjectRecords || []).length / PROJECT_CATALOG_PAGE_SIZE));
+		                currentCatalogPage = Math.min(totalPages, currentCatalogPage + 1);
+		                renderProjectCatalog(visibleProjectRecords);
+		            });
+		        }
 
 		        if (statusFilter instanceof HTMLSelectElement) {
 		            statusFilter.addEventListener("change", () => {
@@ -20279,15 +21010,17 @@ document.addEventListener("DOMContentLoaded", () => {
 	            window.addEventListener("storage", (event) => {
 	                const key = String(event.key || "");
 	                if (![
+	                    ADMIN_DIVISION_STORAGE_KEY,
 	                    PLANNING_DOCUMENT_STORAGE_KEY,
 	                    CONSTRUCTION_STORAGE_KEY,
+	                    QUALITY_STORAGE_KEY,
 	                    MAINTENANCE_STORAGE_KEY,
 	                ].includes(key)) {
 	                    return;
 	                }
-                refreshProjectBoard();
-            });
-        };
+	                refreshProjectBoard();
+	            });
+	        };
 
         let projectBoardBootstrapped = false;
 
@@ -20335,18 +21068,20 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
 
-        const syncProjectStoresFromServer = async () => {
-            if (!window.peoDivisionStore || typeof window.peoDivisionStore.fetchStore !== "function") {
-                return;
-            }
+	        const syncProjectStoresFromServer = async () => {
+	            if (!window.peoDivisionStore || typeof window.peoDivisionStore.fetchStore !== "function") {
+	                return;
+	            }
 
             const initialLocalProjectCount = buildProjectRecords().length;
 
-	            const definitions = [
-	                { storeKey: "planning", localStorageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
-	                { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
-	                { storeKey: "maintenance", localStorageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
-	            ];
+		            const definitions = [
+		                { storeKey: "admin", localStorageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
+		                { storeKey: "planning", localStorageKey: PLANNING_DOCUMENT_STORAGE_KEY, type: "array" },
+		                { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+		                { storeKey: "quality", localStorageKey: QUALITY_STORAGE_KEY, type: "array" },
+		                { storeKey: "maintenance", localStorageKey: MAINTENANCE_STORAGE_KEY, type: "object" },
+		            ];
 
             const results = await Promise.all(definitions.map(async (def) => {
                 const payload = await window.peoDivisionStore.fetchStore(def.storeKey);
@@ -20393,13 +21128,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const hydrateAndBootstrap = () => {
             // Bootstrap immediately so the sidebar "Projects" click shows something right away.
             bootstrapProjectBoard();
-            window.requestAnimationFrame(() => {
-                try {
-                    refreshProjectBoard();
-                } catch (e) {
-                    /* ignore */
-                }
-            });
+            try {
+                refreshProjectBoard();
+            } catch (e) {
+                /* ignore */
+            }
 
             // Then fetch the latest server copies and refresh once they land in localStorage.
             Promise.resolve(syncProjectStoresFromServer())
@@ -22444,6 +23177,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	            records = dedupeQualityRecords(syncAdminRoutedQualityRecords(records));
 	            writeStoredRecords(records);
+                if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                    window.peoDivisionStore.flushSync();
+                }
 	            renderTable();
 	            closeQualityModal();
 
