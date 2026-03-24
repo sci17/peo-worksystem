@@ -5,6 +5,8 @@ from .models import (
     UserProfile,
     SharedDivisionStore,
     DivisionStore,
+    DivisionStoreEvent,
+    ConstructionUpload,
     KEY_ADMIN,
     KEY_PLANNING,
     KEY_CONSTRUCTION,
@@ -192,3 +194,25 @@ class SharedDivisionStoreAdmin(admin.ModelAdmin):
 
         user_division = _get_user_division_key(request.user)
         return bool(user_division) and obj.key == user_division
+
+
+@admin.register(DivisionStoreEvent)
+class DivisionStoreEventAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "store_key", "target", "actor", "write_mode", "method", "path")
+    list_filter = ("store_key", "target", "write_mode", "method")
+    search_fields = ("actor__username", "actor__first_name", "actor__last_name", "path")
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ConstructionUpload)
+class ConstructionUploadAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "uploaded_by", "original_name", "stored_name", "size_bytes", "content_type")
+    list_filter = ("content_type", "created_at")
+    search_fields = ("original_name", "stored_name", "uploaded_by__username")
+    ordering = ("-created_at",)

@@ -82,3 +82,64 @@ class SharedDivisionStore(models.Model):
 
     def __str__(self):
         return f'{self.key} shared store'
+
+
+class DivisionStoreEvent(models.Model):
+    TARGET_SHARED = "shared"
+    TARGET_USER = "user"
+    TARGET_CHOICES = [
+        (TARGET_SHARED, "Shared"),
+        (TARGET_USER, "User"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="division_store_events",
+    )
+    store_key = models.CharField(max_length=20, choices=DIVISION_KEY_CHOICES)
+    target = models.CharField(max_length=10, choices=TARGET_CHOICES)
+    write_mode = models.CharField(max_length=50, blank=True)
+    request_payload = models.JSONField(null=True, blank=True)
+    stored_payload = models.JSONField(null=True, blank=True)
+    path = models.CharField(max_length=255, blank=True)
+    method = models.CharField(max_length=10, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["store_key", "created_at"]),
+            models.Index(fields=["actor", "created_at"]),
+        ]
+
+    def __str__(self):
+        actor = self.actor.get_username() if self.actor else "anonymous"
+        return f"{actor} {self.store_key} event"
+
+
+class ConstructionUpload(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="construction_uploads",
+    )
+    stored_name = models.CharField(max_length=255)
+    original_name = models.CharField(max_length=255, blank=True)
+    url = models.CharField(max_length=500, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
+    size_bytes = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self):
+        return self.original_name or self.stored_name
