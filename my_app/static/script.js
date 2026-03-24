@@ -921,7 +921,7 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         if (!csrfToken) return;
 
         try {
-            await window.fetch(`${API_BASE}${encodeURIComponent(storeKey)}/`, {
+            const response = await window.fetch(`${API_BASE}${encodeURIComponent(storeKey)}/`, {
                 method: "POST",
                 credentials: "same-origin",
                 keepalive: true,
@@ -931,8 +931,14 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
                 },
                 body: JSON.stringify(payload ?? null),
             });
+            if (!response.ok) {
+                return null;
+            }
+            const data = await response.json().catch(() => ({}));
+            return data && typeof data === "object" ? data : {};
         } catch (error) {
             // Ignore network failures.
+            return null;
         }
     };
 
@@ -952,28 +958,80 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
     };
 
     const latestPayloads = new Map();
+    const latestWriteTokens = new Map();
     const timers = new Map();
+
+    const nextWriteToken = (storeKey) => {
+        const current = Number(latestWriteTokens.get(storeKey) || 0);
+        const next = current + 1;
+        latestWriteTokens.set(storeKey, next);
+        return next;
+    };
+
+    const syncPendingMeta = (storeKey, token, state, responseData = null) => {
+        const currentToken = Number(latestWriteTokens.get(storeKey) || 0);
+        if (token !== currentToken) {
+            return;
+        }
+
+        const prevMeta = readStoreMeta(storeKey);
+        const nextMeta = {
+            ...prevMeta,
+            pending_local_write: Boolean(state),
+            pending_write_token: token,
+        };
+
+        const serverUpdatedAt = String(responseData?.updated_at || "").trim();
+        if (!state && serverUpdatedAt) {
+            nextMeta.updated_at = serverUpdatedAt;
+            nextMeta.fetched_at = new Date().toISOString();
+        }
+        writeStoreMeta(storeKey, nextMeta);
+    };
+
+    const sendLatestPayload = (storeKey, token) => {
+        const latest = latestPayloads.get(storeKey);
+        if (typeof latest === "undefined") {
+            return;
+        }
+
+        Promise.resolve(postStore(storeKey, latest))
+            .then((responseData) => {
+                if (!responseData) {
+                    return;
+                }
+                syncPendingMeta(storeKey, token, false, responseData);
+            })
+            .catch(() => {
+                // Ignore network failures.
+            });
+    };
+
     const flushSync = () => {
         timers.forEach((timerId) => {
             window.clearTimeout(timerId);
         });
         timers.clear();
 
-        latestPayloads.forEach((payload, storeKey) => {
-            postStore(storeKey, payload);
+        latestPayloads.forEach((_, storeKey) => {
+            const token = Number(latestWriteTokens.get(storeKey) || 0);
+            if (!token) return;
+            sendLatestPayload(storeKey, token);
         });
     };
+
     const queueSync = (storeKey, payload, delayMs = 400) => {
         const normalizedKey = String(storeKey || "").trim();
         if (!normalizedKey) return;
 
         latestPayloads.set(normalizedKey, payload);
+        const token = nextWriteToken(normalizedKey);
+        syncPendingMeta(normalizedKey, token, true);
         const existing = timers.get(normalizedKey);
         if (existing) window.clearTimeout(existing);
 
         timers.set(normalizedKey, window.setTimeout(() => {
-            const latest = latestPayloads.get(normalizedKey);
-            postStore(normalizedKey, latest);
+            sendLatestPayload(normalizedKey, token);
         }, Math.max(0, Number(delayMs) || 0)));
     };
 
@@ -1039,19 +1097,14 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
             if (!isValid) continue;
 
             const meta = readStoreMeta(storeKey);
+            if (meta && meta.pending_local_write === true) {
+                continue;
+            }
             const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
             const serverUpdatedAtMs = Date.parse(serverUpdatedAt);
 
-            const localRaw = safeLocalStorageGet(localKey);
-            const localParsed = localRaw ? safeJsonParse(localRaw, null) : null;
-            const localCount = type === "object"
-                ? (localParsed && typeof localParsed === "object" && !Array.isArray(localParsed) ? Object.keys(localParsed).length : 0)
-                : (Array.isArray(localParsed) ? localParsed.length : 0);
-            const serverCount = type === "object" ? Object.keys(serverData || {}).length : serverData.length;
-
             const shouldWrite = force
-                || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs))
-                || (serverCount !== localCount);
+                || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs));
 
             if (!shouldWrite) continue;
 
@@ -11123,6 +11176,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function persistMaintenanceState() {
         const hasMaintenanceTargets = Boolean(roadMunicipalityList || equipmentTableBody || scheduleTableBody || taskTableBody || contractorManagement);
         if (!hasMaintenanceTargets) {
+            return;
+        }
+        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+        if (access.readOnly) {
             return;
         }
 
