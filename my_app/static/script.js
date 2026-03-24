@@ -15276,18 +15276,24 @@ document.addEventListener("DOMContentLoaded", () => {
     const formatDate = (value) => {
         const text = String(value ?? "").trim();
         if (!text) return "-";
-        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-            const parsed = new Date(text);
-            if (!Number.isNaN(parsed.getTime())) {
-                return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-            }
-            return text;
-        }
-        const parsed = new Date(text);
-        if (!Number.isNaN(parsed.getTime())) {
+
+        // Avoid timezone-shifts for date-only strings like "2026-03-12" (JS parses them as UTC).
+        const dateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateOnlyMatch) {
+            const year = Number(dateOnlyMatch[1]);
+            const month = Number(dateOnlyMatch[2]);
+            const day = Number(dateOnlyMatch[3]);
+            const parsed = new Date(year, Math.max(0, month - 1), day);
+            if (Number.isNaN(parsed.getTime())) return text;
             return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
         }
-        return text;
+
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return text;
+        const hasTime = /T\d{2}:\d{2}/.test(text) || /\d{1,2}:\d{2}/.test(text);
+        return hasTime
+            ? parsed.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+            : parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     };
 
     const formatMoney = (value) => {
