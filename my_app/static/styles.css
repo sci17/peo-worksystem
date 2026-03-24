@@ -21529,3 +21529,58 @@ body.quality-scan-open {
     cursor: not-allowed;
 }
 
+.road-delete-all-btn {
+    min-height: 40px;
+    height: auto;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 1px solid #a73333;
+    background: linear-gradient(135deg, #d64545 0%, #b4232f 100%);
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(180, 35, 47, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.road-delete-all-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.03);
+    box-shadow: 0 14px 22px rgba(180, 35, 47, 0.24);
+}
+
+.road-delete-all-btn:active {
+    transform: translateY(0);
+}
+
+.road-delete-all-btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(180, 35, 47, 0.24);
+}
+
+.road-delete-all-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.road-select-row--road .road-delete-all-btn {
+    flex: 0 0 auto;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+    .road-delete-all-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+

@@ -5349,6 +5349,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const scheduleStatUrgent = document.querySelector(".js-schedule-stat-urgent");
     const topScheduledCount = document.querySelector(".js-top-scheduled-count");
     const roadUploadInput = document.getElementById("road-upload-input");
+    const roadDeleteAllButton = document.querySelector(".js-road-delete-all-data");
     const roadSearchInput = document.querySelector(".js-road-search-input");
     const roadSearchShell = document.querySelector(".js-road-search-shell");
     const roadSearchToggle = document.querySelector(".js-road-search-toggle");
@@ -12386,6 +12387,120 @@ document.addEventListener("DOMContentLoaded", () => {
         // Pull server state when localStorage is empty/stale (e.g., different user/session/device).
         requestMaintenanceHydrate();
     }
+
+    const clearAllMaintenanceData = () => {
+        const currentAdminTaskIds = (typeof getTaskRows === "function" ? getTaskRows() : [])
+            .map((row) => String(row?.dataset?.adminRecordId || "").trim())
+            .filter(Boolean);
+        dismissedAdminTaskIds = Array.from(new Set([...(Array.isArray(dismissedAdminTaskIds) ? dismissedAdminTaskIds : []), ...currentAdminTaskIds]));
+
+        roadRecords.length = 0;
+        roadMunicipalityPageState.clear();
+        roadMunicipalityToastState.clear();
+        roadMunicipalityToastTimers.forEach((timerId) => window.clearTimeout(timerId));
+        roadMunicipalityToastTimers.clear();
+
+        if (equipmentTableBody) {
+            equipmentTableBody.innerHTML = "";
+        }
+        if (scheduleTableBody) {
+            restoreScheduleEmptyRow();
+        }
+        if (taskTableBody) {
+            restoreTaskEmptyRow();
+        }
+
+        personnelRecords = [];
+        syncTaskPersonnelDropdownOptions();
+
+        if (Array.isArray(contractorRows) && contractorRows.length) {
+            const rowsToRemove = [...contractorRows];
+            contractorRows.splice(0, contractorRows.length);
+            rowsToRemove.forEach((row) => row?.remove?.());
+        }
+        if (contractorEmptyRow) {
+            contractorEmptyRow.hidden = false;
+        }
+
+        closeTaskAssignPopover();
+        closeEquipmentModal();
+        closeScheduleModal();
+        closeRoadEditModal();
+        closeRoadDeleteModal();
+        closeRoadAddModal();
+        closeTaskPersonnelModal();
+        closeTaskRowEditModal();
+        closeTaskModal();
+        closeRoadDeleteConfirmToast();
+        closeRoadUploadDuplicatePrompt();
+        closeRoadUploadAddConfirmPrompt();
+        closeContractorFloatCard();
+        closeContractorDeleteToast();
+        closeContractorAddModal();
+        closeContractorEditModal();
+        closeContractorEvalModal();
+
+        refreshRoadMunicipalityOptions();
+        if (typeof refreshRoadRegister === "function") {
+            refreshRoadRegister();
+        }
+        updateEquipmentSummary();
+        updateScheduleSummary();
+        updateTaskSummary();
+        applyTaskFilters();
+        refreshContractorSummary();
+        refreshContractorTable();
+
+        const emptyPayload = {
+            version: 1,
+            roadRecords: [],
+            equipmentRows: [],
+            scheduleRows: [],
+            taskRows: [],
+            personnelRecords: [],
+            contractorRecords: [],
+            dismissedAdminTaskIds,
+        };
+        try {
+            window.localStorage.setItem(maintenanceStorageKey, JSON.stringify(emptyPayload));
+        } catch (error) {
+            // Ignore storage errors.
+        }
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            window.peoDivisionStore.queueSync("maintenance", emptyPayload, 0);
+        }
+        persistMaintenanceState();
+    };
+
+    if (roadDeleteAllButton) {
+        const readOnly = !canWriteMaintenanceState();
+        roadDeleteAllButton.disabled = readOnly;
+        if (readOnly) {
+            roadDeleteAllButton.classList.add("peo-readonly-disabled");
+        }
+
+        roadDeleteAllButton.addEventListener("click", async () => {
+            if (!canWriteMaintenanceState()) {
+                showRoadUploadStatusToast("Read-only access for this dashboard.", "warning");
+                return;
+            }
+
+            const shouldDelete = await showRoadDeleteConfirmToast("All Road Management data", {
+                title: "Delete All Data",
+                copy: "This will permanently delete all roads, equipment, schedules, and related maintenance records.",
+                confirmLabel: "Yes, Delete All",
+                cancelLabel: "Cancel",
+                variant: "danger",
+            });
+            if (!shouldDelete) {
+                return;
+            }
+
+            clearAllMaintenanceData();
+            showRoadUploadStatusToast("All maintenance data deleted successfully.", "success");
+        });
+    }
+
     if (contractorManagement) {
         seedDerivedContractorsFromProjectContracts();
         contractorRows.forEach((row) => syncContractorRowContractMetrics(row));
