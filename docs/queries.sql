@@ -1,4 +1,6 @@
 -- PEO Worksystem - Full Database Schema (SQLite)
+-- Database file name: peo_database.db
+-- Note: SQLite creates a database by opening a file; it does not support CREATE DATABASE.
 -- Purpose:
 -- 1) Define the core framework/auth tables needed by the system.
 -- 2) Define the current my_app tables used by Django views/API.
@@ -562,3 +564,188 @@ CREATE INDEX IF NOT EXISTS my_app_maintenance_task_status_idx
 COMMIT;
 
 -- End of schema.
+
+-- ============================================================
+-- 5) Query Reference (existing system operations)
+-- ============================================================
+
+-- Account settings (views.account_settings)
+SELECT id, username, first_name, last_name, email
+FROM auth_user
+WHERE id = :user_id;
+
+SELECT id, user_id, division, email_notifications, portal_notifications, appearance_mode, updated_at
+FROM my_app_userprofile
+WHERE user_id = :user_id;
+
+UPDATE auth_user
+SET first_name = :first_name,
+    last_name = :last_name,
+    email = :email
+WHERE id = :user_id;
+
+UPDATE my_app_userprofile
+SET email_notifications = :email_notifications,
+    portal_notifications = :portal_notifications,
+    appearance_mode = :appearance_mode,
+    division = :division,
+    updated_at = CURRENT_TIMESTAMP
+WHERE user_id = :user_id;
+
+-- Division store API (GET/POST /api/division-store/<key>/)
+SELECT id, key, data, updated_at
+FROM my_app_shareddivisionstore
+WHERE key = :store_key;
+
+SELECT id, user_id, key, data, updated_at
+FROM my_app_divisionstore
+WHERE user_id = :user_id
+  AND key = :store_key;
+
+UPDATE my_app_shareddivisionstore
+SET data = :json_payload,
+    updated_at = CURRENT_TIMESTAMP
+WHERE key = :store_key;
+
+INSERT INTO my_app_shareddivisionstore (key, data, created_at, updated_at)
+VALUES (:store_key, :json_payload, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO my_app_divisionstoreevent (
+    id, actor_id, store_key, target, write_mode,
+    request_payload, stored_payload, path, method, created_at
+) VALUES (
+    :uuid, :actor_id, :store_key, :target, :write_mode,
+    :request_payload_json, :stored_payload_json, :path, :method, CURRENT_TIMESTAMP
+);
+
+-- Clear all stores (POST /api/division-store-clear-all/)
+UPDATE my_app_shareddivisionstore
+SET data = CASE
+    WHEN key = 'maintenance' THEN '{}'
+    ELSE '[]'
+END,
+updated_at = CURRENT_TIMESTAMP
+WHERE key IN ('admin', 'planning', 'construction', 'quality', 'maintenance');
+
+DELETE FROM my_app_divisionstore
+WHERE key IN ('admin', 'planning', 'construction', 'quality', 'maintenance');
+
+-- Project database seed read
+SELECT key, data, updated_at
+FROM my_app_shareddivisionstore
+WHERE key IN ('admin', 'planning', 'construction', 'quality', 'maintenance');
+
+-- Maintenance read/write payload
+SELECT id, key, data, updated_at
+FROM my_app_shareddivisionstore
+WHERE key = 'maintenance';
+
+UPDATE my_app_shareddivisionstore
+SET data = :maintenance_payload_json,
+    updated_at = CURRENT_TIMESTAMP
+WHERE key = 'maintenance';
+
+-- Maintenance JSON helper queries
+SELECT
+    json_extract(road.value, '$.roadId') AS road_id,
+    json_extract(road.value, '$.roadName') AS road_name,
+    json_extract(road.value, '$.municipality') AS municipality,
+    json_extract(road.value, '$.location') AS location,
+    json_extract(road.value, '$.surfaceType') AS surface_type,
+    json_extract(road.value, '$.lengthKm') AS length_km,
+    json_extract(road.value, '$.condition') AS condition
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.roadRecords') AS road
+WHERE key = 'maintenance';
+
+SELECT
+    json_extract(road.value, '$.condition') AS condition,
+    COUNT(*) AS road_count
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.roadRecords') AS road
+WHERE key = 'maintenance'
+GROUP BY json_extract(road.value, '$.condition');
+
+SELECT
+    SUM(COALESCE(json_extract(road.value, '$.lengthKm'), 0)) AS total_length_km
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.roadRecords') AS road
+WHERE key = 'maintenance';
+
+SELECT
+    json_extract(eq.value, '$.code') AS code,
+    json_extract(eq.value, '$.name') AS name,
+    json_extract(eq.value, '$.type') AS type,
+    json_extract(eq.value, '$.model') AS model,
+    json_extract(eq.value, '$.plateNumber') AS plate_number,
+    json_extract(eq.value, '$.status') AS status,
+    json_extract(eq.value, '$.location') AS location,
+    json_extract(eq.value, '$.operator') AS operator
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.equipmentRows') AS eq
+WHERE key = 'maintenance';
+
+SELECT
+    json_extract(sched.value, '$.title') AS title,
+    json_extract(sched.value, '$.road') AS road,
+    json_extract(sched.value, '$.type') AS type,
+    json_extract(sched.value, '$.priority') AS priority,
+    json_extract(sched.value, '$.status') AS status,
+    json_extract(sched.value, '$.startDate') AS start_date,
+    json_extract(sched.value, '$.team') AS team
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.scheduleRows') AS sched
+WHERE key = 'maintenance';
+
+-- Construction uploads (POST /api/uploads/construction/)
+INSERT INTO my_app_constructionupload (
+    id, uploaded_by_id, stored_name, original_name, url, content_type, size_bytes, created_at
+) VALUES (
+    :uuid, :user_id, :stored_name, :original_name, :url, :content_type, :size_bytes, CURRENT_TIMESTAMP
+);
+
+SELECT id, uploaded_by_id, original_name, url, size_bytes, content_type, created_at
+FROM my_app_constructionupload
+ORDER BY created_at DESC;
+
+-- ============================================================
+-- 6) Query Reference (normalized entities)
+-- ============================================================
+
+-- Workflow records and division routing history
+SELECT
+    wr.id,
+    wr.document_name,
+    wr.doc_status,
+    wr.billing_status,
+    wr.created_at,
+    d.label AS assigned_division
+FROM my_app_workflow_record wr
+JOIN my_app_division d ON d.key = wr.assigned_division_key
+ORDER BY wr.created_at DESC;
+
+SELECT
+    we.workflow_record_id,
+    we.action,
+    fd.label AS from_division,
+    td.label AS to_division,
+    we.status_after,
+    we.acted_at
+FROM my_app_workflow_event we
+LEFT JOIN my_app_division fd ON fd.key = we.from_division_key
+LEFT JOIN my_app_division td ON td.key = we.to_division_key
+WHERE we.workflow_record_id = :workflow_record_id
+ORDER BY we.acted_at DESC;
+
+-- Maintenance normalized entities
+SELECT road_name, municipality, length_km, condition
+FROM my_app_maintenance_road
+ORDER BY municipality, road_name;
+
+SELECT name, code, type, status, location
+FROM my_app_maintenance_equipment
+ORDER BY name;
+
+SELECT title, road_ref, priority, status, start_date, end_date
+FROM my_app_maintenance_schedule
+ORDER BY start_date, title;
