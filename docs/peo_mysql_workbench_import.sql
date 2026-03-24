@@ -37,7 +37,7 @@ CREATE TABLE django_migrations (id INT NOT NULL PRIMARY KEY AUTO_INCREMENT, app 
 CREATE TABLE django_session (session_key varchar(40) NOT NULL PRIMARY KEY, session_data text NOT NULL, expire_date DATETIME NOT NULL);
 
 -- Table: my_app_construction_project
-CREATE TABLE my_app_construction_project (id char(32) NOT NULL PRIMARY KEY, project_name varchar(255) NOT NULL, location text NULL, municipality varchar(120) NULL, contractor varchar(255) NULL, contract_cost decimal NULL, ntp_date date NULL, contract_duration_days INT UNSIGNED NULL CHECK (contract_duration_days >= 0), original_expiry_date date NULL, additional_cd_days INT UNSIGNED NULL CHECK (additional_cd_days >= 0), revised_expiry_date date NULL, date_completed date NULL, revised_contract_cost decimal NULL, status_previous_percent DOUBLE NULL, status_current_percent DOUBLE NULL, time_elapsed_percent DOUBLE NULL, slippage_percent DOUBLE NULL, remarks text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, created_by_id INT NULL, workflow_record_id char(32) NULL UNIQUE);
+CREATE TABLE my_app_construction_project (id char(32) NOT NULL PRIMARY KEY, project_name varchar(255) NOT NULL, location text NULL, municipality varchar(120) NULL, contractor varchar(255) NULL, contract_cost DECIMAL(18,2) NULL, ntp_date date NULL, contract_duration_days INT UNSIGNED NULL CHECK (contract_duration_days >= 0), original_expiry_date date NULL, additional_cd_days INT UNSIGNED NULL CHECK (additional_cd_days >= 0), revised_expiry_date date NULL, date_completed date NULL, revised_contract_cost DECIMAL(18,2) NULL, status_previous_percent DOUBLE NULL, status_current_percent DOUBLE NULL, time_elapsed_percent DOUBLE NULL, slippage_percent DOUBLE NULL, remarks text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, created_by_id INT NULL, workflow_record_id char(32) NULL UNIQUE);
 
 -- Table: my_app_construction_task
 CREATE TABLE my_app_construction_task (id char(32) NOT NULL PRIMARY KEY, task_name varchar(255) NOT NULL, assigned_to varchar(255) NULL, date_received DATETIME NULL, status varchar(60) NULL, remarks text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, construction_project_id char(32) NULL, workflow_record_id char(32) NULL);
@@ -58,7 +58,7 @@ CREATE TABLE my_app_divisionstore (id INT NOT NULL PRIMARY KEY AUTO_INCREMENT, `
 CREATE TABLE my_app_divisionstoreevent (id char(32) NOT NULL PRIMARY KEY, store_key varchar(20) NOT NULL, target varchar(10) NOT NULL, write_mode varchar(50) NOT NULL, request_payload JSON NULL, stored_payload JSON NULL, path varchar(255) NOT NULL, method varchar(10) NOT NULL, created_at DATETIME NOT NULL, actor_id INT NULL);
 
 -- Table: my_app_maintenance_contractor
-CREATE TABLE my_app_maintenance_contractor (id char(32) NOT NULL PRIMARY KEY, name varchar(255) NOT NULL, trade_name varchar(255) NULL, tin varchar(80) NULL UNIQUE, philgeps varchar(80) NULL, pcab varchar(80) NULL, status varchar(60) NULL, contracts INT UNSIGNED NULL CHECK (contracts >= 0), value decimal NULL, rating DOUBLE NULL, classification varchar(120) NULL, license_expiry date NULL, contact_person varchar(255) NULL, contact_email varchar(254) NULL, contact_phone varchar(60) NULL, contact_address text NULL, pcab_license varchar(120) NULL, address text NULL, contact_city varchar(120) NULL, contact_province varchar(120) NULL, contact_mobile varchar(60) NULL, remarks text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
+CREATE TABLE my_app_maintenance_contractor (id char(32) NOT NULL PRIMARY KEY, name varchar(255) NOT NULL, trade_name varchar(255) NULL, tin varchar(80) NULL UNIQUE, philgeps varchar(80) NULL, pcab varchar(80) NULL, status varchar(60) NULL, contracts INT UNSIGNED NULL CHECK (contracts >= 0), value DECIMAL(18,2) NULL, rating DOUBLE NULL, classification varchar(120) NULL, license_expiry date NULL, contact_person varchar(255) NULL, contact_email varchar(254) NULL, contact_phone varchar(60) NULL, contact_address text NULL, pcab_license varchar(120) NULL, address text NULL, contact_city varchar(120) NULL, contact_province varchar(120) NULL, contact_mobile varchar(60) NULL, remarks text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
 
 -- Table: my_app_maintenance_equipment
 CREATE TABLE my_app_maintenance_equipment (id char(32) NOT NULL PRIMARY KEY, code varchar(60) NULL UNIQUE, name varchar(255) NOT NULL, type varchar(120) NULL, model varchar(120) NULL, plate_number varchar(60) NULL, status varchar(60) NULL, location varchar(255) NULL, operator varchar(255) NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
@@ -67,16 +67,16 @@ CREATE TABLE my_app_maintenance_equipment (id char(32) NOT NULL PRIMARY KEY, cod
 CREATE TABLE my_app_maintenance_personnel (id char(32) NOT NULL PRIMARY KEY, full_name varchar(255) NOT NULL, employee_id varchar(80) NULL UNIQUE, division varchar(120) NULL, position varchar(120) NULL, email varchar(254) NULL, phone varchar(60) NULL, division_head varchar(255) NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
 
 -- Table: my_app_maintenance_road
-CREATE TABLE my_app_maintenance_road (id char(32) NOT NULL PRIMARY KEY, road_id varchar(100) NULL UNIQUE, road_name varchar(255) NOT NULL, municipality varchar(120) NULL, location text NULL, surface_type varchar(80) NULL, length_km DOUBLE NULL, condition varchar(60) NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
+CREATE TABLE my_app_maintenance_road (id char(32) NOT NULL PRIMARY KEY, road_id varchar(100) NULL UNIQUE, road_name varchar(255) NOT NULL, municipality varchar(120) NULL, location text NULL, surface_type varchar(80) NULL, length_km DOUBLE NULL, `condition` varchar(60) NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
 
 -- Table: my_app_maintenance_schedule
-CREATE TABLE my_app_maintenance_schedule (id char(32) NOT NULL PRIMARY KEY, title varchar(255) NOT NULL, road_ref varchar(255) NULL, type varchar(120) NULL, priority varchar(60) NULL, status varchar(60) NULL, start_date date NULL, end_date date NULL, team varchar(255) NULL, estimated_cost decimal NULL, notes text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
+CREATE TABLE my_app_maintenance_schedule (id char(32) NOT NULL PRIMARY KEY, title varchar(255) NOT NULL, road_ref varchar(255) NULL, type varchar(120) NULL, priority varchar(60) NULL, status varchar(60) NULL, start_date date NULL, end_date date NULL, team varchar(255) NULL, estimated_cost DECIMAL(18,2) NULL, notes text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
 
 -- Table: my_app_maintenance_task
-CREATE TABLE my_app_maintenance_task (id char(32) NOT NULL PRIMARY KEY, admin_record_external_id varchar(64) NULL, slip_no varchar(64) NULL, title varchar(255) NOT NULL, division_label varchar(120) NULL, location text NULL, assigned_to varchar(255) NULL, priority varchar(60) NULL, status varchar(60) NULL, due_date date NULL, amount decimal NULL, notes text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, workflow_record_id char(32) NULL);
+CREATE TABLE my_app_maintenance_task (id char(32) NOT NULL PRIMARY KEY, admin_record_external_id varchar(64) NULL, slip_no varchar(64) NULL, title varchar(255) NOT NULL, division_label varchar(120) NULL, location text NULL, assigned_to varchar(255) NULL, priority varchar(60) NULL, status varchar(60) NULL, due_date date NULL, amount DECIMAL(18,2) NULL, notes text NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, workflow_record_id char(32) NULL);
 
 -- Table: my_app_planning_record
-CREATE TABLE my_app_planning_record (id char(32) NOT NULL PRIMARY KEY, budget_no varchar(80) NULL, project_name varchar(255) NULL, location text NULL, contractor varchar(255) NULL, contract_amount decimal NULL, revised_contract_amount decimal NULL, budget_allocation decimal NULL, status varchar(60) NULL, remarks text NULL, date_received DATETIME NULL, received_from varchar(255) NULL, payload JSON NULL, updated_at DATETIME NOT NULL, workflow_record_id char(32) NOT NULL UNIQUE);
+CREATE TABLE my_app_planning_record (id char(32) NOT NULL PRIMARY KEY, budget_no varchar(80) NULL, project_name varchar(255) NULL, location text NULL, contractor varchar(255) NULL, contract_amount DECIMAL(18,2) NULL, revised_contract_amount DECIMAL(18,2) NULL, budget_allocation DECIMAL(18,2) NULL, status varchar(60) NULL, remarks text NULL, date_received DATETIME NULL, received_from varchar(255) NULL, payload JSON NULL, updated_at DATETIME NOT NULL, workflow_record_id char(32) NOT NULL UNIQUE);
 
 -- Table: my_app_quality_record
 CREATE TABLE my_app_quality_record (id char(32) NOT NULL PRIMARY KEY, received_from varchar(255) NULL, doc_date date NULL, particulars text NULL, doc_no varchar(100) NULL, billing_type varchar(120) NULL, project_location varchar(255) NULL, location_detail text NULL, scan_url text NULL, received_by varchar(255) NULL, date_recv DATETIME NULL, status varchar(60) NULL, payload JSON NULL, updated_at DATETIME NOT NULL, route_to_division_key varchar(20) NULL, workflow_record_id char(32) NOT NULL UNIQUE);
@@ -91,72 +91,72 @@ CREATE TABLE my_app_userprofile (id INT NOT NULL PRIMARY KEY AUTO_INCREMENT, pro
 CREATE TABLE my_app_workflow_event (id char(32) NOT NULL PRIMARY KEY, action varchar(80) NOT NULL, status_after varchar(50) NULL, remarks text NULL, acted_at DATETIME NOT NULL, acted_by_id INT NULL, from_division_key varchar(20) NULL, to_division_key varchar(20) NULL, workflow_record_id char(32) NOT NULL);
 
 -- Table: my_app_workflow_record
-CREATE TABLE my_app_workflow_record (id char(32) NOT NULL PRIMARY KEY, source_admin_record_id varchar(64) NULL UNIQUE, slip_no varchar(64) NULL, document_name varchar(255) NOT NULL, project_name varchar(255) NULL, location text NULL, contractor varchar(255) NULL, billing_type varchar(120) NULL, contract_amount decimal NULL, revised_contract_amount decimal NULL, doc_status varchar(50) NOT NULL, billing_status varchar(50) NOT NULL, scanned_file_url text NULL, date_received DATETIME NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, assigned_division_key varchar(20) NOT NULL, created_by_id INT NULL, submitted_from_division_key varchar(20) NULL);
+CREATE TABLE my_app_workflow_record (id char(32) NOT NULL PRIMARY KEY, source_admin_record_id varchar(64) NULL UNIQUE, slip_no varchar(64) NULL, document_name varchar(255) NOT NULL, project_name varchar(255) NULL, location text NULL, contractor varchar(255) NULL, billing_type varchar(120) NULL, contract_amount DECIMAL(18,2) NULL, revised_contract_amount DECIMAL(18,2) NULL, doc_status varchar(50) NOT NULL, billing_status varchar(50) NOT NULL, scanned_file_url text NULL, date_received DATETIME NULL, payload JSON NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, assigned_division_key varchar(20) NOT NULL, created_by_id INT NULL, submitted_from_division_key varchar(20) NULL);
 
 -- Foreign keys: auth_group_permissions
-ALTER TABLE auth_group_permissions ADD CONSTRAINT fk_auth_group_permissions_0 FOREIGN KEY (permission_id) REFERENCES auth_permission (id);
-ALTER TABLE auth_group_permissions ADD CONSTRAINT fk_auth_group_permissions_1 FOREIGN KEY (group_id) REFERENCES auth_group (id);
+ALTER TABLE auth_group_permissions ADD CONSTRAINT fk_auth_group_permissions_0 FOREIGN KEY (permission_id) REFERENCES auth_permission (id) ON DELETE CASCADE;
+ALTER TABLE auth_group_permissions ADD CONSTRAINT fk_auth_group_permissions_1 FOREIGN KEY (group_id) REFERENCES auth_group (id) ON DELETE CASCADE;
 
 -- Foreign keys: auth_permission
-ALTER TABLE auth_permission ADD CONSTRAINT fk_auth_permission_0 FOREIGN KEY (content_type_id) REFERENCES django_content_type (id);
+ALTER TABLE auth_permission ADD CONSTRAINT fk_auth_permission_0 FOREIGN KEY (content_type_id) REFERENCES django_content_type (id) ON DELETE CASCADE;
 
 -- Foreign keys: auth_user_groups
-ALTER TABLE auth_user_groups ADD CONSTRAINT fk_auth_user_groups_0 FOREIGN KEY (group_id) REFERENCES auth_group (id);
-ALTER TABLE auth_user_groups ADD CONSTRAINT fk_auth_user_groups_1 FOREIGN KEY (user_id) REFERENCES auth_user (id);
+ALTER TABLE auth_user_groups ADD CONSTRAINT fk_auth_user_groups_0 FOREIGN KEY (group_id) REFERENCES auth_group (id) ON DELETE CASCADE;
+ALTER TABLE auth_user_groups ADD CONSTRAINT fk_auth_user_groups_1 FOREIGN KEY (user_id) REFERENCES auth_user (id) ON DELETE CASCADE;
 
 -- Foreign keys: auth_user_user_permissions
-ALTER TABLE auth_user_user_permissions ADD CONSTRAINT fk_auth_user_user_permissions_0 FOREIGN KEY (permission_id) REFERENCES auth_permission (id);
-ALTER TABLE auth_user_user_permissions ADD CONSTRAINT fk_auth_user_user_permissions_1 FOREIGN KEY (user_id) REFERENCES auth_user (id);
+ALTER TABLE auth_user_user_permissions ADD CONSTRAINT fk_auth_user_user_permissions_0 FOREIGN KEY (permission_id) REFERENCES auth_permission (id) ON DELETE CASCADE;
+ALTER TABLE auth_user_user_permissions ADD CONSTRAINT fk_auth_user_user_permissions_1 FOREIGN KEY (user_id) REFERENCES auth_user (id) ON DELETE CASCADE;
 
 -- Foreign keys: django_admin_log
-ALTER TABLE django_admin_log ADD CONSTRAINT fk_django_admin_log_0 FOREIGN KEY (user_id) REFERENCES auth_user (id);
-ALTER TABLE django_admin_log ADD CONSTRAINT fk_django_admin_log_1 FOREIGN KEY (content_type_id) REFERENCES django_content_type (id);
+ALTER TABLE django_admin_log ADD CONSTRAINT fk_django_admin_log_0 FOREIGN KEY (user_id) REFERENCES auth_user (id) ON DELETE CASCADE;
+ALTER TABLE django_admin_log ADD CONSTRAINT fk_django_admin_log_1 FOREIGN KEY (content_type_id) REFERENCES django_content_type (id) ON DELETE SET NULL;
 
 -- Foreign keys: my_app_construction_project
-ALTER TABLE my_app_construction_project ADD CONSTRAINT fk_my_app_construction_project_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id);
-ALTER TABLE my_app_construction_project ADD CONSTRAINT fk_my_app_construction_project_1 FOREIGN KEY (created_by_id) REFERENCES auth_user (id);
+ALTER TABLE my_app_construction_project ADD CONSTRAINT fk_my_app_construction_project_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id) ON DELETE SET NULL;
+ALTER TABLE my_app_construction_project ADD CONSTRAINT fk_my_app_construction_project_1 FOREIGN KEY (created_by_id) REFERENCES auth_user (id) ON DELETE SET NULL;
 
 -- Foreign keys: my_app_construction_task
-ALTER TABLE my_app_construction_task ADD CONSTRAINT fk_my_app_construction_task_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id);
-ALTER TABLE my_app_construction_task ADD CONSTRAINT fk_my_app_construction_task_1 FOREIGN KEY (construction_project_id) REFERENCES my_app_construction_project (id);
+ALTER TABLE my_app_construction_task ADD CONSTRAINT fk_my_app_construction_task_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id) ON DELETE SET NULL;
+ALTER TABLE my_app_construction_task ADD CONSTRAINT fk_my_app_construction_task_1 FOREIGN KEY (construction_project_id) REFERENCES my_app_construction_project (id) ON DELETE SET NULL;
 
 -- Foreign keys: my_app_constructionupload
-ALTER TABLE my_app_constructionupload ADD CONSTRAINT fk_my_app_constructionupload_0 FOREIGN KEY (uploaded_by_id) REFERENCES auth_user (id);
+ALTER TABLE my_app_constructionupload ADD CONSTRAINT fk_my_app_constructionupload_0 FOREIGN KEY (uploaded_by_id) REFERENCES auth_user (id) ON DELETE SET NULL;
 
 -- Foreign keys: my_app_division_submission
-ALTER TABLE my_app_division_submission ADD CONSTRAINT fk_my_app_division_submission_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id);
-ALTER TABLE my_app_division_submission ADD CONSTRAINT fk_my_app_division_submission_1 FOREIGN KEY (submitted_by_id) REFERENCES auth_user (id);
-ALTER TABLE my_app_division_submission ADD CONSTRAINT fk_my_app_division_submission_2 FOREIGN KEY (division_key) REFERENCES my_app_division (`key`);
+ALTER TABLE my_app_division_submission ADD CONSTRAINT fk_my_app_division_submission_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id) ON DELETE CASCADE;
+ALTER TABLE my_app_division_submission ADD CONSTRAINT fk_my_app_division_submission_1 FOREIGN KEY (submitted_by_id) REFERENCES auth_user (id) ON DELETE SET NULL;
+ALTER TABLE my_app_division_submission ADD CONSTRAINT fk_my_app_division_submission_2 FOREIGN KEY (division_key) REFERENCES my_app_division (`key`) ON DELETE RESTRICT;
 
 -- Foreign keys: my_app_divisionstore
-ALTER TABLE my_app_divisionstore ADD CONSTRAINT fk_my_app_divisionstore_0 FOREIGN KEY (user_id) REFERENCES auth_user (id);
+ALTER TABLE my_app_divisionstore ADD CONSTRAINT fk_my_app_divisionstore_0 FOREIGN KEY (user_id) REFERENCES auth_user (id) ON DELETE CASCADE;
 
 -- Foreign keys: my_app_divisionstoreevent
-ALTER TABLE my_app_divisionstoreevent ADD CONSTRAINT fk_my_app_divisionstoreevent_0 FOREIGN KEY (actor_id) REFERENCES auth_user (id);
+ALTER TABLE my_app_divisionstoreevent ADD CONSTRAINT fk_my_app_divisionstoreevent_0 FOREIGN KEY (actor_id) REFERENCES auth_user (id) ON DELETE SET NULL;
 
 -- Foreign keys: my_app_maintenance_task
-ALTER TABLE my_app_maintenance_task ADD CONSTRAINT fk_my_app_maintenance_task_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id);
+ALTER TABLE my_app_maintenance_task ADD CONSTRAINT fk_my_app_maintenance_task_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id) ON DELETE SET NULL;
 
 -- Foreign keys: my_app_planning_record
-ALTER TABLE my_app_planning_record ADD CONSTRAINT fk_my_app_planning_record_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id);
+ALTER TABLE my_app_planning_record ADD CONSTRAINT fk_my_app_planning_record_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id) ON DELETE CASCADE;
 
 -- Foreign keys: my_app_quality_record
-ALTER TABLE my_app_quality_record ADD CONSTRAINT fk_my_app_quality_record_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id);
-ALTER TABLE my_app_quality_record ADD CONSTRAINT fk_my_app_quality_record_1 FOREIGN KEY (route_to_division_key) REFERENCES my_app_division (`key`);
+ALTER TABLE my_app_quality_record ADD CONSTRAINT fk_my_app_quality_record_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id) ON DELETE CASCADE;
+ALTER TABLE my_app_quality_record ADD CONSTRAINT fk_my_app_quality_record_1 FOREIGN KEY (route_to_division_key) REFERENCES my_app_division (`key`) ON DELETE SET NULL;
 
 -- Foreign keys: my_app_userprofile
-ALTER TABLE my_app_userprofile ADD CONSTRAINT fk_my_app_userprofile_0 FOREIGN KEY (user_id) REFERENCES auth_user (id);
+ALTER TABLE my_app_userprofile ADD CONSTRAINT fk_my_app_userprofile_0 FOREIGN KEY (user_id) REFERENCES auth_user (id) ON DELETE CASCADE;
 
 -- Foreign keys: my_app_workflow_event
-ALTER TABLE my_app_workflow_event ADD CONSTRAINT fk_my_app_workflow_event_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id);
-ALTER TABLE my_app_workflow_event ADD CONSTRAINT fk_my_app_workflow_event_1 FOREIGN KEY (to_division_key) REFERENCES my_app_division (`key`);
-ALTER TABLE my_app_workflow_event ADD CONSTRAINT fk_my_app_workflow_event_2 FOREIGN KEY (from_division_key) REFERENCES my_app_division (`key`);
-ALTER TABLE my_app_workflow_event ADD CONSTRAINT fk_my_app_workflow_event_3 FOREIGN KEY (acted_by_id) REFERENCES auth_user (id);
+ALTER TABLE my_app_workflow_event ADD CONSTRAINT fk_my_app_workflow_event_0 FOREIGN KEY (workflow_record_id) REFERENCES my_app_workflow_record (id) ON DELETE CASCADE;
+ALTER TABLE my_app_workflow_event ADD CONSTRAINT fk_my_app_workflow_event_1 FOREIGN KEY (to_division_key) REFERENCES my_app_division (`key`) ON DELETE SET NULL;
+ALTER TABLE my_app_workflow_event ADD CONSTRAINT fk_my_app_workflow_event_2 FOREIGN KEY (from_division_key) REFERENCES my_app_division (`key`) ON DELETE SET NULL;
+ALTER TABLE my_app_workflow_event ADD CONSTRAINT fk_my_app_workflow_event_3 FOREIGN KEY (acted_by_id) REFERENCES auth_user (id) ON DELETE SET NULL;
 
 -- Foreign keys: my_app_workflow_record
-ALTER TABLE my_app_workflow_record ADD CONSTRAINT fk_my_app_workflow_record_0 FOREIGN KEY (submitted_from_division_key) REFERENCES my_app_division (`key`);
-ALTER TABLE my_app_workflow_record ADD CONSTRAINT fk_my_app_workflow_record_1 FOREIGN KEY (created_by_id) REFERENCES auth_user (id);
-ALTER TABLE my_app_workflow_record ADD CONSTRAINT fk_my_app_workflow_record_2 FOREIGN KEY (assigned_division_key) REFERENCES my_app_division (`key`);
+ALTER TABLE my_app_workflow_record ADD CONSTRAINT fk_my_app_workflow_record_0 FOREIGN KEY (submitted_from_division_key) REFERENCES my_app_division (`key`) ON DELETE SET NULL;
+ALTER TABLE my_app_workflow_record ADD CONSTRAINT fk_my_app_workflow_record_1 FOREIGN KEY (created_by_id) REFERENCES auth_user (id) ON DELETE SET NULL;
+ALTER TABLE my_app_workflow_record ADD CONSTRAINT fk_my_app_workflow_record_2 FOREIGN KEY (assigned_division_key) REFERENCES my_app_division (`key`) ON DELETE RESTRICT;
 
 -- Index: auth_group_permissions_group_id_b120cbf9 on auth_group_permissions
 CREATE INDEX auth_group_permissions_group_id_b120cbf9 ON auth_group_permissions (group_id);
@@ -252,7 +252,7 @@ CREATE INDEX my_app_divisionstoreevent_actor_id_546f55a7 ON my_app_divisionstore
 CREATE INDEX my_app_main_status_87e3b1_idx ON my_app_maintenance_equipment (status);
 
 -- Index: my_app_main_conditi_e36814_idx on my_app_maintenance_road
-CREATE INDEX my_app_main_conditi_e36814_idx ON my_app_maintenance_road (condition);
+CREATE INDEX my_app_main_conditi_e36814_idx ON my_app_maintenance_road (`condition`);
 
 -- Index: my_app_main_status_edd6e2_idx on my_app_maintenance_schedule
 CREATE INDEX my_app_main_status_edd6e2_idx ON my_app_maintenance_schedule (status, start_date);
@@ -313,5 +313,14 @@ INSERT INTO my_app_division (`key`, `label`, `is_active`) VALUES
 ('quality','Quality Division',1),
 ('maintenance','Maintenance Division',1)
 ON DUPLICATE KEY UPDATE label=VALUES(label), is_active=VALUES(is_active);
+
+INSERT INTO my_app_shareddivisionstore (`key`, data, created_at, updated_at) VALUES
+('admin', JSON_ARRAY(), NOW(), NOW()),
+('planning', JSON_ARRAY(), NOW(), NOW()),
+('construction', JSON_ARRAY(), NOW(), NOW()),
+('quality', JSON_ARRAY(), NOW(), NOW()),
+('maintenance', JSON_OBJECT(), NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+updated_at=VALUES(updated_at);
 
 SET FOREIGN_KEY_CHECKS = 1;
