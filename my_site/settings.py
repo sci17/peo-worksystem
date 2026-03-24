@@ -86,11 +86,26 @@ WSGI_APPLICATION = 'my_site.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+_db_engine = os.environ.get('DJANGO_DB_ENGINE', 'django.db.backends.mysql')
+_db_name = os.environ.get('DJANGO_DB_NAME', 'peo_database')
+_db_config = {
+    'ENGINE': _db_engine,
+    'NAME': _db_name,
+}
+
+if _db_engine == 'django.db.backends.mysql':
+    _db_config.update({
+        'USER': os.environ.get('DJANGO_DB_USER', 'root'),
+        'PASSWORD': os.environ.get('DJANGO_DB_PASSWORD', 'root'),
+        'HOST': os.environ.get('DJANGO_DB_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('DJANGO_DB_PORT', '3306'),
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+        },
+    })
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': _db_config
 }
 
 
