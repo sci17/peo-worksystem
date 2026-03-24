@@ -21,10 +21,11 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
 from .forms import AccountSettingsForm
-from .models import DivisionStore, SharedDivisionStore
 from .models import (
     DivisionStore,
     SharedDivisionStore,
+    DivisionStoreEvent,
+    ConstructionUpload,
     UserProfile,
     KEY_ADMIN,
     KEY_PLANNING,
@@ -32,6 +33,34 @@ from .models import (
     KEY_QUALITY,
     KEY_MAINTENANCE
 )
+
+
+def _safe_log_division_store_event(
+    *,
+    actor,
+    store_key,
+    target,
+    write_mode="",
+    request_payload=None,
+    stored_payload=None,
+    path="",
+    method="",
+):
+    try:
+        DivisionStoreEvent.objects.create(
+            actor=actor,
+            store_key=store_key,
+            target=target,
+            write_mode=str(write_mode or ""),
+            request_payload=request_payload,
+            stored_payload=stored_payload,
+            path=str(path or "")[:255],
+            method=str(method or "")[:10],
+        )
+    except (OperationalError, ProgrammingError):
+        return
+    except Exception:
+        return
 
 
 def _get_user_profile(user):
@@ -2051,6 +2080,17 @@ def division_store_api(request, key):
         store.data = payload
     store.save()
 
+    _safe_log_division_store_event(
+        actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+        store_key=key,
+        target=DivisionStoreEvent.TARGET_SHARED if using_shared_store else DivisionStoreEvent.TARGET_USER,
+        write_mode=write_mode,
+        request_payload=payload,
+        stored_payload=store.data,
+        path=getattr(request, "path", ""),
+        method=getattr(request, "method", ""),
+    )
+
     return JsonResponse(
         {
             "ok": True,
@@ -2076,6 +2116,17 @@ def division_store_clear_all_api(request):
             store.data = empty_payload
             store.save(update_fields=["data", "updated_at"])
             cleared.append(key)
+
+            _safe_log_division_store_event(
+                actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+                store_key=key,
+                target=DivisionStoreEvent.TARGET_SHARED,
+                write_mode="clear_all",
+                request_payload=None,
+                stored_payload=empty_payload,
+                path=getattr(request, "path", ""),
+                method=getattr(request, "method", ""),
+            )
         except (OperationalError, ProgrammingError):
             # Shared store not available; fall back to wiping per-user stores below.
             pass
@@ -2135,13 +2186,22 @@ def construction_photo_upload(request):
             for chunk in file.chunks():
                 handle.write(chunk)
 
-        stored.append(
-            {
-                "name": filename,
-                "original_name": original_name,
-                "url": f"/static/uploads/{filename}",
-            }
-        )
+        url = f"/static/uploads/{filename}"
+        stored.append({"name": filename, "original_name": original_name, "url": url})
+
+        try:
+            ConstructionUpload.objects.create(
+                uploaded_by=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+                stored_name=filename,
+                original_name=original_name,
+                url=url,
+                content_type=str(getattr(file, "content_type", "") or ""),
+                size_bytes=int(size or 0),
+            )
+        except (OperationalError, ProgrammingError):
+            pass
+        except Exception:
+            pass
 
     if not stored:
         return JsonResponse({"error": "No valid files uploaded."}, status=400)
