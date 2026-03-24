@@ -15481,7 +15481,53 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (tableBody) {
-        tableBody.addEventListener("click", (event) => {
+        tableBody.addEventListener("click", async (event) => {
+            const deleteTrigger = event.target.closest(".js-construction-task-delete");
+            if (deleteTrigger) {
+                event.preventDefault();
+                const recordId = String(deleteTrigger.dataset.recordId || deleteTrigger.closest("tr")?.dataset.recordId || "").trim();
+                if (!recordId) return;
+
+                const tasks = readTasks();
+                const match = tasks.find((task) => String(task?.construction_id || task?.__id || "") === recordId) || {};
+                const taskName = String(match?.task_name || match?.project_name || match?.name || match?.title || "this task").trim();
+                const confirmMessage = taskName === "this task"
+                    ? "Delete this task?"
+                    : `Delete "${taskName}"?`;
+
+                const approved = await showPeoGeneralConfirm({
+                    title: "Delete Task",
+                    message: confirmMessage,
+                    confirmLabel: "Delete",
+                    cancelLabel: "Cancel",
+                    variant: "danger",
+                });
+                if (!approved) return;
+
+                const nextTasks = tasks.filter((task) => String(task?.construction_id || task?.__id || "") !== recordId);
+                const wroteTasks = writeTasks(nextTasks);
+                if (!wroteTasks) {
+                    showPeoGeneralToast("Unable to delete task. Storage is unavailable.", {
+                        title: "Construction Division",
+                        variant: "danger",
+                    });
+                    return;
+                }
+
+                const constructionRecords = readConstructionRecords();
+                const nextConstructionRecords = constructionRecords.filter((item) => String(item?.__id || item?.construction_id || "") !== recordId);
+                if (nextConstructionRecords.length !== constructionRecords.length) {
+                    writeConstructionRecords(nextConstructionRecords);
+                }
+
+                showPeoGeneralToast("Task deleted successfully.", {
+                    title: "Construction Division",
+                    variant: "success",
+                });
+                render();
+                return;
+            }
+
             const trigger = event.target.closest(".js-open-construction-task-modal");
             if (!trigger) return;
             event.preventDefault();
@@ -15506,16 +15552,16 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!totalCount) {
             tableBody.innerHTML = `
                 <tr class="construction-empty-row">
-                    <td colspan="7">No construction tasks available yet.</td>
+                    <td colspan="8">No construction tasks available yet.</td>
                 </tr>
             `;
         } else {
             records.forEach((record, index) => {
                 const row = document.createElement("tr");
-                row.dataset.recordId = String(record?.__id || "");
+                const constructionId = record?.construction_id || record?.__id || "";
+                row.dataset.recordId = String(constructionId || "");
 
                 const taskName = record?.task_name || record?.project_name || record?.name || record?.title;
-                const constructionId = record?.construction_id || record?.__id || "";
                 const assignedTo = record?.assigned_to || record?.assign_to || record?.personnel_name || record?.personnel || record?.assignee;
                 const dateReceived = record?.date_received || record?.date_receive || record?.date || record?.received_at;
                 const status = record?.status || record?.task_status;
@@ -15540,6 +15586,19 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td>${escapeHtml(formatDate(dateReceived))}</td>
                     <td>${escapeHtml(toDisplay(status))}</td>
                     <td>${escapeHtml(toDisplay(remarks))}</td>
+                    <td>
+                        <div class="construction-actions">
+                            <button
+                                type="button"
+                                class="construction-action-btn construction-action-btn--delete js-construction-task-delete"
+                                ${constructionId ? `data-record-id="${escapeHtml(constructionId)}"` : ""}
+                                aria-label="Delete task"
+                                title="Delete task"
+                            >
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
                 `;
                 tableBody.appendChild(row);
             });

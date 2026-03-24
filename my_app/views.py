@@ -102,6 +102,66 @@ def _normalize_division_key(value):
     return ""
 
 
+def _is_empty_division_store_payload(store_key, payload):
+    key = _normalize_division_key(store_key)
+    if key == KEY_MAINTENANCE:
+        if not isinstance(payload, dict):
+            return True
+        for list_key in (
+            "roadRecords",
+            "equipmentRows",
+            "scheduleRows",
+            "taskRows",
+            "personnelRecords",
+            "contractorRecords",
+        ):
+            if isinstance(payload.get(list_key), list) and payload.get(list_key):
+                return False
+        return True
+
+    return not (isinstance(payload, list) and len(payload) > 0)
+
+
+def _shared_store_should_bootstrap(store_key, shared_store):
+    """
+    Bootstrap SharedDivisionStore from legacy per-user DivisionStore only when the shared
+    store is still uninitialized.
+
+    If the shared store was explicitly written (including being cleared to empty), do not
+    re-bootstrap; otherwise deleted data can reappear after refresh.
+    """
+
+    key = _normalize_division_key(store_key)
+    if not key or not shared_store:
+        return False
+
+    if not _is_empty_division_store_payload(key, getattr(shared_store, "data", None)):
+        return False
+
+    try:
+        has_events = DivisionStoreEvent.objects.filter(
+            store_key=key,
+            target=DivisionStoreEvent.TARGET_SHARED,
+        ).exists()
+        if has_events:
+            return False
+    except (OperationalError, ProgrammingError):
+        # The events table might not exist yet; fall back to timestamps below.
+        pass
+    except Exception:
+        pass
+
+    try:
+        created_at = getattr(shared_store, "created_at", None)
+        updated_at = getattr(shared_store, "updated_at", None)
+        if created_at and updated_at and (updated_at - created_at) > timedelta(seconds=2):
+            return False
+    except Exception:
+        pass
+
+    return True
+
+
 def _division_label_for_key(value):
     key = _normalize_division_key(value)
     labels = {
@@ -1855,34 +1915,16 @@ def project_dashboard(request):
     }
     project_store_seed = dict(store_defaults)
 
-    def is_empty_payload(key, payload):
-        if key == KEY_MAINTENANCE:
-            if not isinstance(payload, dict):
-                return True
-            for list_key in (
-                "roadRecords",
-                "equipmentRows",
-                "scheduleRows",
-                "taskRows",
-                "personnelRecords",
-                "contractorRecords",
-            ):
-                if isinstance(payload.get(list_key), list) and payload.get(list_key):
-                    return False
-            return True
-
-        return not (isinstance(payload, list) and len(payload) > 0)
-
     try:
         for key in store_defaults.keys():
             shared_store, _ = SharedDivisionStore.objects.get_or_create(key=key)
-            if is_empty_payload(key, shared_store.data):
+            if _shared_store_should_bootstrap(key, shared_store):
                 candidate = (
                     DivisionStore.objects.filter(key=key)
                     .order_by("-updated_at")
                     .first()
                 )
-                if candidate and not is_empty_payload(key, candidate.data):
+                if candidate and not _is_empty_division_store_payload(key, candidate.data):
                     shared_store.data = candidate.data
                     shared_store.save(update_fields=["data", "updated_at"])
 
@@ -2031,26 +2073,14 @@ def division_store_api(request, key):
 
     if request.method == "GET":
         if using_shared_store:
-            def is_empty_payload(payload):
-                if key == KEY_MAINTENANCE:
-                    if not isinstance(payload, dict):
-                        return True
-                    # Consider it empty when there are no meaningful arrays in the payload.
-                    for list_key in ("roadRecords", "equipmentRows", "scheduleRows", "taskRows", "personnelRecords", "contractorRecords"):
-                        if isinstance(payload.get(list_key), list) and payload.get(list_key):
-                            return False
-                    return True
-
-                return not (isinstance(payload, list) and len(payload) > 0)
-
             # Bootstrap shared store from the most recently updated per-user store (if shared is empty).
-            if is_empty_payload(store.data):
+            if _shared_store_should_bootstrap(key, store):
                 candidate = (
                     DivisionStore.objects.filter(key=key)
                     .order_by("-updated_at")
                     .first()
                 )
-                if candidate and not is_empty_payload(candidate.data):
+                if candidate and not _is_empty_division_store_payload(key, candidate.data):
                     store.data = candidate.data
                     store.save(update_fields=["data", "updated_at"])
 

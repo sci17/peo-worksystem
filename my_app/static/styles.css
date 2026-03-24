@@ -8700,6 +8700,15 @@ body.construction-modal-open {
     min-width: 220px;
 }
 
+.js-construction-task-dashboard .construction-table th:nth-child(8),
+.js-construction-task-dashboard .construction-table td:nth-child(8) {
+    width: 110px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+}
+
 .construction-task-modal {
     position: fixed;
     inset: 0;
@@ -9082,6 +9091,11 @@ body.construction-modal-open {
     width: 16px;
     height: 16px;
     fill: currentColor;
+}
+
+.construction-action-btn .material-symbols-outlined {
+    font-size: 18px;
+    line-height: 1;
 }
 
 .construction-action-btn:hover {
