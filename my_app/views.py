@@ -713,7 +713,7 @@ def _build_overview_context(user):
     completed_projects.sort(key=lambda item: item.get('__sort', 0), reverse=True)
     spotlight_projects = [
         {k: v for k, v in item.items() if not k.startswith('__')}
-        for item in completed_projects[:5]
+        for item in completed_projects
     ]
 
     # Recent activity (division store syncs)
@@ -2189,8 +2189,6 @@ def construction_photo_upload(request):
         return JsonResponse({"error": "No files uploaded."}, status=400)
 
     allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf"}
-    max_bytes = 8 * 1024 * 1024  # 8MB per file
-
     uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2205,8 +2203,6 @@ def construction_photo_upload(request):
             return JsonResponse({"error": f"Unsupported file type: {ext or 'unknown'}."}, status=400)
 
         size = getattr(file, "size", 0) or 0
-        if size > max_bytes:
-            return JsonResponse({"error": f"File too large (max {max_bytes // (1024 * 1024)}MB)."}, status=400)
 
         # Keep filenames stable and avoid collisions.
         filename = f"construction_{uuid.uuid4().hex}{ext}"

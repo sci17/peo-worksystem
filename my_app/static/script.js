@@ -12338,11 +12338,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const titleEl = spotlightScene.querySelector(".spotlight-copy h4");
     const subtitleEl = spotlightScene.querySelector(".spotlight-copy p");
     const dotsWrap = spotlightScene.querySelector(".spotlight-dots");
-    const dotEls = dotsWrap ? Array.from(dotsWrap.querySelectorAll("span")) : [];
 
     const SPOTLIGHT_INDEX_KEY = "peo_overview_spotlight_index_v1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
-    const SPOTLIGHT_AUTOPLAY_MS = 5000;
+    const SPOTLIGHT_AUTOPLAY_MS = 4000;
     const prefersReducedMotion = typeof window.matchMedia === "function"
         ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
         : false;
@@ -12352,6 +12351,13 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentSpotlightBgUrl = "";
 
     const normalize = (value) => String(value || "").trim().toLowerCase();
+    const escapeHtml = (value) =>
+        String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
     // Only allow construction uploads from the static uploads folder. This prevents the spotlight from
     // accidentally showing user profile images or other unrelated assets.
     const normalizeConstructionSpotlightUrl = (value) => {
@@ -12416,6 +12422,26 @@ document.addEventListener("DOMContentLoaded", () => {
         return String(list[Math.floor(Math.random() * list.length)]);
     };
 
+    const isConstructionCompleted = (record) => {
+        const statusRaw = String(record?.status_current ?? record?.statusCurrent ?? "").trim().toLowerCase();
+        const hasCompletedDate = Boolean(String(record?.date_completed || record?.dateCompleted || "").trim());
+        const percent = Number.parseFloat(statusRaw.replace(/[^0-9.-]/g, ""));
+        return statusRaw.includes("complete")
+            || hasCompletedDate
+            || (Number.isFinite(percent) && percent >= 100);
+    };
+
+    const getFirstConstructionImageUrl = (record) => {
+        const images = Array.isArray(record?.accomplishment_images) ? record.accomplishment_images : [];
+        for (const img of images) {
+            const url = (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim();
+            const normalizedUrl = normalizeConstructionSpotlightUrl(url);
+            if (normalizedUrl) return normalizedUrl;
+        }
+        const legacy = String(record?.accomplishment_image || "").trim();
+        return normalizeConstructionSpotlightUrl(legacy);
+    };
+
     const buildConstructionSlides = (records) =>
         (Array.isArray(records) ? records : [])
             .filter((record) => record && typeof record === "object")
@@ -12462,11 +12488,23 @@ document.addEventListener("DOMContentLoaded", () => {
             usesConstructionSlides = false;
         }
 
-        // The template only renders dots for the server-provided spotlight items. Hide them when we
-        // switch to construction-driven slides (could be hundreds of records).
-        if (dotsWrap instanceof HTMLElement) {
-            dotsWrap.style.display = usesConstructionSlides ? "none" : "";
-        }
+        const renderDots = () => {
+            if (!(dotsWrap instanceof HTMLElement)) return;
+            dotsWrap.innerHTML = "";
+            if (slides.length <= 1) {
+                dotsWrap.style.display = "none";
+                return;
+            }
+            dotsWrap.style.display = "";
+            const frag = document.createDocumentFragment();
+            slides.forEach(() => {
+                const dot = document.createElement("span");
+                frag.appendChild(dot);
+            });
+            dotsWrap.appendChild(frag);
+        };
+
+        renderDots();
     };
 
     const ensureSpotlightLayers = () => {
@@ -12592,7 +12630,8 @@ document.addEventListener("DOMContentLoaded", () => {
             clearSpotlightBackground();
         }
 
-        if (!usesConstructionSlides && dotEls.length) {
+        if (dotsWrap instanceof HTMLElement) {
+            const dotEls = Array.from(dotsWrap.querySelectorAll("span"));
             dotEls.forEach((dot, dotIndex) => {
                 dot.classList.toggle("is-active", dotIndex === nextIndex);
             });
@@ -12604,6 +12643,48 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initial render.
     const initialRecords = readConstructionRecords();
     refreshSlides(initialRecords);
+    const spotlightGalleryWrap = spotlightSection.querySelector(".spotlight-gallery");
+    const spotlightGallery = spotlightSection.querySelector(".js-spotlight-gallery");
+    const spotlightGalleryMeta = spotlightSection.querySelector(".js-spotlight-gallery-meta");
+
+    const renderSpotlightGallery = (records) => {
+        if (!(spotlightGallery instanceof HTMLElement)) return;
+        const list = Array.isArray(records) ? records : [];
+        const cards = list
+            .filter((record) => record && typeof record === "object" && isConstructionCompleted(record))
+            .map((record) => {
+                const imageUrl = getFirstConstructionImageUrl(record);
+                if (!imageUrl) return null;
+                const title = String(record.project_name || record.project || "Construction Project").trim();
+                const location = String(record.location || "").trim();
+                const contractor = String(record.contractor || "").trim();
+                const subtitle = [location, contractor].filter(Boolean).join(" \u00b7 ");
+                return `
+                    <article class="spotlight-gallery-card">
+                        <div class="spotlight-gallery-photo" style="background-image: url('${imageUrl.replace(/'/g, "%27")}')"></div>
+                        <div class="spotlight-gallery-copy">
+                            <h5>${escapeHtml(title)}</h5>
+                            ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+                        </div>
+                    </article>
+                `;
+            })
+            .filter(Boolean);
+
+        if (spotlightGalleryMeta instanceof HTMLElement) {
+            spotlightGalleryMeta.textContent = cards.length
+                ? `${cards.length} completed project${cards.length === 1 ? "" : "s"} with photos.`
+                : "";
+        }
+
+        if (spotlightGalleryWrap instanceof HTMLElement) {
+            spotlightGalleryWrap.hidden = !cards.length;
+        }
+
+        spotlightGallery.innerHTML = cards.length ? cards.join("") : "";
+    };
+
+    renderSpotlightGallery(initialRecords);
     if (!slides.length) {
         return;
     }
@@ -12644,6 +12725,7 @@ document.addEventListener("DOMContentLoaded", () => {
             go(1);
         });
     }
+
 
     // Auto-advance the spotlight carousel (skip if only one item or user prefers reduced motion).
     let autoplayTimer = null;
@@ -12692,13 +12774,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Keep spotlight in sync when construction records update (e.g., after uploading photos).
     window.addEventListener("focus", () => {
-        refreshSlides(readConstructionRecords());
+        const records = readConstructionRecords();
+        refreshSlides(records);
+        renderSpotlightGallery(records);
         applySpotlight(activeIndex);
     });
     window.addEventListener("storage", (event) => {
         if (String(event.key || "") === CONSTRUCTION_STORAGE_KEY) {
             // Records changed elsewhere; keep the current slide but refresh the image.
-            refreshSlides(readConstructionRecords());
+            const records = readConstructionRecords();
+            refreshSlides(records);
+            renderSpotlightGallery(records);
             applySpotlight(activeIndex);
         }
         if (String(event.key || "") === SPOTLIGHT_INDEX_KEY) {
@@ -13513,10 +13599,53 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 const safe = record && typeof record === "object" ? { ...record } : {};
-                delete safe.accomplishment_images;
-                delete safe.accomplishment_history;
-                delete safe.accomplishment_image;
-                delete safe.accomplishment_image_name;
+
+                const sanitizeUrl = (value) => {
+                    const url = String(value || "").trim();
+                    if (!url) return "";
+                    if (url.startsWith("data:")) return "";
+                    return url;
+                };
+
+                const normalizeImages = (value) => {
+                    const list = Array.isArray(value) ? value : [];
+                    return list
+                        .map((img) => {
+                            if (typeof img === "string") {
+                                const dataUrl = sanitizeUrl(img);
+                                return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                            }
+                            if (!img || typeof img !== "object") return null;
+                            const dataUrl = sanitizeUrl(img.dataUrl || img.url || "");
+                            if (!dataUrl) return null;
+                            return {
+                                dataUrl,
+                                name: String(img.name || "").trim(),
+                                uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || "").trim(),
+                            };
+                        })
+                        .filter(Boolean);
+                };
+
+                if (Array.isArray(safe.accomplishment_images)) {
+                    safe.accomplishment_images = normalizeImages(safe.accomplishment_images);
+                }
+
+                if (Array.isArray(safe.accomplishment_history)) {
+                    safe.accomplishment_history = safe.accomplishment_history
+                        .map((entry) => {
+                            const snap = entry && typeof entry === "object" ? { ...entry } : {};
+                            if (Array.isArray(snap.images)) {
+                                snap.images = normalizeImages(snap.images);
+                            }
+                            return snap;
+                        })
+                        .filter((entry) => entry && typeof entry === "object");
+                }
+
+                if (typeof safe.accomplishment_image === "string") {
+                    safe.accomplishment_image = sanitizeUrl(safe.accomplishment_image);
+                }
                 return safe;
             });
             window.peoDivisionStore.queueSync("construction", safeRecords, 0);
@@ -14912,6 +15041,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .map((img) => ({
                 dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
                 name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
+                uploaded_at: String(typeof img === "string" ? "" : (img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || record?.__updated_at || record?.__created_at || "")).trim(),
             }))
             .filter((img) => img.dataUrl);
     };
@@ -15644,7 +15774,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const currentUser = String(projectDashboard.dataset.currentUser || "").trim() || "Local User";
     const recordId = String(new URLSearchParams(window.location.search).get("id") || "").trim();
     const MAX_IMAGE_COUNT = 10;
-    const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
     const HISTORY_LIMIT = 12;
 
     const readConstructionTasks = () => {
@@ -15743,10 +15872,53 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
             const safeForSync = safeItems.map((record) => {
                 const safe = record && typeof record === "object" ? { ...record } : {};
-                delete safe.accomplishment_images;
-                delete safe.accomplishment_history;
-                delete safe.accomplishment_image;
-                delete safe.accomplishment_image_name;
+
+                const sanitizeUrl = (value) => {
+                    const url = String(value || "").trim();
+                    if (!url) return "";
+                    if (url.startsWith("data:")) return "";
+                    return url;
+                };
+
+                const normalizeImages = (value) => {
+                    const list = Array.isArray(value) ? value : [];
+                    return list
+                        .map((img) => {
+                            if (typeof img === "string") {
+                                const dataUrl = sanitizeUrl(img);
+                                return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                            }
+                            if (!img || typeof img !== "object") return null;
+                            const dataUrl = sanitizeUrl(img.dataUrl || img.url || "");
+                            if (!dataUrl) return null;
+                            return {
+                                dataUrl,
+                                name: String(img.name || "").trim(),
+                                uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || "").trim(),
+                            };
+                        })
+                        .filter(Boolean);
+                };
+
+                if (Array.isArray(safe.accomplishment_images)) {
+                    safe.accomplishment_images = normalizeImages(safe.accomplishment_images);
+                }
+
+                if (Array.isArray(safe.accomplishment_history)) {
+                    safe.accomplishment_history = safe.accomplishment_history
+                        .map((entry) => {
+                            const snap = entry && typeof entry === "object" ? { ...entry } : {};
+                            if (Array.isArray(snap.images)) {
+                                snap.images = normalizeImages(snap.images);
+                            }
+                            return snap;
+                        })
+                        .filter((entry) => entry && typeof entry === "object");
+                }
+
+                if (typeof safe.accomplishment_image === "string") {
+                    safe.accomplishment_image = sanitizeUrl(safe.accomplishment_image);
+                }
                 return safe;
             });
             window.peoDivisionStore.queueSync("construction", safeForSync, 0);
@@ -15835,13 +16007,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         for (const file of list) {
             if (results.length >= MAX_IMAGE_COUNT) break;
-            if (file.size > MAX_IMAGE_BYTES) {
-                toast(`Skipped ${file.name}: image must be smaller than 6MB.`, {
-                    title: "Construction Project",
-                    variant: "warning",
-                });
-                continue;
-            }
 
             // eslint-disable-next-line no-await-in-loop
             const dataUrl = await new Promise((resolve) => {
@@ -15882,6 +16047,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 const statusCurrent = String(snapshot.status_current ?? "").trim();
                 const imageDataUrl = String(snapshot.image_data_url || snapshot.dataUrl || snapshot.image || "").trim();
                 const imageName = String(snapshot.image_name || snapshot.name || "").trim();
+                const images = (Array.isArray(snapshot.images) ? snapshot.images : [])
+                    .map((img) => {
+                        if (typeof img === "string") {
+                            const dataUrl = img.trim();
+                            return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                        }
+                        if (!img || typeof img !== "object") return null;
+                        const dataUrl = String(img.dataUrl || img.url || "").trim();
+                        if (!dataUrl) return null;
+                        return {
+                            dataUrl,
+                            name: String(img.name || "").trim(),
+                            uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || savedAt || "").trim(),
+                        };
+                    })
+                    .filter(Boolean);
+
+                const normalizedImages = images.length
+                    ? images
+                    : (imageDataUrl ? [{
+                        dataUrl: imageDataUrl,
+                        name: imageName,
+                        uploaded_at: savedAt,
+                    }] : []);
 
                 return {
                     id: String(snapshot.id || snapshot.__id || "").trim() || createHistoryId(),
@@ -15893,6 +16082,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     status_current: statusCurrent,
                     image_data_url: imageDataUrl,
                     image_name: imageName,
+                    images: normalizedImages,
                 };
             })
             .filter((entry) => entry.project_name || entry.location || entry.contractor || entry.status_current || entry.image_data_url);
@@ -16106,6 +16296,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 .map((img) => ({
                     dataUrl: String(img?.dataUrl || "").trim(),
                     name: String(img?.name || "").trim(),
+                    uploaded_at: String(img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || nextRecord.__updated_at || "").trim(),
                 }))
                 .filter((img) => img.dataUrl);
 
@@ -19227,6 +19418,86 @@ document.addEventListener("DOMContentLoaded", () => {
                 const serverCount = Array.isArray(serverData) ? serverData.length : 0;
 
                 if (serverCount > localCount) {
+                    if (def.storeKey === "construction") {
+                        const localList = Array.isArray(localParsed) ? localParsed : [];
+                        const localById = new Map();
+                        localList.forEach((row) => {
+                            const id = String(row?.__id || row?.construction_id || row?.id || "").trim();
+                            if (!id) return;
+                            localById.set(id, row);
+                        });
+
+                        const normalizeImages = (value) => {
+                            const list = Array.isArray(value) ? value : [];
+                            const seen = new Set();
+                            const out = [];
+                            list.forEach((img) => {
+                                if (typeof img === "string") {
+                                    const url = img.trim();
+                                    if (!url || url.startsWith("data:") || seen.has(url)) return;
+                                    seen.add(url);
+                                    out.push({ dataUrl: url, name: "", uploaded_at: "" });
+                                    return;
+                                }
+                                if (!img || typeof img !== "object") return;
+                                const url = String(img.dataUrl || img.url || "").trim();
+                                if (!url || url.startsWith("data:") || seen.has(url)) return;
+                                seen.add(url);
+                                out.push({
+                                    dataUrl: url,
+                                    name: String(img.name || "").trim(),
+                                    uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || "").trim(),
+                                });
+                            });
+                            return out;
+                        };
+
+                        const mergeConstructionFields = (serverRow, localRow) => {
+                            const serverObj = serverRow && typeof serverRow === "object" ? serverRow : {};
+                            const localObj = localRow && typeof localRow === "object" ? localRow : {};
+                            const merged = { ...localObj, ...serverObj };
+
+                            const localImages = Array.isArray(localObj.accomplishment_images) ? normalizeImages(localObj.accomplishment_images) : [];
+                            const serverImages = Array.isArray(serverObj.accomplishment_images) ? normalizeImages(serverObj.accomplishment_images) : [];
+                            const images = serverImages.length ? serverImages : localImages;
+                            if (images.length) merged.accomplishment_images = images;
+
+                            const localHistory = Array.isArray(localObj.accomplishment_history) ? localObj.accomplishment_history : [];
+                            const serverHistory = Array.isArray(serverObj.accomplishment_history) ? serverObj.accomplishment_history : [];
+                            const history = serverHistory.length ? serverHistory : localHistory;
+                            if (history.length) merged.accomplishment_history = history;
+
+                            if (localObj.accomplishment_image && !merged.accomplishment_image) {
+                                merged.accomplishment_image = localObj.accomplishment_image;
+                            }
+                            if (localObj.accomplishment_image_name && !merged.accomplishment_image_name) {
+                                merged.accomplishment_image_name = localObj.accomplishment_image_name;
+                            }
+
+                            return merged;
+                        };
+
+                        const mergedList = [];
+                        const used = new Set();
+                        (Array.isArray(serverData) ? serverData : []).forEach((row) => {
+                            const id = String(row?.__id || row?.construction_id || row?.id || "").trim();
+                            if (!id) {
+                                mergedList.push(row);
+                                return;
+                            }
+                            used.add(id);
+                            mergedList.push(mergeConstructionFields(row, localById.get(id)));
+                        });
+                        localList.forEach((row) => {
+                            const id = String(row?.__id || row?.construction_id || row?.id || "").trim();
+                            if (!id || used.has(id)) return;
+                            mergedList.push(row);
+                        });
+
+                        safeLocalStorageSet(def.storageKey, JSON.stringify(mergedList));
+                        return;
+                    }
+
                     safeLocalStorageSet(def.storageKey, JSON.stringify(serverData));
                 }
             });
@@ -19460,6 +19731,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             .map((img) => ({
                                 dataUrl: String(img?.dataUrl || img?.image_data_url || "").trim(),
                                 name: String(img?.name || img?.image_name || "").trim(),
+                                uploaded_at: String(img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || savedAt || "").trim(),
                             }))
                             .filter((img) => img.dataUrl),
                     };
@@ -20539,6 +20811,73 @@ document.addEventListener("DOMContentLoaded", () => {
 	                return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 	            };
 
+                const formatDateTime = (value) => {
+                    const text = String(value ?? "").trim();
+                    if (!text) return "";
+
+                    const isoDateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    if (isoDateOnlyMatch) {
+                        const year = Number(isoDateOnlyMatch[1]);
+                        const month = Number(isoDateOnlyMatch[2]);
+                        const day = Number(isoDateOnlyMatch[3]);
+                        const parsed = new Date(year, month - 1, day);
+                        if (Number.isNaN(parsed.getTime())) return text;
+                        return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+                    }
+
+                    const parsed = new Date(text);
+                    if (Number.isNaN(parsed.getTime())) return text;
+                    return parsed.toLocaleString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                    });
+                };
+
+                const buildDetailsImagesHtml = () => {
+                    const images = Array.isArray(record?.accomplishment_images)
+                        ? record.accomplishment_images
+                            .map((img) => {
+                                if (typeof img === "string") {
+                                    const dataUrl = img.trim();
+                                    return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                                }
+                                if (!img || typeof img !== "object") return null;
+                                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                                if (!dataUrl) return null;
+                                return {
+                                    dataUrl,
+                                    name: String(img.name || "").trim(),
+                                    uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || record?.__updated_at || record?.__created_at || "").trim(),
+                                };
+                            })
+                            .filter(Boolean)
+                        : [];
+
+                    if (!images.length) {
+                        return `<div style="color:#64748b;">No images uploaded yet.</div>`;
+                    }
+
+                    return `
+                        <div class="project-history-month-images">
+                            ${images.map((img) => {
+                                const uploadedAtLabel = formatDateTime(img.uploaded_at);
+                                const meta = uploadedAtLabel
+                                    ? `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded ${escapeProjectHtml(uploadedAtLabel)}`
+                                    : `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded -`;
+                                return `
+                                    <figure class="project-history-month-image">
+                                        <img src="${escapeProjectHtml(img.dataUrl)}" alt="${escapeProjectHtml(img.name || record?.project_name || "Project image")}">
+                                        <figcaption class="project-history-image-meta">${meta}</figcaption>
+                                    </figure>
+                                `;
+                            }).join("")}
+                        </div>
+                    `;
+                };
+
 		            const formatMonthYear = (value) => {
 		                const text = String(value ?? "").trim();
 		                if (!text) return "-";
@@ -20557,11 +20896,12 @@ document.addEventListener("DOMContentLoaded", () => {
 			                return `${normalized.toFixed(0)}%`;
 			            };
 	
-			            const asOfMonthYear = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long" });
-			            const statusPercent = formatStatusPercent(record.status_current);
-			            const asOfHeader = `As of (${asOfMonthYear})`;
-			            const detailsCard = `
-			                <article class="project-history-month-card project-history-details-card">
+		            const asOfMonthYear = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long" });
+		            const statusPercent = formatStatusPercent(record.status_current);
+		            const asOfHeader = `As of (${asOfMonthYear})`;
+                    const detailsImagesHtml = buildDetailsImagesHtml();
+		            const detailsCard = `
+		                <article class="project-history-month-card project-history-details-card">
 	                    <div class="project-history-month-head">
 	                        <div>
 	                            <h5>Project Details</h5>
@@ -20573,7 +20913,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	                            <thead>
 	                                    <tr>
 	                                        <th>Project Name</th>
-	                                        <th>Location</th>
+	                                        <th><span class="material-symbols-outlined" aria-hidden="true">location_on</span> Location</th>
 	                                        <th>Municipality</th>
 	                                        <th>Contract Cost</th>
 	                                        <th>C.D.</th>
@@ -20602,6 +20942,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	                            </tbody>
 	                        </table>
 	                    </div>
+                        ${detailsImagesHtml}
 	                </article>
 	            `;
 
@@ -20611,6 +20952,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	                        .map((img) => ({
                             dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
                             name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
+                            uploaded_at: String(typeof img === "string" ? "" : (img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || "")).trim(),
                         }))
                         .filter((img) => img.dataUrl)
                     : [];
@@ -20628,72 +20970,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }];
             };
 
-	            const effectiveSnapshots = snapshots.length ? snapshots : ensureFallbackSnapshot();
-	            if (!effectiveSnapshots.length) {
-	                return `${detailsCard}<div style="color:#64748b;">No monthly history found for this project yet.</div>`;
-	            }
-
-            const grouped = new Map();
-            effectiveSnapshots.forEach((snap) => {
-                const month = String(snap.month || "").trim() || getMonthKey(snap.saved_at || new Date());
-                const existing = grouped.get(month) || { month, snapshots: [], images: [] };
-                existing.snapshots.push(snap);
-                (Array.isArray(snap.images) ? snap.images : []).forEach((img) => {
-                    const url = String(img?.dataUrl || "").trim();
-                    if (!url) return;
-                    existing.images.push({ dataUrl: url, name: String(img?.name || "").trim() });
-                });
-                grouped.set(month, existing);
-            });
-
-            const monthGroups = Array.from(grouped.values()).sort((a, b) => String(b.month).localeCompare(String(a.month)));
-
-	            return detailsCard + monthGroups.map((group) => {
-	                group.snapshots.sort((a, b) => String(b.saved_at).localeCompare(String(a.saved_at)));
-	                const latest = group.snapshots[0] || {};
-	                const projectName = String(latest.project_name || record.project_name || "Construction Project").trim();
-	                const location = String(latest.location || record.location || "").trim();
-                const contractor = String(latest.contractor || record.contractor || "").trim();
-                const percent = String(latest.status_current ?? "").trim();
-
-                const uniqueImages = [];
-                const seen = new Set();
-                group.images.forEach((img) => {
-                    const url = String(img?.dataUrl || "").trim();
-                    if (!url || seen.has(url)) return;
-                    seen.add(url);
-                    uniqueImages.push(img);
-                });
-
-                const imagesHtml = uniqueImages.length
-                    ? `<div class="project-history-month-images">
-                        ${uniqueImages.map((img) => `<img src="${escapeProjectHtml(img.dataUrl)}" alt="${escapeProjectHtml(img.name || projectName || "Project image")}">`).join("")}
-                      </div>`
-                    : `<div style="color:#64748b;">No images saved for this month.</div>`;
-
-                return `
-                    <article class="project-history-month-card">
-                        <div class="project-history-month-head">
-                            <div>
-                                <h5>${escapeProjectHtml(formatMonthLabel(group.month))}</h5>
-                                <div class="project-history-month-meta">${escapeProjectHtml(projectName)}</div>
-                            </div>
-                            <div class="project-history-month-meta">${percent ? `${escapeProjectHtml(percent)}%` : ""}</div>
-                        </div>
-                        <div class="project-history-month-grid">
-                            <div class="project-history-month-field">
-                                <small>Location</small>
-                                <strong>${escapeProjectHtml(location || "-")}</strong>
-                            </div>
-                            <div class="project-history-month-field">
-                                <small>Contractor</small>
-                                <strong>${escapeProjectHtml(contractor || "-")}</strong>
-                            </div>
-                        </div>
-                        ${imagesHtml}
-                    </article>
-                `;
-            }).join("");
+            return detailsCard;
         };
 
         const openConstructionHistoryModal = (constructionRecord) => {
@@ -21497,9 +21774,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-		    if (addButton instanceof HTMLButtonElement) {
-		        addButton.addEventListener("click", openModal);
-		    }
+	    if (addButton instanceof HTMLButtonElement) {
+	        addButton.addEventListener("click", openModal);
+	    }
+
 
 		    if (selectAllCheckbox instanceof HTMLInputElement) {
 		        selectAllCheckbox.addEventListener("change", () => {
@@ -23695,6 +23973,77 @@ if (document.readyState === "loading") {
 	        return toLabel(date);
 	    };
 
+        const formatDateTime = (value) => {
+            const text = String(value ?? "").trim();
+            if (!text) return "";
+
+            const isoDateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (isoDateOnlyMatch) {
+                const year = Number(isoDateOnlyMatch[1]);
+                const month = Number(isoDateOnlyMatch[2]);
+                const day = Number(isoDateOnlyMatch[3]);
+                const parsed = new Date(year, month - 1, day);
+                if (Number.isNaN(parsed.getTime())) return text;
+                return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+            }
+
+            const parsed = new Date(text);
+            if (Number.isNaN(parsed.getTime())) return text;
+            return parsed.toLocaleString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+        };
+
+        const buildDetailsImagesHtml = (record) => {
+            const images = Array.isArray(record?.accomplishment_images)
+                ? record.accomplishment_images
+                    .map((img) => {
+                        if (typeof img === "string") {
+                            const dataUrl = img.trim();
+                            return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                        }
+                        if (!img || typeof img !== "object") return null;
+                        const dataUrl = String(img?.dataUrl || img?.url || "").trim();
+                        if (!dataUrl) return null;
+                        return {
+                            dataUrl,
+                            name: String(img?.name || "").trim(),
+                            uploaded_at: String(img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || record?.__updated_at || record?.__created_at || "").trim(),
+                        };
+                    })
+                    .filter(Boolean)
+                : [];
+
+            if (!images.length) {
+                return `<div style="color:#64748b;">No images uploaded yet.</div>`;
+            }
+
+            const titleText = String(record?.project_name || "Project Photos").trim() || "Project Photos";
+            return `
+                <div class="project-history-details-images">
+                    <h6 class="project-history-details-image-title">${escapeHtml(titleText)}</h6>
+                    <div class="project-history-month-images project-history-details-grid">
+                        ${images.map((img) => {
+                            const uploadedAtLabel = formatDateTime(img.uploaded_at);
+                            const meta = uploadedAtLabel
+                                ? `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded ${escapeHtml(uploadedAtLabel)}`
+                                : `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded -`;
+                            return `
+                                <figure class="project-history-month-image">
+                                    <img src="${escapeHtml(img.dataUrl)}" alt="${escapeHtml(img.name || record?.project_name || "Project image")}">
+                                    <figcaption class="project-history-image-meta">${meta}</figcaption>
+                                </figure>
+                            `;
+                        }).join("")}
+                    </div>
+                </div>
+            `;
+        };
+
 		    const formatMonthYear = (value) => {
 		        const text = String(value ?? "").trim();
 		        if (!text) return "-";
@@ -23717,6 +24066,7 @@ if (document.readyState === "loading") {
 			        const asOfMonthYear = new Date().toLocaleString(undefined, { month: "long", year: "numeric" });
 			        const statusPercent = formatStatusPercent(record?.status_current);
 			        const asOfHeader = `As of (${asOfMonthYear})`;
+                    const detailsImagesHtml = buildDetailsImagesHtml(record);
 	
 		        return `
 		            <article class="project-history-month-card project-history-details-card">
@@ -23728,10 +24078,10 @@ if (document.readyState === "loading") {
 	                </div>
 	                <div class="project-history-details-table-wrap">
 	                    <table class="road-table project-history-details-table">
-	                        <thead>
+		                        <thead>
 		                            <tr>
 		                                <th>Project Name</th>
-		                                <th>Location</th>
+		                                <th><span class="material-symbols-outlined" aria-hidden="true">location_on</span> Location</th>
 		                                <th>Municipality</th>
 		                                <th>Contract Cost</th>
 		                                <th>C.D.</th>
@@ -23760,85 +24110,14 @@ if (document.readyState === "loading") {
 	                        </tbody>
 	                    </table>
 	                </div>
+                    ${detailsImagesHtml}
 	            </article>
 	        `;
 	    };
 
-	    const buildMonthlyHistoryCards = (record) => {
-	        const detailsCard = buildProjectDetailsCard(record);
-	        const raw = Array.isArray(record?.accomplishment_history) ? record.accomplishment_history : [];
-	        if (!raw.length) {
-	            return `${detailsCard}<div style="color:#64748b;">No monthly history found for this project yet.</div>`;
-	        }
-
-        const buckets = new Map();
-        raw.forEach((entry) => {
-            if (!entry || typeof entry !== "object") return;
-            const month = String(entry.month || "").trim();
-            if (!month) return;
-            const list = buckets.get(month) || [];
-            list.push(entry);
-            buckets.set(month, list);
-        });
-
-        const months = Array.from(buckets.keys()).sort().reverse();
-        const projectName = String(record?.project_name || "Construction Project").trim();
-
-	        return detailsCard + months
-	            .map((month) => {
-	                const entries = buckets.get(month) || [];
-	                const latest = entries[0] && typeof entries[0] === "object" ? entries[0] : {};
-	                const location = String(latest.location || record.location || "").trim();
-	                const contractor = String(latest.contractor || record.contractor || "").trim();
-                const percent = String(latest.status_current || record.status_current || "").trim();
-
-                const seen = new Set();
-                const uniqueImages = [];
-                entries.forEach((e) => {
-                    const imgs = Array.isArray(e?.images) ? e.images : [];
-                    imgs.forEach((img) => {
-                        const url = String(img?.dataUrl || "").trim();
-                        if (!url || seen.has(url)) return;
-                        seen.add(url);
-                        uniqueImages.push(img);
-                    });
-                });
-
-                const imagesHtml = uniqueImages.length
-                    ? `<div class="project-history-month-images">
-                        ${uniqueImages
-                            .map(
-                                (img) =>
-                                    `<img src="${escapeHtml(img.dataUrl)}" alt="${escapeHtml(img.name || projectName || "Project image")}">`
-                            )
-                            .join("")}
-                      </div>`
-                    : `<div style="color:#64748b;">No images saved for this month.</div>`;
-
-                return `
-                    <article class="project-history-month-card">
-                        <div class="project-history-month-head">
-                            <div>
-                                <h5>${escapeHtml(formatMonthLabel(month))}</h5>
-                                <div class="project-history-month-meta">${escapeHtml(projectName)}</div>
-                            </div>
-                            <div class="project-history-month-meta">${percent ? `${escapeHtml(percent)}%` : ""}</div>
-                        </div>
-                        <div class="project-history-month-grid">
-                            <div class="project-history-month-field">
-                                <small>Location</small>
-                                <strong>${escapeHtml(location || "-")}</strong>
-                            </div>
-                            <div class="project-history-month-field">
-                                <small>Contractor</small>
-                                <strong>${escapeHtml(contractor || "-")}</strong>
-                            </div>
-                        </div>
-                        ${imagesHtml}
-                    </article>
-                `;
-            })
-            .join("");
+    const buildMonthlyHistoryCards = (record) => {
+        const detailsCard = buildProjectDetailsCard(record);
+        return detailsCard;
     };
 
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
