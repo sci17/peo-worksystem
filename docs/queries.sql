@@ -109,6 +109,4 @@ INSERT INTO my_app_constructionupload (
 -- List recent uploads
 SELECT id, uploaded_by_id, original_name, url, size_bytes, content_type, created_at
 FROM my_app_constructionupload
-ORDER BY created_at DESC
-LIMIT 50;
-
+ORDER BY created_at DESC;
