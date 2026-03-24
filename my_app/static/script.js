@@ -12096,6 +12096,148 @@ document.addEventListener("DOMContentLoaded", () => {
         roadTabsObserver.observe(document.body, { childList: true, subtree: true });
     }
 
+    const canWriteMaintenanceState = () => {
+        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+        return !access.readOnly;
+    };
+
+    const normalizeRoadInputRecord = (record) => {
+        if (!record || typeof record !== "object") {
+            return null;
+        }
+        const normalized = record.__roadNormalized ? record : normalizeRoadRecord(record);
+        if (!normalized) {
+            return null;
+        }
+
+        return {
+            roadId: String(normalized.roadId || "-"),
+            roadName: String(normalized.roadName || "-"),
+            municipality: normalizeMunicipalityDisplayName(normalized.municipality, "Unknown"),
+            location: String(normalized.location || ""),
+            surfaceType: String(normalized.surfaceType || "-"),
+            lengthKm: parseNumber(normalized.lengthKm),
+            condition: String(normalized.condition || "unknown"),
+            __roadNormalized: true,
+        };
+    };
+
+    const syncRoadManagementState = () => {
+        refreshRoadMunicipalityOptions();
+        if (typeof refreshRoadRegister === "function") {
+            refreshRoadRegister();
+        }
+        persistMaintenanceState();
+    };
+
+    const getRoadSummary = () => {
+        const conditions = { good: 0, fair: 0, poor: 0, bad: 0, unknown: 0 };
+        let totalLengthKm = 0;
+        roadRecords.forEach((record) => {
+            totalLengthKm += typeof record.lengthKm === "number" && Number.isFinite(record.lengthKm)
+                ? record.lengthKm
+                : 0;
+            const key = normalizeStatus(record.condition).replaceAll("_", " ");
+            if (key === "good") conditions.good += 1;
+            else if (key === "fair") conditions.fair += 1;
+            else if (key === "poor") conditions.poor += 1;
+            else if (key === "bad") conditions.bad += 1;
+            else conditions.unknown += 1;
+        });
+
+        return {
+            totalRoads: roadRecords.length,
+            totalLengthKm,
+            conditions,
+        };
+    };
+
+    const setRoadRecords = (records) => {
+        if (!canWriteMaintenanceState()) {
+            return { ok: false, error: "Read-only access for this dashboard." };
+        }
+
+        roadRecords.length = 0;
+        const list = Array.isArray(records) ? records : [];
+        const normalized = dedupeRoadRecords(list.map(normalizeRoadInputRecord).filter(Boolean));
+        if (normalized.length) {
+            roadRecords.push(...normalized);
+        }
+        roadMunicipalityPageState.clear();
+        syncRoadManagementState();
+        return { ok: true, count: roadRecords.length };
+    };
+
+    const addRoadRecord = (record) => {
+        if (!canWriteMaintenanceState()) {
+            return { ok: false, error: "Read-only access for this dashboard." };
+        }
+
+        const normalized = normalizeRoadInputRecord(record);
+        if (!normalized) {
+            return { ok: false, error: "Invalid road record." };
+        }
+
+        roadRecords.push(normalized);
+        const deduped = dedupeRoadRecords(roadRecords);
+        if (deduped.length !== roadRecords.length) {
+            roadRecords.length = 0;
+            roadRecords.push(...deduped);
+        }
+        roadMunicipalityPageState.set(normalizeMunicipalityName(normalized.municipality), 1);
+        syncRoadManagementState();
+        return { ok: true, count: roadRecords.length };
+    };
+
+    const updateRoadRecord = (index, updates) => {
+        if (!canWriteMaintenanceState()) {
+            return { ok: false, error: "Read-only access for this dashboard." };
+        }
+
+        const targetIndex = Number.parseInt(String(index ?? ""), 10);
+        if (!Number.isInteger(targetIndex) || !roadRecords[targetIndex]) {
+            return { ok: false, error: "Road record not found." };
+        }
+
+        const nextRecord = normalizeRoadInputRecord({ ...roadRecords[targetIndex], ...updates, __roadNormalized: true });
+        if (!nextRecord) {
+            return { ok: false, error: "Invalid road record." };
+        }
+
+        roadRecords[targetIndex] = nextRecord;
+        roadMunicipalityPageState.set(normalizeMunicipalityName(nextRecord.municipality), 1);
+        syncRoadManagementState();
+        return { ok: true };
+    };
+
+    const deleteRoadRecord = (index) => {
+        if (!canWriteMaintenanceState()) {
+            return { ok: false, error: "Read-only access for this dashboard." };
+        }
+
+        const targetIndex = Number.parseInt(String(index ?? ""), 10);
+        if (!Number.isInteger(targetIndex) || !roadRecords[targetIndex]) {
+            return { ok: false, error: "Road record not found." };
+        }
+
+        const removed = roadRecords.splice(targetIndex, 1)[0];
+        if (removed) {
+            roadMunicipalityPageState.set(normalizeMunicipalityName(removed.municipality), 1);
+        }
+        syncRoadManagementState();
+        return { ok: true };
+    };
+
+    window.peoRoadManagement = {
+        getRecords: () => roadRecords.map((record) => ({ ...record })),
+        getSummary: () => getRoadSummary(),
+        setRecords: (records) => setRoadRecords(records),
+        addRecord: (record) => addRoadRecord(record),
+        updateRecord: (index, updates) => updateRoadRecord(index, updates),
+        deleteRecord: (index) => deleteRoadRecord(index),
+        refresh: () => syncRoadManagementState(),
+    };
+
     restoreMaintenanceState();
 
     const refreshTaskTableFromStorage = () => {

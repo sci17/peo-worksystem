@@ -95,6 +95,79 @@ FROM my_app_shareddivisionstore
 WHERE key IN ('admin', 'planning', 'construction', 'quality', 'maintenance');
 
 -- ============================================================
+-- Maintenance Division - Road Management (views.road_management)
+-- Data source: my_app_shareddivisionstore where key = 'maintenance'
+-- ============================================================
+
+-- Read the entire maintenance payload (JSON object)
+SELECT id, key, data, updated_at
+FROM my_app_shareddivisionstore
+WHERE key = 'maintenance';
+
+-- Write the entire maintenance payload (roadRecords + equipmentRows + schedules, etc.)
+UPDATE my_app_shareddivisionstore
+SET data = :maintenance_payload_json,
+    updated_at = CURRENT_TIMESTAMP
+WHERE key = 'maintenance';
+
+-- JSON1 helpers (SQLite) for road records
+-- List road records
+SELECT
+    json_extract(road.value, '$.roadId') AS road_id,
+    json_extract(road.value, '$.roadName') AS road_name,
+    json_extract(road.value, '$.municipality') AS municipality,
+    json_extract(road.value, '$.location') AS location,
+    json_extract(road.value, '$.surfaceType') AS surface_type,
+    json_extract(road.value, '$.lengthKm') AS length_km,
+    json_extract(road.value, '$.condition') AS condition
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.roadRecords') AS road
+WHERE key = 'maintenance';
+
+-- Road condition counts
+SELECT
+    json_extract(road.value, '$.condition') AS condition,
+    COUNT(*) AS road_count
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.roadRecords') AS road
+WHERE key = 'maintenance'
+GROUP BY json_extract(road.value, '$.condition');
+
+-- Total road length (km)
+SELECT
+    SUM(COALESCE(json_extract(road.value, '$.lengthKm'), 0)) AS total_length_km
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.roadRecords') AS road
+WHERE key = 'maintenance';
+
+-- Equipment inventory (optional)
+SELECT
+    json_extract(eq.value, '$.code') AS code,
+    json_extract(eq.value, '$.name') AS name,
+    json_extract(eq.value, '$.type') AS type,
+    json_extract(eq.value, '$.model') AS model,
+    json_extract(eq.value, '$.plateNumber') AS plate_number,
+    json_extract(eq.value, '$.status') AS status,
+    json_extract(eq.value, '$.location') AS location,
+    json_extract(eq.value, '$.operator') AS operator
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.equipmentRows') AS eq
+WHERE key = 'maintenance';
+
+-- Maintenance schedules (optional)
+SELECT
+    json_extract(sched.value, '$.title') AS title,
+    json_extract(sched.value, '$.road') AS road,
+    json_extract(sched.value, '$.type') AS type,
+    json_extract(sched.value, '$.priority') AS priority,
+    json_extract(sched.value, '$.status') AS status,
+    json_extract(sched.value, '$.startDate') AS start_date,
+    json_extract(sched.value, '$.team') AS team
+FROM my_app_shareddivisionstore,
+     json_each(my_app_shareddivisionstore.data, '$.scheduleRows') AS sched
+WHERE key = 'maintenance';
+
+-- ============================================================
 -- Construction uploads (views.construction_photo_upload)
 -- Endpoint: POST /api/uploads/construction/
 -- ============================================================

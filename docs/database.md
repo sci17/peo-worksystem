@@ -9,6 +9,33 @@ This project already uses a SQLite database at `db.sqlite3` (see `my_site/settin
 - `my_app_shareddivisionstore`: **shared** JSON store per division key (`admin`, `planning`, `construction`, `quality`, `maintenance`). This is what the dashboards and the “Project Database” use.
 - `my_app_divisionstore`: **per-user** JSON store (kept for backward compatibility / bootstrap).
 
+## Maintenance Division (Road Management)
+
+Road management data is stored as a JSON object inside the shared division store:
+
+- Table: `my_app_shareddivisionstore`
+- Key: `maintenance`
+- Client cache: `localStorage` key `peo_maintenance_state_v1`
+- Sync API: `GET/POST /api/division-store/maintenance/`
+
+The payload is a single JSON object with these top-level arrays:
+
+- `roadRecords`: provincial roads
+  - Fields: `roadId`, `roadName`, `municipality`, `location`, `surfaceType`, `lengthKm`, `condition`
+- `equipmentRows`: equipment inventory
+  - Fields: `code`, `name`, `type`, `model`, `plateNumber`, `status`, `location`, `operator`
+- `scheduleRows`: maintenance schedules
+  - Fields: `title`, `road`, `type`, `priority`, `status`, `startDate`, `endDate`, `team`, `estimatedCost`, `notes`
+- `taskRows`: maintenance task tracker
+  - Fields: `slipNo`, `title`, `division`, `location`, `assignedTo`, `priority`, `status`, `dueDateIso`, `amount`, `notes`, plus `adminRecordId` when routed from Admin.
+- `personnelRecords`: maintenance personnel roster
+  - Fields: `fullName`, `employeeId`, `division`, `position`, `email`, `phone`, `divisionHead`
+- `contractorRecords`: contractor registry
+  - Fields: `name`, `tradeName`, `tin`, `philgeps`, `pcab`, `status`, `contracts`, `value`, `rating`, `classification`, `licenseExpiry`, `contactPerson`, `contactEmail`, `contactPhone`, `contactAddress`, `pcabLicense`, `address`, `contactCity`, `contactProvince`, `contactMobile`, `remarks`
+- `dismissedAdminTaskIds`: Admin record ids dismissed in the Maintenance task table so they do not reappear on restore.
+
+The road management UI and persistence logic live in `my_app/static/script.js` under the `ROAD_MAINTENANCE_SCRIPT_START` block (functions like `persistMaintenanceState`, `restoreMaintenanceState`, and road record normalization/helpers).
+
 ## Input persistence (important)
 
 The UI writes most “form/table” changes via the API endpoint:
