@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from django.contrib.auth import login
+from django.contrib.auth import get_user_model
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
@@ -1473,6 +1474,11 @@ def _build_tracking_payload(user):
 
 
 def _build_dashboard_notifications(request, profile, current_section='', page_heading='', current_maintenance=''):
+    stores = _load_shared_stores(request.user)
+    admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
+    user_division = _get_user_division_key(request.user)
+    is_super = bool(getattr(request.user, "is_superuser", False))
+
     def parse_event_datetime(value):
         parsed = _parse_loose_datetime(value)
         if not parsed:
@@ -1498,33 +1504,141 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
         key = _normalize_division_key(raw)
         return _division_label_for_key(key) or raw
 
-    def build_document_notifications():
-        # Pull document routing history from the Admin shared store, since routed records are centralized there.
-        stores = _load_shared_stores(request.user)
-        admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
+    def resolve_user_role():
+        if request.user.is_superuser:
+            return "admin"
 
-        user_division = _get_user_division_key(request.user)
-        is_super = bool(getattr(request.user, "is_superuser", False))
+        group_names = set()
+        try:
+            group_names = {str(group.name or "").strip().lower() for group in request.user.groups.all()}
+        except Exception:
+            group_names = set()
 
-        events = []
+        if any("employer" in name for name in group_names):
+            return "employer"
+        if any(token in name for name in group_names for token in ("applicant", "jobseeker", "job seeker")):
+            return "applicant"
+        if request.user.is_staff or user_division:
+            return "staff"
+        return "applicant"
+
+    viewer_role = resolve_user_role()
+
+    category_catalog = {
+        "applications": {"label": "Applications", "icon": "assignment_ind"},
+        "documents": {"label": "Documents", "icon": "description"},
+        "workflow": {"label": "Workflow", "icon": "sync_alt"},
+        "messages": {"label": "Messages", "icon": "mail"},
+        "announcements": {"label": "Announcements", "icon": "campaign"},
+        "alerts": {"label": "Alerts", "icon": "warning"},
+        "reminders": {"label": "Reminders", "icon": "event_upcoming"},
+        "admin": {"label": "Admin", "icon": "admin_panel_settings"},
+    }
+
+    def is_role_allowed(roles):
+        if not roles:
+            return True
+        if is_super:
+            return True
+        return viewer_role in set(roles)
+
+    def event_touches_user(from_key, to_key, by_key, assigned_key=""):
+        if is_super:
+            return True
+        if user_division:
+            return user_division in {from_key, to_key, by_key, assigned_key}
+        return True
+
+    notifications = []
+    seen_keys = set()
+
+    def append_notification(
+        *,
+        key,
+        at,
+        title,
+        message,
+        href,
+        category,
+        icon="notifications",
+        severity="info",
+        roles=None,
+    ):
+        normalized_key = str(key or "").strip()
+        if not normalized_key or normalized_key in seen_keys:
+            return
+        if not is_role_allowed(roles):
+            return
+
+        at_dt = parse_event_datetime(at) if not isinstance(at, datetime) else at
+        at_dt = at_dt or timezone.now()
+        meta_parts = []
+        abs_stamp = format_absolute_time(at_dt)
+        if abs_stamp:
+            meta_parts.append(abs_stamp)
+        meta_parts.append(_format_notification_time(at_dt, fallback="Recently updated"))
+        meta = " | ".join([part for part in meta_parts if part])
+
+        cat_key = str(category or "").strip().lower() or "documents"
+        cat_meta = category_catalog.get(cat_key, category_catalog["documents"])
+
+        notifications.append(
+            {
+                "key": normalized_key,
+                "at": at_dt,
+                "icon": icon or cat_meta["icon"],
+                "title": str(title or "Notification").strip() or "Notification",
+                "message": str(message or "Update available.").strip() or "Update available.",
+                "meta": meta,
+                "href": href or reverse("user_dashboard"),
+                "category": cat_key,
+                "category_label": cat_meta["label"],
+                "severity": str(severity or "info").strip().lower() or "info",
+            }
+        )
+        seen_keys.add(normalized_key)
+
+    def build_document_workflow_notifications():
         for record in admin_records:
             if not isinstance(record, dict):
                 continue
+
             admin_id = str(record.get("__record_id") or "").strip()
             if not admin_id:
                 continue
 
-            doc_name = str(record.get("document_name") or record.get("project_name") or record.get("title") or "Untitled Document").strip() or "Untitled Document"
+            doc_name = str(
+                record.get("document_name")
+                or record.get("project_name")
+                or record.get("title")
+                or "Untitled Document"
+            ).strip() or "Untitled Document"
             slip_no = str(record.get("slip_no") or "").strip()
-            title = f"{slip_no} • {doc_name}" if slip_no else doc_name
+            title = f"{slip_no} | {doc_name}" if slip_no else doc_name
+            href = f"{reverse('tracking_details')}?record={admin_id}"
+            assigned_key = _normalize_division_key(record.get("division"))
 
             raw_events = record.get("__tracking_events")
             if not isinstance(raw_events, list):
                 raw_events = []
 
-            for ev in raw_events:
+            if not raw_events:
+                submitted_at = parse_event_datetime(record.get("__submitted_at"))
+                if submitted_at:
+                    raw_events = [
+                        {
+                            "at": submitted_at.isoformat(),
+                            "action": "Submitted",
+                            "from": record.get("__submitted_from_division"),
+                            "to": record.get("division"),
+                            "by": record.get("__submitted_from_division"),
+                        }
+                    ]
+
+            for index, ev in enumerate(raw_events):
                 if not isinstance(ev, dict):
                     continue
+
                 at_raw = ev.get("at") or ev.get("timestamp") or ev.get("date")
                 at_dt = (
                     parse_event_datetime(at_raw)
@@ -1532,7 +1646,9 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
                     or parse_event_datetime(record.get("date_received") or record.get("date"))
                     or timezone.now()
                 )
+
                 action = str(ev.get("action") or "Update").strip() or "Update"
+                note_label = str(ev.get("note") or ev.get("message") or "").strip()
                 from_label = normalize_division_label(ev.get("from") or ev.get("from_division"))
                 to_label = normalize_division_label(ev.get("to") or ev.get("to_division"))
                 by_label = normalize_division_label(ev.get("by") or ev.get("submitted_by"))
@@ -1541,175 +1657,319 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
                 to_key = _normalize_division_key(to_label)
                 by_key = _normalize_division_key(by_label)
 
-                if not is_super and user_division:
-                    if user_division not in {from_key, to_key, by_key}:
-                        continue
+                if not event_touches_user(from_key, to_key, by_key, assigned_key):
+                    continue
 
-                if to_label and from_label:
+                action_lower = action.lower()
+                note_lower = note_label.lower()
+                is_failure = any(token in action_lower or token in note_lower for token in ("fail", "error", "reject", "return"))
+                is_transfer = any(token in action_lower for token in ("submit", "route", "forward", "send", "receive", "inbox"))
+                is_status = "status" in action_lower or "status set to" in note_lower or "stage" in note_lower
+                is_message = bool(note_label) and any(token in note_lower for token in ("message", "note", "remark", "comment"))
+                has_route_fields = bool(to_key and ((from_key and from_key != to_key) or (by_key and by_key != to_key)))
+
+                if not (is_failure or is_transfer or is_status or is_message or has_route_fields):
+                    continue
+
+                category = "documents"
+                icon = "description"
+                severity = "info"
+
+                if is_failure:
+                    category = "alerts"
+                    icon = "error"
+                    severity = "critical"
+                elif is_message:
+                    category = "messages"
+                    icon = "mail"
+                elif is_status:
+                    category = "workflow"
+                    icon = "sync_alt"
+                elif "submit" in action_lower:
+                    category = "applications"
+                    icon = "assignment_ind"
+
+                if is_failure:
+                    message = "Routing failed"
+                    if to_label and from_label:
+                        message = f"Routing failed to {to_label} (from {from_label})"
+                    elif to_label:
+                        message = f"Routing failed to {to_label}"
+                    elif from_label:
+                        message = f"Routing failed from {from_label}"
+                    if note_label:
+                        message = f"{message}: {note_label}"
+                elif is_status:
+                    if note_label:
+                        message = note_label
+                    elif to_label and from_label:
+                        message = f"{action} ({from_label} to {to_label})"
+                    else:
+                        message = action
+                elif user_division and user_division == to_key:
+                    sender = from_label or by_label or "another division"
+                    message = f"New document received from {sender}"
+                elif user_division and user_division in {from_key, by_key} and to_label:
+                    message = f"Document sent to {to_label}"
+                elif to_label and from_label:
                     message = f"{action} to {to_label} (from {from_label})"
                 elif to_label:
                     message = f"{action} to {to_label}"
                 elif from_label:
                     message = f"{action} from {from_label}"
                 else:
-                    message = action or "Document update"
-                if by_label and by_label not in (from_label, to_label):
-                    message = f"{message} (By {by_label})"
+                    message = action
+                if note_label and not is_failure and note_label.lower() not in message.lower():
+                    message = f"{message}: {note_label}"
 
-                meta_parts = []
-                abs_stamp = format_absolute_time(at_dt)
-                if abs_stamp:
-                    meta_parts.append(abs_stamp)
-                meta_parts.append(_format_notification_time(at_dt, fallback="Recently updated"))
-                meta = " • ".join([part for part in meta_parts if part])
-
-                events.append(
-                    {
-                        "at": at_dt,
-                        "icon": "forward_to_inbox",
-                        "title": title,
-                        "message": message,
-                        "meta": meta,
-                        "href": f"{reverse('tracking_details')}?record={admin_id}",
-                    }
+                append_notification(
+                    key=f"ev|{admin_id}|{index}|{at_dt.isoformat()}|{action}|{from_key}|{to_key}",
+                    at=at_dt,
+                    title=title,
+                    message=message,
+                    href=href,
+                    category=category,
+                    icon=icon,
+                    severity=severity,
+                    roles=["admin", "staff", "employer", "applicant"],
                 )
 
-        events.sort(key=lambda item: item.get("at") or timezone.now(), reverse=True)
-        return events[:8]
+            attachments = record.get("__attachments")
+            if isinstance(attachments, list):
+                for att in attachments:
+                    if not isinstance(att, dict):
+                        continue
 
-    document_notifications = build_document_notifications()
+                    file_name = str(att.get("name") or att.get("fileName") or "attachment").strip() or "attachment"
+                    added_at_raw = att.get("addedAt") or att.get("added_at") or record.get("__updated_at") or record.get("__submitted_at")
+                    added_at = parse_event_datetime(added_at_raw) or timezone.now()
+                    added_by = str(att.get("addedBy") or "").strip()
+                    added_by_label = normalize_division_label(added_by) or added_by or "A user"
+                    added_by_key = _normalize_division_key(added_by_label)
 
-    section_updates = {
-        'workflow': {
-            'icon': 'dashboard_customize',
-            'title': 'Workflow dashboard is live',
-            'message': 'Active projects, approvals, and update metrics are ready for monitoring.',
-            'href': reverse('user_dashboard'),
-        },
-        'admin': {
-            'icon': 'admin_panel_settings',
-            'title': 'Admin Division queue is active',
-            'message': 'Document routing and billing review tools are available in the admin workspace.',
-            'href': reverse('admin_division_dashboard'),
-        },
-        'planning': {
-            'icon': 'architecture',
-            'title': 'Planning Division workspace is active',
-            'message': 'Planning records and division workflow controls are ready for use.',
-            'href': reverse('planning_division_dashboard'),
-        },
-        'project': {
-            'icon': 'folder_open',
-            'title': 'Project registry is available',
-            'message': 'Shared project records are ready for searching and division review.',
-            'href': reverse('project_dashboard'),
-        },
-        'construction': {
-            'icon': 'construction',
-            'title': 'Construction Division updates are available',
-            'message': 'Construction workflow items are ready from the main division board.',
-            'href': reverse('construction_division_dashboard'),
-        },
-        'quality': {
-            'icon': 'verified',
-            'title': 'Quality Division checks are active',
-            'message': 'Quality assurance workflow items are available for monitoring.',
-            'href': reverse('quality_division_dashboard'),
-        },
-        'maintenance': {
-            'icon': 'build',
-            'title': 'Maintenance tools are open',
-            'message': f'{(current_maintenance or "maintenance").replace("_", " ").title()} workflow is loaded from the sidebar.',
-            'href': reverse(
-                'road_management' if current_maintenance == 'road'
-                else 'contractor_management' if current_maintenance == 'contractor'
-                else 'task_management'
-            ),
-        },
-        'settings': {
-            'icon': 'settings',
-            'title': 'Account settings are ready',
-            'message': 'Profile, password, notifications, appearance, and support settings are available here.',
-            'href': f"{reverse('account_settings')}#account-settings-profile",
-        },
-    }
+                    if not event_touches_user(added_by_key, assigned_key, assigned_key, assigned_key):
+                        continue
 
-    notifications_message = (
-        'Email and portal workflow alerts are enabled.'
-        if profile.email_notifications and profile.portal_notifications
-        else 'Some workflow alerts are currently turned off in your notification preferences.'
+                    append_notification(
+                        key=f"att|{admin_id}|{str(att.get('id') or file_name)}|{added_at.isoformat()}",
+                        at=added_at,
+                        title=title,
+                        message=f"{added_by_label} uploaded {file_name}",
+                        href=href,
+                        category="documents",
+                        icon="upload_file",
+                        severity="info",
+                        roles=["admin", "staff", "employer", "applicant"],
+                    )
+
+            deadline_candidates = [
+                record.get("revised_completion_date"),
+                record.get("target_completion_date"),
+                record.get("completion_date"),
+                record.get("due_date"),
+                record.get("dueDateIso"),
+            ]
+            deadline_dt = None
+            for candidate in deadline_candidates:
+                parsed_deadline = parse_event_datetime(candidate)
+                if parsed_deadline:
+                    deadline_dt = parsed_deadline
+                    break
+            if deadline_dt:
+                status_text = str(record.get("doc_status") or record.get("status") or "").strip().lower()
+                is_done = any(token in status_text for token in ("complete", "approved", "closed", "done"))
+                if not is_done and event_touches_user("", assigned_key, "", assigned_key):
+                    today = timezone.localtime(timezone.now()).date()
+                    due_date = timezone.localtime(deadline_dt).date()
+                    days_left = (due_date - today).days
+                    if -14 <= days_left <= 14:
+                        if days_left < 0:
+                            message = f"Deadline passed {abs(days_left)} day{'s' if abs(days_left) != 1 else ''} ago"
+                            category = "alerts"
+                            icon = "event_busy"
+                            severity = "high"
+                        elif days_left == 0:
+                            message = "Deadline is today"
+                            category = "reminders"
+                            icon = "event_upcoming"
+                            severity = "medium"
+                        else:
+                            message = f"Deadline in {days_left} day{'s' if days_left != 1 else ''}"
+                            category = "reminders"
+                            icon = "event_upcoming"
+                            severity = "info"
+
+                        append_notification(
+                            key=f"deadline|{admin_id}|{due_date.isoformat()}",
+                            at=deadline_dt,
+                            title=title,
+                            message=message,
+                            href=href,
+                            category=category,
+                            icon=icon,
+                            severity=severity,
+                            roles=["admin", "staff", "employer", "applicant"],
+                        )
+
+    def build_admin_staff_notifications():
+        if viewer_role not in {"admin", "staff"}:
+            return
+
+        user_model = get_user_model()
+        now = timezone.now()
+        recent_cutoff = now - timedelta(days=14)
+        recent_users = user_model.objects.exclude(id=request.user.id).order_by("-date_joined")[:12]
+        for created_user in recent_users:
+            joined_at = getattr(created_user, "date_joined", None)
+            if not joined_at or joined_at < recent_cutoff:
+                continue
+            username = str(created_user.get_username() or "User").strip() or "User"
+            message = f"{username} registered a new portal account"
+            category = "admin"
+            icon = "person_add"
+            severity = "info"
+            if not bool(getattr(created_user, "is_active", True)):
+                message = f"{username} account is pending approval"
+                category = "alerts"
+                icon = "pending_actions"
+                severity = "medium"
+
+            append_notification(
+                key=f"user_joined|{created_user.id}|{joined_at.isoformat()}",
+                at=joined_at,
+                title="User Registration",
+                message=message,
+                href=f"{reverse('account_settings')}#account-settings-history",
+                category=category,
+                icon=icon,
+                severity=severity,
+                roles=["admin", "staff"],
+            )
+
+        pending_count = user_model.objects.filter(is_active=False).count()
+        if pending_count > 0:
+            append_notification(
+                key=f"user_pending_total|{pending_count}",
+                at=timezone.now(),
+                title="Approvals Needed",
+                message=f"{pending_count} user account{'s' if pending_count != 1 else ''} pending approval",
+                href=f"{reverse('account_settings')}#account-settings-history",
+                category="admin",
+                icon="admin_panel_settings",
+                severity="medium",
+                roles=["admin", "staff"],
+            )
+
+        stale_days = 7
+        stale_keys = []
+        for key in (KEY_ADMIN, KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE):
+            store = stores.get(key)
+            if not store or not getattr(store, "updated_at", None):
+                stale_keys.append(_division_label_for_key(key) or key.title())
+                continue
+            if (now - store.updated_at) > timedelta(days=stale_days):
+                stale_keys.append(_division_label_for_key(key) or key.title())
+        if stale_keys:
+            append_notification(
+                key=f"stale_stores|{'|'.join(stale_keys)}",
+                at=timezone.now(),
+                title="Sync Reminder",
+                message=f"Store sync needed: {', '.join(stale_keys[:3])}{'...' if len(stale_keys) > 3 else ''}",
+                href=reverse("user_dashboard"),
+                category="announcements",
+                icon="campaign",
+                severity="medium",
+                roles=["admin", "staff"],
+            )
+
+    def build_system_alert_notifications():
+        group_division_key = _division_key_from_groups(request.user)
+        profile_division_key = _normalize_division_key(getattr(profile, "division", ""))
+        if group_division_key and profile_division_key and group_division_key != profile_division_key:
+            append_notification(
+                key=f"division_mismatch|{request.user.id}|{group_division_key}|{profile_division_key}",
+                at=timezone.now(),
+                title="Security Alert",
+                message="Division mismatch detected in account profile. Review account settings.",
+                href=f"{reverse('account_settings')}#account-settings-profile",
+                category="alerts",
+                icon="shield_lock",
+                severity="critical",
+                roles=["admin", "staff", "employer", "applicant"],
+            )
+
+    if not bool(getattr(profile, "portal_notifications", True)):
+        disabled_item = {
+            "key": "portal_notifications_disabled",
+            "at": timezone.now(),
+            "icon": "notifications_off",
+            "title": "Portal Notifications Disabled",
+            "message": "Enable notifications in settings to receive new updates.",
+            "meta": _format_notification_time(timezone.now(), fallback="Recently updated"),
+            "href": f"{reverse('account_settings')}#account-settings-notifications",
+            "category": "alerts",
+            "category_label": category_catalog["alerts"]["label"],
+            "severity": "medium",
+        }
+        return {
+            "dashboard_notifications": [disabled_item],
+            "dashboard_notification_count": 1,
+            "dashboard_has_notifications": True,
+            "dashboard_notification_categories": [
+                {
+                    "key": "alerts",
+                    "label": category_catalog["alerts"]["label"],
+                    "icon": category_catalog["alerts"]["icon"],
+                    "count": 1,
+                }
+            ],
+            "dashboard_notification_user_role": viewer_role,
+        }
+
+    build_document_workflow_notifications()
+    build_admin_staff_notifications()
+    build_system_alert_notifications()
+
+    notifications.sort(key=lambda item: item.get("at") or timezone.now(), reverse=True)
+    notifications = notifications[:40]
+
+    category_counts = {}
+    for item in notifications:
+        key = str(item.get("category") or "documents").strip().lower() or "documents"
+        category_counts[key] = category_counts.get(key, 0) + 1
+
+    preferred_category_order = (
+        "applications",
+        "documents",
+        "workflow",
+        "messages",
+        "announcements",
+        "alerts",
+        "reminders",
+        "admin",
     )
-    notifications_meta = (
-        'All alerts enabled'
-        if profile.email_notifications and profile.portal_notifications
-        else 'Review notification preferences'
-    )
-
-    profile_dir = Path(__file__).resolve().parent / "static" / "profile"
-    legacy_uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
-
-    def has_static_profile_picture(base_dir):
-        if not base_dir.exists():
-            return False
-        return any((base_dir / f"profile_{request.user.id}{ext}").exists() for ext in (".jpg", ".jpeg", ".png", ".webp"))
-
-    has_static_picture = has_static_profile_picture(profile_dir) or has_static_profile_picture(legacy_uploads_dir)
-
-    if request.user.get_full_name().strip() and (profile.profile_picture or has_static_picture):
-        profile_title = 'Profile is fully set up'
-        profile_message = 'Your account name and profile picture are ready across the portal.'
-        profile_meta = 'Profile complete'
-    else:
-        profile_title = 'Finish your account profile'
-        profile_message = 'Add your full name and profile picture so your workflow account is easier to identify.'
-        profile_meta = 'Recommended'
-
-    last_login = request.user.last_login or request.user.date_joined
-    notifications = [
-        *document_notifications,
-        {
-            'icon': section_updates.get(current_section, section_updates['workflow'])['icon'],
-            'title': section_updates.get(current_section, section_updates['workflow'])['title'],
-            'message': section_updates.get(current_section, section_updates['workflow'])['message'],
-            'meta': page_heading or 'Portal workspace',
-            'href': section_updates.get(current_section, section_updates['workflow'])['href'],
-        },
-        {
-            'icon': 'person',
-            'title': profile_title,
-            'message': profile_message,
-            'meta': profile_meta,
-            'href': f"{reverse('account_settings')}#account-settings-profile",
-        },
-        {
-            'icon': 'notifications_active',
-            'title': 'Workflow notifications synced',
-            'message': notifications_message,
-            'meta': notifications_meta,
-            'href': f"{reverse('account_settings')}#account-settings-notifications",
-        },
-        {
-            'icon': 'shield_lock',
-            'title': 'Account security is protected',
-            'message': 'Use the password panel any time you need to rotate or strengthen your sign-in credentials.',
-            'meta': 'Security controls',
-            'href': f"{reverse('account_settings')}#account-settings-password",
-        },
-        {
-            'icon': 'history',
-            'title': 'Recent account activity recorded',
-            'message': f'Last sign-in for {request.user.get_username()} was saved to your activity history.',
-            'meta': _format_notification_time(last_login, fallback='Account history available'),
-            'href': f"{reverse('account_settings')}#account-settings-history",
-        },
-    ]
+    category_items = []
+    for key in preferred_category_order:
+        count = category_counts.get(key, 0)
+        if count <= 0:
+            continue
+        meta = category_catalog.get(key, category_catalog["documents"])
+        category_items.append(
+            {
+                "key": key,
+                "label": meta["label"],
+                "icon": meta["icon"],
+                "count": count,
+            }
+        )
 
     return {
-        'dashboard_notifications': notifications,
-        'dashboard_notification_count': len(document_notifications),
-        'dashboard_has_notifications': bool(document_notifications),
+        "dashboard_notifications": notifications,
+        "dashboard_notification_count": len(notifications),
+        "dashboard_has_notifications": bool(notifications),
+        "dashboard_notification_categories": category_items,
+        "dashboard_notification_user_role": viewer_role,
     }
-
 
 def _build_dashboard_context(request, **extra):
     profile = _get_user_profile(request.user)

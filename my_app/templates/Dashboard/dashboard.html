@@ -214,30 +214,69 @@
                             data-topbar-notifications-toggle
                         >
                             <span class="material-symbols-outlined">notifications</span>
+                            <span class="icon-btn-badge" data-topbar-notification-badge {% if not dashboard_notification_count %}hidden{% endif %}>{{ dashboard_notification_count }}</span>
                         </button>
                         <div class="topbar-notifications-dropdown" hidden data-topbar-notifications-menu>
                             <div class="topbar-notifications-head">
                                 <div>
                                     <p>Workflow Updates</p>
-                                    <span>{{ dashboard_notification_count }} document update{{ dashboard_notification_count|pluralize }}</span>
+                                    <span data-notification-summary>{{ dashboard_notification_count }} notification{{ dashboard_notification_count|pluralize }}</span>
                                 </div>
-                                <a href="{% url 'account_settings' %}#account-settings-history">Activity History</a>
+                                <div class="topbar-notifications-head-actions">
+                                    <button type="button" class="topbar-notifications-head-btn" data-notification-mark-all>Mark all as read</button>
+                                    <a href="{% url 'account_settings' %}#account-settings-history">Activity History</a>
+                                </div>
                             </div>
+                            {% if dashboard_notification_categories %}
+                                <div class="topbar-notification-filters" data-notification-filters>
+                                    <button
+                                        type="button"
+                                        class="topbar-notification-filter is-active"
+                                        data-notification-filter
+                                        data-filter-value="all"
+                                        aria-pressed="true"
+                                    >
+                                        <span>All</span>
+                                        <span class="topbar-notification-filter-count">{{ dashboard_notification_count }}</span>
+                                    </button>
+                                    {% for category in dashboard_notification_categories %}
+                                        <button
+                                            type="button"
+                                            class="topbar-notification-filter"
+                                            data-notification-filter
+                                            data-filter-value="{{ category.key }}"
+                                            aria-pressed="false"
+                                        >
+                                            <span class="material-symbols-outlined">{{ category.icon }}</span>
+                                            <span>{{ category.label }}</span>
+                                            <span class="topbar-notification-filter-count">{{ category.count }}</span>
+                                        </button>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
                             <div class="topbar-notifications-list">
                                 {% for item in dashboard_notifications %}
-                                    <a href="{{ item.href }}" class="topbar-notification-item">
-                                        <span class="material-symbols-outlined topbar-notification-icon">{{ item.icon }}</span>
-                                        <span class="topbar-notification-copy">
-                                            <strong>{{ item.title }}</strong>
-                                            <span>{{ item.message }}</span>
-                                            <small>{{ item.meta }}</small>
-                                        </span>
-                                    </a>
-                                {% empty %}
-                                    <div class="topbar-notifications-empty">
-                                        No workflow updates are available right now.
-                                    </div>
+                                    <article
+                                        class="topbar-notification-item is-unread"
+                                        data-notification-item
+                                        data-notification-category="{{ item.category|default:'documents' }}"
+                                        data-notification-key="{{ item.href }}|{{ item.title }}|{{ item.meta }}|{{ forloop.counter }}"
+                                    >
+                                        <a href="{{ item.href }}" class="topbar-notification-link">
+                                            <span class="material-symbols-outlined topbar-notification-icon">{{ item.icon }}</span>
+                                            <span class="topbar-notification-copy">
+                                                <strong>{{ item.title }}</strong>
+                                                <em class="topbar-notification-category topbar-notification-category--{{ item.severity|default:'info' }}">{{ item.category_label|default:'Notification' }}</em>
+                                                <span>{{ item.message }}</span>
+                                                <small>{{ item.meta }}</small>
+                                            </span>
+                                        </a>
+                                        <button type="button" class="topbar-notification-mark" data-notification-mark>Mark as read</button>
+                                    </article>
                                 {% endfor %}
+                            </div>
+                            <div class="topbar-notifications-empty" data-notification-empty {% if dashboard_notifications %}hidden{% endif %}>
+                                No notifications are available right now.
                             </div>
                         </div>
                     </div>
@@ -256,7 +295,6 @@
                             <a href="{% url 'account_settings' %}#account-settings-profile" class="topbar-settings-item">My Profile</a>
                             <a href="{% url 'account_settings' %}#account-settings-password" class="topbar-settings-item">Change Password</a>
                             <a href="{% url 'account_settings' %}#account-settings-notifications" class="topbar-settings-item">Notifications</a>
-                            <a href="{% url 'account_settings' %}#account-settings-appearance" class="topbar-settings-item">Appearance</a>
                             <a href="{% url 'account_settings' %}#account-settings-history" class="topbar-settings-item">Activity History</a>
                             <a href="{% url 'account_settings' %}#account-settings-support" class="topbar-settings-item">Help &amp; Support</a>
                         </div>

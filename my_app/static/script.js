@@ -2739,6 +2739,980 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
+const projectHistoryImageViewer = (() => {
+    let overlay = null;
+    let imageElement = null;
+    let counterElement = null;
+    let metaElement = null;
+    let prevButton = null;
+    let nextButton = null;
+    let closeButton = null;
+    let items = [];
+    let activeIndex = 0;
+    let lastTrigger = null;
+
+    const clampIndex = (value, min, max) => {
+        return Math.max(min, Math.min(max, value));
+    };
+
+    const isOpen = () => {
+        return overlay instanceof HTMLElement && !overlay.hidden;
+    };
+
+    const updateViewer = () => {
+        if (!items.length || !(imageElement instanceof HTMLImageElement)) return;
+        const current = items[activeIndex] || {};
+        imageElement.src = String(current.src || "");
+        imageElement.alt = String(current.alt || "Project image");
+
+        if (counterElement instanceof HTMLElement) {
+            counterElement.textContent = `Image ${activeIndex + 1} of ${items.length}`;
+        }
+        if (metaElement instanceof HTMLElement) {
+            metaElement.textContent = String(current.meta || current.alt || "").trim();
+        }
+        if (prevButton instanceof HTMLButtonElement) {
+            prevButton.disabled = activeIndex <= 0;
+        }
+        if (nextButton instanceof HTMLButtonElement) {
+            nextButton.disabled = activeIndex >= items.length - 1;
+        }
+    };
+
+    const close = () => {
+        if (!(overlay instanceof HTMLElement)) return;
+        overlay.hidden = true;
+        document.body.classList.remove("project-image-viewer-open");
+        if (imageElement instanceof HTMLImageElement) {
+            imageElement.src = "";
+        }
+        if (lastTrigger instanceof HTMLElement) {
+            window.setTimeout(() => {
+                try {
+                    lastTrigger.focus();
+                } catch (error) {
+                    /* no-op */
+                }
+            }, 0);
+        }
+        items = [];
+        activeIndex = 0;
+        lastTrigger = null;
+    };
+
+    const showPrevious = () => {
+        if (!items.length) return;
+        activeIndex = clampIndex(activeIndex - 1, 0, items.length - 1);
+        updateViewer();
+    };
+
+    const showNext = () => {
+        if (!items.length) return;
+        activeIndex = clampIndex(activeIndex + 1, 0, items.length - 1);
+        updateViewer();
+    };
+
+    const ensureOverlay = () => {
+        if (overlay instanceof HTMLElement) return;
+
+        overlay = document.querySelector(".js-project-image-viewer-overlay");
+        if (!(overlay instanceof HTMLElement)) {
+            overlay = document.createElement("div");
+            overlay.className = "project-modal-overlay project-image-viewer-overlay js-project-image-viewer-overlay";
+            overlay.hidden = true;
+            overlay.innerHTML = `
+                <div class="project-modal project-image-viewer-modal" role="dialog" aria-modal="true" aria-labelledby="project-image-viewer-title">
+                    <div class="project-modal-head project-image-viewer-head">
+                        <div>
+                            <h4 id="project-image-viewer-title">Project Photo Viewer</h4>
+                            <p class="project-image-viewer-counter js-project-image-viewer-counter">Image 1 of 1</p>
+                        </div>
+                        <button type="button" class="project-modal-close js-project-image-viewer-close" aria-label="Close image viewer">x</button>
+                    </div>
+                    <div class="project-image-viewer-content">
+                        <button type="button" class="project-image-viewer-nav js-project-image-viewer-prev" aria-label="Previous image">
+                            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                        </button>
+                        <figure class="project-image-viewer-figure">
+                            <img class="js-project-image-viewer-image" src="" alt="">
+                            <figcaption class="project-image-viewer-meta js-project-image-viewer-meta"></figcaption>
+                        </figure>
+                        <button type="button" class="project-image-viewer-nav js-project-image-viewer-next" aria-label="Next image">
+                            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+
+        imageElement = overlay.querySelector(".js-project-image-viewer-image");
+        counterElement = overlay.querySelector(".js-project-image-viewer-counter");
+        metaElement = overlay.querySelector(".js-project-image-viewer-meta");
+        prevButton = overlay.querySelector(".js-project-image-viewer-prev");
+        nextButton = overlay.querySelector(".js-project-image-viewer-next");
+        closeButton = overlay.querySelector(".js-project-image-viewer-close");
+
+        if (closeButton instanceof HTMLButtonElement) {
+            closeButton.addEventListener("click", close);
+        }
+        if (prevButton instanceof HTMLButtonElement) {
+            prevButton.addEventListener("click", showPrevious);
+        }
+        if (nextButton instanceof HTMLButtonElement) {
+            nextButton.addEventListener("click", showNext);
+        }
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) {
+                close();
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (!isOpen()) return;
+            if (event.key === "Escape") {
+                event.preventDefault();
+                close();
+                return;
+            }
+            if (event.key === "ArrowLeft") {
+                event.preventDefault();
+                showPrevious();
+                return;
+            }
+            if (event.key === "ArrowRight") {
+                event.preventDefault();
+                showNext();
+            }
+        });
+    };
+
+    const open = (nextItems, index, triggerElement) => {
+        const normalizedItems = Array.isArray(nextItems)
+            ? nextItems.filter((item) => item && typeof item === "object" && String(item.src || "").trim())
+            : [];
+        if (!normalizedItems.length) return;
+
+        ensureOverlay();
+        items = normalizedItems;
+        activeIndex = clampIndex(Number(index) || 0, 0, items.length - 1);
+        lastTrigger = triggerElement instanceof HTMLElement ? triggerElement : null;
+
+        if (overlay instanceof HTMLElement) {
+            overlay.hidden = false;
+        }
+        document.body.classList.add("project-image-viewer-open");
+        updateViewer();
+    };
+
+    const collectItemsFromRoot = (root) => {
+        if (!(root instanceof HTMLElement)) return [];
+        const images = Array.from(root.querySelectorAll("img.js-project-history-open-image"));
+        return images.map((node) => {
+            const src = String(node.getAttribute("src") || "").trim();
+            const alt = String(node.getAttribute("alt") || "Project image").trim() || "Project image";
+            const figure = node.closest("figure");
+            const metaNode = figure ? figure.querySelector(".project-history-image-meta") : null;
+            const meta = metaNode instanceof HTMLElement ? String(metaNode.textContent || "").trim() : "";
+            return { src, alt, meta, node };
+        }).filter((entry) => entry.src);
+    };
+
+    const bindRoot = (root) => {
+        if (!(root instanceof HTMLElement)) return;
+        if (root.dataset.projectImageViewerBound === "1") return;
+        root.dataset.projectImageViewerBound = "1";
+
+        root.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const image = target.closest("img.js-project-history-open-image");
+            if (!(image instanceof HTMLImageElement)) return;
+
+            const allItems = collectItemsFromRoot(root);
+            const imageNodes = allItems.map((entry) => entry.node);
+            const index = imageNodes.indexOf(image);
+            if (index < 0) return;
+
+            open(
+                allItems.map(({ src, alt, meta }) => ({ src, alt, meta })),
+                index,
+                image,
+            );
+        });
+
+        root.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            const target = event.target;
+            if (!(target instanceof HTMLImageElement)) return;
+            if (!target.classList.contains("js-project-history-open-image")) return;
+            event.preventDefault();
+            target.click();
+        });
+    };
+
+    return {
+        bindRoot,
+        close,
+    };
+})();
+
+const projectHistoryPdfExporter = (() => {
+    const JSPDF_CDN_URL = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+    let jsPdfLoader = null;
+
+    const slugifyFilename = (value) => {
+        const base = String(value || "project_details")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .slice(0, 80);
+        return base || "project_details";
+    };
+
+    const toDisplay = (value) => {
+        const text = String(value ?? "").trim();
+        return text || "-";
+    };
+
+    const formatMoney = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+        if (/php|\u20b1/i.test(text)) return text;
+        const numeric = Number(text.replace(/,/g, ""));
+        if (!Number.isFinite(numeric)) return text;
+        return `PHP ${numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const formatDate = (value) => {
+        if (value === null || value === undefined || value === "") return "-";
+        const text = String(value).trim();
+        if (!text) return "-";
+        const isoDateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoDateOnly) {
+            const year = Number(isoDateOnly[1]);
+            const month = Number(isoDateOnly[2]);
+            const day = Number(isoDateOnly[3]);
+            const parsed = new Date(year, month - 1, day);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+            }
+        }
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return text;
+        return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    };
+
+    const formatStatusPercent = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "-";
+        const numericRaw = Number.parseFloat(text.replace(/[^0-9.-]/g, ""));
+        if (!Number.isFinite(numericRaw)) return text.includes("%") ? text : `${text}%`;
+        const hasPercentSign = /%/.test(text);
+        const normalized = (!hasPercentSign && Math.abs(numericRaw) <= 1) ? (numericRaw * 100) : numericRaw;
+        return `${normalized.toFixed(0)}%`;
+    };
+
+    const parseDateLike = (value) => {
+        const raw = String(value ?? "").trim();
+        if (!raw) return null;
+
+        const text = raw
+            .replace(/\s+/g, " ")
+            .replace(/^uploaded\s+/i, "")
+            .replace(/^schedule\s+/i, "")
+            .trim();
+        if (!text) return null;
+
+        const monthKeyMatch = text.match(/^(\d{4})-(\d{2})$/);
+        if (monthKeyMatch) {
+            const year = Number(monthKeyMatch[1]);
+            const month = Number(monthKeyMatch[2]);
+            if (Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12) {
+                const parsedMonth = new Date(year, month - 1, 1);
+                if (!Number.isNaN(parsedMonth.getTime())) return parsedMonth;
+            }
+        }
+
+        const parsed = new Date(text);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const getAsOfDate = (safeRecord, imageList = []) => {
+        const monthPriority = [
+            safeRecord?.update_month,
+            safeRecord?.month,
+            safeRecord?.as_of_month,
+        ]
+            .map(parseDateLike)
+            .find((item) => item instanceof Date && !Number.isNaN(item.getTime()));
+        if (monthPriority) return monthPriority;
+
+        const recordDateCandidates = [
+            safeRecord?.__report_date,
+            safeRecord?.as_of_date,
+            safeRecord?.last_update,
+            safeRecord?.__updated_at,
+            safeRecord?.__created_at,
+        ]
+            .map(parseDateLike)
+            .filter((item) => item instanceof Date && !Number.isNaN(item.getTime()));
+
+        const imageDateCandidates = imageList
+            .map((img) => parseDateLike(img?.uploadedAt || img?.uploaded_at || img?.created_at || img?.createdAt || ""))
+            .filter((item) => item instanceof Date && !Number.isNaN(item.getTime()));
+
+        const merged = [...recordDateCandidates, ...imageDateCandidates];
+        if (!merged.length) return null;
+
+        return merged.sort((a, b) => b.getTime() - a.getTime())[0];
+    };
+
+    const buildAsOfHeaderLabel = (safeRecord, imageList = []) => {
+        const asOfDate = getAsOfDate(safeRecord, imageList);
+        if (!(asOfDate instanceof Date) || Number.isNaN(asOfDate.getTime())) return "AS OF";
+        const monthYear = asOfDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+        return `AS OF (${monthYear})`;
+    };
+
+    const ensureJsPdf = async () => {
+        if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+
+        if (!jsPdfLoader) {
+            jsPdfLoader = new Promise((resolve, reject) => {
+                const existing = document.querySelector('script[data-peo-jspdf="1"]');
+                if (existing) {
+                    existing.addEventListener("load", () => {
+                        if (window.jspdf && window.jspdf.jsPDF) resolve(window.jspdf.jsPDF);
+                        else reject(new Error("jsPDF unavailable after load"));
+                    }, { once: true });
+                    existing.addEventListener("error", () => reject(new Error("Failed to load jsPDF script")), { once: true });
+                    return;
+                }
+
+                const script = document.createElement("script");
+                script.src = JSPDF_CDN_URL;
+                script.async = true;
+                script.dataset.peoJspdf = "1";
+                script.onload = () => {
+                    if (window.jspdf && window.jspdf.jsPDF) resolve(window.jspdf.jsPDF);
+                    else reject(new Error("jsPDF unavailable after load"));
+                };
+                script.onerror = () => reject(new Error("Failed to load jsPDF script"));
+                document.head.appendChild(script);
+            });
+        }
+
+        return jsPdfLoader;
+    };
+
+    const normalizeImagesFromRecord = (record) => {
+        const images = Array.isArray(record?.accomplishment_images) ? record.accomplishment_images : [];
+        return images
+            .map((img) => {
+                if (typeof img === "string") {
+                    const dataUrl = img.trim();
+                    return dataUrl ? { dataUrl, name: "", uploadedAt: "" } : null;
+                }
+                if (!img || typeof img !== "object") return null;
+                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                if (!dataUrl) return null;
+                return {
+                    dataUrl,
+                    name: String(img.name || "").trim(),
+                    uploadedAt: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || "").trim(),
+                };
+            })
+            .filter((item) => item && item.dataUrl);
+    };
+
+    const normalizeImagesFromNode = (sourceNode) => {
+        if (!(sourceNode instanceof HTMLElement)) return [];
+        const images = Array.from(sourceNode.querySelectorAll("img.js-project-history-open-image"));
+        return images
+            .map((node) => {
+                if (!(node instanceof HTMLImageElement)) return null;
+                const dataUrl = String(node.getAttribute("src") || "").trim();
+                if (!dataUrl) return null;
+                const figure = node.closest("figure");
+                const metaNode = figure ? figure.querySelector(".project-history-image-meta") : null;
+                return {
+                    dataUrl,
+                    name: String(node.getAttribute("alt") || "").trim(),
+                    uploadedAt: metaNode instanceof HTMLElement ? String(metaNode.textContent || "").trim() : "",
+                };
+            })
+            .filter((item) => item && item.dataUrl);
+    };
+
+    const loadImageData = (url, options = {}) => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const outputFormat = String(options.format || "JPEG").toUpperCase() === "PNG" ? "PNG" : "JPEG";
+            const mimeType = outputFormat === "PNG" ? "image/png" : "image/jpeg";
+            const opacity = Number.isFinite(Number(options.opacity))
+                ? Math.max(0, Math.min(1, Number(options.opacity)))
+                : 1;
+            if (!String(url).startsWith("data:")) {
+                img.crossOrigin = "anonymous";
+            }
+            img.onload = () => {
+                try {
+                    const canvas = document.createElement("canvas");
+                    const width = img.naturalWidth || img.width;
+                    const height = img.naturalHeight || img.height;
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) {
+                        reject(new Error("Canvas context not available"));
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    if (options.transparentEdgeWhite) {
+                        const imageData = ctx.getImageData(0, 0, width, height);
+                        const pixels = imageData.data;
+                        const visited = new Uint8Array(width * height);
+                        const queue = [];
+                        const whiteThreshold = 245;
+
+                        const indexAt = (x, y) => (y * width) + x;
+                        const byteAt = (pixelIndex) => pixelIndex * 4;
+                        const isEdgeWhite = (pixelIndex) => {
+                            const i = byteAt(pixelIndex);
+                            const r = pixels[i];
+                            const g = pixels[i + 1];
+                            const b = pixels[i + 2];
+                            const a = pixels[i + 3];
+                            return a > 0 && r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold;
+                        };
+                        const markTransparent = (pixelIndex) => {
+                            const i = byteAt(pixelIndex);
+                            pixels[i + 3] = 0;
+                        };
+                        const enqueueIfNeeded = (x, y) => {
+                            if (x < 0 || y < 0 || x >= width || y >= height) return;
+                            const pixelIndex = indexAt(x, y);
+                            if (visited[pixelIndex]) return;
+                            visited[pixelIndex] = 1;
+                            if (isEdgeWhite(pixelIndex)) {
+                                queue.push(pixelIndex);
+                            }
+                        };
+
+                        for (let x = 0; x < width; x += 1) {
+                            enqueueIfNeeded(x, 0);
+                            enqueueIfNeeded(x, height - 1);
+                        }
+                        for (let y = 0; y < height; y += 1) {
+                            enqueueIfNeeded(0, y);
+                            enqueueIfNeeded(width - 1, y);
+                        }
+
+                        while (queue.length) {
+                            const pixelIndex = queue.pop();
+                            if (!isEdgeWhite(pixelIndex)) continue;
+                            markTransparent(pixelIndex);
+                            const x = pixelIndex % width;
+                            const y = Math.floor(pixelIndex / width);
+                            enqueueIfNeeded(x - 1, y);
+                            enqueueIfNeeded(x + 1, y);
+                            enqueueIfNeeded(x, y - 1);
+                            enqueueIfNeeded(x, y + 1);
+                        }
+
+                        ctx.putImageData(imageData, 0, 0);
+                    }
+
+                    if (opacity < 1) {
+                        const imageData = ctx.getImageData(0, 0, width, height);
+                        const pixels = imageData.data;
+                        for (let i = 0; i < pixels.length; i += 4) {
+                            pixels[i + 3] = Math.round(pixels[i + 3] * opacity);
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+                    }
+
+                    const dataUrl = outputFormat === "PNG"
+                        ? canvas.toDataURL(mimeType)
+                        : canvas.toDataURL(mimeType, 0.95);
+
+                    const squareSize = Math.min(width, height);
+                    const squareCanvas = document.createElement("canvas");
+                    squareCanvas.width = squareSize;
+                    squareCanvas.height = squareSize;
+                    const squareCtx = squareCanvas.getContext("2d");
+                    if (!squareCtx) {
+                        reject(new Error("Square canvas context not available"));
+                        return;
+                    }
+                    const sx = Math.floor((width - squareSize) / 2);
+                    const sy = Math.floor((height - squareSize) / 2);
+                    squareCtx.drawImage(
+                        canvas,
+                        sx,
+                        sy,
+                        squareSize,
+                        squareSize,
+                        0,
+                        0,
+                        squareSize,
+                        squareSize,
+                    );
+                    const squareDataUrl = outputFormat === "PNG"
+                        ? squareCanvas.toDataURL(mimeType)
+                        : squareCanvas.toDataURL(mimeType, 0.95);
+
+                    resolve({ dataUrl, squareDataUrl, width, height, format: outputFormat });
+                } catch (error) {
+                    reject(error);
+                }
+            };
+            img.onerror = () => reject(new Error("Failed to load image"));
+            img.src = String(url || "");
+        });
+    };
+
+    const drawReportHeader = (doc, pageWidth, safeRecord, logos, pageLabel = "") => {
+        doc.setFillColor(236, 243, 250);
+        doc.rect(0, 0, pageWidth, 44, "F");
+        doc.setDrawColor(213, 226, 238);
+        doc.line(0, 44, pageWidth, 44);
+
+        const logoY = 4;
+        const logoSize = 16;
+        const firstLogoX = 8;
+        const secondLogoX = 26.5;
+
+        if (logos.prov) {
+            doc.addImage(logos.prov.dataUrl, logos.prov.format || "PNG", firstLogoX, logoY, logoSize, logoSize, undefined, "FAST");
+        }
+        if (logos.peo) {
+            doc.addImage(logos.peo.dataUrl, logos.peo.format || "PNG", secondLogoX, logoY, logoSize, logoSize, undefined, "FAST");
+        }
+
+        const titleX = 47;
+        const projectName = toDisplay(safeRecord.project_name).toUpperCase();
+        const projectNameLines = doc.splitTextToSize(projectName, pageWidth - titleX - 10);
+        const wrappedProjectName = projectNameLines.slice(0, 2);
+        if (projectNameLines.length > 2 && wrappedProjectName.length) {
+            wrappedProjectName[wrappedProjectName.length - 1] = `${wrappedProjectName[wrappedProjectName.length - 1]}...`;
+        }
+
+        doc.setTextColor(42, 74, 111);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14.5);
+        doc.text("Project Details Report", titleX, 12.5);
+
+        doc.setFontSize(9);
+        doc.text(wrappedProjectName, titleX, 19.5, { maxWidth: pageWidth - titleX - 10 });
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10.2);
+        doc.text(`Municipality: ${toDisplay(safeRecord.mun)}`, titleX, 32.5);
+        doc.text(`Contract Cost: ${formatMoney(safeRecord.contract_cost)}`, titleX, 38.5);
+
+        if (pageLabel) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.8);
+            doc.setTextColor(77, 107, 139);
+            doc.text(pageLabel, pageWidth - 9, 40, { align: "right" });
+        }
+
+        doc.setTextColor(32, 49, 68);
+        return 58;
+    };
+
+    const drawTemplateFooter = (doc, pageWidth, pageHeight, showCaption = false) => {
+        doc.setDrawColor(213, 226, 238);
+        doc.line(0, pageHeight - 6, pageWidth, pageHeight - 6);
+
+        if (showCaption) {
+            doc.setFont("helvetica", "bolditalic");
+            doc.setFontSize(8.2);
+            doc.setTextColor(43, 84, 124);
+            doc.text("Accomplishment Report on PGP Infrastructure Projects implemented by PEO", 4, pageHeight - 2.1);
+            doc.setTextColor(32, 49, 68);
+        }
+    };
+
+    const drawDetailsTable = (doc, startX, startY, tableWidth, safeRecord, options = {}) => {
+        const rawAsOfLabel = String(options.asOfLabel || "AS OF").trim() || "AS OF";
+        const asOfLabel = rawAsOfLabel
+            .replace(/^AS OF\s*\(/i, "AS OF ")
+            .replace(/\)\s*$/, "")
+            .toUpperCase();
+        const columns = [
+            { label: "PROJECT NAME", value: toDisplay(safeRecord.project_name), weight: 2.1 },
+            { label: "LOCATION", value: toDisplay(safeRecord.location), weight: 1.35 },
+            { label: "MUNICIPALITY", value: toDisplay(safeRecord.mun), weight: 1.25 },
+            { label: "CONTRACT COST", value: formatMoney(safeRecord.contract_cost), weight: 1.15 },
+            { label: "C.D", value: toDisplay(safeRecord.cd), weight: 0.55 },
+            { label: "NTP DATE", value: formatDate(safeRecord.ntp_date), weight: 1.05 },
+            { label: "TARGET COMPLETION DATE", value: formatDate(safeRecord.original_expiry_date), weight: 1.35 },
+            { label: asOfLabel, value: formatStatusPercent(safeRecord.status_current), weight: 0.95 },
+            { label: "GENERAL REMARKS", value: toDisplay(safeRecord.remarks), weight: 1.1 },
+            { label: "PROJECT CONTRACTOR", value: toDisplay(safeRecord.contractor), weight: 1.25 },
+        ];
+
+        const totalWeight = columns.reduce((sum, col) => sum + col.weight, 0);
+        const widths = columns.map((col) => (tableWidth * col.weight) / totalWeight);
+
+        const headerFontSize = 7.4;
+        const headerLineHeight = 3.2;
+        const valueFontSize = 8.8;
+        const valueLineHeight = 3.8;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(headerFontSize);
+
+        const headerLines = columns.map((column, idx) => doc.splitTextToSize(column.label, widths[idx] - 2.2));
+        const maxHeaderLines = headerLines.reduce((max, lines) => Math.max(max, lines.length), 1);
+        const headerHeight = Math.max(14, (maxHeaderLines * headerLineHeight) + 4.2);
+
+        let cursorX = startX;
+        columns.forEach((column, idx) => {
+            const width = widths[idx];
+            doc.setFillColor(166, 193, 219);
+            doc.setDrawColor(232, 239, 246);
+            doc.rect(cursorX, startY, width, headerHeight, "FD");
+
+            const lines = headerLines[idx];
+            doc.setTextColor(21, 37, 55);
+            doc.text(lines, cursorX + 1.1, startY + 3.9);
+            cursorX += width;
+        });
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(valueFontSize);
+
+        const valueLines = columns.map((column, idx) => {
+            return doc.splitTextToSize(String(column.value || "-"), widths[idx] - 2.2);
+        });
+        const maxLines = valueLines.reduce((max, lines) => Math.max(max, lines.length), 1);
+        const rowHeight = Math.max(17, (maxLines * valueLineHeight) + 4.2);
+
+        cursorX = startX;
+        columns.forEach((column, idx) => {
+            const width = widths[idx];
+            doc.setFillColor(201, 217, 226);
+            doc.setDrawColor(232, 239, 246);
+            doc.rect(cursorX, startY + headerHeight, width, rowHeight, "FD");
+            doc.setTextColor(20, 34, 48);
+            doc.text(valueLines[idx], cursorX + 1.1, startY + headerHeight + 4.4);
+            cursorX += width;
+        });
+
+        return startY + headerHeight + rowHeight;
+    };
+
+    const getContainedImageRect = (boxX, boxY, boxWidth, boxHeight, sourceWidth, sourceHeight) => {
+        const safeSourceWidth = Math.max(1, Number(sourceWidth) || 1);
+        const safeSourceHeight = Math.max(1, Number(sourceHeight) || 1);
+        const scale = Math.min(boxWidth / safeSourceWidth, boxHeight / safeSourceHeight);
+        const drawWidth = Math.max(1, safeSourceWidth * scale);
+        const drawHeight = Math.max(1, safeSourceHeight * scale);
+        return {
+            x: boxX + ((boxWidth - drawWidth) / 2),
+            y: boxY + ((boxHeight - drawHeight) / 2),
+            width: drawWidth,
+            height: drawHeight,
+        };
+    };
+
+    const drawImageInArea = (doc, image, areaX, areaY, areaWidth, areaHeight) => {
+        if (!image || !image.dataUrl) return false;
+        if (!(areaWidth > 0) || !(areaHeight > 0)) return false;
+        const fitRect = getContainedImageRect(
+            areaX,
+            areaY,
+            areaWidth,
+            areaHeight,
+            image.width,
+            image.height,
+        );
+        doc.addImage(
+            image.dataUrl,
+            "JPEG",
+            fitRect.x,
+            fitRect.y,
+            fitRect.width,
+            fitRect.height,
+            undefined,
+            "FAST",
+        );
+        return true;
+    };
+
+    const PDF_PAPER_STORAGE_KEY = "peo.project.pdf.paper.v1";
+    const PDF_PAPER_PRESETS = {
+        auto: { key: "auto", label: "Auto (Letter)", format: "letter" },
+        short: { key: "short", label: "Short", format: "letter" },
+        letter: { key: "letter", label: "Letter", format: "letter" },
+        a4: { key: "a4", label: "A4", format: "a4" },
+        long: { key: "long", label: "Long", format: [330.2, 215.9] },
+        legal: { key: "legal", label: "Legal", format: "legal" },
+    };
+
+    const normalizePaperSizeKey = (value) => {
+        const key = String(value || "").trim().toLowerCase();
+        if (!key) return "auto";
+        if (key === "folio") return "long";
+        if (Object.prototype.hasOwnProperty.call(PDF_PAPER_PRESETS, key)) return key;
+        return "auto";
+    };
+
+    const resolvePaperPreset = (value) => {
+        const requestedKey = normalizePaperSizeKey(value);
+        const effectiveKey = requestedKey === "auto" ? "letter" : requestedKey;
+        const preset = PDF_PAPER_PRESETS[effectiveKey] || PDF_PAPER_PRESETS.letter;
+        return {
+            requestedKey,
+            effectiveKey,
+            label: preset.label || "Letter",
+            format: preset.format || "letter",
+        };
+    };
+
+    const readStoredPaperSize = () => {
+        try {
+            return normalizePaperSizeKey(window.localStorage.getItem(PDF_PAPER_STORAGE_KEY));
+        } catch (error) {
+            return "auto";
+        }
+    };
+
+    const writeStoredPaperSize = (value) => {
+        const normalized = normalizePaperSizeKey(value);
+        try {
+            window.localStorage.setItem(PDF_PAPER_STORAGE_KEY, normalized);
+        } catch (error) {
+            /* ignore storage failures */
+        }
+        return normalized;
+    };
+
+    const PDF_MAX_IMAGES_PER_PAGE = 2;
+    const PDF_IMAGE_GAP_MM = 6;
+    const PDF_IMAGE_AREA_MARGIN_X_MM = 6;
+    const PDF_IMAGE_TARGET_SIZE_MM = 101.6; // 4 x 4 inches
+    const PDF_SINGLE_IMAGE_WIDTH_RATIO = 0.92;
+    const PDF_SINGLE_IMAGE_HEIGHT_RATIO = 0.88;
+    const PDF_SINGLE_IMAGE_BOX_ASPECT = 4 / 3;
+
+    const buildImageSlotBoxes = (count, area) => {
+        const areaX = Number(area?.x) || 0;
+        const areaY = Number(area?.y) || 0;
+        const areaWidth = Number(area?.width) || 0;
+        const areaHeight = Number(area?.height) || 0;
+        if (!(areaWidth > 0) || !(areaHeight > 0)) return [];
+
+        const drawCount = Math.max(1, Math.min(PDF_MAX_IMAGES_PER_PAGE, Number(count) || 1));
+        const gap = PDF_IMAGE_GAP_MM;
+
+        if (drawCount === 1) {
+            const maxWidth = Math.max(1, areaWidth * PDF_SINGLE_IMAGE_WIDTH_RATIO);
+            const maxHeight = Math.max(1, areaHeight * PDF_SINGLE_IMAGE_HEIGHT_RATIO);
+            let width = maxWidth;
+            let height = width / PDF_SINGLE_IMAGE_BOX_ASPECT;
+            if (height > maxHeight) {
+                height = maxHeight;
+                width = height * PDF_SINGLE_IMAGE_BOX_ASPECT;
+            }
+
+            // Keep a minimum visual presence close to the old 4x4 target when space allows.
+            const minSize = Math.min(PDF_IMAGE_TARGET_SIZE_MM, maxWidth, maxHeight);
+            if (width < minSize || height < minSize) {
+                const uniform = Math.max(1, minSize);
+                width = Math.min(maxWidth, uniform);
+                height = Math.min(maxHeight, uniform);
+            }
+
+            return [
+                {
+                    x: areaX + ((areaWidth - width) / 2),
+                    y: areaY + ((areaHeight - height) / 2),
+                    width,
+                    height,
+                },
+            ];
+        }
+
+        if (drawCount === 2) {
+            const size = Math.max(1, Math.min(PDF_IMAGE_TARGET_SIZE_MM, (areaWidth - gap) / 2, areaHeight));
+            const rowWidth = (size * 2) + gap;
+            const startX = areaX + ((areaWidth - rowWidth) / 2);
+            const y = areaY + ((areaHeight - size) / 2);
+            return [
+                { x: startX, y, width: size, height: size },
+                { x: startX + size + gap, y, width: size, height: size },
+            ];
+        }
+
+        // 3 images: single horizontal row for a wider look.
+        const size = Math.max(1, Math.min(PDF_IMAGE_TARGET_SIZE_MM, (areaWidth - (gap * 2)) / 3, areaHeight));
+        const rowWidth = (size * 3) + (gap * 2);
+        const startX = areaX + ((areaWidth - rowWidth) / 2);
+        const startY = areaY + ((areaHeight - size) / 2);
+        return [
+            { x: startX, y: startY, width: size, height: size },
+            { x: startX + size + gap, y: startY, width: size, height: size },
+            { x: startX + (2 * (size + gap)), y: startY, width: size, height: size },
+        ];
+    };
+
+    const drawImageSlotsInArea = (doc, loadedImages, startIndex, drawCount, area) => {
+        if (!Array.isArray(loadedImages) || startIndex >= loadedImages.length) return 0;
+        const remaining = Math.max(0, loadedImages.length - startIndex);
+        const count = Math.max(1, Math.min(PDF_MAX_IMAGES_PER_PAGE, drawCount, remaining));
+        const boxes = buildImageSlotBoxes(count, area);
+        if (!boxes.length) return 0;
+
+        let drawn = 0;
+        for (let i = 0; i < boxes.length; i += 1) {
+            const image = loadedImages[startIndex + i];
+            const box = boxes[i];
+            if (drawImageInArea(doc, image, box.x, box.y, box.width, box.height)) {
+                drawn += 1;
+            }
+        }
+        return drawn;
+    };
+
+    const drawFirstPageImages = (doc, loadedImages, startIndex, tableBottomY, pageWidth, pageHeight, safeRecord) => {
+        const firstPageTopGap = 6;
+        const firstPageBottomGap = 8;
+        const sectionTop = tableBottomY + firstPageTopGap;
+        doc.setFont("helvetica", "bolditalic");
+        doc.setFontSize(11.5);
+        doc.setTextColor(34, 77, 117);
+        doc.text(toDisplay(safeRecord?.project_name), pageWidth / 2, sectionTop + 4, { align: "center" });
+        doc.setTextColor(32, 49, 68);
+
+        const area = {
+            x: PDF_IMAGE_AREA_MARGIN_X_MM,
+            y: sectionTop + 8,
+            width: pageWidth - (PDF_IMAGE_AREA_MARGIN_X_MM * 2),
+            height: pageHeight - (sectionTop + 8) - firstPageBottomGap,
+        };
+
+        const remaining = Math.max(0, loadedImages.length - startIndex);
+        // Allow up to max-per-page images on first page while staying below the table.
+        const drawCount = Math.min(PDF_MAX_IMAGES_PER_PAGE, remaining);
+        if (drawCount <= 0) return 0;
+        return drawImageSlotsInArea(doc, loadedImages, startIndex, drawCount, area);
+    };
+
+    const drawImageGridPage = (doc, loadedImages, startIndex, pageWidth, pageHeight, layout = {}) => {
+        const topY = Number.isFinite(layout.topY) ? Math.max(0, layout.topY) : 62;
+        const bottomMargin = Number.isFinite(layout.bottomMargin) ? Math.max(0, layout.bottomMargin) : 10;
+        const titleText = String(layout.titleText || "").trim();
+
+        if (titleText) {
+            doc.setFont("helvetica", "bolditalic");
+            doc.setFontSize(11.5);
+            doc.setTextColor(34, 77, 117);
+            doc.text(titleText, pageWidth / 2, Math.max(52, topY - 5), { align: "center" });
+            doc.setTextColor(32, 49, 68);
+        }
+
+        const area = {
+            x: PDF_IMAGE_AREA_MARGIN_X_MM,
+            y: titleText ? (topY + 6) : topY,
+            width: pageWidth - (PDF_IMAGE_AREA_MARGIN_X_MM * 2),
+            height: pageHeight - (titleText ? (topY + 6) : topY) - bottomMargin,
+        };
+
+        const remaining = Math.max(0, loadedImages.length - startIndex);
+        const drawCount = Math.min(PDF_MAX_IMAGES_PER_PAGE, remaining);
+        if (drawCount <= 0) return 0;
+        return drawImageSlotsInArea(doc, loadedImages, startIndex, drawCount, area);
+    };
+
+    const exportRecord = async (record, options = {}) => {
+        if (!record || typeof record !== "object") {
+            return { ok: false, reason: "invalid_record" };
+        }
+
+        try {
+            const JsPdfCtor = await ensureJsPdf();
+            const paperPreset = resolvePaperPreset(options.paperSize || readStoredPaperSize());
+            const doc = new JsPdfCtor({ orientation: "landscape", unit: "mm", format: paperPreset.format });
+
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const safeRecord = record && typeof record === "object" ? record : {};
+
+            const [provLogo, peoLogo] = await Promise.all([
+                loadImageData("/static/img/prov logo.png", { format: "PNG", transparentEdgeWhite: true }).catch(() => null),
+                loadImageData("/static/img/peo logo.png", { format: "PNG", transparentEdgeWhite: true }).catch(() => null),
+            ]);
+            const logos = { prov: provLogo, peo: peoLogo };
+
+            const sourceNode = options.sourceNode instanceof HTMLElement ? options.sourceNode : null;
+            const recordImages = normalizeImagesFromRecord(safeRecord);
+            const nodeImages = normalizeImagesFromNode(sourceNode);
+            const imageList = recordImages.length ? recordImages : nodeImages;
+            const asOfLabel = buildAsOfHeaderLabel(safeRecord, imageList);
+
+            const loadedImages = [];
+            for (const image of imageList) {
+                try {
+                    const loaded = await loadImageData(image.dataUrl);
+                    loadedImages.push(loaded);
+                } catch (error) {
+                    /* skip broken image */
+                }
+            }
+
+            if (!loadedImages.length) {
+                drawTemplateFooter(doc, pageWidth, pageHeight, true);
+                const tableStartY = drawReportHeader(doc, pageWidth, safeRecord, logos, "Page 1");
+                const tableBottomY = drawDetailsTable(doc, 8, tableStartY, pageWidth - 16, safeRecord, { asOfLabel });
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(11);
+                doc.setTextColor(86, 110, 137);
+                doc.text("No project image available.", pageWidth / 2, tableBottomY + 24, { align: "center" });
+            } else {
+                drawTemplateFooter(doc, pageWidth, pageHeight, true);
+                const tableStartY = drawReportHeader(doc, pageWidth, safeRecord, logos, "Page 1");
+                const tableBottomY = drawDetailsTable(doc, 8, tableStartY, pageWidth - 16, safeRecord, { asOfLabel });
+                const drawnOnFirstPage = drawFirstPageImages(doc, loadedImages, 0, tableBottomY, pageWidth, pageHeight, safeRecord);
+
+                let imageIndex = Math.max(0, drawnOnFirstPage);
+                let pageNumber = 2;
+                while (imageIndex < loadedImages.length) {
+                    doc.addPage();
+                    drawTemplateFooter(doc, pageWidth, pageHeight, false);
+                    drawReportHeader(doc, pageWidth, safeRecord, logos, `Page ${pageNumber}`);
+                    const drawn = drawImageGridPage(doc, loadedImages, imageIndex, pageWidth, pageHeight, {
+                        topY: 62,
+                        bottomMargin: 10,
+                        titleText: toDisplay(safeRecord.project_name),
+                    });
+                    imageIndex += Math.max(1, drawn);
+                    pageNumber += 1;
+                }
+            }
+
+            const filenameHint = String(options.filenameHint || safeRecord.project_name || "project_details").trim();
+            const filename = `${slugifyFilename(filenameHint)}_${paperPreset.effectiveKey}_project_details.pdf`;
+            doc.save(filename);
+            return { ok: true, paperSize: paperPreset.effectiveKey };
+        } catch (error) {
+            return { ok: false, reason: "generation_failed", error };
+        }
+    };
+
+    return {
+        exportRecord,
+        normalizePaperSizeKey,
+        readStoredPaperSize,
+        writeStoredPaperSize,
+    };
+})();
+
 const portalDomReady = () => {
     const loginCard = document.querySelector(".login-card, .login-container");
     if (loginCard) {
@@ -2766,7 +3740,12 @@ const portalDomReady = () => {
     const topbarNotificationsRoot = document.querySelector(".topbar-notifications-menu");
     const topbarNotificationsToggle = document.querySelector("[data-topbar-notifications-toggle]");
     const topbarNotificationsMenu = document.querySelector("[data-topbar-notifications-menu]");
-    const topbarNotificationItems = document.querySelectorAll(".topbar-notification-item");
+    const topbarNotificationItems = Array.from(document.querySelectorAll("[data-notification-item]"));
+    const topbarNotificationBadge = document.querySelector("[data-topbar-notification-badge]");
+    const topbarNotificationSummary = document.querySelector("[data-notification-summary]");
+    const topbarNotificationMarkAll = document.querySelector("[data-notification-mark-all]");
+    const topbarNotificationFilterButtons = Array.from(document.querySelectorAll("[data-notification-filter]"));
+    const topbarNotificationEmpty = document.querySelector("[data-notification-empty]");
     const topbarSettingsRoot = document.querySelector(".topbar-settings-menu");
     const topbarSettingsToggle = document.querySelector("[data-topbar-settings-toggle]");
     const topbarSettingsMenu = document.querySelector("[data-topbar-settings-menu]");
@@ -2775,18 +3754,80 @@ const portalDomReady = () => {
     const accountMenuToggle = document.querySelector("[data-account-menu-toggle]");
     const accountMenu = document.querySelector("[data-account-menu]");
     const settingsSections = document.querySelectorAll("[data-settings-section]");
+    const projectHistoryPaperSizeSelects = Array.from(document.querySelectorAll(".js-project-history-paper-size"));
 
     const closeSidebar = () => {
         body.classList.remove("sidebar-open");
     };
 
-    const setTopbarNotificationsOpen = (open) => {
+    const normalizeProjectPdfPaperSize = (value) => {
+        if (projectHistoryPdfExporter && typeof projectHistoryPdfExporter.normalizePaperSizeKey === "function") {
+            return projectHistoryPdfExporter.normalizePaperSizeKey(value);
+        }
+        const key = String(value || "").trim().toLowerCase();
+        return key || "auto";
+    };
+
+    const syncProjectPdfPaperSizeControls = (value) => {
+        const normalized = normalizeProjectPdfPaperSize(value);
+        projectHistoryPaperSizeSelects.forEach((select) => {
+            if (!(select instanceof HTMLSelectElement)) return;
+            select.value = normalized;
+        });
+        return normalized;
+    };
+
+    if (projectHistoryPaperSizeSelects.length) {
+        const storedPaperSize = projectHistoryPdfExporter && typeof projectHistoryPdfExporter.readStoredPaperSize === "function"
+            ? projectHistoryPdfExporter.readStoredPaperSize()
+            : "auto";
+        syncProjectPdfPaperSizeControls(storedPaperSize);
+
+        projectHistoryPaperSizeSelects.forEach((select) => {
+            if (!(select instanceof HTMLSelectElement)) return;
+            select.addEventListener("change", () => {
+                const next = syncProjectPdfPaperSizeControls(select.value);
+                if (projectHistoryPdfExporter && typeof projectHistoryPdfExporter.writeStoredPaperSize === "function") {
+                    projectHistoryPdfExporter.writeStoredPaperSize(next);
+                }
+            });
+        });
+    }
+
+    let topbarNotificationsHideTimer = null;
+    const getNotificationTransitionMs = () => (window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
+
+    const setTopbarNotificationsOpen = (open, options = {}) => {
         if (!(topbarNotificationsRoot instanceof HTMLElement) || !(topbarNotificationsToggle instanceof HTMLElement) || !(topbarNotificationsMenu instanceof HTMLElement)) {
             return;
         }
-        topbarNotificationsRoot.classList.toggle("is-open", open);
-        topbarNotificationsToggle.setAttribute("aria-expanded", open ? "true" : "false");
-        topbarNotificationsMenu.hidden = !open;
+        const immediate = options && options.immediate === true;
+        const transitionMs = immediate ? 0 : getNotificationTransitionMs();
+
+        if (topbarNotificationsHideTimer) {
+            window.clearTimeout(topbarNotificationsHideTimer);
+            topbarNotificationsHideTimer = null;
+        }
+
+        if (open) {
+            topbarNotificationsMenu.hidden = false;
+            window.requestAnimationFrame(() => {
+                topbarNotificationsRoot.classList.add("is-open");
+                topbarNotificationsToggle.setAttribute("aria-expanded", "true");
+            });
+            return;
+        }
+
+        topbarNotificationsRoot.classList.remove("is-open");
+        topbarNotificationsToggle.setAttribute("aria-expanded", "false");
+        if (transitionMs <= 0) {
+            topbarNotificationsMenu.hidden = true;
+            return;
+        }
+        topbarNotificationsHideTimer = window.setTimeout(() => {
+            topbarNotificationsMenu.hidden = true;
+            topbarNotificationsHideTimer = null;
+        }, transitionMs);
     };
 
     const setTopbarSettingsOpen = (open) => {
@@ -2824,6 +3865,136 @@ const portalDomReady = () => {
         setTopbarNotificationsOpen(false);
         setTopbarSettingsOpen(false);
         collapseAccountMenu();
+    };
+
+    const TOPBAR_READ_KEY = "peo.topbar.notifications.read.v1";
+
+    const loadTopbarReadSet = () => {
+        try {
+            const raw = window.localStorage.getItem(TOPBAR_READ_KEY);
+            if (!raw) return new Set();
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return new Set();
+            return new Set(parsed.map((item) => String(item || "").trim()).filter(Boolean));
+        } catch (error) {
+            return new Set();
+        }
+    };
+
+    const saveTopbarReadSet = (readSet) => {
+        try {
+            window.localStorage.setItem(TOPBAR_READ_KEY, JSON.stringify(Array.from(readSet)));
+        } catch (error) {
+            /* ignore storage failures */
+        }
+    };
+
+    const getNotificationItemKey = (item, index) => {
+        if (!(item instanceof HTMLElement)) return `notification-${index}`;
+        const explicit = String(item.dataset.notificationKey || "").trim();
+        if (explicit) return explicit;
+
+        const title = item.querySelector("strong");
+        const bodyText = item.querySelector(".topbar-notification-copy > span");
+        const meta = item.querySelector("small");
+        const href = item.querySelector("a");
+        return [
+            href instanceof HTMLAnchorElement ? String(href.getAttribute("href") || "") : "",
+            title ? String(title.textContent || "") : "",
+            bodyText ? String(bodyText.textContent || "") : "",
+            meta ? String(meta.textContent || "") : "",
+            String(index),
+        ].join("|");
+    };
+
+    const applyNotificationVisualState = (item, isRead) => {
+        if (!(item instanceof HTMLElement)) return;
+        item.classList.toggle("is-read", isRead);
+        item.classList.toggle("is-unread", !isRead);
+        const markButton = item.querySelector("[data-notification-mark]");
+        if (markButton instanceof HTMLButtonElement) {
+            markButton.textContent = isRead ? "Mark as unread" : "Mark as read";
+            markButton.setAttribute("aria-pressed", isRead ? "true" : "false");
+        }
+    };
+
+    const updateNotificationIndicators = () => {
+        if (!(topbarNotificationsToggle instanceof HTMLElement)) return;
+        const unreadCount = topbarNotificationItems.filter((item) => item instanceof HTMLElement && item.classList.contains("is-unread")).length;
+        const totalCount = topbarNotificationItems.length;
+        const hasUnread = unreadCount > 0;
+
+        topbarNotificationsToggle.classList.toggle("has-dot", hasUnread);
+
+        if (topbarNotificationBadge instanceof HTMLElement) {
+            if (unreadCount > 0) {
+                topbarNotificationBadge.hidden = false;
+                topbarNotificationBadge.textContent = String(unreadCount);
+            } else {
+                topbarNotificationBadge.hidden = true;
+                topbarNotificationBadge.textContent = "0";
+            }
+        }
+
+        if (topbarNotificationSummary instanceof HTMLElement) {
+            if (totalCount <= 0) {
+                topbarNotificationSummary.textContent = "No notifications";
+            } else if (unreadCount > 0) {
+                topbarNotificationSummary.textContent = `${unreadCount} unread of ${totalCount} notification${totalCount !== 1 ? "s" : ""}`;
+            } else {
+                topbarNotificationSummary.textContent = `${totalCount} notification${totalCount !== 1 ? "s" : ""}`;
+            }
+        }
+
+        if (topbarNotificationMarkAll instanceof HTMLButtonElement) {
+            topbarNotificationMarkAll.disabled = unreadCount <= 0;
+        }
+    };
+
+    const updateNotificationEmptyState = () => {
+        if (!(topbarNotificationEmpty instanceof HTMLElement)) return;
+        const visibleItems = topbarNotificationItems.filter((item) => item instanceof HTMLElement && !item.hidden);
+        if (visibleItems.length > 0) {
+            topbarNotificationEmpty.hidden = true;
+            return;
+        }
+
+        const activeFilter = topbarNotificationFilterButtons.find((button) => button.classList.contains("is-active"));
+        const filterValue = activeFilter instanceof HTMLButtonElement ? String(activeFilter.dataset.filterValue || "all").trim() : "all";
+        if (filterValue && filterValue !== "all") {
+            const activeLabelNode = activeFilter instanceof HTMLButtonElement
+                ? Array.from(activeFilter.querySelectorAll("span")).find((node) => {
+                    if (!(node instanceof HTMLElement)) return false;
+                    if (node.classList.contains("material-symbols-outlined")) return false;
+                    if (node.classList.contains("topbar-notification-filter-count")) return false;
+                    return true;
+                })
+                : null;
+            const labelText = activeLabelNode instanceof HTMLElement ? String(activeLabelNode.textContent || "").trim() : filterValue;
+            topbarNotificationEmpty.textContent = `No ${labelText || filterValue} notifications right now.`;
+        } else {
+            topbarNotificationEmpty.textContent = "No notifications are available right now.";
+        }
+        topbarNotificationEmpty.hidden = false;
+    };
+
+    const applyNotificationFilter = (nextFilter) => {
+        const selected = String(nextFilter || "all").trim() || "all";
+        topbarNotificationFilterButtons.forEach((button) => {
+            if (!(button instanceof HTMLButtonElement)) return;
+            const buttonValue = String(button.dataset.filterValue || "all").trim() || "all";
+            const isActive = buttonValue === selected;
+            button.classList.toggle("is-active", isActive);
+            button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+
+        topbarNotificationItems.forEach((item) => {
+            if (!(item instanceof HTMLElement)) return;
+            const itemCategory = String(item.dataset.notificationCategory || "documents").trim() || "documents";
+            item.hidden = selected !== "all" && itemCategory !== selected;
+        });
+
+        updateNotificationEmptyState();
     };
 
     const setSettingsSelectorOpen = (open) => {
@@ -2954,7 +4125,7 @@ const portalDomReady = () => {
     }
 
     if (topbarNotificationsRoot && topbarNotificationsToggle && topbarNotificationsMenu) {
-        setTopbarNotificationsOpen(false);
+        setTopbarNotificationsOpen(false, { immediate: true });
 
         topbarNotificationsToggle.addEventListener("click", (event) => {
             event.preventDefault();
@@ -2964,13 +4135,71 @@ const portalDomReady = () => {
             setTopbarNotificationsOpen(willOpen);
         });
 
-        if (topbarNotificationItems.length) {
-            topbarNotificationItems.forEach((item) => {
-                item.addEventListener("click", () => {
+        const readSet = loadTopbarReadSet();
+        topbarNotificationItems.forEach((item, index) => {
+            if (!(item instanceof HTMLElement)) return;
+            const key = getNotificationItemKey(item, index);
+            item.dataset.notificationResolvedKey = key;
+            applyNotificationVisualState(item, readSet.has(key));
+
+            const link = item.querySelector(".topbar-notification-link");
+            if (link instanceof HTMLAnchorElement) {
+                link.addEventListener("click", () => {
+                    readSet.add(key);
+                    applyNotificationVisualState(item, true);
+                    saveTopbarReadSet(readSet);
+                    updateNotificationIndicators();
                     setTopbarNotificationsOpen(false);
+                });
+            }
+
+            const markButton = item.querySelector("[data-notification-mark]");
+            if (markButton instanceof HTMLButtonElement) {
+                markButton.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const currentlyRead = item.classList.contains("is-read");
+                    if (currentlyRead) {
+                        readSet.delete(key);
+                        applyNotificationVisualState(item, false);
+                    } else {
+                        readSet.add(key);
+                        applyNotificationVisualState(item, true);
+                    }
+                    saveTopbarReadSet(readSet);
+                    updateNotificationIndicators();
+                });
+            }
+        });
+
+        if (topbarNotificationMarkAll instanceof HTMLButtonElement) {
+            topbarNotificationMarkAll.addEventListener("click", (event) => {
+                event.preventDefault();
+                topbarNotificationItems.forEach((item, index) => {
+                    if (!(item instanceof HTMLElement)) return;
+                    const key = String(item.dataset.notificationResolvedKey || getNotificationItemKey(item, index)).trim();
+                    readSet.add(key);
+                    applyNotificationVisualState(item, true);
+                });
+                saveTopbarReadSet(readSet);
+                updateNotificationIndicators();
+            });
+        }
+
+        if (topbarNotificationFilterButtons.length) {
+            topbarNotificationFilterButtons.forEach((button) => {
+                if (!(button instanceof HTMLButtonElement)) return;
+                button.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    const filterValue = String(button.dataset.filterValue || "all").trim() || "all";
+                    applyNotificationFilter(filterValue);
                 });
             });
         }
+
+        const presetFilter = topbarNotificationFilterButtons.find((button) => button.classList.contains("is-active"));
+        applyNotificationFilter(presetFilter instanceof HTMLButtonElement ? String(presetFilter.dataset.filterValue || "all") : "all");
+        updateNotificationIndicators();
     }
 
     if (topbarSettingsRoot && topbarSettingsToggle && topbarSettingsMenu) {
@@ -19702,6 +20931,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const constructionHistoryCards = projectBoard.querySelector(".js-project-construction-history-cards");
         const constructionHistoryTitle = projectBoard.querySelector("#project-construction-history-title");
         const constructionHistorySubtitle = projectBoard.querySelector(".js-project-construction-history-subtitle");
+        const constructionHistoryExportPdfButton = projectBoard.querySelector(".js-project-construction-history-export-pdf");
         const projectForm = projectBoard.querySelector("[data-project-form]");
 	        const projectTableBody = projectBoard.querySelector("[data-project-table-body]");
 	        const projectResultsSummary = projectBoard.querySelector("[data-project-results-summary]");
@@ -20876,6 +22106,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	        let projectRecords = [];
 	        let visibleProjectRecords = [];
 	        let currentProjectPage = 1;
+            let activeConstructionHistoryRecord = null;
 	        const PROJECT_PAGE_SIZE = 10;
 	        let currentCatalogPage = 1;
 	        const PROJECT_CATALOG_PAGE_SIZE = 5;
@@ -21192,17 +22423,23 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         const closeConstructionHistoryModal = (persistState = true) => {
+            projectHistoryImageViewer.close();
             if (constructionHistoryModal instanceof HTMLElement) {
                 constructionHistoryModal.hidden = true;
             }
             if (constructionHistoryCards instanceof HTMLElement) {
                 constructionHistoryCards.innerHTML = "";
             }
+            activeConstructionHistoryRecord = null;
             if (persistState) {
                 persistCurrentProjectUiState({ openModal: "", constructionSourceId: "" });
             }
             syncProjectModalState();
         };
+
+        if (constructionHistoryCards instanceof HTMLElement) {
+            projectHistoryImageViewer.bindRoot(constructionHistoryCards);
+        }
 
 	        const buildConstructionMonthlyHistoryCards = (constructionRecord) => {
 	            const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
@@ -21299,7 +22536,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                     : `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded -`;
                                 return `
                                     <figure class="project-history-month-image">
-                                        <img src="${escapeProjectHtml(img.dataUrl)}" alt="${escapeProjectHtml(img.name || record?.project_name || "Project image")}">
+                                        <img class="js-project-history-open-image" src="${escapeProjectHtml(img.dataUrl)}" alt="${escapeProjectHtml(img.name || record?.project_name || "Project image")}" loading="lazy" tabindex="0">
                                         <figcaption class="project-history-image-meta">${meta}</figcaption>
                                     </figure>
                                 `;
@@ -21408,6 +22645,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (projectModal instanceof HTMLElement) projectModal.hidden = true;
 
             const record = constructionRecord && typeof constructionRecord === "object" ? constructionRecord : {};
+            activeConstructionHistoryRecord = record;
             const recordId = String(record.__id || "").trim();
             const projectName = String(record.project_name || "Construction Project").trim();
 
@@ -21462,6 +22700,53 @@ document.addEventListener("DOMContentLoaded", () => {
                 closeConstructionHistoryModal();
             });
         });
+
+        if (constructionHistoryExportPdfButton instanceof HTMLButtonElement) {
+            constructionHistoryExportPdfButton.addEventListener("click", async () => {
+                if (!activeConstructionHistoryRecord) {
+                    showPeoGeneralToast("Open a project history record first before exporting to PDF.", {
+                        title: "Project PDF",
+                        variant: "warning",
+                    });
+                    return;
+                }
+
+                constructionHistoryExportPdfButton.disabled = true;
+                const originalLabel = constructionHistoryExportPdfButton.innerHTML;
+                constructionHistoryExportPdfButton.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span><span>Preparing PDF...</span>';
+                const selectedPaperSize = (() => {
+                    const select = constructionHistoryModal instanceof HTMLElement
+                        ? constructionHistoryModal.querySelector(".js-project-history-paper-size")
+                        : null;
+                    if (select instanceof HTMLSelectElement) {
+                        return String(select.value || "").trim();
+                    }
+                    if (projectHistoryPdfExporter && typeof projectHistoryPdfExporter.readStoredPaperSize === "function") {
+                        return projectHistoryPdfExporter.readStoredPaperSize();
+                    }
+                    return "auto";
+                })();
+
+                const result = await projectHistoryPdfExporter.exportRecord(
+                    activeConstructionHistoryRecord,
+                    {
+                        sourceNode: constructionHistoryCards,
+                        filenameHint: activeConstructionHistoryRecord?.project_name || "construction_project",
+                        paperSize: selectedPaperSize,
+                    },
+                );
+
+                constructionHistoryExportPdfButton.innerHTML = originalLabel;
+                constructionHistoryExportPdfButton.disabled = false;
+
+                if (!result.ok) {
+                    showPeoGeneralToast("Unable to generate the PDF file automatically right now.", {
+                        title: "Project PDF",
+                        variant: "danger",
+                    });
+                }
+            });
+        }
 
         [projectModal, constructionHistoryModal, projectDetailModal].forEach((modal) => {
             if (!(modal instanceof HTMLElement)) return;
@@ -22592,6 +23877,145 @@ document.addEventListener("DOMContentLoaded", () => {
     const QUALITY_PAGE_SIZE = 10;
     const ROUTE_FILTERS = ["all", "incoming", "outgoing"];
     const DEFAULT_QUALITY_RECORDS = [];
+
+    const closeQualityParticularsDropdown = () => {
+        if (!(qualityParticularsSelect instanceof HTMLSelectElement)) return;
+        const wrapper = qualityParticularsSelect.nextElementSibling;
+        if (!(wrapper instanceof HTMLElement) || !wrapper.classList.contains("quality-particulars-dropdown")) return;
+        wrapper.classList.remove("is-open");
+        const trigger = wrapper.querySelector(".pa-select-custom__trigger");
+        if (trigger instanceof HTMLElement) {
+            trigger.setAttribute("aria-expanded", "false");
+        }
+    };
+
+    const enhanceQualityParticularsSelect = () => {
+        if (!(qualityParticularsSelect instanceof HTMLSelectElement)) return;
+        if (qualityParticularsSelect.dataset.qualityEnhanced === "true") return;
+        qualityParticularsSelect.dataset.qualityEnhanced = "true";
+        qualityParticularsSelect.classList.add("pa-select-native-hidden");
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "pa-select-custom quality-particulars-dropdown";
+
+        const trigger = document.createElement("button");
+        trigger.type = "button";
+        trigger.className = "pa-select-custom__trigger";
+        trigger.setAttribute("aria-haspopup", "listbox");
+        trigger.setAttribute("aria-expanded", "false");
+        trigger.disabled = qualityParticularsSelect.disabled;
+
+        const label = document.createElement("span");
+        label.className = "pa-select-custom__label";
+        const caret = document.createElement("span");
+        caret.className = "pa-select-custom__caret";
+        caret.textContent = "v";
+        trigger.appendChild(label);
+        trigger.appendChild(caret);
+
+        const menu = document.createElement("ul");
+        menu.className = "pa-select-custom__menu";
+        menu.setAttribute("role", "listbox");
+
+        const renderOptions = () => {
+            menu.innerHTML = "";
+            Array.from(qualityParticularsSelect.options).forEach((option) => {
+                const item = document.createElement("li");
+                const optionButton = document.createElement("button");
+                optionButton.type = "button";
+                optionButton.className = "pa-select-custom__option";
+                optionButton.dataset.value = option.value;
+                optionButton.textContent = option.textContent || option.value;
+                optionButton.setAttribute("role", "option");
+                optionButton.disabled = option.disabled;
+                optionButton.setAttribute("aria-selected", option.selected ? "true" : "false");
+                if (option.selected) {
+                    optionButton.classList.add("is-selected");
+                }
+                item.appendChild(optionButton);
+                menu.appendChild(item);
+            });
+        };
+
+        const syncFromSelect = () => {
+            const selected = qualityParticularsSelect.options[qualityParticularsSelect.selectedIndex];
+            label.textContent = selected?.textContent || "All Particulars";
+            trigger.disabled = qualityParticularsSelect.disabled;
+            menu.querySelectorAll(".pa-select-custom__option").forEach((button) => {
+                const isSelected = button.dataset.value === qualityParticularsSelect.value;
+                button.classList.toggle("is-selected", isSelected);
+                button.setAttribute("aria-selected", isSelected ? "true" : "false");
+            });
+        };
+
+        qualityParticularsSelect._qualitySelectRender = renderOptions;
+        qualityParticularsSelect._qualitySelectSync = syncFromSelect;
+
+        renderOptions();
+        syncFromSelect();
+
+        trigger.addEventListener("click", (event) => {
+            if (qualityParticularsSelect.disabled) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const willOpen = !wrapper.classList.contains("is-open");
+            closeQualityParticularsDropdown();
+            wrapper.classList.toggle("is-open", willOpen);
+            trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        });
+
+        menu.addEventListener("click", (event) => {
+            const optionButton = event.target instanceof HTMLElement
+                ? event.target.closest(".pa-select-custom__option")
+                : null;
+            if (!(optionButton instanceof HTMLButtonElement) || optionButton.disabled) return;
+            const nextValue = String(optionButton.dataset.value || "");
+            if (qualityParticularsSelect.value !== nextValue) {
+                qualityParticularsSelect.value = nextValue;
+                qualityParticularsSelect.dispatchEvent(new Event("change", { bubbles: true }));
+            } else {
+                syncFromSelect();
+            }
+            closeQualityParticularsDropdown();
+        });
+
+        if (typeof MutationObserver !== "undefined") {
+            const observer = new MutationObserver(() => {
+                renderOptions();
+                syncFromSelect();
+            });
+            observer.observe(qualityParticularsSelect, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+            });
+            qualityParticularsSelect._qualitySelectObserver = observer;
+        }
+
+        if (qualityParticularsSelect.dataset.qualitySelectListenerBound !== "true") {
+            qualityParticularsSelect.addEventListener("change", syncFromSelect);
+            qualityParticularsSelect.dataset.qualitySelectListenerBound = "true";
+        }
+
+        wrapper.appendChild(trigger);
+        wrapper.appendChild(menu);
+        qualityParticularsSelect.insertAdjacentElement("afterend", wrapper);
+    };
+
+    enhanceQualityParticularsSelect();
+
+    document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (target.closest(".quality-particulars-dropdown")) return;
+        closeQualityParticularsDropdown();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            closeQualityParticularsDropdown();
+        }
+    });
 
     const escapeHtml = (value) => {
         return String(value ?? "")
@@ -24325,6 +25749,7 @@ if (document.readyState === "loading") {
 
     const subtitleEl = document.querySelector(".js-project-history-page-subtitle");
     const metaEl = document.querySelector(".js-project-history-page-meta");
+    const exportPdfButton = document.querySelector(".js-project-history-page-export-pdf");
 
     const escapeHtml = (value) => {
         return String(value ?? "")
@@ -24464,7 +25889,7 @@ if (document.readyState === "loading") {
                                 : `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded -`;
                             return `
                                 <figure class="project-history-month-image">
-                                    <img src="${escapeHtml(img.dataUrl)}" alt="${escapeHtml(img.name || record?.project_name || "Project image")}">
+                                    <img class="js-project-history-open-image" src="${escapeHtml(img.dataUrl)}" alt="${escapeHtml(img.name || record?.project_name || "Project image")}" loading="lazy" tabindex="0">
                                     <figcaption class="project-history-image-meta">${meta}</figcaption>
                                 </figure>
                             `;
@@ -24560,6 +25985,9 @@ if (document.readyState === "loading") {
     }
 
     if (!record) {
+        if (exportPdfButton instanceof HTMLButtonElement) {
+            exportPdfButton.disabled = true;
+        }
         if (metaEl instanceof HTMLElement) {
             metaEl.textContent = "Project not found in local construction records on this device.";
         }
@@ -24571,4 +25999,45 @@ if (document.readyState === "loading") {
         metaEl.textContent = "History entries are grouped by month and shown full-width on this page.";
     }
     cardsWrap.innerHTML = buildMonthlyHistoryCards(record);
+    projectHistoryImageViewer.bindRoot(cardsWrap);
+
+    if (exportPdfButton instanceof HTMLButtonElement) {
+        exportPdfButton.disabled = false;
+        exportPdfButton.addEventListener("click", async () => {
+            exportPdfButton.disabled = true;
+            const originalLabel = exportPdfButton.innerHTML;
+            exportPdfButton.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span><span>Preparing PDF...</span>';
+            const selectedPaperSize = (() => {
+                const select = document.querySelector(".js-project-history-paper-size");
+                if (select instanceof HTMLSelectElement) {
+                    return String(select.value || "").trim();
+                }
+                if (projectHistoryPdfExporter && typeof projectHistoryPdfExporter.readStoredPaperSize === "function") {
+                    return projectHistoryPdfExporter.readStoredPaperSize();
+                }
+                return "auto";
+            })();
+
+            const result = await projectHistoryPdfExporter.exportRecord(
+                record,
+                {
+                    sourceNode: cardsWrap,
+                    filenameHint: record?.project_name || "construction_project",
+                    paperSize: selectedPaperSize,
+                },
+            );
+
+            exportPdfButton.innerHTML = originalLabel;
+            exportPdfButton.disabled = false;
+
+            if (!result.ok) {
+                showPeoGeneralToast("Unable to generate the PDF file automatically right now.", {
+                    title: "Project PDF",
+                    variant: "danger",
+                });
+            }
+        });
+    }
 })();
+
+

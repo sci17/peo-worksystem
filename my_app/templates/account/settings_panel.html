@@ -3,7 +3,7 @@
         <div>
             <p class="account-settings-kicker">Portal Settings</p>
             <h1>Settings</h1>
-            <p class="account-settings-subtitle">Manage your profile, password, notifications, appearance, activity, and support options from one portal panel.</p>
+            <p class="account-settings-subtitle">Manage your profile, password, notifications, activity, and support options from one portal panel.</p>
         </div>
     </header>
 
@@ -194,35 +194,6 @@
 
                     <div class="account-settings-actions">
                         <button type="submit" class="account-settings-save">Save Notifications</button>
-                    </div>
-                </form>
-            </section>
-
-            <section class="account-settings-card account-settings-section" id="account-settings-appearance" data-settings-section hidden>
-                <div class="account-settings-section-head">
-                    <div>
-                        <h2>Appearance</h2>
-                        <p>Select how the settings profile should be stored for your account.</p>
-                    </div>
-                </div>
-
-                <form method="post" enctype="multipart/form-data" class="account-settings-form" novalidate>
-                    {% csrf_token %}
-                    <input type="hidden" name="settings_form" value="profile">
-                    {{ form.first_name.as_hidden }}
-                    {{ form.last_name.as_hidden }}
-                    {{ form.email.as_hidden }}
-                    {{ form.email_notifications.as_hidden }}
-                    {{ form.portal_notifications.as_hidden }}
-                    {{ form.remove_profile_picture.as_hidden }}
-
-                    <div class="account-settings-field">
-                        <label for="id_appearance_mode">Appearance Mode</label>
-                        {{ form.appearance_mode }}
-                    </div>
-
-                    <div class="account-settings-actions">
-                        <button type="submit" class="account-settings-save">Save Appearance</button>
                     </div>
                 </form>
             </section>

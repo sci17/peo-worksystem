@@ -14,7 +14,24 @@
                     <h4>History</h4>
                     <p class="js-project-history-page-meta">Loading history…</p>
                 </div>
-                <a href="{% url 'project_dashboard' %}" class="project-modal-close project-history-back" aria-label="Back to projects">←</a>
+                <div class="project-history-head-actions">
+                    <label class="project-history-paper-size-wrap">
+                        <span>Paper</span>
+                        <select class="project-history-paper-size js-project-history-paper-size" aria-label="PDF paper size">
+                            <option value="auto" selected>Auto (Letter)</option>
+                            <option value="a4">A4</option>
+                            <option value="short">Short (8.5 x 11 in)</option>
+                            <option value="letter">Letter (8.5 x 11 in)</option>
+                            <option value="long">Long (8.5 x 13 in)</option>
+                            <option value="legal">Legal (8.5 x 14 in)</option>
+                        </select>
+                    </label>
+                    <button type="button" class="project-secondary-btn js-project-history-page-export-pdf">
+                        <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
+                        <span>Convert to PDF</span>
+                    </button>
+                    <a href="{% url 'project_dashboard' %}" class="project-modal-close project-history-back" aria-label="Back to projects">&larr;</a>
+                </div>
             </div>
 
             <div class="project-history-body">
@@ -242,26 +259,6 @@
 	                <h3 class="js-project-panel-title">All Division Projects</h3>
 	                <p class="js-project-panel-subtitle">Showing project records and activity across all divisions.</p>
 	            </div>
-            <div class="project-shell-actions">
-                <button
-                    type="button"
-                    class="project-secondary-btn"
-                    data-peo-toast-message="Use the Division, Status, and Sort controls below to filter the project registry."
-                    data-peo-toast-variant="info"
-                >
-                    <span class="material-symbols-outlined" aria-hidden="true">filter_list</span>
-                    <span>Filter</span>
-                </button>
-                <button
-                    type="button"
-                    class="project-secondary-btn js-project-export-btn"
-                    data-peo-toast-message="Project CSV export is reserved here for the shared system workflow."
-                    data-peo-toast-variant="info"
-                >
-                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
-                    <span>Export CSV</span>
-                </button>
-            </div>
         </div>
 
         <div class="project-toolbar">
@@ -414,7 +411,24 @@
                     <h4 id="project-construction-history-title">Construction Monthly History</h4>
                     <p class="js-project-construction-history-subtitle">Monthly snapshots and uploaded images for this project.</p>
                 </div>
-                <button type="button" class="project-modal-close js-project-close-construction-history" aria-label="Close history dialog">x</button>
+                <div class="project-history-head-actions">
+                    <label class="project-history-paper-size-wrap">
+                        <span>Paper</span>
+                        <select class="project-history-paper-size js-project-history-paper-size" aria-label="PDF paper size">
+                            <option value="auto" selected>Auto (Letter)</option>
+                            <option value="a4">A4</option>
+                            <option value="short">Short (8.5 x 11 in)</option>
+                            <option value="letter">Letter (8.5 x 11 in)</option>
+                            <option value="long">Long (8.5 x 13 in)</option>
+                            <option value="legal">Legal (8.5 x 14 in)</option>
+                        </select>
+                    </label>
+                    <button type="button" class="project-secondary-btn js-project-construction-history-export-pdf">
+                        <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
+                        <span>Convert to PDF</span>
+                    </button>
+                    <button type="button" class="project-modal-close js-project-close-construction-history" aria-label="Close history dialog">x</button>
+                </div>
             </div>
 
             <div class="project-history-body">
@@ -430,3 +444,4 @@
     </div>
 </section>
 {% endif %}
+
