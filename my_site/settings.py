@@ -86,8 +86,9 @@ WSGI_APPLICATION = 'my_site.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-_db_engine = os.environ.get('DJANGO_DB_ENGINE', 'django.db.backends.mysql')
-_db_name = os.environ.get('DJANGO_DB_NAME', 'peo_database')
+_db_engine = os.environ.get('DJANGO_DB_ENGINE', 'django.db.backends.sqlite3')
+_default_db_name = 'peo_database' if _db_engine == 'django.db.backends.mysql' else str(BASE_DIR / 'db.sqlite3')
+_db_name = os.environ.get('DJANGO_DB_NAME', _default_db_name)
 _db_config = {
     'ENGINE': _db_engine,
     'NAME': _db_name,
