@@ -14534,6 +14534,121 @@ document.addEventListener("DOMContentLoaded", () => {
         return String(formData.get(key) ?? "").trim();
     };
 
+    const syncConstructionScheduleDates = () => {
+        if (!(constructionForm instanceof HTMLFormElement)) return;
+
+        const ntpInput = constructionForm.querySelector('input[name="ntp_date"]');
+        const cdInput = constructionForm.querySelector('input[name="cd"]');
+        const originalExpiryInput = constructionForm.querySelector('input[name="original_expiry_date"]');
+        const addlCdInput = constructionForm.querySelector('input[name="addl_cd"]');
+        const revisedExpiryInput = constructionForm.querySelector('input[name="revised_expiry_date"]');
+
+        const shouldAutofill = (input) => {
+            return input instanceof HTMLInputElement && (!input.value || input.dataset.peoAutoComputed === "1");
+        };
+
+        const setAutofillValue = (input, value) => {
+            if (!(input instanceof HTMLInputElement)) return;
+            const nextValue = String(value || "");
+            if (input.value !== nextValue) {
+                input.value = nextValue;
+            }
+            if (nextValue) {
+                input.dataset.peoAutoComputed = "1";
+            } else {
+                delete input.dataset.peoAutoComputed;
+            }
+        };
+
+        const clearAutoIfFlagged = (input) => {
+            if (!(input instanceof HTMLInputElement)) return;
+            if (input.dataset.peoAutoComputed === "1") {
+                setAutofillValue(input, "");
+            }
+        };
+
+        const ntpDate = parseConstructionDateValue(ntpInput instanceof HTMLInputElement ? ntpInput.value : "");
+        const cdDaysRaw = parseConstructionNumber(cdInput instanceof HTMLInputElement ? cdInput.value : "");
+        const cdDays = cdDaysRaw !== null ? Math.max(0, cdDaysRaw) : null;
+
+        let computedOriginal = "";
+        if (ntpDate && cdDays !== null && cdDays > 0) {
+            computedOriginal = toIsoDateOnly(new Date(ntpDate.getTime() + (cdDays * 86400000)));
+        }
+
+        if (computedOriginal) {
+            if (shouldAutofill(originalExpiryInput)) {
+                setAutofillValue(originalExpiryInput, computedOriginal);
+            }
+        } else {
+            clearAutoIfFlagged(originalExpiryInput);
+        }
+
+        const addlCdRaw = parseConstructionNumber(addlCdInput instanceof HTMLInputElement ? addlCdInput.value : "");
+        const addlCdDays = addlCdRaw !== null ? Math.max(0, addlCdRaw) : null;
+        const baseOriginal = parseConstructionDateValue(
+            originalExpiryInput instanceof HTMLInputElement ? originalExpiryInput.value : ""
+        );
+
+        let computedRevised = "";
+        if (baseOriginal && addlCdDays !== null) {
+            computedRevised = toIsoDateOnly(new Date(baseOriginal.getTime() + (addlCdDays * 86400000)));
+        }
+
+        if (computedRevised) {
+            if (shouldAutofill(revisedExpiryInput)) {
+                setAutofillValue(revisedExpiryInput, computedRevised);
+            }
+        } else {
+            clearAutoIfFlagged(revisedExpiryInput);
+        }
+    };
+
+    const initConstructionScheduleAutofill = () => {
+        if (!(constructionForm instanceof HTMLFormElement)) return;
+        if (constructionForm.dataset.peoScheduleAutofillInit === "1") {
+            syncConstructionScheduleDates();
+            return;
+        }
+        constructionForm.dataset.peoScheduleAutofillInit = "1";
+
+        const ntpInput = constructionForm.querySelector('input[name="ntp_date"]');
+        const cdInput = constructionForm.querySelector('input[name="cd"]');
+        const originalExpiryInput = constructionForm.querySelector('input[name="original_expiry_date"]');
+        const addlCdInput = constructionForm.querySelector('input[name="addl_cd"]');
+        const revisedExpiryInput = constructionForm.querySelector('input[name="revised_expiry_date"]');
+
+        const markManual = (input) => {
+            if (!(input instanceof HTMLInputElement)) return;
+            delete input.dataset.peoAutoComputed;
+        };
+
+        [ntpInput, cdInput, addlCdInput].forEach((input) => {
+            if (input instanceof HTMLInputElement) {
+                input.addEventListener("input", syncConstructionScheduleDates);
+                input.addEventListener("change", syncConstructionScheduleDates);
+            }
+        });
+
+        if (originalExpiryInput instanceof HTMLInputElement) {
+            originalExpiryInput.addEventListener("input", () => {
+                markManual(originalExpiryInput);
+                syncConstructionScheduleDates();
+            });
+            originalExpiryInput.addEventListener("change", () => {
+                markManual(originalExpiryInput);
+                syncConstructionScheduleDates();
+            });
+        }
+
+        if (revisedExpiryInput instanceof HTMLInputElement) {
+            revisedExpiryInput.addEventListener("input", () => markManual(revisedExpiryInput));
+            revisedExpiryInput.addEventListener("change", () => markManual(revisedExpiryInput));
+        }
+
+        syncConstructionScheduleDates();
+    };
+
     const setConstructionFormMode = (mode) => {
         if (!constructionModal) return;
         const title = constructionModal.querySelector("#construction-modal-title");
@@ -14751,6 +14866,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 fillConstructionForm(record);
             }
         }
+        initConstructionScheduleAutofill();
         renderConstructionPersonnel(mode === "edit" && record ? record.personnel : []);
         setConstructionProjectOverviewReadonly(mode === "edit");
         if (constructionPhotoInput instanceof HTMLInputElement) {
