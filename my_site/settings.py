@@ -96,7 +96,7 @@ _db_config = {
 if _db_engine == 'django.db.backends.mysql':
     _db_config.update({
         'USER': os.environ.get('DJANGO_DB_USER', 'root'),
-        'PASSWORD': os.environ.get('DJANGO_DB_PASSWORD', 'root'),
+        'PASSWORD': os.environ.get('DJANGO_DB_PASSWORD', 'Spledelyn1704'),
         'HOST': os.environ.get('DJANGO_DB_HOST', '127.0.0.1'),
         'PORT': os.environ.get('DJANGO_DB_PORT', '3306'),
         'OPTIONS': {
