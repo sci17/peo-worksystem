@@ -1598,6 +1598,351 @@ body {
     box-shadow: 0 10px 24px rgba(21, 41, 74, 0.04);
 }
 
+/* Workflow dashboard overview theme (Materio-inspired) */
+.portal-content.portal-content-materio {
+    --materio-surface: #ffffff;
+    --materio-surface-soft: #f8f9ff;
+    --materio-border: #e6e8f4;
+    --materio-ink: #283046;
+    --materio-muted: #7f8ca6;
+    --materio-primary: #696cff;
+    --materio-warning: #ffab00;
+    --materio-success: #71dd37;
+    --materio-shadow: 0 14px 34px rgba(67, 89, 113, 0.12);
+    position: relative;
+    isolation: isolate;
+}
+
+.portal-content.portal-content-materio::before {
+    content: "";
+    position: absolute;
+    top: -120px;
+    right: -80px;
+    width: min(46vw, 620px);
+    height: min(46vw, 620px);
+    border-radius: 999px;
+    background:
+        radial-gradient(circle at 38% 38%, rgba(105, 108, 255, 0.2), rgba(105, 108, 255, 0) 60%),
+        radial-gradient(circle at 66% 68%, rgba(113, 221, 55, 0.14), rgba(113, 221, 55, 0) 64%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+.portal-content.portal-content-materio .overview h3 {
+    color: var(--materio-ink);
+    letter-spacing: -0.02em;
+}
+
+.portal-content.portal-content-materio .overview p {
+    color: var(--materio-muted);
+}
+
+.portal-content.portal-content-materio .status-card {
+    position: relative;
+    border-radius: 20px;
+    border: 1px solid var(--materio-border);
+    background: linear-gradient(145deg, var(--materio-surface), var(--materio-surface-soft));
+    box-shadow: var(--materio-shadow);
+    overflow: hidden;
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.portal-content.portal-content-materio .status-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, rgba(105, 108, 255, 0.2), rgba(105, 108, 255, 0.95));
+}
+
+.portal-content.portal-content-materio .status-card:nth-child(2)::before {
+    background: linear-gradient(90deg, rgba(255, 171, 0, 0.2), rgba(255, 171, 0, 0.92));
+}
+
+.portal-content.portal-content-materio .status-card:nth-child(3)::before {
+    background: linear-gradient(90deg, rgba(113, 221, 55, 0.2), rgba(113, 221, 55, 0.92));
+}
+
+.portal-content.portal-content-materio .status-card:hover {
+    transform: translateY(-3px);
+    border-color: #d8dcf0;
+    box-shadow: 0 18px 34px rgba(67, 89, 113, 0.18);
+}
+
+.portal-content.portal-content-materio .status-head .material-symbols-outlined {
+    width: 36px;
+    height: 36px;
+}
+
+.portal-content.portal-content-materio .status-value {
+    color: var(--materio-ink);
+}
+
+.portal-content.portal-content-materio .progress-track {
+    height: 7px;
+    background: #edf1fb;
+}
+
+.portal-content.portal-content-materio .panel,
+.portal-content.portal-content-materio .spotlight-card {
+    border-radius: 20px;
+    border-color: var(--materio-border);
+    box-shadow: var(--materio-shadow);
+}
+
+.portal-content.portal-content-materio .panel-head {
+    border-bottom-color: #edf1fb;
+    background: linear-gradient(180deg, rgba(105, 108, 255, 0.06), rgba(105, 108, 255, 0));
+}
+
+.portal-content.portal-content-materio .panel-head h3,
+.portal-content.portal-content-materio .section-head h3 {
+    color: var(--materio-ink);
+}
+
+.portal-content.portal-content-materio .section-head p,
+.portal-content.portal-content-materio .spotlight-gallery-head p {
+    color: var(--materio-muted);
+}
+
+.portal-content.portal-content-materio .circle-action {
+    border-color: #dce3f4;
+    background: #f9faff;
+    color: #5f6b84;
+}
+
+.portal-content.portal-content-materio .circle-action:hover {
+    background: #f1f4ff;
+}
+
+.portal-content.portal-content-materio .overview-analytics {
+    gap: 18px;
+}
+
+.portal-content.portal-content-materio .activity-list {
+    padding: 18px;
+    gap: 12px;
+}
+
+.portal-content.portal-content-materio .activity-list li {
+    border: 1px solid #e8ebf8;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #ffffff, #fafbff);
+    padding: 12px 13px;
+    box-shadow: 0 8px 20px rgba(67, 89, 113, 0.08);
+}
+
+.portal-content.portal-content-materio .activity-dot {
+    width: 20px;
+    height: 20px;
+    margin-top: 3px;
+}
+
+.portal-content.portal-content-materio .activity-dot::after {
+    inset: 6px;
+}
+
+.portal-content.portal-content-materio .activity-list p {
+    color: #2e3650;
+    font-weight: 700;
+}
+
+.portal-content.portal-content-materio .activity-list small {
+    color: #8b95ae;
+    font-weight: 600;
+}
+
+.portal-content.portal-content-materio .activity-file {
+    border: 1px solid #dde5f7;
+    background: #f7f9ff;
+    color: #5e6a86;
+}
+
+.portal-content.portal-content-materio .activity-note {
+    color: #7d87a2;
+    font-style: normal;
+}
+
+.portal-content.portal-content-materio .chart-legend {
+    color: #8b95ae;
+}
+
+.portal-content.portal-content-materio .legend-dot-light {
+    background: #d6dcff;
+}
+
+.portal-content.portal-content-materio .legend-dot-strong {
+    background: #696cff;
+}
+
+.portal-content.portal-content-materio .performance-chart {
+    position: relative;
+    padding: 22px 20px 16px;
+    background:
+        linear-gradient(180deg, rgba(105, 108, 255, 0.04), rgba(105, 108, 255, 0)),
+        repeating-linear-gradient(
+            to top,
+            transparent 0,
+            transparent 25%,
+            rgba(152, 168, 199, 0.14) 25%,
+            rgba(152, 168, 199, 0.14) calc(25% + 1px)
+        );
+}
+
+.portal-content.portal-content-materio .chart-bars {
+    height: 182px;
+    gap: 8px;
+}
+
+.portal-content.portal-content-materio .chart-bar {
+    width: 16px;
+    border-radius: 6px 6px 0 0;
+    box-shadow: 0 6px 14px rgba(67, 89, 113, 0.16);
+}
+
+.portal-content.portal-content-materio .chart-bar-target {
+    background: linear-gradient(180deg, #e2e7ff 0%, #c8d1ff 100%);
+}
+
+.portal-content.portal-content-materio .chart-bar-actual {
+    background: linear-gradient(180deg, #8b8fff 0%, #696cff 100%);
+}
+
+.portal-content.portal-content-materio .chart-group p {
+    color: #68758f;
+    letter-spacing: 0.04em;
+}
+
+.portal-content.portal-content-materio .performance-summary {
+    border-top-color: #edf1fb;
+}
+
+.portal-content.portal-content-materio .summary-tile {
+    border: 1px solid #e8ecf8;
+    background: linear-gradient(145deg, #ffffff, #f8faff);
+    box-shadow: 0 8px 18px rgba(67, 89, 113, 0.08);
+}
+
+.portal-content.portal-content-materio .summary-tile .material-symbols-outlined {
+    background: #eef0ff;
+    color: #696cff;
+}
+
+.portal-content.portal-content-materio .summary-tile small {
+    color: #8a95ad;
+}
+
+.portal-content.portal-content-materio .summary-tile strong {
+    color: #2e3650;
+}
+
+.portal-content.portal-content-materio .panel-progress .panel-head {
+    background:
+        linear-gradient(180deg, rgba(105, 108, 255, 0.08), rgba(105, 108, 255, 0)),
+        #ffffff;
+}
+
+.portal-content.portal-content-materio .panel-progress .text-action {
+    color: #696cff;
+}
+
+.portal-content.portal-content-materio .division-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.portal-content.portal-content-materio .division-table th {
+    background: #f4f6ff;
+    color: #677188;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #e2e7f5;
+}
+
+.portal-content.portal-content-materio .division-table td {
+    border-bottom: 1px solid #edf1fb;
+    color: #2f3750;
+}
+
+.portal-content.portal-content-materio .division-table tbody tr {
+    transition: background-color 160ms ease;
+}
+
+.portal-content.portal-content-materio .division-table tbody tr:hover td {
+    background: #f8f9ff;
+}
+
+.portal-content.portal-content-materio .division-name {
+    color: #2f3750;
+    font-weight: 700;
+}
+
+.portal-content.portal-content-materio .division-meta {
+    color: #8a95ad;
+}
+
+.portal-content.portal-content-materio .completion-wrap > span {
+    color: #5f6b84;
+    font-weight: 700;
+}
+
+.portal-content.portal-content-materio .pill {
+    border: 1px solid transparent;
+    font-weight: 700;
+}
+
+.portal-content.portal-content-materio .pill-blue {
+    border-color: #d7defb;
+    background: #ecefff;
+    color: #4d57dd;
+}
+
+.portal-content.portal-content-materio .pill-amber {
+    border-color: #f8e4b4;
+    background: #fff4d7;
+    color: #a77203;
+}
+
+.portal-content.portal-content-materio .pill-green {
+    border-color: #d5f0c5;
+    background: #e9f8df;
+    color: #3f7b1e;
+}
+
+.portal-content.portal-content-materio .pill-slate {
+    border-color: #dce2f0;
+    background: #f4f6fc;
+    color: #677188;
+}
+
+.portal-content.portal-content-materio .row-action {
+    border-color: #dfe5f4;
+    background: #f6f8ff;
+    color: #68758f;
+}
+
+.portal-content.portal-content-materio .row-action:hover {
+    background: #ecefff;
+    color: #555fd3;
+}
+
+@media (max-width: 760px) {
+    .portal-content.portal-content-materio .activity-list {
+        padding: 14px;
+    }
+
+    .portal-content.portal-content-materio .performance-chart {
+        padding: 18px 14px 14px;
+    }
+
+    .portal-content.portal-content-materio .division-table th,
+    .portal-content.portal-content-materio .division-table td {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+}
+
 .panel-head {
     padding: 18px 20px;
     border-bottom: 1px solid #e6edf5;

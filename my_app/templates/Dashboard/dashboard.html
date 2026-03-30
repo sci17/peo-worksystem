@@ -336,7 +336,7 @@
                 </div>
             </header>
 
-	            <section class="portal-content">
+	            <section class="portal-content {% if current_section == 'workflow' or not current_section %}portal-content-materio{% endif %}">
                     {% if user_division_mismatch %}
                         <div class="account-settings-alert account-settings-alert--warning" role="status">
                             Your account division does not match your assigned group. Please ask an administrator to fix your Division/Group assignment.
