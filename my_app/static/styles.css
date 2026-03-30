@@ -2146,10 +2146,12 @@ body {
 
 .spotlight-copy h4 {
     -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
 .spotlight-copy p {
     -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
 .spotlight-dots {
