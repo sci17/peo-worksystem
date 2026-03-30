@@ -18334,6 +18334,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const closeModalButtons = planningBudgetModal.querySelectorAll(".js-close-planning-budget-modal");
     const budgetForm = planningBudgetModal.querySelector("#planning-budget-form");
     const budgetNameInput = planningBudgetModal.querySelector('input[name="budget_name"]');
+    const totalBudgetInput = planningBudgetModal.querySelector('input[name="total_budget"]');
     const closeEditModalButtons = planningEditBudgetModal instanceof HTMLElement
         ? planningEditBudgetModal.querySelectorAll(".js-close-planning-edit-modal")
         : [];
@@ -18476,6 +18477,36 @@ document.addEventListener("DOMContentLoaded", () => {
         const numeric = Number(value);
         if (!Number.isFinite(numeric)) return "0.00";
         return numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    const formatBudgetInputText = (value) => {
+        const raw = String(value ?? "");
+        const cleaned = raw.replace(/,/g, "").replace(/[^0-9.]/g, "");
+        if (!cleaned) return "";
+
+        const hasDecimal = cleaned.includes(".");
+        const [integerRaw = "", ...fractionParts] = cleaned.split(".");
+        const normalizedInteger = (integerRaw || "0").replace(/^0+(?=\d)/, "");
+        const groupedInteger = (normalizedInteger || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const fractionRaw = fractionParts.join("").slice(0, 2);
+
+        if (!hasDecimal) return groupedInteger;
+        return `${groupedInteger}.${fractionRaw}`;
+    };
+
+    const parseBudgetInputNumber = (value) => {
+        const normalized = String(value ?? "").replace(/,/g, "").trim();
+        if (!normalized) return NaN;
+        const numeric = Number(normalized);
+        return Number.isFinite(numeric) ? numeric : NaN;
+    };
+
+    const applyBudgetInputFormatting = (input) => {
+        if (!(input instanceof HTMLInputElement)) return;
+        const formatted = formatBudgetInputText(input.value);
+        if (input.value !== formatted) {
+            input.value = formatted;
+        }
     };
 
     const parseCurrencyValue = (value) => {
@@ -19978,7 +20009,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!(editBudgetHelper instanceof HTMLElement) || !(editTotalBudgetInput instanceof HTMLInputElement)) {
             return;
         }
-        const amount = Number(editTotalBudgetInput.value);
+        const amount = parseBudgetInputNumber(editTotalBudgetInput.value);
         editBudgetHelper.textContent = formatPhp(Number.isFinite(amount) ? amount : 0);
     };
 
@@ -20030,7 +20061,7 @@ document.addEventListener("DOMContentLoaded", () => {
             editBudgetSubtitle.textContent = `Update budget allocation for FY ${record.fiscalYear}`;
         }
         if (editTotalBudgetInput instanceof HTMLInputElement) {
-            editTotalBudgetInput.value = Number(record.totalBudget || 0).toFixed(2);
+            editTotalBudgetInput.value = formatBudgetInputText(Number(record.totalBudget || 0).toFixed(2));
         }
         if (editRemarksInput instanceof HTMLTextAreaElement) {
             editRemarksInput.value = record.remarks || "";
@@ -20897,7 +20928,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (editTotalBudgetInput instanceof HTMLInputElement) {
         editTotalBudgetInput.addEventListener("input", () => {
+            applyBudgetInputFormatting(editTotalBudgetInput);
             updateEditBudgetHelper();
+        });
+        editTotalBudgetInput.addEventListener("blur", () => {
+            applyBudgetInputFormatting(editTotalBudgetInput);
+            updateEditBudgetHelper();
+        });
+    }
+
+    if (totalBudgetInput instanceof HTMLInputElement) {
+        totalBudgetInput.addEventListener("input", () => {
+            applyBudgetInputFormatting(totalBudgetInput);
+        });
+        totalBudgetInput.addEventListener("blur", () => {
+            applyBudgetInputFormatting(totalBudgetInput);
         });
     }
 
@@ -20907,7 +20952,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const formData = new FormData(budgetForm);
             const budgetName = String(formData.get("budget_name") || "").trim();
             const fiscalYear = String(formData.get("fiscal_year") || "").trim();
-            const totalBudget = Number(formData.get("total_budget"));
+            const totalBudget = parseBudgetInputNumber(
+                totalBudgetInput instanceof HTMLInputElement
+                    ? totalBudgetInput.value
+                    : formData.get("total_budget")
+            );
             const status = normalizeStatus(statusInput instanceof HTMLInputElement ? statusInput.value : formData.get("status"));
             const remarks = String(formData.get("remarks") || "").trim();
 
@@ -20948,7 +20997,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const totalBudget = Number(editTotalBudgetInput instanceof HTMLInputElement ? editTotalBudgetInput.value : NaN);
+            const totalBudget = parseBudgetInputNumber(editTotalBudgetInput instanceof HTMLInputElement ? editTotalBudgetInput.value : "");
             const status = normalizeStatus(editStatusInput instanceof HTMLInputElement ? editStatusInput.value : "Draft");
             const remarks = String(editRemarksInput instanceof HTMLTextAreaElement ? editRemarksInput.value : "").trim();
 
