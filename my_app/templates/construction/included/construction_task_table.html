@@ -10,12 +10,20 @@
                     <h3 style="margin-bottom:4px;">Construction Task Table</h3>
                     <p style="margin:0; font-size:13px; color:#6b7280;">Statuses: pending, on process, draft, completed task</p>
                 </div>
-                <span class="js-construction-task-record-meta">0 tasks</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="js-construction-task-record-meta">0 tasks</span>
+                    <button
+                        type="button"
+                        class="pa-bulk-delete js-construction-task-delete-all"
+                        aria-label="Delete all construction task data"
+                    >
+                        Delete All Data
+                    </button>
+                </div>
             </div>
 
             <table class="road-table construction-table">
                 <colgroup>
-                    <col style="width:44px;">
                     <col style="width:52px;">
                     <col style="width:320px;">
                     <col style="width:240px;">
@@ -26,9 +34,6 @@
                 </colgroup>
                 <thead>
                     <tr>
-                        <th class="pa-select-col">
-                            <input type="checkbox" aria-label="Select all construction tasks">
-                        </th>
                         <th>#</th>
                         <th>Task / Project Name</th>
                         <th>Assign To (Personnel)</th>
@@ -40,7 +45,7 @@
                 </thead>
                 <tbody class="js-construction-task-table-body">
                     <tr class="construction-empty-row">
-                        <td colspan="8">No construction tasks available yet.</td>
+                        <td colspan="7">No construction tasks available yet.</td>
                     </tr>
                 </tbody>
             </table>

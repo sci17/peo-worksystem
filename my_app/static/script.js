@@ -834,6 +834,41 @@ document.addEventListener("click", async (event) => {
     await peoOpenFile({ dataUrl: url });
 });
 
+const peoOpenFileObjectUrls = new Set();
+const peoScheduleObjectUrlCleanup = (objectUrl, delayMs = 60_000) => {
+    const url = String(objectUrl || "").trim();
+    if (!url || !url.startsWith("blob:")) return;
+    peoOpenFileObjectUrls.add(url);
+    window.setTimeout(() => {
+        if (!peoOpenFileObjectUrls.has(url)) return;
+        peoOpenFileObjectUrls.delete(url);
+        try {
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            // Ignore revoke failures.
+        }
+    }, Math.max(1_000, Number(delayMs) || 60_000));
+};
+
+const peoFlushObjectUrlCleanup = () => {
+    if (!peoOpenFileObjectUrls.size) return;
+    const pending = Array.from(peoOpenFileObjectUrls);
+    peoOpenFileObjectUrls.clear();
+    pending.forEach((url) => {
+        try {
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            // Ignore revoke failures.
+        }
+    });
+};
+
+if (window.__peoOpenFileCleanupBound !== true) {
+    window.__peoOpenFileCleanupBound = true;
+    window.addEventListener("pagehide", peoFlushObjectUrlCleanup);
+    window.addEventListener("beforeunload", peoFlushObjectUrlCleanup);
+}
+
 const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTab = false } = {}) => {
     const normalized = peoNormalizeDataUrl({ dataUrl, fileName, mimeType });
     if (!normalized) return { ok: false, error: "Missing file data." };
@@ -841,16 +876,18 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
     const openTarget = (url) => {
         if (openInSameTab) {
             window.location.href = url;
-            return true;
+            return { ok: true, opened: null, fallbackSameTab: true };
         }
         const opened = window.open(url, "_blank", "noopener,noreferrer");
-        if (opened) return true;
-        window.location.href = url;
-        return false;
+        if (opened) return { ok: true, opened, fallbackSameTab: false };
+        return { ok: false, opened: null, fallbackSameTab: false, error: "Pop-up blocked. Please allow pop-ups for this site." };
     };
 
     if (normalized.startsWith("http") || normalized.startsWith("/")) {
-        openTarget(normalized);
+        const openResult = openTarget(normalized);
+        if (!openResult.ok) {
+            return { ok: false, error: openResult.error || "Unable to open file in a new tab." };
+        }
         return { ok: true };
     }
 
@@ -858,11 +895,34 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
         const response = await fetch(normalized);
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
-        openTarget(objectUrl);
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        const openResult = openTarget(objectUrl);
+        if (!openResult.ok) {
+            peoScheduleObjectUrlCleanup(objectUrl, 1_000);
+            return { ok: false, error: openResult.error || "Unable to open file in a new tab." };
+        }
+        peoScheduleObjectUrlCleanup(objectUrl, openResult.fallbackSameTab ? 60_000 : 25_000);
+
+        if (openResult.opened && typeof openResult.opened.addEventListener === "function") {
+            let earlyCleanupQueued = false;
+            const queueEarlyCleanup = () => {
+                if (earlyCleanupQueued) return;
+                earlyCleanupQueued = true;
+                peoScheduleObjectUrlCleanup(objectUrl, 5_000);
+            };
+            try {
+                openResult.opened.addEventListener("load", queueEarlyCleanup, { once: true });
+                openResult.opened.addEventListener("pagehide", queueEarlyCleanup, { once: true });
+            } catch (error) {
+                // Ignore listener binding failures on the opened tab.
+            }
+        }
+
         return { ok: true };
     } catch (error) {
-        openTarget(normalized);
+        const openResult = openTarget(normalized);
+        if (!openResult.ok) {
+            return { ok: false, error: openResult.error || "Unable to open file in a new tab." };
+        }
         return { ok: true };
     }
 };
@@ -2097,14 +2157,48 @@ document.addEventListener("DOMContentLoaded", () => {
         return null;
     };
 
+    const resolveSubmissionScannedFile = (record) => {
+        const source = record && typeof record === "object" ? record : {};
+        const directDataUrl = peoNormalizeDataUrl({
+            dataUrl: source.scanned_file_data || source.scan_url || "",
+            fileName: source.scanned_file_name || "",
+            mimeType: source.scanned_file_type || "",
+        });
+        if (directDataUrl) {
+            return {
+                fileName: String(source.scanned_file_name || "").trim(),
+                fileType: String(source.scanned_file_type || "").trim(),
+                fileData: directDataUrl,
+            };
+        }
+
+        const attachments = peoExtractAttachments(source);
+        const latestAttachment = attachments.length ? attachments[attachments.length - 1] : null;
+        if (!latestAttachment) {
+            return {
+                fileName: "",
+                fileType: "",
+                fileData: "",
+            };
+        }
+
+        return {
+            fileName: String(source.scanned_file_name || latestAttachment.name || "").trim(),
+            fileType: String(source.scanned_file_type || latestAttachment.type || "").trim(),
+            fileData: String(latestAttachment.dataUrl || "").trim(),
+        };
+    };
+
     const getSubmissionsForDivision = (adminRecords, divisionKey) => {
         const targetKey = normalizeKey(divisionKey);
         return (Array.isArray(adminRecords) ? adminRecords : [])
             .filter((record) => record && typeof record === "object")
             .filter((record) => normalizeDivisionKeyFromAdmin(record.division) === targetKey)
             .filter((record) => String(record.__submitted_from_division || "").trim() || (Array.isArray(record.__tracking_events) && record.__tracking_events.length))
-            .map((record) => ({
-                id: String(record.__record_id || record.__id || "").trim(),
+            .map((record) => {
+                const scannedFile = resolveSubmissionScannedFile(record);
+                return {
+                    id: String(record.__record_id || record.__id || "").trim(),
                 from: (() => {
                     const ev = getLatestRouteEventToDivision(record, targetKey);
                     const candidate = ev?.by || ev?.from || record.__submitted_from_division || "";
@@ -2133,11 +2227,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     || record.date_released_admin
                     || ""
                 ).trim(),
-                scannedFileName: String(record.scanned_file_name || "").trim(),
-                scannedFileType: String(record.scanned_file_type || "").trim(),
-                scannedFileData: String(record.scanned_file_data || "").trim(),
+                scannedFileName: scannedFile.fileName,
+                scannedFileType: scannedFile.fileType,
+                scannedFileData: scannedFile.fileData,
                 remarks: String(record.description || record.remarks || "").trim() || "-",
-            }));
+                };
+            });
     };
 
     const renderRoot = async (root) => {
@@ -4941,11 +5036,55 @@ const portalDomReady = () => {
 	            const submittedKey = resolveAdminDivisionKey(normalized.__submitted_from_division);
 	            normalized.received_from = labelForAdminDivisionKey(submittedKey) || String(normalized.received_by || "").trim();
 	        }
-	        normalized.scanned_file_name = normalized.scanned_file_name || "";
-	        normalized.scanned_file_type = normalized.scanned_file_type || "";
-	        normalized.scanned_file_data = normalized.scanned_file_data || "";
+	        normalized.scanned_file_name = String(normalized.scanned_file_name || "").trim();
+	        normalized.scanned_file_type = String(normalized.scanned_file_type || "").trim();
+	        normalized.scanned_file_data = peoNormalizeDataUrl({
+	            dataUrl: normalized.scanned_file_data || normalized.scan_url || "",
+	            fileName: normalized.scanned_file_name,
+	            mimeType: normalized.scanned_file_type,
+	        });
+	        const normalizedAttachments = peoExtractAttachments(normalized);
+	        if (normalizedAttachments.length) {
+	            normalized.__attachments = normalizedAttachments;
+	            const fallbackAttachment = normalizedAttachments[normalizedAttachments.length - 1];
+	            if (!normalized.scanned_file_name) {
+	                normalized.scanned_file_name = String(fallbackAttachment.name || "").trim();
+	            }
+	            if (!normalized.scanned_file_type) {
+	                normalized.scanned_file_type = String(fallbackAttachment.type || "").trim();
+	            }
+	            if (!normalized.scanned_file_data) {
+	                normalized.scanned_file_data = String(fallbackAttachment.dataUrl || "").trim();
+	            }
+	        }
 	        normalized.billing_history = ensureBillingHistory(normalized);
         return normalized;
+    };
+
+    const resolveRecordScannedFile = (record) => {
+        const source = record && typeof record === "object" ? record : {};
+        const directDataUrl = peoNormalizeDataUrl({
+            dataUrl: source.scanned_file_data || source.scan_url || "",
+            fileName: source.scanned_file_name || "",
+            mimeType: source.scanned_file_type || "",
+        });
+        if (directDataUrl) {
+            return {
+                dataUrl: directDataUrl,
+                fileName: String(source.scanned_file_name || "").trim(),
+                mimeType: String(source.scanned_file_type || "").trim(),
+            };
+        }
+
+        const attachments = peoExtractAttachments(source);
+        const latestAttachment = attachments.length ? attachments[attachments.length - 1] : null;
+        if (!latestAttachment) return null;
+
+        return {
+            dataUrl: String(latestAttachment.dataUrl || "").trim(),
+            fileName: String(source.scanned_file_name || latestAttachment.name || "").trim(),
+            mimeType: String(source.scanned_file_type || latestAttachment.type || "").trim(),
+        };
     };
 
     const refreshScannedFileLabel = (form) => {
@@ -5587,7 +5726,8 @@ const portalDomReady = () => {
         }
 	        toggleBillingTypeOtherField(form);
 	        toggleBillingReceivedFields(form);
-	        setExistingScannedFileName(form, record.scanned_file_name || "");
+	        const existingScannedFile = resolveRecordScannedFile(record);
+	        setExistingScannedFileName(form, existingScannedFile?.fileName || record.scanned_file_name || "");
 	        applyAdminNewDocumentModalInteractivity(form, tableType === "billing" ? "edit_billing" : "edit_document");
 
 	        modal.style.display = "flex";
@@ -5712,7 +5852,8 @@ const portalDomReady = () => {
         });
 
         const scannedFileCell = document.createElement("td");
-        if (values.scanned_file_data) {
+        const scannedFilePayload = resolveRecordScannedFile(values);
+        if (scannedFilePayload && scannedFilePayload.dataUrl) {
             const viewButton = document.createElement("button");
             viewButton.type = "button";
             viewButton.className = "pa-view-uploaded-file";
@@ -6458,7 +6599,8 @@ const portalDomReady = () => {
 
             if (action === "view-file") {
                 const record = readAdminDivisionRecords().find((item) => item.__record_id === recordId);
-                if (!record?.scanned_file_data) {
+                const scannedFile = resolveRecordScannedFile(record);
+                if (!scannedFile?.dataUrl) {
                     showPeoGeneralToast("No scanned file is available for this record.", {
                         title: "File Unavailable",
                         variant: "warning",
@@ -6466,9 +6608,9 @@ const portalDomReady = () => {
                     return;
                 }
                 const result = await peoOpenFile({
-                    dataUrl: record.scanned_file_data,
-                    fileName: record.scanned_file_name,
-                    mimeType: record.scanned_file_type,
+                    dataUrl: scannedFile.dataUrl,
+                    fileName: scannedFile.fileName,
+                    mimeType: scannedFile.mimeType,
                 });
                 if (!result.ok) {
                     showPeoGeneralToast(String(result.error || "Unable to open scanned file."), {
@@ -17040,6 +17182,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const tableBody = taskDashboard.querySelector(".js-construction-task-table-body");
     const recordMeta = taskDashboard.querySelector(".js-construction-task-record-meta");
+    const deleteAllButton = taskDashboard.querySelector(".js-construction-task-delete-all");
     const listView = taskDashboard.querySelector(".js-construction-task-list-view");
     const detailView = taskDashboard.querySelector(".js-construction-task-detail-view");
     const detailBody = detailView ? detailView.querySelector(".js-construction-task-detail-body") : null;
@@ -17150,6 +17293,67 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             return false;
         }
+    };
+
+    const deleteAllTaskData = async () => {
+        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+        if (access.readOnly) {
+            showPeoGeneralToast("Read-only access: you cannot delete records on this dashboard.", {
+                title: "Construction Division",
+                variant: "warning",
+            });
+            return;
+        }
+
+        const tasks = readTasks();
+        if (!tasks.length) {
+            showPeoGeneralToast("No construction task data found.", {
+                title: "Construction Division",
+                variant: "info",
+            });
+            return;
+        }
+
+        const approved = await showPeoGeneralConfirm({
+            title: "Delete All Task Data",
+            message: "This will permanently delete all task records in the construction task table.",
+            confirmLabel: "Delete All",
+            cancelLabel: "Cancel",
+            variant: "danger",
+        });
+        if (!approved) return;
+
+        const deletedRecordIds = new Set(
+            tasks
+                .map((task) => String(task?.construction_id || task?.__id || "").trim())
+                .filter(Boolean)
+        );
+
+        const wroteTasks = writeTasks([]);
+        if (!wroteTasks) {
+            showPeoGeneralToast("Unable to delete all tasks. Storage is unavailable.", {
+                title: "Construction Division",
+                variant: "danger",
+            });
+            return;
+        }
+
+        if (deletedRecordIds.size > 0) {
+            const constructionRecords = readConstructionRecords();
+            const nextConstructionRecords = constructionRecords.filter((record) => {
+                const id = String(record?.__id || record?.construction_id || "").trim();
+                return !id || !deletedRecordIds.has(id);
+            });
+            if (nextConstructionRecords.length !== constructionRecords.length) {
+                writeConstructionRecords(nextConstructionRecords);
+            }
+        }
+
+        showPeoGeneralToast("All construction task data deleted successfully.", {
+            title: "Construction Division",
+            variant: "success",
+        });
+        render();
     };
 
     const FORM_FIELDS = [
@@ -17332,6 +17536,13 @@ document.addEventListener("DOMContentLoaded", () => {
             openModal(constructionRecord || taskRecord || {});
         });
     }
+
+    if (deleteAllButton instanceof HTMLButtonElement) {
+        deleteAllButton.addEventListener("click", () => {
+            deleteAllTaskData();
+        });
+    }
+
     const render = () => {
         if (!tableBody) return;
         const records = readTasks();
@@ -17341,7 +17552,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!totalCount) {
             tableBody.innerHTML = `
                 <tr class="construction-empty-row">
-                    <td colspan="8">No construction tasks available yet.</td>
+                    <td colspan="7">No construction tasks available yet.</td>
                 </tr>
             `;
         } else {
@@ -17357,9 +17568,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 const remarks = record?.remarks || record?.note || record?.comment;
 
                 row.innerHTML = `
-                    <td class="pa-select-col">
-                        <input type="checkbox" aria-label="Select row" ${record?.__id ? `data-record-id="${escapeHtml(record.__id)}"` : ""}>
-                    </td>
                     <td>${index + 1}</td>
                     <td>
                         <button
@@ -17395,6 +17603,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (recordMeta) {
             recordMeta.textContent = `${totalCount} task${totalCount === 1 ? "" : "s"}`;
+        }
+        if (deleteAllButton instanceof HTMLButtonElement) {
+            deleteAllButton.disabled = totalCount === 0;
         }
     };
 
