@@ -14497,6 +14497,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const pageMeta = constructionDashboard.querySelector(".js-construction-page-meta");
     const constructionModal = document.querySelector(".js-construction-modal");
     const constructionForm = constructionModal ? constructionModal.querySelector(".js-construction-form") : null;
+    const constructionContractCostInput = constructionForm ? constructionForm.querySelector('input[name="contract_cost"]') : null;
+    const constructionRevisedContractCostInput = constructionForm ? constructionForm.querySelector('input[name="revised_contract_cost"]') : null;
     const constructionPhotoInput = constructionModal ? constructionModal.querySelector(".js-construction-photo-input") : null;
     const constructionRouteDivisionSelect = constructionModal ? constructionModal.querySelector(".js-construction-route-division") : null;
     const constructionRouteSubmitButton = constructionModal ? constructionModal.querySelector(".js-construction-route-submit") : null;
@@ -15905,6 +15907,34 @@ document.addEventListener("DOMContentLoaded", () => {
         return String(formData.get(key) ?? "").trim();
     };
 
+    const formatConstructionCurrencyInputText = (value) => {
+        const raw = String(value ?? "");
+        const cleaned = raw.replace(/,/g, "").replace(/[^0-9.]/g, "");
+        if (!cleaned) return "";
+
+        const hasDecimal = cleaned.includes(".");
+        const [integerRaw = "", ...fractionParts] = cleaned.split(".");
+        const normalizedInteger = (integerRaw || "0").replace(/^0+(?=\d)/, "");
+        const groupedInteger = (normalizedInteger || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const fractionRaw = fractionParts.join("").slice(0, 2);
+
+        if (!hasDecimal) return groupedInteger;
+        return `${groupedInteger}.${fractionRaw}`;
+    };
+
+    const normalizeConstructionCurrencyInput = (input) => {
+        if (!(input instanceof HTMLInputElement)) return;
+        const formatted = formatConstructionCurrencyInputText(input.value);
+        if (input.value !== formatted) {
+            input.value = formatted;
+        }
+    };
+
+    const syncConstructionCurrencyInputs = () => {
+        normalizeConstructionCurrencyInput(constructionContractCostInput);
+        normalizeConstructionCurrencyInput(constructionRevisedContractCostInput);
+    };
+
     const syncConstructionScheduleDates = () => {
         if (!(constructionForm instanceof HTMLFormElement)) return;
 
@@ -16237,6 +16267,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 fillConstructionForm(record);
             }
         }
+        syncConstructionCurrencyInputs();
         initConstructionScheduleAutofill();
         renderConstructionPersonnel(mode === "edit" && record ? record.personnel : []);
         setConstructionProjectOverviewReadonly(mode === "edit");
@@ -16295,6 +16326,16 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     syncConstructionPersonnelUi();
+
+    [constructionContractCostInput, constructionRevisedContractCostInput].forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) return;
+        input.addEventListener("input", () => {
+            normalizeConstructionCurrencyInput(input);
+        });
+        input.addEventListener("blur", () => {
+            normalizeConstructionCurrencyInput(input);
+        });
+    });
 
     if (addConstructionPersonnelButton instanceof HTMLButtonElement) {
         addConstructionPersonnelButton.addEventListener("click", () => {
@@ -17253,6 +17294,34 @@ document.addEventListener("DOMContentLoaded", () => {
         return formatted;
     };
 
+    const formatConstructionTaskCurrencyInputText = (value) => {
+        const raw = String(value ?? "");
+        const cleaned = raw.replace(/,/g, "").replace(/[^0-9.]/g, "");
+        if (!cleaned) return "";
+
+        const hasDecimal = cleaned.includes(".");
+        const [integerRaw = "", ...fractionParts] = cleaned.split(".");
+        const normalizedInteger = (integerRaw || "0").replace(/^0+(?=\d)/, "");
+        const groupedInteger = (normalizedInteger || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const fractionRaw = fractionParts.join("").slice(0, 2);
+
+        if (!hasDecimal) return groupedInteger;
+        return `${groupedInteger}.${fractionRaw}`;
+    };
+
+    const normalizeConstructionTaskCurrencyInput = (input) => {
+        if (!(input instanceof HTMLInputElement)) return;
+        const formatted = formatConstructionTaskCurrencyInputText(input.value);
+        if (input.value !== formatted) {
+            input.value = formatted;
+        }
+    };
+
+    const syncConstructionTaskCurrencyInputs = () => {
+        normalizeConstructionTaskCurrencyInput(taskContractCostInput);
+        normalizeConstructionTaskCurrencyInput(taskRevisedContractCostInput);
+    };
+
     const readTasks = () => {
         try {
             const raw = window.localStorage.getItem(TASK_STORAGE_KEY);
@@ -17378,6 +17447,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const formModal = taskDashboard.querySelector(".js-construction-task-modal");
     const form = formModal ? formModal.querySelector(".js-construction-task-form") : null;
+    const taskContractCostInput = form ? form.querySelector('input[name="contract_cost"]') : null;
+    const taskRevisedContractCostInput = form ? form.querySelector('input[name="revised_contract_cost"]') : null;
     const modalDialog = formModal ? formModal.querySelector(".construction-modal-dialog") : null;
     const modalBackdrop = formModal ? formModal.querySelector(".construction-modal-backdrop") : null;
     const closeModalButtons = formModal ? Array.from(formModal.querySelectorAll(".js-close-construction-task-modal")) : [];
@@ -17391,6 +17462,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const value = record[field] ?? "";
             input.value = value;
         });
+        syncConstructionTaskCurrencyInputs();
         form.dataset.recordId = String(record.__id || record.construction_id || record.id || "");
     };
 
@@ -17416,6 +17488,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modalBackdrop) {
         modalBackdrop.addEventListener("click", closeModal);
     }
+
+    [taskContractCostInput, taskRevisedContractCostInput].forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) return;
+        input.addEventListener("input", () => {
+            normalizeConstructionTaskCurrencyInput(input);
+        });
+        input.addEventListener("blur", () => {
+            normalizeConstructionTaskCurrencyInput(input);
+        });
+    });
 
     const saveFormToStorage = () => {
         if (!form) return "";
@@ -18361,6 +18443,9 @@ document.addEventListener("DOMContentLoaded", () => {
         : null;
     const ppaProjectTitleInput = planningPpaModal instanceof HTMLElement
         ? planningPpaModal.querySelector('input[name="project_title"]')
+        : null;
+    const ppaEstimatedCostInput = planningPpaModal instanceof HTMLElement
+        ? planningPpaModal.querySelector('input[name="estimated_cost"]')
         : null;
     const ppaBudgetAllocationSelect = planningPpaModal instanceof HTMLElement
         ? planningPpaModal.querySelector(".js-planning-ppa-budget-select")
@@ -20946,6 +21031,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    if (ppaEstimatedCostInput instanceof HTMLInputElement) {
+        ppaEstimatedCostInput.addEventListener("input", () => {
+            applyBudgetInputFormatting(ppaEstimatedCostInput);
+        });
+        ppaEstimatedCostInput.addEventListener("blur", () => {
+            applyBudgetInputFormatting(ppaEstimatedCostInput);
+        });
+    }
+
     if (budgetForm instanceof HTMLFormElement) {
         budgetForm.addEventListener("submit", (event) => {
             event.preventDefault();
@@ -23492,6 +23586,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	    const modalTitleEl = modal ? modal.querySelector("#construction-proposal-modal-title") : null;
 	    const modalSubmitButton = form ? form.querySelector('button[type="submit"]') : null;
 	    const attachmentInput = form ? form.querySelector('input[name="attachment"]') : null;
+	    const proposalContractAmountInput = form ? form.querySelector('input[name="contract_amount"]') : null;
 
 		    const STORAGE_KEY = "peo_construction_proposals_v1";
 		    const PLANNING_TARGET_LABEL = "Planning Division";
@@ -23525,6 +23620,33 @@ document.addEventListener("DOMContentLoaded", () => {
             .replace(/>/g, "&gt;")
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    };
+
+    const formatConstructionProposalCurrencyInputText = (value) => {
+        const raw = String(value ?? "");
+        const cleaned = raw.replace(/,/g, "").replace(/[^0-9.]/g, "");
+        if (!cleaned) return "";
+
+        const hasDecimal = cleaned.includes(".");
+        const [integerRaw = "", ...fractionParts] = cleaned.split(".");
+        const normalizedInteger = (integerRaw || "0").replace(/^0+(?=\d)/, "");
+        const groupedInteger = (normalizedInteger || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const fractionRaw = fractionParts.join("").slice(0, 2);
+
+        if (!hasDecimal) return groupedInteger;
+        return `${groupedInteger}.${fractionRaw}`;
+    };
+
+    const normalizeConstructionProposalCurrencyInput = (input) => {
+        if (!(input instanceof HTMLInputElement)) return;
+        const formatted = formatConstructionProposalCurrencyInputText(input.value);
+        if (input.value !== formatted) {
+            input.value = formatted;
+        }
+    };
+
+    const syncConstructionProposalCurrencyInputs = () => {
+        normalizeConstructionProposalCurrencyInput(proposalContractAmountInput);
     };
 
     const readRecords = () => {
@@ -23696,6 +23818,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	        modal.hidden = false;
 	        editingRecordId = "";
 	        setModalMode("add");
+	        syncConstructionProposalCurrencyInputs();
 	        const first = form ? form.querySelector('input[name="project_name"]') : null;
 	        if (first instanceof HTMLInputElement) {
 	            window.setTimeout(() => first.focus(), 0);
@@ -23752,6 +23875,15 @@ document.addEventListener("DOMContentLoaded", () => {
 	    if (addButton instanceof HTMLButtonElement) {
 	        addButton.addEventListener("click", openModal);
 	    }
+
+    if (proposalContractAmountInput instanceof HTMLInputElement) {
+        proposalContractAmountInput.addEventListener("input", () => {
+            normalizeConstructionProposalCurrencyInput(proposalContractAmountInput);
+        });
+        proposalContractAmountInput.addEventListener("blur", () => {
+            normalizeConstructionProposalCurrencyInput(proposalContractAmountInput);
+        });
+    }
 
 
 		    if (selectAllCheckbox instanceof HTMLInputElement) {
@@ -23841,6 +23973,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		            setValue("contractor", record?.contractor || "");
 		            setValue("contract_amount", record?.contract_amount || "");
 		            setValue("status", record?.status || "");
+		            syncConstructionProposalCurrencyInputs();
 
 		            modal.hidden = false;
 		            const first = form.querySelector('input[name="project_name"]');
@@ -23866,6 +23999,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	    if (form instanceof HTMLFormElement) {
 	        form.addEventListener("submit", async (event) => {
             event.preventDefault();
+            syncConstructionProposalCurrencyInputs();
             if (!form.checkValidity()) {
                 form.reportValidity();
                 return;
