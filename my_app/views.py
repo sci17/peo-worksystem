@@ -3,6 +3,7 @@ import re
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from django.contrib.auth import login
 from django.contrib.auth import get_user_model
@@ -10,6 +11,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.forms import UserCreationForm
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponseRedirect
@@ -34,6 +36,80 @@ from .models import (
     KEY_QUALITY,
     KEY_MAINTENANCE
 )
+
+PEO_CACHE_VERSION_KEY = "peo:system:cache:version"
+PEO_CACHE_TIMEOUT_SHORT = 30
+PEO_CACHE_TIMEOUT_MEDIUM = 60
+
+
+def _get_cache_version():
+    try:
+        cached_version = cache.get(PEO_CACHE_VERSION_KEY)
+        if isinstance(cached_version, int) and cached_version > 0:
+            return cached_version
+        cache.set(PEO_CACHE_VERSION_KEY, 1, None)
+    except Exception:
+        return 1
+    return 1
+
+
+def _make_cache_key(*parts):
+    normalized_parts = []
+    for part in parts:
+        text = str(part or "").strip()
+        if not text:
+            continue
+        normalized_parts.append(re.sub(r"[^a-zA-Z0-9:_-]+", "_", text))
+
+    suffix = ":".join(normalized_parts) if normalized_parts else "default"
+    return f"peo:v{_get_cache_version()}:{suffix}"
+
+
+def _bump_system_cache_version():
+    try:
+        if cache.add(PEO_CACHE_VERSION_KEY, 1, None):
+            return
+        cache.incr(PEO_CACHE_VERSION_KEY)
+    except Exception:
+        try:
+            cache.set(PEO_CACHE_VERSION_KEY, _get_cache_version() + 1, None)
+        except Exception:
+            return
+
+
+def _serialize_store_snapshot(stores):
+    serialized = {}
+    for key, store in (stores or {}).items():
+        if not store:
+            continue
+        updated_at = getattr(store, "updated_at", None)
+        serialized[str(key)] = {
+            "data": getattr(store, "data", None),
+            "updated_at": updated_at.isoformat() if updated_at else "",
+        }
+    return serialized
+
+
+def _deserialize_store_snapshot(snapshot):
+    if not isinstance(snapshot, dict):
+        return {}
+
+    restored = {}
+    for key, payload in snapshot.items():
+        if not isinstance(payload, dict):
+            continue
+        updated_at = _parse_loose_datetime(payload.get("updated_at"))
+        if updated_at and timezone.is_naive(updated_at):
+            try:
+                updated_at = timezone.make_aware(updated_at, timezone.get_current_timezone())
+            except Exception:
+                pass
+        restored[str(key)] = SimpleNamespace(
+            key=str(key),
+            data=payload.get("data"),
+            updated_at=updated_at,
+        )
+    return restored
 
 
 def _safe_log_division_store_event(
@@ -477,21 +553,57 @@ def _load_shared_stores(user=None):
         KEY_PLANNING,
         KEY_CONSTRUCTION,
         KEY_QUALITY,
-       KEY_MAINTENANCE,
+        KEY_MAINTENANCE,
     )
 
+    shared_cache_key = _make_cache_key("stores", "shared")
     try:
-        return {store.key: store for store in SharedDivisionStore.objects.filter(key__in=keys)}
+        cached_snapshot = cache.get(shared_cache_key)
+        if cached_snapshot is not None:
+            return _deserialize_store_snapshot(cached_snapshot)
+    except Exception:
+        pass
+
+    try:
+        stores = {store.key: store for store in SharedDivisionStore.objects.filter(key__in=keys)}
+        try:
+            cache.set(shared_cache_key, _serialize_store_snapshot(stores), PEO_CACHE_TIMEOUT_MEDIUM)
+        except Exception:
+            pass
+        return stores
     except (OperationalError, ProgrammingError):
         if user is None:
             return {}
-        return {
+
+        user_id = getattr(user, "id", "") or "anonymous"
+        fallback_cache_key = _make_cache_key("stores", "fallback_user", user_id)
+        try:
+            cached_snapshot = cache.get(fallback_cache_key)
+            if cached_snapshot is not None:
+                return _deserialize_store_snapshot(cached_snapshot)
+        except Exception:
+            pass
+
+        stores = {
             store.key: store
             for store in DivisionStore.objects.filter(user=user, key__in=keys)
         }
+        try:
+            cache.set(fallback_cache_key, _serialize_store_snapshot(stores), PEO_CACHE_TIMEOUT_SHORT)
+        except Exception:
+            pass
+        return stores
 
 
 def _build_overview_context(user):
+    cache_key = _make_cache_key("overview_context")
+    try:
+        cached_payload = cache.get(cache_key)
+        if isinstance(cached_payload, dict):
+            return cached_payload
+    except Exception:
+        pass
+
     stores = _load_shared_stores(user)
 
     admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
@@ -926,7 +1038,7 @@ def _build_overview_context(user):
         _division_leader('Quality Control Division', 'Charisma Wy B. Proells', avatar_class='leader-avatar-quality'),
     ]
 
-    return {
+    overview_context = {
         'overview_active_projects': active_projects,
         'overview_active_projects_delta': '',
         'overview_active_projects_progress': overview_active_projects_progress,
@@ -947,9 +1059,22 @@ def _build_overview_context(user):
         'overview_overall_efficiency': f'{avg_efficiency}%',
         'overview_division_progress': division_progress_rows,
     }
+    try:
+        cache.set(cache_key, overview_context, PEO_CACHE_TIMEOUT_SHORT)
+    except Exception:
+        pass
+    return overview_context
 
 
 def _build_tracking_rows(user):
+    cache_key = _make_cache_key("tracking_rows")
+    try:
+        cached_rows = cache.get(cache_key)
+        if isinstance(cached_rows, list):
+            return cached_rows
+    except Exception:
+        pass
+
     def load_stores():
         stores = _load_shared_stores(user)
 
@@ -1112,10 +1237,22 @@ def _build_tracking_rows(user):
 
     # Sort by slip no (numeric-aware), fallback to project name.
     rows.sort(key=lambda item: (str(item.get('slip_no') or ''), str(item.get('project_name') or '')))
+    try:
+        cache.set(cache_key, rows, PEO_CACHE_TIMEOUT_SHORT)
+    except Exception:
+        pass
     return rows
 
 
 def _build_tracking_payload(user):
+    cache_key = _make_cache_key("tracking_payload")
+    try:
+        cached_payload = cache.get(cache_key)
+        if isinstance(cached_payload, dict):
+            return cached_payload
+    except Exception:
+        pass
+
     stores = _load_shared_stores(user)
 
     admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
@@ -1470,6 +1607,10 @@ def _build_tracking_payload(user):
             },
         }
 
+    try:
+        cache.set(cache_key, payload, PEO_CACHE_TIMEOUT_SHORT)
+    except Exception:
+        pass
     return payload
 
 
@@ -1523,6 +1664,25 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
         return "applicant"
 
     viewer_role = resolve_user_role()
+    profile_updated = getattr(profile, "updated_at", None)
+    profile_updated_stamp = profile_updated.isoformat() if profile_updated else ""
+    notifications_cache_key = _make_cache_key(
+        "dashboard_notifications",
+        getattr(request.user, "id", ""),
+        "super" if is_super else "standard",
+        viewer_role,
+        user_division,
+        current_section,
+        page_heading,
+        current_maintenance,
+        profile_updated_stamp,
+    )
+    try:
+        cached_notifications = cache.get(notifications_cache_key)
+        if isinstance(cached_notifications, dict):
+            return cached_notifications
+    except Exception:
+        pass
 
     category_catalog = {
         "applications": {"label": "Applications", "icon": "assignment_ind"},
@@ -1911,7 +2071,7 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
             "category_label": category_catalog["alerts"]["label"],
             "severity": "medium",
         }
-        return {
+        disabled_payload = {
             "dashboard_notifications": [disabled_item],
             "dashboard_notification_count": 1,
             "dashboard_has_notifications": True,
@@ -1925,6 +2085,11 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
             ],
             "dashboard_notification_user_role": viewer_role,
         }
+        try:
+            cache.set(notifications_cache_key, disabled_payload, PEO_CACHE_TIMEOUT_SHORT)
+        except Exception:
+            pass
+        return disabled_payload
 
     build_document_workflow_notifications()
     build_admin_staff_notifications()
@@ -1963,13 +2128,18 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
             }
         )
 
-    return {
+    notifications_payload = {
         "dashboard_notifications": notifications,
         "dashboard_notification_count": len(notifications),
         "dashboard_has_notifications": bool(notifications),
         "dashboard_notification_categories": category_items,
         "dashboard_notification_user_role": viewer_role,
     }
+    try:
+        cache.set(notifications_cache_key, notifications_payload, PEO_CACHE_TIMEOUT_SHORT)
+    except Exception:
+        pass
+    return notifications_payload
 
 def _build_dashboard_context(request, **extra):
     profile = _get_user_profile(request.user)
@@ -2174,6 +2344,7 @@ def project_dashboard(request):
         KEY_MAINTENANCE: {},
     }
     project_store_seed = dict(store_defaults)
+    did_bootstrap_store = False
 
     try:
         for key in store_defaults.keys():
@@ -2187,6 +2358,7 @@ def project_dashboard(request):
                 if candidate and not _is_empty_division_store_payload(key, candidate.data):
                     shared_store.data = candidate.data
                     shared_store.save(update_fields=["data", "updated_at"])
+                    did_bootstrap_store = True
 
             project_store_seed[key] = shared_store.data
     except (OperationalError, ProgrammingError):
@@ -2206,6 +2378,9 @@ def project_dashboard(request):
             project_store_seed[key] = data if isinstance(data, dict) else {}
         else:
             project_store_seed[key] = data if isinstance(data, list) else []
+
+    if did_bootstrap_store:
+        _bump_system_cache_version()
 
     return render(
         request,
@@ -2332,6 +2507,7 @@ def division_store_api(request, key):
         store, _ = DivisionStore.objects.get_or_create(user=request.user, key=key)
 
     if request.method == "GET":
+        did_bootstrap_store = False
         if using_shared_store:
             # Bootstrap shared store from the most recently updated per-user store (if shared is empty).
             if _shared_store_should_bootstrap(key, store):
@@ -2343,6 +2519,9 @@ def division_store_api(request, key):
                 if candidate and not _is_empty_division_store_payload(key, candidate.data):
                     store.data = candidate.data
                     store.save(update_fields=["data", "updated_at"])
+                    did_bootstrap_store = True
+        if did_bootstrap_store:
+            _bump_system_cache_version()
 
         return JsonResponse(
             {
@@ -2369,6 +2548,7 @@ def division_store_api(request, key):
     else:
         store.data = payload
     store.save()
+    _bump_system_cache_version()
 
     _safe_log_division_store_event(
         actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
@@ -2427,6 +2607,7 @@ def division_store_clear_all_api(request):
     except Exception:
         # Ignore database issues; clearing shared stores is still best-effort.
         pass
+    _bump_system_cache_version()
 
     return JsonResponse({"ok": True, "cleared": sorted(cleared)})
 

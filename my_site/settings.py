@@ -150,6 +150,27 @@ STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# System-wide cache configuration.
+# Defaults to a file-based cache so data persists across server restarts in local dev.
+CACHE_BACKEND = os.environ.get('DJANGO_CACHE_BACKEND', 'django.core.cache.backends.filebased.FileBasedCache')
+CACHE_LOCATION = os.environ.get('DJANGO_CACHE_LOCATION', str(BASE_DIR / '.cache' / 'django'))
+CACHE_TIMEOUT = int(os.environ.get('DJANGO_CACHE_TIMEOUT', '300'))
+CACHE_MAX_ENTRIES = int(os.environ.get('DJANGO_CACHE_MAX_ENTRIES', '10000'))
+
+if 'filebased' in CACHE_BACKEND.lower():
+    os.makedirs(CACHE_LOCATION, exist_ok=True)
+
+CACHES = {
+    'default': {
+        'BACKEND': CACHE_BACKEND,
+        'LOCATION': CACHE_LOCATION,
+        'TIMEOUT': CACHE_TIMEOUT,
+        'OPTIONS': {
+            'MAX_ENTRIES': CACHE_MAX_ENTRIES,
+        },
+    }
+}
+
 # Production security hardening (enabled only when DEBUG is False)
 if not DEBUG:
     SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000'))
