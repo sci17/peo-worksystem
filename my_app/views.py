@@ -1,15 +1,20 @@
 import json
+import hashlib
 import re
 import uuid
+from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
+from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth import get_user_model
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.forms import UserCreationForm
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponseRedirect
@@ -471,24 +476,136 @@ def _safe_list(value):
     return value if isinstance(value, list) else []
 
 
-def _load_shared_stores(user=None):
-    keys = (
-        KEY_ADMIN,
-        KEY_PLANNING,
-        KEY_CONSTRUCTION,
-        KEY_QUALITY,
-       KEY_MAINTENANCE,
-    )
+_CACHE_VERSION_KEY = "my_app:store_cache_version"
+_STORE_KEYS = (
+    KEY_ADMIN,
+    KEY_PLANNING,
+    KEY_CONSTRUCTION,
+    KEY_QUALITY,
+    KEY_MAINTENANCE,
+)
 
+
+def _settings_int(name, default):
     try:
-        return {store.key: store for store in SharedDivisionStore.objects.filter(key__in=keys)}
+        return int(getattr(settings, name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+_SYSTEM_DATA_CACHE_TTL = _settings_int("SYSTEM_DATA_CACHE_TTL_SECONDS", 300)
+_SYSTEM_COMPUTED_CACHE_TTL = _settings_int("SYSTEM_COMPUTED_CACHE_TTL_SECONDS", 120)
+
+
+def _cache_key(namespace, *parts):
+    raw = "|".join(str(part or "") for part in parts)
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return f"my_app:{namespace}:{digest}"
+
+
+def _cache_get_or_set(cache_key_value, builder, timeout):
+    cached = cache.get(cache_key_value)
+    if cached is not None:
+        return deepcopy(cached)
+
+    computed = builder()
+    cache.set(cache_key_value, computed, timeout)
+    return deepcopy(computed)
+
+
+def _get_store_cache_version():
+    version = cache.get(_CACHE_VERSION_KEY)
+    if version:
+        return str(version)
+
+    version = uuid.uuid4().hex
+    cache.set(_CACHE_VERSION_KEY, version, None)
+    return version
+
+
+def _invalidate_store_cache():
+    cache.set(_CACHE_VERSION_KEY, uuid.uuid4().hex, None)
+
+
+def _store_default_data(key):
+    return {} if key == KEY_MAINTENANCE else []
+
+
+def _normalize_store_data(key, data):
+    if key == KEY_MAINTENANCE:
+        return data if isinstance(data, dict) else {}
+    return data if isinstance(data, list) else []
+
+
+def _empty_store_snapshot():
+    return {
+        key: {
+            "data": _store_default_data(key),
+            "updated_at": None,
+        }
+        for key in _STORE_KEYS
+    }
+
+
+def _snapshot_to_store_map(snapshot):
+    stores = {}
+    for key in _STORE_KEYS:
+        snapshot_item = snapshot.get(key) if isinstance(snapshot, dict) else None
+        snapshot_item = snapshot_item if isinstance(snapshot_item, dict) else {}
+        updated_at_raw = snapshot_item.get("updated_at")
+        updated_at = _parse_loose_datetime(updated_at_raw)
+        stores[key] = SimpleNamespace(
+            key=key,
+            data=_normalize_store_data(key, snapshot_item.get("data")),
+            updated_at=updated_at,
+        )
+    return stores
+
+
+def _build_shared_store_snapshot():
+    snapshot = _empty_store_snapshot()
+    stores = SharedDivisionStore.objects.filter(key__in=_STORE_KEYS)
+    for store in stores:
+        snapshot[store.key] = {
+            "data": _normalize_store_data(store.key, store.data),
+            "updated_at": store.updated_at.isoformat() if store.updated_at else None,
+        }
+    return snapshot
+
+
+def _build_user_store_snapshot(user):
+    snapshot = _empty_store_snapshot()
+    stores = DivisionStore.objects.filter(user=user, key__in=_STORE_KEYS)
+    for store in stores:
+        snapshot[store.key] = {
+            "data": _normalize_store_data(store.key, store.data),
+            "updated_at": store.updated_at.isoformat() if store.updated_at else None,
+        }
+    return snapshot
+
+
+def _load_shared_stores(user=None):
+    version = _get_store_cache_version()
+    shared_cache_key = _cache_key("stores", "shared", version)
+    try:
+        shared_snapshot = _cache_get_or_set(
+            shared_cache_key,
+            _build_shared_store_snapshot,
+            timeout=_SYSTEM_DATA_CACHE_TTL,
+        )
+        return _snapshot_to_store_map(shared_snapshot)
     except (OperationalError, ProgrammingError):
         if user is None:
-            return {}
-        return {
-            store.key: store
-            for store in DivisionStore.objects.filter(user=user, key__in=keys)
-        }
+            return _snapshot_to_store_map(_empty_store_snapshot())
+
+    user_id = getattr(user, "pk", None)
+    user_cache_key = _cache_key("stores", "user", user_id or "anon", version)
+    user_snapshot = _cache_get_or_set(
+        user_cache_key,
+        lambda: _build_user_store_snapshot(user),
+        timeout=_SYSTEM_DATA_CACHE_TTL,
+    )
+    return _snapshot_to_store_map(user_snapshot)
 
 
 def _build_overview_context(user):
@@ -947,6 +1064,22 @@ def _build_overview_context(user):
         'overview_overall_efficiency': f'{avg_efficiency}%',
         'overview_division_progress': division_progress_rows,
     }
+
+
+_build_overview_context_uncached = _build_overview_context
+
+
+def _build_overview_context(user):
+    cache_key_value = _cache_key(
+        "overview",
+        _get_store_cache_version(),
+        getattr(user, "pk", "anon"),
+    )
+    return _cache_get_or_set(
+        cache_key_value,
+        lambda: _build_overview_context_uncached(user),
+        timeout=_SYSTEM_COMPUTED_CACHE_TTL,
+    )
 
 
 def _build_tracking_rows(user):
@@ -1473,6 +1606,38 @@ def _build_tracking_payload(user):
     return payload
 
 
+_build_tracking_rows_uncached = _build_tracking_rows
+
+
+def _build_tracking_rows(user):
+    cache_key_value = _cache_key(
+        "tracking_rows",
+        _get_store_cache_version(),
+        getattr(user, "pk", "anon"),
+    )
+    return _cache_get_or_set(
+        cache_key_value,
+        lambda: _build_tracking_rows_uncached(user),
+        timeout=_SYSTEM_COMPUTED_CACHE_TTL,
+    )
+
+
+_build_tracking_payload_uncached = _build_tracking_payload
+
+
+def _build_tracking_payload(user):
+    cache_key_value = _cache_key(
+        "tracking_payload",
+        _get_store_cache_version(),
+        getattr(user, "pk", "anon"),
+    )
+    return _cache_get_or_set(
+        cache_key_value,
+        lambda: _build_tracking_payload_uncached(user),
+        timeout=_SYSTEM_COMPUTED_CACHE_TTL,
+    )
+
+
 def _build_dashboard_notifications(request, profile, current_section='', page_heading='', current_maintenance=''):
     stores = _load_shared_stores(request.user)
     admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
@@ -1970,6 +2135,37 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
         "dashboard_notification_user_role": viewer_role,
     }
 
+
+_build_dashboard_notifications_uncached = _build_dashboard_notifications
+
+
+def _build_dashboard_notifications(request, profile, current_section='', page_heading='', current_maintenance=''):
+    profile_updated_at = getattr(profile, "updated_at", None)
+    profile_stamp = profile_updated_at.isoformat() if profile_updated_at else ""
+    cache_key_value = _cache_key(
+        "dashboard_notifications",
+        _get_store_cache_version(),
+        getattr(request.user, "pk", "anon"),
+        profile_stamp,
+        current_section,
+        page_heading,
+        current_maintenance,
+        int(bool(getattr(request.user, "is_staff", False))),
+        int(bool(getattr(request.user, "is_superuser", False))),
+    )
+    return _cache_get_or_set(
+        cache_key_value,
+        lambda: _build_dashboard_notifications_uncached(
+            request,
+            profile,
+            current_section=current_section,
+            page_heading=page_heading,
+            current_maintenance=current_maintenance,
+        ),
+        timeout=_SYSTEM_COMPUTED_CACHE_TTL,
+    )
+
+
 def _build_dashboard_context(request, **extra):
     profile = _get_user_profile(request.user)
     current_section = extra.get('current_section', '')
@@ -2174,6 +2370,7 @@ def project_dashboard(request):
     }
     project_store_seed = dict(store_defaults)
 
+    did_bootstrap_shared_store = False
     try:
         for key in store_defaults.keys():
             shared_store, _ = SharedDivisionStore.objects.get_or_create(key=key)
@@ -2186,6 +2383,7 @@ def project_dashboard(request):
                 if candidate and not _is_empty_division_store_payload(key, candidate.data):
                     shared_store.data = candidate.data
                     shared_store.save(update_fields=["data", "updated_at"])
+                    did_bootstrap_shared_store = True
 
             project_store_seed[key] = shared_store.data
     except (OperationalError, ProgrammingError):
@@ -2197,6 +2395,9 @@ def project_dashboard(request):
                 .first()
             )
             project_store_seed[key] = candidate.data if candidate else fallback
+
+    if did_bootstrap_shared_store:
+        _invalidate_store_cache()
 
     # Normalize seed types for the client.
     for key in store_defaults.keys():
@@ -2342,6 +2543,7 @@ def division_store_api(request, key):
                 if candidate and not _is_empty_division_store_payload(key, candidate.data):
                     store.data = candidate.data
                     store.save(update_fields=["data", "updated_at"])
+                    _invalidate_store_cache()
 
         return JsonResponse(
             {
@@ -2368,6 +2570,7 @@ def division_store_api(request, key):
     else:
         store.data = payload
     store.save()
+    _invalidate_store_cache()
 
     _safe_log_division_store_event(
         actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
@@ -2426,6 +2629,8 @@ def division_store_clear_all_api(request):
     except Exception:
         # Ignore database issues; clearing shared stores is still best-effort.
         pass
+
+    _invalidate_store_cache()
 
     return JsonResponse({"ok": True, "cleared": sorted(cleared)})
 
@@ -2490,6 +2695,8 @@ def construction_photo_upload(request):
 
     if not stored:
         return JsonResponse({"error": "No valid files uploaded."}, status=400)
+
+    _invalidate_store_cache()
 
     return JsonResponse({"ok": True, "files": stored})
 

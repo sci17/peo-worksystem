@@ -110,6 +110,38 @@ DATABASES = {
 }
 
 
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+_cache_backend = os.environ.get('DJANGO_CACHE_BACKEND', 'django.core.cache.backends.locmem.LocMemCache')
+_cache_location_default = (
+    str(BASE_DIR / '.django_cache')
+    if _cache_backend == 'django.core.cache.backends.filebased.FileBasedCache'
+    else 'peo-worksystem-cache'
+)
+_cache_location = os.environ.get('DJANGO_CACHE_LOCATION', _cache_location_default)
+
+CACHES = {
+    'default': {
+        'BACKEND': _cache_backend,
+        'LOCATION': _cache_location,
+        'TIMEOUT': _env_int('DJANGO_CACHE_DEFAULT_TIMEOUT_SECONDS', 300),
+        'OPTIONS': {
+            'MAX_ENTRIES': _env_int('DJANGO_CACHE_MAX_ENTRIES', 5000),
+        },
+        'KEY_PREFIX': os.environ.get('DJANGO_CACHE_KEY_PREFIX', 'peo'),
+    }
+}
+
+# App-level cache controls used by dashboard/store view helpers.
+SYSTEM_DATA_CACHE_TTL_SECONDS = _env_int('DJANGO_SYSTEM_DATA_CACHE_TTL_SECONDS', 300)
+SYSTEM_COMPUTED_CACHE_TTL_SECONDS = _env_int('DJANGO_SYSTEM_COMPUTED_CACHE_TTL_SECONDS', 120)
+
+
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
