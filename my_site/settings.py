@@ -117,13 +117,15 @@ def _env_int(name, default):
         return default
 
 
-_cache_backend = os.environ.get('DJANGO_CACHE_BACKEND', 'django.core.cache.backends.locmem.LocMemCache')
+_cache_backend = os.environ.get('DJANGO_CACHE_BACKEND', 'django.core.cache.backends.filebased.FileBasedCache')
 _cache_location_default = (
-    str(BASE_DIR / '.django_cache')
+    str(BASE_DIR / '.cache' / 'django')
     if _cache_backend == 'django.core.cache.backends.filebased.FileBasedCache'
     else 'peo-worksystem-cache'
 )
 _cache_location = os.environ.get('DJANGO_CACHE_LOCATION', _cache_location_default)
+if _cache_backend == 'django.core.cache.backends.filebased.FileBasedCache':
+    os.makedirs(_cache_location, exist_ok=True)
 
 CACHES = {
     'default': {
