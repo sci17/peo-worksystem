@@ -927,6 +927,77 @@ const peoOpenFile = async ({ dataUrl, fileName = "", mimeType = "", openInSameTa
     }
 };
 
+const peoShouldCompressUploadImage = (file) => {
+    if (!(file instanceof File)) return false;
+    const type = String(file.type || "").toLowerCase();
+    if (!type.startsWith("image/")) return false;
+    if (type === "image/gif" || type === "image/svg+xml") return false;
+    return file.size > (250 * 1024);
+};
+
+const peoCompressUploadImageFile = async (file, options = {}) => {
+    if (!peoShouldCompressUploadImage(file)) return file;
+
+    const maxDimension = Number(options.maxDimension) > 0 ? Number(options.maxDimension) : 2560;
+    const quality = Number(options.quality) > 0 ? Math.min(1, Number(options.quality)) : 0.92;
+    const minBytesSaved = Number(options.minBytesSaved) > 0 ? Number(options.minBytesSaved) : 32 * 1024;
+    const outputType = String(file.type || "").toLowerCase() === "image/png" ? "image/png" : "image/jpeg";
+    const objectUrl = window.URL.createObjectURL(file);
+
+    try {
+        const image = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error("Image load failed"));
+            img.src = objectUrl;
+        });
+
+        const srcWidth = Number(image.naturalWidth || image.width || 0);
+        const srcHeight = Number(image.naturalHeight || image.height || 0);
+        if (!srcWidth || !srcHeight) return file;
+
+        const scale = Math.min(1, maxDimension / Math.max(srcWidth, srcHeight));
+        const targetWidth = Math.max(1, Math.round(srcWidth * scale));
+        const targetHeight = Math.max(1, Math.round(srcHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return file;
+
+        ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+        const blob = await new Promise((resolve) => {
+            if (outputType === "image/png") {
+                canvas.toBlob(resolve, outputType);
+            } else {
+                canvas.toBlob(resolve, outputType, quality);
+            }
+        });
+        if (!(blob instanceof Blob)) return file;
+        if (blob.size >= (file.size - minBytesSaved)) return file;
+
+        const extension = outputType === "image/png" ? ".png" : ".jpg";
+        const nextName = outputType === file.type
+            ? file.name
+            : file.name.replace(/\.[^.]*$/, "") + extension;
+        return new File([blob], nextName, {
+            type: outputType,
+            lastModified: Date.now(),
+        });
+    } catch (error) {
+        return file;
+    } finally {
+        window.URL.revokeObjectURL(objectUrl);
+    }
+};
+
+const compressImageUploadFile = (file, options = {}) => peoCompressUploadImageFile(file, options);
+const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
+    maxDimension: 2560,
+    quality: 0.92,
+    minBytesSaved: 32 * 1024,
+});
+
 (() => {
     const API_BASE = "/api/division-store/";
 
@@ -14756,8 +14827,11 @@ document.addEventListener("DOMContentLoaded", () => {
             return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
         }
 
+        const filesForUpload = await Promise.all(
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+        );
         const payload = new FormData();
-        list.forEach((file) => {
+        filesForUpload.forEach((file) => {
             payload.append("photos", file, file?.name || "photo");
         });
 
@@ -23966,7 +24040,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const payload = new FormData();
-        payload.append("files", file, file?.name || "file");
+        const fileForUpload = await compressProposalUploadImage(file);
+        payload.append("files", fileForUpload, fileForUpload?.name || file?.name || "file");
 
         try {
             const response = await window.fetch(fileUploadUrl, {
