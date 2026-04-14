@@ -1151,6 +1151,11 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         });
     };
 
+    const syncNow = (storeKey, payload) => {
+        queueSync(storeKey, payload, 0);
+        flushSync();
+    };
+
     const queueSync = (storeKey, payload, delayMs = 400) => {
         const normalizedKey = String(storeKey || "").trim();
         if (!normalizedKey) return;
@@ -1210,6 +1215,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
 
         const force = options && options.force === true;
         let didWrite = false;
+        const updatedStoreKeys = [];
 
         for (const def of list) {
             const storeKey = String(def?.storeKey || "").trim();
@@ -1248,9 +1254,18 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
                     fetched_at: new Date().toISOString(),
                 });
                 didWrite = true;
+                updatedStoreKeys.push(storeKey);
             } finally {
                 window.__peoReadonlyStorageBypass = prevBypass;
             }
+        }
+
+        if (updatedStoreKeys.length) {
+            window.dispatchEvent(new CustomEvent("peo:division-store-synced", {
+                detail: {
+                    storeKeys: updatedStoreKeys,
+                },
+            }));
         }
 
         return didWrite;
@@ -1259,6 +1274,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
     window.peoDivisionStore = {
         queueSync,
         flushSync,
+        syncNow,
         fetchStore,
         hydrateLocalStorageIfEmpty,
         syncToLocalStorage,
@@ -1315,6 +1331,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
     window.addEventListener("focus", () => {
         sync();
     });
+    window.setInterval(sync, 15000);
 })();
 
 (() => {
@@ -5292,11 +5309,11 @@ const portalDomReady = () => {
     };
 
     const writeAdminDivisionRecords = (records) => {
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+            window.peoDivisionStore.syncNow("admin", safeRecords);
         }
 
         if (!isLocalStorageAvailable()) return;
@@ -6783,6 +6800,11 @@ const portalDomReady = () => {
     applyDocumentFilters();
     applyBillingFilters();
     restoreAdminDivisionRecords();
+    window.addEventListener("peo:division-store-synced", (event) => {
+        const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!syncedStoreKeys.includes("admin")) return;
+        renderAdminDivisionRecords(readAdminDivisionRecords().map((record) => normalizeRecord(record)));
+    });
     if ((documentsTableBody || billingTableBody) && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
         window.peoIncomingDocToast.check("admin", readAdminDivisionRecords());
     }
@@ -15417,7 +15439,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage errors.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 const safe = record && typeof record === "object" ? { ...record } : {};
 
@@ -15469,7 +15491,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 return safe;
             });
-            window.peoDivisionStore.queueSync("construction", safeRecords, 0);
+            window.peoDivisionStore.syncNow("construction", safeRecords);
         }
     };
 
@@ -17375,6 +17397,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     window.addEventListener("focus", resyncAdminAssignedProjects);
+    window.addEventListener("peo:division-store-synced", (event) => {
+        const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("construction")) return;
+        resyncAdminAssignedProjects();
+    });
     window.addEventListener("construction-records-updated", resyncAdminAssignedProjects);
     window.addEventListener("storage", (event) => {
         const key = String(event.key || "");
@@ -18900,11 +18927,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+            window.peoDivisionStore.syncNow("admin", safeRecords);
         }
     };
 
@@ -18961,8 +18988,8 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
-            window.peoDivisionStore.queueSync("planning", records, 0);
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
+            window.peoDivisionStore.syncNow("planning", records);
         }
     };
 
@@ -21472,6 +21499,14 @@ document.addEventListener("DOMContentLoaded", () => {
         syncPpaFromPlanningDocuments(planningDocumentRecords);
         syncPpaTableState();
         enablePlanningPpaCardFloat();
+        window.addEventListener("peo:division-store-synced", (event) => {
+            const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("planning")) return;
+            planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
+            renderPlanningDocumentsTable(planningDocumentRecords);
+            syncPpaFromPlanningDocuments(planningDocumentRecords);
+            syncPpaTableState();
+        });
     }
 
     const projectBoard = document.querySelector(".project-board");
@@ -24723,11 +24758,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+            window.peoDivisionStore.syncNow("admin", safeRecords);
         }
     };
 
@@ -25003,11 +25038,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage errors.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("quality", safeRecords, 0);
+            window.peoDivisionStore.syncNow("quality", safeRecords);
         }
     };
 
@@ -26365,6 +26400,11 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTable();
     };
     window.addEventListener("focus", refreshQualityRecordsFromAdmin);
+    window.addEventListener("peo:division-store-synced", (event) => {
+        const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("quality")) return;
+        refreshQualityRecordsFromAdmin();
+    });
     window.addEventListener("storage", (event) => {
         if (event.key !== ADMIN_DIVISION_STORAGE_KEY && event.key !== QUALITY_STORAGE_KEY) return;
         refreshQualityRecordsFromAdmin();

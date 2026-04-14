@@ -1,0 +1,128 @@
+[
+  {
+    "username": "admin_division",
+    "fields": {
+      "username": "admin_division",
+      "password": "pbkdf2_sha256$1200000$4EVJNd32REsJpeISgeixOs$PvFxDtt9fcrz169k3f1yD6Qpw0uki96HSAnabKxXBQw=",
+      "email": "",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_staff": true,
+      "is_superuser": false,
+      "last_login": "2026-04-14 08:20:20.948242+00:00",
+      "date_joined": "2026-03-17 01:40:25+00:00"
+    },
+    "profile": {
+      "email_notifications": true,
+      "portal_notifications": true,
+      "appearance_mode": "light",
+      "division": "admin"
+    }
+  },
+  {
+    "username": "construction_division",
+    "fields": {
+      "username": "construction_division",
+      "password": "pbkdf2_sha256$1200000$q0apQwSifozPzUSVmIhf5s$vCfVJ64VKGeJPhPLOlsrJkoezrm+1fxfIkQVBe1rEPo=",
+      "email": "",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_staff": true,
+      "is_superuser": false,
+      "last_login": "2026-03-19 01:25:57.870184+00:00",
+      "date_joined": "2026-03-17 01:41:56+00:00"
+    },
+    "profile": {
+      "email_notifications": true,
+      "portal_notifications": true,
+      "appearance_mode": "light",
+      "division": "construction"
+    }
+  },
+  {
+    "username": "maintenance_division",
+    "fields": {
+      "username": "maintenance_division",
+      "password": "pbkdf2_sha256$1200000$areJzho1eSN9onUlMornJE$UOGiWsbUk82O7LTuTn1cuYT7tDhL20HCRnowCkwbYw0=",
+      "email": "",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_staff": true,
+      "is_superuser": false,
+      "last_login": null,
+      "date_joined": "2026-03-17 01:44:41+00:00"
+    },
+    "profile": {
+      "email_notifications": true,
+      "portal_notifications": true,
+      "appearance_mode": "light",
+      "division": "maintenance"
+    }
+  },
+  {
+    "username": "peo_admin",
+    "fields": {
+      "username": "peo_admin",
+      "password": "pbkdf2_sha256$1200000$Y2GxmQby2qu8GsF12fUlPR$ouSTd7/6soT9TvpcYbCe03uEPl5lr19cEZ9TKr+wGO0=",
+      "email": "recarzekaycee@gmail.com",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_staff": true,
+      "is_superuser": true,
+      "last_login": "2026-04-14 08:08:34.194818+00:00",
+      "date_joined": "2026-03-04 14:29:52.461731+00:00"
+    },
+    "profile": {
+      "email_notifications": true,
+      "portal_notifications": true,
+      "appearance_mode": "light",
+      "division": null
+    }
+  },
+  {
+    "username": "planning_division",
+    "fields": {
+      "username": "planning_division",
+      "password": "pbkdf2_sha256$1200000$0T9cyuo0HtMEx71FrsWrTF$r2lSaczcb5IKRWrri1Ochl1CNRupR9ryl2xaQ8bKb+o=",
+      "email": "",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_staff": true,
+      "is_superuser": false,
+      "last_login": "2026-03-18 05:52:46.879570+00:00",
+      "date_joined": "2026-03-17 01:40:58+00:00"
+    },
+    "profile": {
+      "email_notifications": true,
+      "portal_notifications": true,
+      "appearance_mode": "light",
+      "division": "planning"
+    }
+  },
+  {
+    "username": "quality_control",
+    "fields": {
+      "username": "quality_control",
+      "password": "pbkdf2_sha256$1200000$ofWjnzc9sV1UNm0MjpZIpB$7Pyv6aqtCY4x8M9LTqzPJTmQf0BFkh31xNhAbZ0D4eU=",
+      "email": "",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_staff": true,
+      "is_superuser": false,
+      "last_login": "2026-03-17 06:03:56.372171+00:00",
+      "date_joined": "2026-03-17 01:43:45+00:00"
+    },
+    "profile": {
+      "email_notifications": true,
+      "portal_notifications": true,
+      "appearance_mode": "light",
+      "division": "quality"
+    }
+  }
+]

@@ -9,8 +9,8 @@ services:
       - "8000"
     environment:
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1]}
-      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1],192.168.1.177,192.168.1.*}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000,http://192.168.1.177:8000}
       DJANGO_DB_ENGINE: ${DJANGO_DB_ENGINE:-django.db.backends.mysql}
       DJANGO_DB_NAME: ${DJANGO_DB_NAME:-peo_database}
       DJANGO_DB_USER: ${DJANGO_DB_USER:-django_user}
@@ -22,10 +22,12 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-this-to-a-long-random-secret}
       DJANGO_SECURE_PROXY_SSL_HEADER: ${DJANGO_SECURE_PROXY_SSL_HEADER:-HTTP_X_FORWARDED_PROTO:https}
       DJANGO_USE_X_FORWARDED_HOST: ${DJANGO_USE_X_FORWARDED_HOST:-True}
+      DJANGO_MEDIA_URL: /media/
+      DJANGO_MEDIA_ROOT: /shared/media
     volumes:
       - .:/app
       - django_cache:/app/.cache/django
-      - django_media:/app/media
+      - shared_media:/shared/media
       - django_static:/app/staticfiles
     depends_on:
       db:
@@ -48,7 +50,7 @@ services:
       - "8000:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - django_media:/app/media:ro
+      - shared_media:/shared/media:ro
       - django_static:/app/staticfiles:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
@@ -80,5 +82,5 @@ services:
 volumes:
   mysql_data:
   django_cache:
-  django_media:
+  shared_media:
   django_static:

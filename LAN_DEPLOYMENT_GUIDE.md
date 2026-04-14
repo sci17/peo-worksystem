@@ -36,6 +36,7 @@ docker compose ps
 Located at: `C:\Users\Administrator\Desktop\peo-worksystem\.env`
 
 Key variables:
+- `DJANGO_DB_ENGINE` should stay `django.db.backends.mysql` for shared multi-user data.
 - `DJANGO_ALLOWED_HOSTS` — Add other LAN IPs as needed
 - `DJANGO_SECRET_KEY` — Change to a secure random value
 - `DJANGO_DB_PASSWORD` — Update default password
@@ -81,6 +82,9 @@ docker compose up -d --build
 ```
 
 ## Database Access
+
+This LAN setup should use the shared MySQL container as the system database.
+If different PCs run separate local copies with SQLite, they will not see the same documents.
 
 ### From Host Machine
 ```bash
