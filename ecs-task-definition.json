@@ -1,0 +1,164 @@
+{
+  "family": "peo-worksystem",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "mysql",
+      "image": "mysql:8.4",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3306,
+          "hostPort": 3306,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "MYSQL_DATABASE",
+          "value": "peo_database"
+        },
+        {
+          "name": "MYSQL_USER",
+          "value": "django_user"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "MYSQL_ROOT_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:peo-db-root-password"
+        },
+        {
+          "name": "MYSQL_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:peo-db-password"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "mysql-data",
+          "containerPath": "/var/lib/mysql"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/peo-worksystem",
+          "awslogs-region": "REGION",
+          "awslogs-stream-prefix": "mysql"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    },
+    {
+      "name": "web",
+      "image": "YOUR_ACCOUNT.dkr.ecr.REGION.amazonaws.com/peo-worksystem-web:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DJANGO_DEBUG",
+          "value": "False"
+        },
+        {
+          "name": "DJANGO_ALLOWED_HOSTS",
+          "value": "your-domain.com"
+        },
+        {
+          "name": "DJANGO_DB_ENGINE",
+          "value": "django.db.backends.mysql"
+        },
+        {
+          "name": "DJANGO_DB_NAME",
+          "value": "peo_database"
+        },
+        {
+          "name": "DJANGO_DB_USER",
+          "value": "django_user"
+        },
+        {
+          "name": "DJANGO_DB_HOST",
+          "value": "localhost"
+        },
+        {
+          "name": "DJANGO_DB_PORT",
+          "value": "3306"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DJANGO_DB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:peo-db-password"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "django-media",
+          "containerPath": "/app/media"
+        },
+        {
+          "sourceVolume": "django-static",
+          "containerPath": "/app/staticfiles"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/peo-worksystem",
+          "awslogs-region": "REGION",
+          "awslogs-stream-prefix": "web"
+        }
+      },
+      "dependsOn": [
+        {
+          "containerName": "mysql",
+          "condition": "HEALTHY"
+        }
+      ]
+    }
+  ],
+  "volumes": [
+    {
+      "name": "mysql-data",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "fs-XXXXXXXXX",
+        "transitEncryption": "ENABLED"
+      }
+    },
+    {
+      "name": "django-media",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "fs-XXXXXXXXX",
+        "transitEncryption": "ENABLED"
+      }
+    },
+    {
+      "name": "django-static",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "fs-XXXXXXXXX",
+        "transitEncryption": "ENABLED"
+      }
+    }
+  ],
+  "executionRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT:role/peoWorksystemTaskRole"
+}
