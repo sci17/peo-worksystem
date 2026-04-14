@@ -1,0 +1,21 @@
+# check if there is at least one published port
+
+#! web-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: web-published
+    namespace: peo-worksystem
+    labels:
+        com.docker.compose.project: peo-worksystem
+        com.docker.compose.service: web
+spec:
+    selector:
+        com.docker.compose.project: peo-worksystem
+        com.docker.compose.service: web
+    ports:
+        - name: web-8000
+          port: 8000
+          protocol: TCP
+          targetPort: web-8000

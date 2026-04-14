@@ -1,0 +1,9 @@
+#! web-django_media-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: web-django-media
+    namespace: peo-worksystem
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

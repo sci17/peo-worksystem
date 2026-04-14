@@ -2,23 +2,69 @@ services:
   web:
     build:
       context: .
-      dockerfile: DockerFile
-    ports:
-      - "8000:8000"
+      dockerfile: Dockerfile
+    command: gunicorn my_site.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
+    expose:
+      - "8000"
     environment:
-      DJANGO_DEBUG: "True"
+      DJANGO_DEBUG: "False"
       DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,[::1]"
-      DJANGO_DB_ENGINE: "django.db.backends.sqlite3"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost:8000,http://127.0.0.1:8000"
+      DJANGO_DB_ENGINE: "django.db.backends.mysql"
+      DJANGO_DB_NAME: ${DJANGO_DB_NAME:-peo_database}
+      DJANGO_DB_USER: ${DJANGO_DB_USER:-django_user}
+      DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:-django_pass}
+      DJANGO_DB_HOST: db
+      DJANGO_DB_PORT: "3306"
       DJANGO_CACHE_BACKEND: "django.core.cache.backends.filebased.FileBasedCache"
       DJANGO_CACHE_LOCATION: "/app/.cache/django"
+      DJANGO_SECURE_PROXY_SSL_HEADER: "HTTP_X_FORWARDED_PROTO:https"
+      DJANGO_USE_X_FORWARDED_HOST: "True"
     volumes:
       - .:/app
       - django_cache:/app/.cache/django
       - django_media:/app/media
       - django_static:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 1g
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      web:
+        condition: service_started
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - django_media:/app/media:ro
+      - django_static:/app/staticfiles:ro
+    mem_limit: 512m
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.4
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD:-rootpass} || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 30s
+    environment:
+      MYSQL_DATABASE: ${DJANGO_DB_NAME:-peo_database}
+      MYSQL_USER: ${DJANGO_DB_USER:-django_user}
+      MYSQL_PASSWORD: ${DJANGO_DB_PASSWORD:-django_pass}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    mem_limit: 1g
     restart: unless-stopped
 
 volumes:
+  mysql_data:
   django_cache:
   django_media:
   django_static:
