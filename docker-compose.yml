@@ -1,4 +1,21 @@
+version: "3.9"
+
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
   web:
     build:
       context: .
@@ -17,13 +34,16 @@ services:
       DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:-django_pass}
       DJANGO_DB_HOST: ${DJANGO_DB_HOST:-db}
       DJANGO_DB_PORT: ${DJANGO_DB_PORT:-3306}
-      DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:-django.core.cache.backends.filebased.FileBasedCache}
-      DJANGO_CACHE_LOCATION: ${DJANGO_CACHE_LOCATION:-/app/.cache/django}
+      DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:-django_redis.cache.RedisCache}
+      DJANGO_CACHE_LOCATION: ${DJANGO_CACHE_LOCATION:-redis://redis:6379/1}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-this-to-a-long-random-secret}
       DJANGO_SECURE_PROXY_SSL_HEADER: ${DJANGO_SECURE_PROXY_SSL_HEADER:-HTTP_X_FORWARDED_PROTO:https}
       DJANGO_USE_X_FORWARDED_HOST: ${DJANGO_USE_X_FORWARDED_HOST:-True}
       DJANGO_MEDIA_URL: /media/
       DJANGO_MEDIA_ROOT: /shared/media
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      WEBSOCKET_ACCEPT_ALL: "true"
     volumes:
       - .:/app
       - django_cache:/app/.cache/django
@@ -32,6 +52,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
     healthcheck:
       test: ["CMD-SHELL", "python manage.py check >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -39,6 +63,59 @@ services:
       retries: 5
       start_period: 40s
     mem_limit: 1g
+    restart: unless-stopped
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A my_site worker -l info
+    env_file:
+      - .env
+    environment:
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_DB_ENGINE: ${DJANGO_DB_ENGINE:-django.db.backends.mysql}
+      DJANGO_DB_NAME: ${DJANGO_DB_NAME:-peo_database}
+      DJANGO_DB_USER: ${DJANGO_DB_USER:-django_user}
+      DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:-django_pass}
+      DJANGO_DB_HOST: ${DJANGO_DB_HOST:-db}
+      DJANGO_DB_PORT: ${DJANGO_DB_PORT:-3306}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - .:/app
+      - shared_media:/shared/media
+    depends_on:
+      - db
+      - redis
+      - web
+    mem_limit: 512m
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A my_site beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file:
+      - .env
+    environment:
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_DB_ENGINE: ${DJANGO_DB_ENGINE:-django.db.backends.mysql}
+      DJANGO_DB_NAME: ${DJANGO_DB_NAME:-peo_database}
+      DJANGO_DB_USER: ${DJANGO_DB_USER:-django_user}
+      DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:-django_pass}
+      DJANGO_DB_HOST: ${DJANGO_DB_HOST:-db}
+      DJANGO_DB_PORT: ${DJANGO_DB_PORT:-3306}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+      - web
+    mem_limit: 256m
     restart: unless-stopped
 
   nginx:
@@ -84,3 +161,4 @@ volumes:
   django_cache:
   shared_media:
   django_static:
+  redis_data:
