@@ -8,19 +8,20 @@ services:
     expose:
       - "8000"
     environment:
-      DJANGO_DEBUG: "False"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,[::1]"
-      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost:8000,http://127.0.0.1:8000"
-      DJANGO_DB_ENGINE: "django.db.backends.mysql"
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1]}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      DJANGO_DB_ENGINE: ${DJANGO_DB_ENGINE:-django.db.backends.mysql}
       DJANGO_DB_NAME: ${DJANGO_DB_NAME:-peo_database}
       DJANGO_DB_USER: ${DJANGO_DB_USER:-django_user}
       DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:-django_pass}
-      DJANGO_DB_HOST: db
-      DJANGO_DB_PORT: "3306"
-      DJANGO_CACHE_BACKEND: "django.core.cache.backends.filebased.FileBasedCache"
-      DJANGO_CACHE_LOCATION: "/app/.cache/django"
-      DJANGO_SECURE_PROXY_SSL_HEADER: "HTTP_X_FORWARDED_PROTO:https"
-      DJANGO_USE_X_FORWARDED_HOST: "True"
+      DJANGO_DB_HOST: ${DJANGO_DB_HOST:-db}
+      DJANGO_DB_PORT: ${DJANGO_DB_PORT:-3306}
+      DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:-django.core.cache.backends.filebased.FileBasedCache}
+      DJANGO_CACHE_LOCATION: ${DJANGO_CACHE_LOCATION:-/app/.cache/django}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-this-to-a-long-random-secret}
+      DJANGO_SECURE_PROXY_SSL_HEADER: ${DJANGO_SECURE_PROXY_SSL_HEADER:-HTTP_X_FORWARDED_PROTO:https}
+      DJANGO_USE_X_FORWARDED_HOST: ${DJANGO_USE_X_FORWARDED_HOST:-True}
     volumes:
       - .:/app
       - django_cache:/app/.cache/django

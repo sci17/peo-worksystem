@@ -144,7 +144,7 @@ spec:
         - name: DJANGO_DEBUG
           value: "False"
         - name: DJANGO_ALLOWED_HOSTS
-          value: "localhost,127.0.0.1,[::1],your-domain.com"
+          value: "localhost,127.0.0.1,[::1],peo.gov.com"
         - name: DJANGO_DB_ENGINE
           value: "django.db.backends.mysql"
         - name: DJANGO_DB_NAME
