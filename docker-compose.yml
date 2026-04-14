@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   redis:
     image: redis:7-alpine
@@ -22,9 +20,12 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    command: gunicorn my_site.wsgi:application --bind 0.0.0.0:8000 --workers 4
     expose:
       - "8000"
     environment:
+      RUN_MIGRATIONS: "true"
+      COLLECT_STATIC: "true"
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1],192.168.1.177,192.168.1.*}
       DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000,http://192.168.1.177:8000}
@@ -36,16 +37,13 @@ services:
       DJANGO_DB_PORT: ${DJANGO_DB_PORT:-3306}
       DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:-django_redis.cache.RedisCache}
       DJANGO_CACHE_LOCATION: ${DJANGO_CACHE_LOCATION:-redis://redis:6379/1}
-      DJANGO_CHANNEL_LAYER_URL: ${DJANGO_CHANNEL_LAYER_URL:-redis://redis:6379/0}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-this-to-a-long-random-secret}
       DJANGO_SECURE_PROXY_SSL_HEADER: ${DJANGO_SECURE_PROXY_SSL_HEADER:-HTTP_X_FORWARDED_PROTO:https}
       DJANGO_USE_X_FORWARDED_HOST: ${DJANGO_USE_X_FORWARDED_HOST:-True}
       DJANGO_MEDIA_URL: /media/
       DJANGO_MEDIA_ROOT: /shared/media
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      WEBSOCKET_ACCEPT_ALL: "true"
     volumes:
       - .:/app
       - django_cache:/app/.cache/django
@@ -73,6 +71,8 @@ services:
     env_file:
       - .env
     environment:
+      RUN_MIGRATIONS: "false"
+      COLLECT_STATIC: "false"
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_DB_ENGINE: ${DJANGO_DB_ENGINE:-django.db.backends.mysql}
       DJANGO_DB_NAME: ${DJANGO_DB_NAME:-peo_database}
@@ -100,6 +100,8 @@ services:
     env_file:
       - .env
     environment:
+      RUN_MIGRATIONS: "false"
+      COLLECT_STATIC: "false"
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_DB_ENGINE: ${DJANGO_DB_ENGINE:-django.db.backends.mysql}
       DJANGO_DB_NAME: ${DJANGO_DB_NAME:-peo_database}
