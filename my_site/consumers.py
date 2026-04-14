@@ -188,3 +188,42 @@ class UserActivityConsumer(AsyncWebsocketConsumer):
             'activity': event['activity'],
             'timestamp': event['timestamp'],
         }))
+
+
+class DivisionStoreConsumer(AsyncWebsocketConsumer):
+    """
+    Broadcast shared division store updates so different devices can refresh routed data quickly.
+    """
+
+    async def connect(self):
+        self.room_group_name = 'division_store_updates'
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data or '{}')
+        except json.JSONDecodeError:
+            data = {}
+
+        if data.get('type') == 'ping':
+            await self.send(text_data=json.dumps({
+                'type': 'pong',
+            }))
+
+    async def store_update(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'store_update',
+            'store_keys': event.get('store_keys', []),
+            'updated_at': event.get('updated_at'),
+            'actor': event.get('actor'),
+        }))

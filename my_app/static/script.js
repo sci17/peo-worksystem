@@ -1297,6 +1297,8 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         quality: { storeKey: "quality", localStorageKey: "peo_quality_records_v1", type: "array" },
         maintenance: { storeKey: "maintenance", localStorageKey: "peo_maintenance_state_v1", type: "object" },
     };
+    let syncInFlight = null;
+    let syncQueued = false;
 
     const getDivisionKey = () => {
         const fromAccess = window.peoAccess && typeof window.peoAccess === "object" ? String(window.peoAccess.divisionKey || "") : "";
@@ -1304,9 +1306,13 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         return String(fromAccess || fromBody || "").trim().toLowerCase();
     };
 
-    const sync = async () => {
+    const sync = async (options = {}) => {
         const store = window.peoDivisionStore;
         if (!store || typeof store.syncToLocalStorage !== "function") return;
+        if (syncInFlight) {
+            syncQueued = true;
+            return syncInFlight;
+        }
 
         const isProjectRegistry = Boolean(document.querySelector(".project-board"));
         const divisionKey = getDivisionKey();
@@ -1317,15 +1323,88 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             defs.push(STORE_DEFS[divisionKey]);
         }
 
-        await store.syncToLocalStorage(defs);
+        syncInFlight = Promise.resolve(store.syncToLocalStorage(defs, options))
+            .finally(() => {
+                syncInFlight = null;
+                if (syncQueued) {
+                    syncQueued = false;
+                    sync({ force: true });
+                }
+            });
+        return syncInFlight;
+    };
+
+    const connectDivisionStoreSocket = () => {
+        if (typeof window.WebSocket !== "function") return;
+
+        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const socketUrl = `${scheme}://${window.location.host}/ws/division-store/`;
+        let reconnectTimer = null;
+        let socket = null;
+
+        const scheduleReconnect = () => {
+            if (reconnectTimer) return;
+            reconnectTimer = window.setTimeout(() => {
+                reconnectTimer = null;
+                openSocket();
+            }, 2000);
+        };
+
+        const openSocket = () => {
+            try {
+                socket = new window.WebSocket(socketUrl);
+            } catch (error) {
+                scheduleReconnect();
+                return;
+            }
+
+            socket.addEventListener("message", (event) => {
+                let payload = null;
+                try {
+                    payload = JSON.parse(String(event.data || "{}"));
+                } catch (error) {
+                    payload = null;
+                }
+                if (!payload || payload.type !== "store_update") return;
+
+                const storeKeys = Array.isArray(payload.store_keys) ? payload.store_keys : [];
+                window.dispatchEvent(new CustomEvent("peo:division-store-remote-update", {
+                    detail: {
+                        storeKeys,
+                        updatedAt: String(payload.updated_at || ""),
+                    },
+                }));
+                sync({ force: true });
+            });
+
+            socket.addEventListener("open", () => {
+                if (reconnectTimer) {
+                    window.clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
+                }
+            });
+
+            socket.addEventListener("close", scheduleReconnect);
+            socket.addEventListener("error", () => {
+                try {
+                    socket.close();
+                } catch (error) {
+                    scheduleReconnect();
+                }
+            });
+        };
+
+        openSocket();
     };
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => {
             sync();
+            connectDivisionStoreSocket();
         });
     } else {
         sync();
+        connectDivisionStoreSocket();
     }
 
     window.addEventListener("focus", () => {

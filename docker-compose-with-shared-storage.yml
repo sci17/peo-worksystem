@@ -1,6 +1,21 @@
 version: "3.9"
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
   web:
     build:
       context: .
@@ -19,20 +34,23 @@ services:
       DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:-django_pass}
       DJANGO_DB_HOST: ${DJANGO_DB_HOST:-db}
       DJANGO_DB_PORT: ${DJANGO_DB_PORT:-3306}
-      DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:-django.core.cache.backends.filebased.FileBasedCache}
-      DJANGO_CACHE_LOCATION: ${DJANGO_CACHE_LOCATION:-/app/.cache/django}
+      DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:-django_redis.cache.RedisCache}
+      DJANGO_CACHE_LOCATION: ${DJANGO_CACHE_LOCATION:-redis://redis:6379/1}
+      DJANGO_CHANNEL_LAYER_URL: ${DJANGO_CHANNEL_LAYER_URL:-redis://redis:6379/0}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-this-to-a-long-random-secret}
       DJANGO_SECURE_PROXY_SSL_HEADER: ${DJANGO_SECURE_PROXY_SSL_HEADER:-HTTP_X_FORWARDED_PROTO:https}
       DJANGO_USE_X_FORWARDED_HOST: ${DJANGO_USE_X_FORWARDED_HOST:-True}
       DJANGO_MEDIA_URL: /media/
       DJANGO_MEDIA_ROOT: /shared/media
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - .:/app
-      - django_cache:/app/.cache/django
       - shared_media:/shared/media
       - django_static:/app/staticfiles
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python manage.py check >/dev/null 2>&1 || exit 1"]
@@ -84,9 +102,9 @@ services:
 volumes:
   mysql_data:
     driver: local
-  django_cache:
-    driver: local
   shared_media:
     driver: local
   django_static:
+    driver: local
+  redis_data:
     driver: local

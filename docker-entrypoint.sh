@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-mkdir -p /app/media /app/staticfiles /app/.cache/django
+mkdir -p "${DJANGO_MEDIA_ROOT:-/shared/media}" /app/staticfiles /app/.cache/django
 
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput

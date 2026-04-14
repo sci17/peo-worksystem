@@ -36,11 +36,13 @@ services:
       DJANGO_DB_PORT: ${DJANGO_DB_PORT:-3306}
       DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:-django_redis.cache.RedisCache}
       DJANGO_CACHE_LOCATION: ${DJANGO_CACHE_LOCATION:-redis://redis:6379/1}
+      DJANGO_CHANNEL_LAYER_URL: ${DJANGO_CHANNEL_LAYER_URL:-redis://redis:6379/0}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-this-to-a-long-random-secret}
       DJANGO_SECURE_PROXY_SSL_HEADER: ${DJANGO_SECURE_PROXY_SSL_HEADER:-HTTP_X_FORWARDED_PROTO:https}
       DJANGO_USE_X_FORWARDED_HOST: ${DJANGO_USE_X_FORWARDED_HOST:-True}
       DJANGO_MEDIA_URL: /media/
       DJANGO_MEDIA_ROOT: /shared/media
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       WEBSOCKET_ACCEPT_ALL: "true"
@@ -54,8 +56,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "8001:8000"
     healthcheck:
       test: ["CMD-SHELL", "python manage.py check >/dev/null 2>&1 || exit 1"]
       interval: 30s
