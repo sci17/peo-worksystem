@@ -1,0 +1,24 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: DockerFile
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_DEBUG: "True"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,[::1]"
+      DJANGO_DB_ENGINE: "django.db.backends.sqlite3"
+      DJANGO_CACHE_BACKEND: "django.core.cache.backends.filebased.FileBasedCache"
+      DJANGO_CACHE_LOCATION: "/app/.cache/django"
+    volumes:
+      - .:/app
+      - django_cache:/app/.cache/django
+      - django_media:/app/media
+      - django_static:/app/staticfiles
+    restart: unless-stopped
+
+volumes:
+  django_cache:
+  django_media:
+  django_static:

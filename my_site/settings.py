@@ -181,6 +181,7 @@ USE_TZ = True
 # Use an absolute path so static assets load correctly on nested URLs like
 # /accounts/login/ (relative paths would resolve to /accounts/login/static/...).
 STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
