@@ -8954,6 +8954,13 @@ body.construction-modal-open {
     text-transform: uppercase;
 }
 
+.construction-personnel-lock-note {
+    margin: 8px 0 0;
+    color: #9a3412;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
 .construction-btn-icon {
     display: inline-flex;
     align-items: center;
@@ -9032,6 +9039,15 @@ body.construction-modal-open {
 
 .construction-personnel-remove-btn .material-symbols-outlined {
     font-size: 18px;
+}
+
+.construction-personnel-remove-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.construction-personnel-row.is-readonly {
+    background: #f8fafc;
 }
 
 .construction-personnel-empty {

@@ -116,6 +116,12 @@ def _normalize_division_key(value):
         "quality control": KEY_QUALITY,
         "maintenance": KEY_MAINTENANCE,
         "maitenance": KEY_MAINTENANCE,
+        "admin_division": KEY_ADMIN,
+        "planning_division": KEY_PLANNING,
+        "construction_division": KEY_CONSTRUCTION,
+        "quality_division": KEY_QUALITY,
+        "quality_control_division": KEY_QUALITY,
+        "maintenance_division": KEY_MAINTENANCE,
     }
     if text in group_to_key:
         return group_to_key[text]
@@ -127,6 +133,12 @@ def _normalize_division_key(value):
         "quality division": KEY_QUALITY,
         "quality control division": KEY_QUALITY,
         "maintenance division": KEY_MAINTENANCE,
+        "admin_division": KEY_ADMIN,
+        "planning_division": KEY_PLANNING,
+        "construction_division": KEY_CONSTRUCTION,
+        "quality_division": KEY_QUALITY,
+        "quality_control_division": KEY_QUALITY,
+        "maintenance_division": KEY_MAINTENANCE,
     }
 
     if text in label_to_key:
@@ -1712,7 +1724,7 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
             return "employer"
         if any(token in name for name in group_names for token in ("applicant", "jobseeker", "job seeker")):
             return "applicant"
-        if request.user.is_staff or user_division:
+        if user_division:
             return "staff"
         return "applicant"
 

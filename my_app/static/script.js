@@ -14931,11 +14931,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionPersonnelList = constructionModal ? constructionModal.querySelector(".js-construction-personnel-list") : null;
     const constructionPersonnelEmpty = constructionModal ? constructionModal.querySelector(".js-construction-personnel-empty") : null;
     const constructionPersonnelMeta = constructionModal ? constructionModal.querySelector(".js-construction-personnel-meta") : null;
+    const constructionPersonnelLockNote = constructionModal ? constructionModal.querySelector(".js-construction-personnel-lock-note") : null;
     const addConstructionPersonnelButton = constructionModal ? constructionModal.querySelector(".js-construction-add-personnel") : null;
     const closeConstructionModalButtons = constructionModal
         ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
         : [];
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
+    const constructionUserDivisionKey = String(document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
+    const isConstructionDashboardReadonly = String(document.body?.dataset?.peoDashboardReadonly || "").trim() === "1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
@@ -16674,6 +16677,43 @@ document.addEventListener("DOMContentLoaded", () => {
         return personnel;
     };
 
+    const canLoggedInUserEditConstructionPersonnel = () => {
+        return constructionUserDivisionKey === "construction" && !isConstructionDashboardReadonly;
+    };
+
+    const syncConstructionPersonnelEditAccess = () => {
+        const canEditPersonnel = canLoggedInUserEditConstructionPersonnel();
+
+        if (addConstructionPersonnelButton instanceof HTMLButtonElement) {
+            addConstructionPersonnelButton.disabled = !canEditPersonnel;
+            addConstructionPersonnelButton.hidden = !canEditPersonnel;
+        }
+
+        if (constructionPersonnelLockNote instanceof HTMLElement) {
+            constructionPersonnelLockNote.hidden = canEditPersonnel;
+        }
+
+        getConstructionPersonnelRows().forEach((row) => {
+            row.classList.toggle("is-readonly", !canEditPersonnel);
+
+            row.querySelectorAll("input").forEach((input) => {
+                if (!(input instanceof HTMLInputElement)) return;
+                input.readOnly = !canEditPersonnel;
+                if (!canEditPersonnel) {
+                    input.setAttribute("aria-readonly", "true");
+                } else {
+                    input.removeAttribute("aria-readonly");
+                }
+            });
+
+            const removeButton = row.querySelector(".js-construction-remove-personnel");
+            if (removeButton instanceof HTMLButtonElement) {
+                removeButton.disabled = !canEditPersonnel;
+                removeButton.hidden = !canEditPersonnel;
+            }
+        });
+    };
+
     const fillConstructionForm = (record) => {
         if (!constructionForm || !record) return;
         CONSTRUCTION_FIELDS.forEach((field) => {
@@ -16697,6 +16737,7 @@ document.addEventListener("DOMContentLoaded", () => {
         initConstructionScheduleAutofill();
         renderConstructionPersonnel(mode === "edit" && record ? record.personnel : []);
         setConstructionProjectOverviewReadonly(mode === "edit");
+        syncConstructionPersonnelEditAccess();
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
@@ -16734,6 +16775,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (constructionForm) constructionForm.reset();
         renderConstructionPersonnel([]);
         setConstructionProjectOverviewReadonly(false);
+        syncConstructionPersonnelEditAccess();
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
@@ -16765,7 +16807,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (addConstructionPersonnelButton instanceof HTMLButtonElement) {
         addConstructionPersonnelButton.addEventListener("click", () => {
+            if (addConstructionPersonnelButton.disabled) return;
             addConstructionPersonnelRow({}, { focus: true });
+            syncConstructionPersonnelEditAccess();
             syncConstructionRouteControls();
         });
     }
@@ -16774,10 +16818,12 @@ document.addEventListener("DOMContentLoaded", () => {
         constructionPersonnelList.addEventListener("click", (event) => {
             const target = event.target instanceof Element ? event.target.closest(".js-construction-remove-personnel") : null;
             if (!target) return;
+            if (target instanceof HTMLButtonElement && target.disabled) return;
             const row = target.closest("[data-construction-personnel-row]");
             if (row) {
                 row.remove();
                 syncConstructionPersonnelUi();
+                syncConstructionPersonnelEditAccess();
                 syncConstructionRouteControls();
             }
         });
@@ -16788,6 +16834,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const formData = new FormData(constructionForm);
         const projectName = getTrimmedFormValue(formData, "project_name");
         if (!projectName) return null;
+        const existingRecord = editingRecordId
+            ? records.find((record) => record.__id === editingRecordId)
+            : null;
+        const personnel = canLoggedInUserEditConstructionPersonnel()
+            ? readConstructionPersonnelFromForm()
+            : (Array.isArray(existingRecord?.personnel) ? existingRecord.personnel : []);
 
         return {
             __id: createRecordId(),
@@ -16808,7 +16860,7 @@ document.addEventListener("DOMContentLoaded", () => {
             time_elapsed: getTrimmedFormValue(formData, "time_elapsed"),
             slippage: getTrimmedFormValue(formData, "slippage"),
             remarks: getTrimmedFormValue(formData, "remarks"),
-            personnel: readConstructionPersonnelFromForm(),
+            personnel,
         };
     };
 
@@ -22209,7 +22261,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const canManageConstructionProjectImages = () => {
             const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
             const divisionKey = String(access.divisionKey || "").trim().toLowerCase();
-            return divisionKey === "construction" || divisionKey === "admin";
+            return divisionKey === "construction";
         };
 
         const removeConstructionImageFromStore = (recordId, imageUrl) => {
@@ -27000,7 +27052,7 @@ if (document.readyState === "loading") {
     const canManageConstructionProjectImages = (() => {
         const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
         const divisionKey = String(access.divisionKey || "").trim().toLowerCase();
-        return divisionKey === "construction" || divisionKey === "admin";
+        return divisionKey === "construction";
     })();
 
     let sourceId = "";
