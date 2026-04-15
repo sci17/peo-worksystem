@@ -336,7 +336,7 @@
                 </div>
             </header>
 
-                <section class="portal-content {% if current_section == 'workflow' or not current_section %}portal-content-materio{% endif %}">
+            <section class="portal-content {% if current_section == 'workflow' or not current_section %}portal-content-materio{% endif %}">
                     {% if user_division_mismatch %}
                         <div class="account-settings-alert account-settings-alert--warning" role="status">
                             Your account division does not match your assigned group. Please ask an administrator to fix your Division/Group assignment.
@@ -739,14 +739,14 @@
                                 <span class="material-symbols-outlined">trending_up</span>
                                 <div>
                                     <small>Top Performer</small>
-                                    <strong>{{ overview_top_performer|default:"—" }}</strong>
+                                    <strong>{{ overview_top_performer|default:"--" }}</strong>
                                 </div>
                             </div>
                             <div class="summary-tile">
                                 <span class="material-symbols-outlined">monitoring</span>
                                 <div>
                                     <small>Overall Efficiency</small>
-                                    <strong>{{ overview_overall_efficiency|default:"—" }}</strong>
+                                    <strong>{{ overview_overall_efficiency|default:"--" }}</strong>
                                 </div>
                             </div>
                         </div>
@@ -788,7 +788,7 @@
                                                     </small>
                                                 {% endif %}
                                             </td>
-                                            <td>{{ row.manager|default:"—" }}</td>
+                                            <td>{{ row.manager|default:"--" }}</td>
                                             <td>
                                                 <div class="completion-wrap">
                                                     <div class="progress-track">
@@ -797,7 +797,7 @@
                                                     <span>{{ row.completion|default:0 }}%</span>
                                                 </div>
                                             </td>
-                                            <td><span class="pill {{ row.status_class|default:'pill-slate' }}">{{ row.status|default:"—" }}</span></td>
+                                            <td><span class="pill {{ row.status_class|default:'pill-slate' }}">{{ row.status|default:"--" }}</span></td>
                                             <td class="align-right">
                                                 <button
                                                     type="button"
@@ -819,10 +819,11 @@
                             </tbody>
                         </table>
                     </div>
-                        </section>
-                    {% endif %}
                 </section>
+            {% endif %}
+            </section>
         </main>
     </div>
 
 {% endblock %}
+
