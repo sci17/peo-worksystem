@@ -215,6 +215,8 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
 MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT', str(BASE_DIR / 'media')))
+DATA_UPLOAD_MAX_MEMORY_SIZE = _env_int('DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE', 262144000)
+FILE_UPLOAD_MAX_MEMORY_SIZE = _env_int('DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE', 262144000)
 
 # Production security hardening (enabled only when DEBUG is False)
 if not DEBUG:

@@ -17271,6 +17271,7 @@ body.submissions-modal-open {
     margin: 0;
     display: grid;
     gap: 6px;
+    position: relative;
 }
 
 .project-history-image-meta {
@@ -17283,6 +17284,44 @@ body.submissions-modal-open {
 }
 
 .project-history-image-meta .material-symbols-outlined {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.project-history-image-meta-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 20px;
+}
+
+.project-history-image-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #fecaca;
+    border-radius: 999px;
+    background: #fff1f2;
+    color: #b91c1c;
+    cursor: pointer;
+    flex: 0 0 auto;
+    position: absolute;
+    right: 10px;
+    bottom: 38px;
+    z-index: 2;
+    box-shadow: 0 8px 18px rgba(185, 28, 28, 0.18);
+}
+
+.project-history-image-delete:hover,
+.project-history-image-delete:focus-visible {
+    background: #ffe4e6;
+    border-color: #fca5a5;
+}
+
+.project-history-image-delete .material-symbols-outlined {
     font-size: 1rem;
     line-height: 1;
 }
@@ -22577,5 +22616,330 @@ body[data-peo-theme="dark"] .portal-shell textarea::placeholder {
 .account-settings-card label {
     overflow-wrap: anywhere;
     word-break: break-word;
+}
+
+/* Shared responsive polish for phones, tablets, and narrow laptops. */
+img,
+svg,
+canvas,
+video,
+iframe {
+    max-width: 100%;
+}
+
+body.portal-body {
+    overflow-x: hidden;
+}
+
+.portal-shell,
+.portal-main,
+.portal-topbar,
+.portal-content,
+.panel,
+.content-card,
+.section-head,
+.panel-head,
+.topbar-left,
+.topbar-right {
+    min-width: 0;
+}
+
+.topbar-left h2,
+.user-meta,
+.overview h3,
+.spotlight-copy h4,
+.leader-card h4,
+.leader-card p,
+.summary-tile strong {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.search-wrap input {
+    min-width: 0;
+}
+
+.table-wrap,
+.road-table-wrap,
+.schedule-table-wrap,
+.equipment-table-wrap,
+.maintenance-docs-table-wrap,
+.construction-table-wrap,
+.contractor-table-wrap,
+.planning-ppa-table-wrap,
+.planning-doc-table-wrap,
+.planning-budget-detail-table-wrap,
+.submissions-table-wrap,
+.project-table-wrap,
+.project-history-details-table-wrap,
+.quality-table-wrap,
+.admin-division-table-scroll,
+.tracking-steps-table-wrap {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable both-edges;
+}
+
+@media (max-width: 1180px) {
+    .portal-topbar {
+        align-items: flex-start;
+    }
+
+    .topbar-right {
+        flex: 1;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .search-wrap {
+        flex: 1 1 240px;
+    }
+}
+
+@media (max-width: 1024px) {
+    body.sidebar-open {
+        overflow: hidden;
+    }
+
+    .portal-sidebar {
+        width: min(320px, calc(100vw - 20px));
+        max-width: calc(100vw - 20px);
+        height: 100dvh;
+        border-right: 0;
+        border-radius: 0 22px 22px 0;
+        overflow: hidden;
+    }
+
+    .portal-nav {
+        padding-bottom: 28px;
+    }
+
+    .portal-topbar {
+        padding:
+            calc(12px + env(safe-area-inset-top, 0px))
+            max(16px, env(safe-area-inset-right, 0px))
+            12px
+            max(16px, env(safe-area-inset-left, 0px));
+    }
+
+    .topbar-notifications-dropdown,
+    .topbar-settings-dropdown,
+    .topbar-user-dropdown {
+        right: 0;
+        left: auto;
+        max-width: min(420px, calc(100vw - 24px));
+    }
+
+    .overview-analytics {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .portal-shell {
+        min-height: 100dvh;
+    }
+
+    .portal-topbar {
+        gap: 12px;
+        padding:
+            calc(10px + env(safe-area-inset-top, 0px))
+            max(12px, env(safe-area-inset-right, 0px))
+            12px
+            max(12px, env(safe-area-inset-left, 0px));
+    }
+
+    .topbar-left,
+    .topbar-right {
+        width: 100%;
+    }
+
+    .topbar-left {
+        align-items: center;
+        justify-content: flex-start;
+    }
+
+    .topbar-left h2 {
+        font-size: 1rem;
+        line-height: 1.25;
+    }
+
+    .sidebar-toggle,
+    .icon-btn,
+    .topbar-prov-logo {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        min-height: 40px;
+    }
+
+    .search-wrap {
+        order: 1;
+        width: 100%;
+        flex: 1 1 100%;
+        height: 40px;
+        border-radius: 12px;
+        padding: 0 12px;
+    }
+
+    .topbar-notifications-menu,
+    .topbar-settings-menu {
+        margin-left: 0;
+    }
+
+    .topbar-notifications-dropdown,
+    .topbar-settings-dropdown,
+    .topbar-user-dropdown {
+        position: fixed;
+        top: auto;
+        left: 12px;
+        right: 12px;
+        width: auto;
+        max-width: none;
+    }
+
+    .topbar-notifications-dropdown {
+        max-height: min(72vh, 540px);
+    }
+
+    .topbar-notifications-head,
+    .topbar-notifications-head-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .topbar-notification-filters {
+        padding-right: 12px;
+    }
+
+    .topbar-settings-dropdown,
+    .topbar-user-dropdown {
+        border-radius: 16px;
+    }
+
+    .portal-content {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .panel,
+    .spotlight-card,
+    .status-card {
+        border-radius: 16px;
+    }
+
+    .panel-head,
+    .section-head {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .activity-list,
+    .performance-summary {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .performance-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .spotlight-scene {
+        min-height: 220px;
+    }
+
+    .spotlight-gallery-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .division-table {
+        min-width: 620px;
+    }
+}
+
+@media (max-width: 560px) {
+    .portal-sidebar {
+        width: calc(100vw - 12px);
+        max-width: calc(100vw - 12px);
+        border-radius: 0 18px 18px 0;
+    }
+
+    .portal-brand,
+    .portal-user {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .portal-nav {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .topbar-left h2 {
+        font-size: 0.95rem;
+    }
+
+    .topbar-prov-logo {
+        display: none;
+    }
+
+    .topbar-user-trigger .user-meta {
+        max-width: 100%;
+    }
+
+    .topbar-notifications-dropdown,
+    .topbar-settings-dropdown,
+    .topbar-user-dropdown {
+        left: 8px;
+        right: 8px;
+    }
+
+    .topbar-notifications-head,
+    .topbar-notification-item,
+    .topbar-settings-item {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .status-card {
+        padding: 16px 14px 14px;
+    }
+
+    .status-value,
+    .portal-content.portal-content-materio .status-value {
+        font-size: clamp(1.8rem, 9vw, 2.2rem);
+    }
+
+    .overview h3,
+    .portal-content.portal-content-materio .overview h3 {
+        font-size: clamp(1.35rem, 7vw, 1.7rem);
+    }
+
+    .spotlight-copy {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+    }
+
+    .spotlight-chip {
+        left: 16px;
+        bottom: 66px;
+    }
+
+    .spotlight-copy h4 {
+        font-size: 1.4rem;
+    }
+
+    .chart-bars {
+        gap: 5px;
+    }
+
+    .chart-bar,
+    .portal-content.portal-content-materio .chart-bar {
+        width: 12px;
+    }
+
+    .division-table {
+        min-width: 560px;
+    }
 }
 

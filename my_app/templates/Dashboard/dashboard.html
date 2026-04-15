@@ -6,7 +6,7 @@
 
 {% block content %}
     <div class="portal-shell">
-        <button type="button" class="sidebar-overlay" aria-label="Close sidebar"></button>
+        <button type="button" class="sidebar-overlay" aria-label="Close sidebar" aria-hidden="true"></button>
 
         <aside class="portal-sidebar" id="portal-sidebar">
             <div class="portal-brand">
@@ -190,7 +190,7 @@
         <main class="portal-main">
             <header class="portal-topbar">
                 <div class="topbar-left">
-                    <button type="button" class="sidebar-toggle" aria-label="Toggle sidebar">
+                    <button type="button" class="sidebar-toggle" aria-label="Toggle sidebar" aria-controls="portal-sidebar" aria-expanded="false">
                         <span class="material-symbols-outlined">menu</span>
                     </button>
                     <h2>{{ page_heading|default:"Workflow Management" }}</h2>
