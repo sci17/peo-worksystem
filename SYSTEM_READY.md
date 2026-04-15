@@ -31,10 +31,10 @@ Use any of these accounts:
 
 | Username | Password | Role |
 |----------|----------|------|
-| admin | admin@123 | Administrator |
-| john_doe | John@2025 | Regular User |
-| maria_santos | Maria@2025 | Regular User |
-| james_smith | James@2025 | Regular User |
+| planning_division | peo_planning123 | Planning Division |
+| construction_division | peo_cons123 | Construction Division |
+| quality_division | peo_quality123 | Quality Division |
+| maintenance_division | peo_maintenance123 | Maintenance Division |
 | peo_admin | (existing account) | Administrator |
 
 ### 4. UPLOAD & SHARE FILES
@@ -167,12 +167,12 @@ peo-worksystem/
 ## 🔐 USER ACCOUNTS
 
 ### Existing Accounts
-- admin
-- john_doe
-- maria_santos
-- james_smith
+- planning_division
+- construction_division
+- quality_division
+- maintenance_division
+- admin_division
 - peo_admin
-- And division managers (admin_division, construction_division, etc.)
 
 ### Create New User
 ```bash

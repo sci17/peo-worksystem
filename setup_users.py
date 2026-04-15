@@ -8,10 +8,10 @@ django.setup()
 from django.contrib.auth.models import User
 
 users_data = [
-    {'username': 'admin', 'email': 'admin@peo.local', 'password': 'admin@123', 'is_staff': True, 'is_superuser': True},
-    {'username': 'john_doe', 'email': 'john@company.com', 'password': 'John@2025', 'is_staff': False, 'is_superuser': False},
-    {'username': 'maria_santos', 'email': 'maria@company.com', 'password': 'Maria@2025', 'is_staff': False, 'is_superuser': False},
-    {'username': 'james_smith', 'email': 'james@company.com', 'password': 'James@2025', 'is_staff': False, 'is_superuser': False},
+    {'username': 'planning_division', 'email': '', 'password': 'peo_planning123', 'is_staff': True, 'is_superuser': False},
+    {'username': 'construction_division', 'email': '', 'password': 'peo_cons123', 'is_staff': True, 'is_superuser': False},
+    {'username': 'quality_division', 'email': '', 'password': 'peo_quality123', 'is_staff': True, 'is_superuser': False},
+    {'username': 'maintenance_division', 'email': '', 'password': 'peo_maintenance123', 'is_staff': True, 'is_superuser': False},
 ]
 
 print("Creating users...")
