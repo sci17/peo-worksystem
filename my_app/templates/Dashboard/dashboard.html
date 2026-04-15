@@ -346,7 +346,6 @@
                             Read-only access: {{ user_division_label }} accounts cannot edit the {{ page_heading|default:"this" }} dashboard.
                         </div>
                     {% endif %}
-
                     {% if current_section == 'admin' %}
                         {% include admin_template|default:"admin/admin_division.html" %}
                     {% elif current_section == 'planning' %}
