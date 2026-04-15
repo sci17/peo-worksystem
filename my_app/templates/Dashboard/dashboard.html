@@ -336,56 +336,56 @@
                 </div>
             </header>
 
-	            <section class="portal-content {% if current_section == 'workflow' or not current_section %}portal-content-materio{% endif %}">
-                    {% if user_division_mismatch %}
-                        <div class="account-settings-alert account-settings-alert--warning" role="status">
-                            Your account division does not match your assigned group. Please ask an administrator to fix your Division/Group assignment.
-                        </div>
-                    {% elif dashboard_readonly %}
-                        <div class="account-settings-alert account-settings-alert--warning" role="status">
-                            Read-only access: {{ user_division_label }} accounts cannot edit the {{ page_heading|default:"this" }} dashboard.
-                        </div>
-                    {% endif %}
-	                {% if current_section == 'admin' %}
-	                    {% include admin_template|default:'admin/admin_division.html' %}
-	                {% elif current_section == 'planning' %}
-	                    {% include planning_template|default:'Planning/planning_division_table.html' %}
-	                {% elif current_section == 'project' %}
-	                    {% include 'Project/project_table.html' %}
-	                {% elif current_section == 'construction' %}
-	                    {% include construction_template|default:'construction/construction.html' %}
-	                {% elif current_section == 'quality' %}
-	                    {% include quality_template|default:'Quality/quality_division_table.html' %}
-	                {% elif current_section == 'settings' %}
-	                    {% include 'account/settings_panel.html' %}
-	                {% elif current_section == 'maintenance' %}
-	                    {% include maintenance_template %}
+            <section class="portal-content {% if current_section == 'workflow' or not current_section %}portal-content-materio{% endif %}">
+                {% if user_division_mismatch %}
+                    <div class="account-settings-alert account-settings-alert--warning" role="status">
+                        Your account division does not match your assigned group. Please ask an administrator to fix your Division/Group assignment.
+                    </div>
+                {% elif dashboard_readonly %}
+                    <div class="account-settings-alert account-settings-alert--warning" role="status">
+                        Read-only access: {{ user_division_label }} accounts cannot edit the {{ page_heading|default:"this" }} dashboard.
+                    </div>
+                {% endif %}
+                {% if current_section == 'admin' %}
+                    {% include admin_template|default:'admin/admin_division.html' %}
+                {% elif current_section == 'planning' %}
+                    {% include planning_template|default:'Planning/planning_division_table.html' %}
+                {% elif current_section == 'project' %}
+                    {% include 'Project/project_table.html' %}
+                {% elif current_section == 'construction' %}
+                    {% include construction_template|default:'construction/construction.html' %}
+                {% elif current_section == 'quality' %}
+                    {% include quality_template|default:'Quality/quality_division_table.html' %}
+                {% elif current_section == 'settings' %}
+                    {% include 'account/settings_panel.html' %}
+                {% elif current_section == 'maintenance' %}
+                    {% include maintenance_template %}
                 {% elif current_section == 'tracking' %}
                     {% include 'tracking_details.html' %}
                 {% else %}
-                <section class="overview">
-                    <h3>Dashboard Overview</h3>
-                    <p>Real-time division progress and workflow status monitoring</p>
-                </section>
+                    <section class="overview">
+                        <h3>Dashboard Overview</h3>
+                        <p>Real-time division progress and workflow status monitoring</p>
+                    </section>
 
-                <section class="status-grid">
-                    <article class="status-card">
-                        <div class="status-head">
-                            <span class="material-symbols-outlined icon-blue">work</span>
-                            {% if overview_active_projects_delta %}
-                                <span class="delta delta-up">{{ overview_active_projects_delta }}</span>
-                            {% endif %}
-                        </div>
-                        <p class="status-label">Active Projects</p>
-                        <p class="status-value">{{ overview_active_projects|default:"0" }}</p>
-                        <div class="progress-track">
-                            <span
-                                class="progress-fill progress-blue"
-                                style="width: {{ overview_active_projects_progress|default:'0' }}%;"
-                                aria-hidden="true"
-                            ></span>
-                        </div>
-                    </article>
+                    <section class="status-grid">
+                        <article class="status-card">
+                            <div class="status-head">
+                                <span class="material-symbols-outlined icon-blue">work</span>
+                                {% if overview_active_projects_delta %}
+                                    <span class="delta delta-up">{{ overview_active_projects_delta }}</span>
+                                {% endif %}
+                            </div>
+                            <p class="status-label">Active Projects</p>
+                            <p class="status-value">{{ overview_active_projects|default:"0" }}</p>
+                            <div class="progress-track">
+                                <span
+                                    class="progress-fill progress-blue"
+                                    style="width: {{ overview_active_projects_progress|default:'0' }}%;"
+                                    aria-hidden="true"
+                                ></span>
+                            </div>
+                        </article>
 
                     <article class="status-card">
                         <div class="status-head">
