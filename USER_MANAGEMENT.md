@@ -1,23 +1,12 @@
 # User Account Management - PEO Worksystem
 
-## Current User Accounts
-
-| Username | Email | Role | Password |
-|----------|-------|------|----------|
-| admin | admin@peo-worksystem.local | Administrator | admin@123 |
-| john_doe | john.doe@company.com | Regular User | John@2025 |
-| maria_santos | maria.santos@company.com | Regular User | Maria@2025 |
-| james_smith | james.smith@company.com | Regular User | James@2025 |
-
----
 
 ## Access the Application
 
 **Web App URL:** http://192.168.1.177:8000
 
 **Admin Panel:** http://192.168.1.177:8000/admin/
-- Username: `admin`
-- Password: `admin@123`
+
 
 ---
 

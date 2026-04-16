@@ -150,7 +150,9 @@
         }
 
         document.addEventListener('click', (ev) => {
-            const trigger = ev.target.closest('[data-peo-toast-message]');
+            const clickTarget = ev.target instanceof Element ? ev.target : null;
+            if (!clickTarget) return;
+            const trigger = clickTarget.closest('[data-peo-toast-message]');
             if (!trigger) return;
             if (trigger.matches(":disabled, [aria-disabled='true']")) return;
             const message = trigger.getAttribute('data-peo-toast-message') || '';
@@ -5082,7 +5084,9 @@ const portalDomReady = () => {
 	        });
 
         menu.addEventListener("click", (event) => {
-            const optionButton = event.target.closest(".pa-select-custom__option");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const optionButton = clickTarget.closest(".pa-select-custom__option");
             if (!optionButton || optionButton.disabled) return;
             const nextValue = String(optionButton.dataset.value || "");
             if (select.value !== nextValue) {
@@ -5157,7 +5161,8 @@ const portalDomReady = () => {
     });
 
     document.addEventListener("click", (event) => {
-        if (!event.target.closest(".pa-select-custom")) {
+        const clickTarget = event.target instanceof Element ? event.target : null;
+        if (!clickTarget || !clickTarget.closest(".pa-select-custom")) {
             closeAdminSelectDropdowns();
         }
     });
@@ -6955,7 +6960,9 @@ const portalDomReady = () => {
             }
         });
         documentsTableBody.addEventListener("click", async (event) => {
-            const actionButton = event.target.closest("[data-admin-action]");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const actionButton = clickTarget.closest("[data-admin-action]");
             if (!actionButton) return;
             const action = actionButton.dataset.adminAction;
             const recordId = actionButton.dataset.recordId;
@@ -7015,7 +7022,9 @@ const portalDomReady = () => {
             }
         });
         billingTableBody.addEventListener("click", async (event) => {
-            const actionButton = event.target.closest("[data-admin-action]");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const actionButton = clickTarget.closest("[data-admin-action]");
             if (!actionButton) return;
             const action = actionButton.dataset.adminAction;
             const recordId = actionButton.dataset.recordId;
@@ -10956,7 +10965,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         contractorManagement.addEventListener("click", (event) => {
-            const evaluationOpener = event.target.closest(".js-contractor-open-eval");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) {
+                return;
+            }
+
+            const evaluationOpener = clickTarget.closest(".js-contractor-open-eval");
             if (evaluationOpener) {
                 const row = evaluationOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10966,7 +10980,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const editOpener = event.target.closest(".js-contractor-open-edit");
+            const editOpener = clickTarget.closest(".js-contractor-open-edit");
             if (editOpener) {
                 const row = editOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10976,7 +10990,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const deleteOpener = event.target.closest(".js-contractor-delete");
+            const deleteOpener = clickTarget.closest(".js-contractor-delete");
             if (deleteOpener) {
                 const row = deleteOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10986,7 +11000,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const opener = event.target.closest(".js-contractor-open-card");
+            const opener = clickTarget.closest(".js-contractor-open-card");
             if (!opener) {
                 return;
             }
@@ -11188,7 +11202,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (dropdownMenu) {
             dropdownMenu.addEventListener("click", (event) => {
-                const option = event.target.closest(".dropdown-option");
+                const clickTarget = event.target instanceof Element ? event.target : null;
+                if (!clickTarget) {
+                    return;
+                }
+                const option = clickTarget.closest(".dropdown-option");
                 if (!option) {
                     return;
                 }
@@ -14513,7 +14531,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (dropdownMenu) {
                 dropdownMenu.addEventListener("click", (event) => {
-                    const option = event.target.closest(".dropdown-option");
+                    const clickTarget = event.target instanceof Element ? event.target : null;
+                    if (!clickTarget) {
+                        return;
+                    }
+                    const option = clickTarget.closest(".dropdown-option");
                     if (!option) {
                         return;
                     }
@@ -18259,7 +18281,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (tableBody) {
         tableBody.addEventListener("click", async (event) => {
-            const deleteTrigger = event.target.closest(".js-construction-task-delete");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+
+            const deleteTrigger = clickTarget.closest(".js-construction-task-delete");
             if (deleteTrigger) {
                 event.preventDefault();
                 const recordId = String(deleteTrigger.dataset.recordId || deleteTrigger.closest("tr")?.dataset.recordId || "").trim();
@@ -18305,7 +18330,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const trigger = event.target.closest(".js-open-construction-task-modal");
+            const trigger = clickTarget.closest(".js-open-construction-task-modal");
             if (!trigger) return;
             event.preventDefault();
             const recordId = String(trigger.dataset.recordId || "").trim();
@@ -22750,7 +22775,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (menu instanceof HTMLElement) {
                 menu.addEventListener("click", (event) => {
-                    const optionButton = event.target.closest(".project-filter-dropdown__option");
+                    const clickTarget = event.target instanceof Element ? event.target : null;
+                    if (!clickTarget) {
+                        return;
+                    }
+                    const optionButton = clickTarget.closest(".project-filter-dropdown__option");
                     if (!(optionButton instanceof HTMLButtonElement)) {
                         return;
                     }
