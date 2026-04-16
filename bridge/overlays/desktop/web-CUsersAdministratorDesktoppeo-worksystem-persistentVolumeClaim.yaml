@@ -1,0 +1,9 @@
+#! web-C:\Users\Administrator\Desktop\peo-worksystem-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: web-c--users-administrator-desktop-peo-worksystem
+    namespace: peo-worksystem
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

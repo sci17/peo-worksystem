@@ -1,0 +1,66 @@
+#! web-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: web
+    namespace: peo-worksystem
+    labels:
+        com.docker.compose.project: peo-worksystem
+        com.docker.compose.service: web
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: peo-worksystem
+            com.docker.compose.service: web
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: peo-worksystem
+                com.docker.compose.service: web
+                com.docker.compose.network.default: "true"
+        spec:
+            restartPolicy: unless-stopped
+            containers:
+                - name: web
+                  image: peo-worksystem-web
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: DJANGO_ALLOWED_HOSTS
+                      value: "localhost,127.0.0.1,[::1]"
+                    - name: DJANGO_CACHE_BACKEND
+                      value: "django.core.cache.backends.filebased.FileBasedCache"
+                    - name: DJANGO_CACHE_LOCATION
+                      value: "/app/.cache/django"
+                    - name: DJANGO_DB_ENGINE
+                      value: "django.db.backends.sqlite3"
+                    - name: DJANGO_DEBUG
+                      value: "True"
+                  ports:
+                    - name: web-8000
+                      containerPort: 8000
+                  volumeMounts:
+                    - name: app
+                      mountPath: /app
+                    - name: app--cache-django
+                      mountPath: /app/.cache/django
+                    - name: app-media
+                      mountPath: /app/media
+                    - name: app-staticfiles
+                      mountPath: /app/staticfiles
+            volumes:
+                - name: app
+                  hostPath:
+                    path: C:\Users\Administrator\Desktop\peo-worksystem
+                - name: app--cache-django
+                  persistentVolumeClaim:
+                    claimName: web-django-cache
+                - name: app-media
+                  persistentVolumeClaim:
+                    claimName: web-django-media
+                - name: app-staticfiles
+                  persistentVolumeClaim:
+                    claimName: web-django-static

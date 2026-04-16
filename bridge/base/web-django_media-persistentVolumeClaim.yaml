@@ -1,0 +1,18 @@
+#! web-django_media-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: web-django-media
+    namespace: peo-worksystem
+    labels:
+        com.docker.compose.service: web
+        com.docker.compose.volume: django_media
+spec:
+    accessModes:
+        # TODO would need to check which services use this volume
+        - ReadWriteOnce
+    volumeMode: Filesystem
+    resources:
+        requests:
+            storage: 100Mi

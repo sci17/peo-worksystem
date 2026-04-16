@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import Group
 
 from .models import (
@@ -16,17 +18,23 @@ from .models import (
 
 
 DIVISION_GROUP_NAME_BY_KEY = {
-    KEY_ADMIN: "Admin Division",
-    KEY_PLANNING: "Planning Division",
-    KEY_CONSTRUCTION: "Construction Division",
-    KEY_QUALITY: "Quality Control Division",
-    KEY_MAINTENANCE: "Maintenance Division",
+    KEY_ADMIN: "Admin_Division",
+    KEY_PLANNING: "Planning_Division",
+    KEY_CONSTRUCTION: "Construction_Division",
+    KEY_QUALITY: "Quality_Control_Division",
+    KEY_MAINTENANCE: "Maintenance_Division",
 }
 DIVISION_GROUP_NAME_ALIASES = {
     "quality division": "quality control division",
     "maitenance division": "maintenance division",
     "maitenance": "maintenance",
     "quality control": "quality",
+    "admin_division": "admin division",
+    "planning_division": "planning division",
+    "construction_division": "construction division",
+    "quality_division": "quality division",
+    "quality_control_division": "quality control division",
+    "maintenance_division": "maintenance division",
 }
 
 
@@ -43,6 +51,12 @@ def _normalize_division_key(value):
         "quality control division": KEY_QUALITY,
         "maintenance division": KEY_MAINTENANCE,
         "maitenance division": KEY_MAINTENANCE,
+        "admin_division": KEY_ADMIN,
+        "planning_division": KEY_PLANNING,
+        "construction_division": KEY_CONSTRUCTION,
+        "quality_division": KEY_QUALITY,
+        "quality_control_division": KEY_QUALITY,
+        "maintenance_division": KEY_MAINTENANCE,
         "admin": KEY_ADMIN,
         "planning": KEY_PLANNING,
         "construction": KEY_CONSTRUCTION,
@@ -52,6 +66,17 @@ def _normalize_division_key(value):
         "maitenance": KEY_MAINTENANCE,
     }
     return aliases.get(text, "")
+
+
+def _division_label_for_key(value):
+    labels = {
+        KEY_ADMIN: "Admin Division",
+        KEY_PLANNING: "Planning Division",
+        KEY_CONSTRUCTION: "Construction Division",
+        KEY_QUALITY: "Quality Division",
+        KEY_MAINTENANCE: "Maintenance Division",
+    }
+    return labels.get(_normalize_division_key(value), "")
 
 
 def _division_key_from_groups(user):
@@ -94,6 +119,125 @@ def _sync_user_division_group(user, division_key):
         user.groups.remove(*list(other_groups))
 
     user.groups.add(target_group)
+
+
+User = get_user_model()
+
+
+class UserAccountTypeFilter(admin.SimpleListFilter):
+    title = "account type"
+    parameter_name = "account_type"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("superadmin", "Super Admin"),
+            ("division_admin", "Division Admin"),
+            ("staff_user", "Staff User"),
+            ("portal_user", "Portal User"),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == "superadmin":
+            return queryset.filter(is_superuser=True)
+        if value == "division_admin":
+            return queryset.filter(is_superuser=False, username__in=[
+                "admin_division",
+                "planning_division",
+                "construction_division",
+                "quality_division",
+                "maintenance_division",
+            ])
+        if value == "staff_user":
+            return queryset.filter(is_superuser=False, is_staff=True).exclude(username__in=[
+                "admin_division",
+                "planning_division",
+                "construction_division",
+                "quality_division",
+                "maintenance_division",
+            ])
+        if value == "portal_user":
+            return queryset.filter(is_superuser=False, is_staff=False)
+        return queryset
+
+
+class UserDivisionFilter(admin.SimpleListFilter):
+    title = "assigned division"
+    parameter_name = "assigned_division"
+
+    def lookups(self, request, model_admin):
+        return (
+            (KEY_ADMIN, "Admin Division"),
+            (KEY_PLANNING, "Planning Division"),
+            (KEY_CONSTRUCTION, "Construction Division"),
+            (KEY_QUALITY, "Quality Division"),
+            (KEY_MAINTENANCE, "Maintenance Division"),
+            ("unassigned", "Unassigned"),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == "unassigned":
+            return queryset.filter(profile__division__isnull=True)
+        if value:
+            return queryset.filter(profile__division=value)
+        return queryset
+
+
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:
+    pass
+
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    list_display = (
+        "username",
+        "email",
+        "account_type_label",
+        "assigned_division_label",
+        "is_staff",
+        "is_superuser",
+        "is_active",
+        "last_login",
+    )
+    list_filter = (
+        UserAccountTypeFilter,
+        UserDivisionFilter,
+        "is_active",
+        "is_staff",
+        "is_superuser",
+    )
+    search_fields = ("username", "email", "first_name", "last_name")
+    ordering = ("username",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("profile")
+
+    @admin.display(description="Account Type")
+    def account_type_label(self, obj):
+        username = str(getattr(obj, "username", "") or "").strip().lower()
+        division_admin_usernames = {
+            "admin_division",
+            "planning_division",
+            "construction_division",
+            "quality_division",
+            "maintenance_division",
+        }
+        if obj.is_superuser:
+            return "Super Admin"
+        if username in division_admin_usernames:
+            return "Division Admin"
+        if obj.is_staff:
+            return "Staff User"
+        return "Portal User"
+
+    @admin.display(description="Assigned Division")
+    def assigned_division_label(self, obj):
+        profile = getattr(obj, "profile", None)
+        division = getattr(profile, "division", "") if profile else ""
+        return _division_label_for_key(division) or "Unassigned"
 
 
 @admin.register(UserProfile)

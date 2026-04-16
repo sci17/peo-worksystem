@@ -1,3 +1,5 @@
+import os
+from importlib.util import find_spec
 """
 Django settings for my_site project.
 
@@ -11,7 +13,6 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
-import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -53,8 +54,18 @@ INSTALLED_APPS = [
     'my_app',
 ]
 
+if find_spec('channels') is not None:
+    INSTALLED_APPS.append('channels')
+
+if find_spec('django_celery_beat') is not None:
+    INSTALLED_APPS.append('django_celery_beat')
+
+if find_spec('django_celery_results') is not None:
+    INSTALLED_APPS.append('django_celery_results')
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -64,6 +75,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'my_site.urls'
+ASGI_APPLICATION = 'my_site.asgi.application'
 
 TEMPLATES = [
     {
@@ -121,7 +133,7 @@ _cache_backend = os.environ.get('DJANGO_CACHE_BACKEND', 'django.core.cache.backe
 _cache_location_default = (
     str(BASE_DIR / '.cache' / 'django')
     if _cache_backend == 'django.core.cache.backends.filebased.FileBasedCache'
-    else 'peo-worksystem-cache'
+    else os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1')
 )
 _cache_location = os.environ.get('DJANGO_CACHE_LOCATION', _cache_location_default)
 if _cache_backend == 'django.core.cache.backends.filebased.FileBasedCache':
@@ -142,6 +154,22 @@ CACHES = {
 # App-level cache controls used by dashboard/store view helpers.
 SYSTEM_DATA_CACHE_TTL_SECONDS = _env_int('DJANGO_SYSTEM_DATA_CACHE_TTL_SECONDS', 300)
 SYSTEM_COMPUTED_CACHE_TTL_SECONDS = _env_int('DJANGO_SYSTEM_COMPUTED_CACHE_TTL_SECONDS', 120)
+
+_redis_url = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': os.environ.get('DJANGO_CHANNEL_LAYER_BACKEND', 'channels_redis.core.RedisChannelLayer'),
+        'CONFIG': {
+            'hosts': [os.environ.get('DJANGO_CHANNEL_LAYER_URL', _redis_url)],
+        },
+    }
+}
+
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', _redis_url)
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
 
 
 # Password validation
@@ -168,11 +196,13 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.environ.get('DJANGO_TIME_ZONE', 'UTC')
 
 USE_I18N = True
 
 USE_TZ = True
+
+CELERY_TIMEZONE = TIME_ZONE
 
 
 # Static files (CSS, JavaScript, Images)
@@ -181,17 +211,29 @@ USE_TZ = True
 # Use an absolute path so static assets load correctly on nested URLs like
 # /accounts/login/ (relative paths would resolve to /accounts/login/static/...).
 STATIC_URL = '/static/'
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
+MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT', str(BASE_DIR / 'media')))
+DATA_UPLOAD_MAX_MEMORY_SIZE = _env_int('DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE', 262144000)
+FILE_UPLOAD_MAX_MEMORY_SIZE = _env_int('DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE', 262144000)
 
 # Production security hardening (enabled only when DEBUG is False)
 if not DEBUG:
-    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '0'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True').lower() in ('1', 'true', 'yes')
     SECURE_HSTS_PRELOAD = os.environ.get('DJANGO_SECURE_HSTS_PRELOAD', 'True').lower() in ('1', 'true', 'yes')
-    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'True').lower() in ('1', 'true', 'yes')
-    SESSION_COOKIE_SECURE = os.environ.get('DJANGO_SESSION_COOKIE_SECURE', 'True').lower() in ('1', 'true', 'yes')
-    CSRF_COOKIE_SECURE = os.environ.get('DJANGO_CSRF_COOKIE_SECURE', 'True').lower() in ('1', 'true', 'yes')
+    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'False').lower() in ('1', 'true', 'yes')
+    SESSION_COOKIE_SECURE = os.environ.get('DJANGO_SESSION_COOKIE_SECURE', 'False').lower() in ('1', 'true', 'yes')
+    CSRF_COOKIE_SECURE = os.environ.get('DJANGO_CSRF_COOKIE_SECURE', 'False').lower() in ('1', 'true', 'yes')
+    if os.environ.get('DJANGO_SECURE_PROXY_SSL_HEADER', '').strip():
+        header_name, _, header_value = os.environ['DJANGO_SECURE_PROXY_SSL_HEADER'].partition(':')
+        if header_name and header_value:
+            SECURE_PROXY_SSL_HEADER = (header_name.strip(), header_value.strip())
+
+_csrf_trusted_origins = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '')
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in _csrf_trusted_origins.split(',') if origin.strip()]
+USE_X_FORWARDED_HOST = os.environ.get('DJANGO_USE_X_FORWARDED_HOST', 'False').lower() in ('1', 'true', 'yes')
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'

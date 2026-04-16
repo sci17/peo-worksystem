@@ -6,7 +6,7 @@
 
 {% block content %}
     <div class="portal-shell">
-        <button type="button" class="sidebar-overlay" aria-label="Close sidebar"></button>
+        <button type="button" class="sidebar-overlay" aria-label="Close sidebar" aria-hidden="true"></button>
 
         <aside class="portal-sidebar" id="portal-sidebar">
             <div class="portal-brand">
@@ -190,7 +190,7 @@
         <main class="portal-main">
             <header class="portal-topbar">
                 <div class="topbar-left">
-                    <button type="button" class="sidebar-toggle" aria-label="Toggle sidebar">
+                    <button type="button" class="sidebar-toggle" aria-label="Toggle sidebar" aria-controls="portal-sidebar" aria-expanded="false">
                         <span class="material-symbols-outlined">menu</span>
                     </button>
                     <h2>{{ page_heading|default:"Workflow Management" }}</h2>
@@ -260,13 +260,13 @@
                                         class="topbar-notification-item is-unread"
                                         data-notification-item
                                         data-notification-category="{{ item.category|default:'documents' }}"
-                                        data-notification-key="{{ item.href }}|{{ item.title }}|{{ item.meta }}|{{ forloop.counter }}"
+                                        data-notification-key="{{ item.href|default:'#' }}|{{ item.title|default:'' }}|{{ item.meta|default:'' }}|{{ forloop.counter }}"
                                     >
-                                        <a href="{{ item.href }}" class="topbar-notification-link">
+                                        <a href="{{ item.href|default:'#' }}" class="topbar-notification-link">
                                             <span class="material-symbols-outlined topbar-notification-icon">{{ item.icon }}</span>
                                             <span class="topbar-notification-copy">
                                                 <strong>{{ item.title }}</strong>
-                                                <em class="topbar-notification-category topbar-notification-category--{{ item.severity|default:'info' }}">{{ item.category_label|default:'Notification' }}</em>
+                                                <em class="topbar-notification-category topbar-notification-category--{{ item.severity|default:'info' }}">{{ item.category_label|default:"Notification" }}</em>
                                                 <span>{{ item.message }}</span>
                                                 <small>{{ item.meta }}</small>
                                             </span>
@@ -336,7 +336,7 @@
                 </div>
             </header>
 
-	            <section class="portal-content {% if current_section == 'workflow' or not current_section %}portal-content-materio{% endif %}">
+            <section class="portal-content {% if current_section == 'workflow' or not current_section %}portal-content-materio{% endif %}">
                     {% if user_division_mismatch %}
                         <div class="account-settings-alert account-settings-alert--warning" role="status">
                             Your account division does not match your assigned group. Please ask an administrator to fix your Division/Group assignment.
@@ -346,46 +346,46 @@
                             Read-only access: {{ user_division_label }} accounts cannot edit the {{ page_heading|default:"this" }} dashboard.
                         </div>
                     {% endif %}
-	                {% if current_section == 'admin' %}
-	                    {% include admin_template|default:'admin/admin_division.html' %}
-	                {% elif current_section == 'planning' %}
-	                    {% include planning_template|default:'Planning/planning_division_table.html' %}
-	                {% elif current_section == 'project' %}
-	                    {% include 'Project/project_table.html' %}
-	                {% elif current_section == 'construction' %}
-	                    {% include construction_template|default:'construction/construction.html' %}
-	                {% elif current_section == 'quality' %}
-	                    {% include quality_template|default:'Quality/quality_division_table.html' %}
-	                {% elif current_section == 'settings' %}
-	                    {% include 'account/settings_panel.html' %}
-	                {% elif current_section == 'maintenance' %}
-	                    {% include maintenance_template %}
-                {% elif current_section == 'tracking' %}
-                    {% include 'tracking_details.html' %}
-                {% else %}
-                <section class="overview">
-                    <h3>Dashboard Overview</h3>
-                    <p>Real-time division progress and workflow status monitoring</p>
-                </section>
+                    {% if current_section == 'admin' %}
+                        {% include admin_template|default:"admin/admin_division.html" %}
+                    {% elif current_section == 'planning' %}
+                        {% include planning_template|default:"Planning/planning_division_table.html" %}
+                    {% elif current_section == 'project' %}
+                        {% include "Project/project_table.html" %}
+                    {% elif current_section == 'construction' %}
+                        {% include construction_template|default:"construction/construction.html" %}
+                    {% elif current_section == 'quality' %}
+                        {% include quality_template|default:"Quality/quality_division_table.html" %}
+                    {% elif current_section == 'settings' %}
+                        {% include "account/settings_panel.html" %}
+                    {% elif current_section == 'maintenance' %}
+                        {% include maintenance_template|default:"Maintenance/includes/road_management_table.html" %}
+                    {% elif current_section == 'tracking' %}
+                        {% include "tracking_details.html" %}
+                    {% else %}
+                        <section class="overview">
+                            <h3>Dashboard Overview</h3>
+                            <p>Real-time division progress and workflow status monitoring</p>
+                        </section>
 
-                <section class="status-grid">
-                    <article class="status-card">
-                        <div class="status-head">
-                            <span class="material-symbols-outlined icon-blue">work</span>
-                            {% if overview_active_projects_delta %}
-                                <span class="delta delta-up">{{ overview_active_projects_delta }}</span>
-                            {% endif %}
-                        </div>
-                        <p class="status-label">Active Projects</p>
-                        <p class="status-value">{{ overview_active_projects|default:"0" }}</p>
-                        <div class="progress-track">
-                            <span
-                                class="progress-fill progress-blue"
-                                style="width: {{ overview_active_projects_progress|default:'0' }}%;"
-                                aria-hidden="true"
-                            ></span>
-                        </div>
-                    </article>
+                        <section class="status-grid">
+                            <article class="status-card">
+                                <div class="status-head">
+                                    <span class="material-symbols-outlined icon-blue">work</span>
+                                    {% if overview_active_projects_delta %}
+                                        <span class="delta delta-up">{{ overview_active_projects_delta }}</span>
+                                    {% endif %}
+                                </div>
+                                <p class="status-label">Active Projects</p>
+                                <p class="status-value">{{ overview_active_projects|default:"0" }}</p>
+                                <div class="progress-track">
+                                    <span
+                                        class="progress-fill progress-blue"
+                                        style='width: {{ overview_active_projects_progress|default:"0" }}%;'
+                                        aria-hidden="true"
+                                    ></span>
+                                </div>
+                            </article>
 
                     <article class="status-card">
                         <div class="status-head">
@@ -399,7 +399,7 @@
                         <div class="progress-track">
                             <span
                                 class="progress-fill progress-amber"
-                                style="width: {{ overview_pending_approvals_progress|default:'0' }}%;"
+                                style='width: {{ overview_pending_approvals_progress|default:"0" }}%;'
                                 aria-hidden="true"
                             ></span>
                         </div>
@@ -417,7 +417,7 @@
                         <div class="progress-track">
                             <span
                                 class="progress-fill progress-green"
-                                style="width: {{ overview_recent_updates_progress|default:'0' }}%;"
+                                style='width: {{ overview_recent_updates_progress|default:"0" }}%;'
                                 aria-hidden="true"
                             ></span>
                         </div>
@@ -530,7 +530,7 @@
                                     <p>{{ overview_leadership_executive.title|default:"Governor" }}</p>
                                 </div>
                             </article>
-                        {% elif overview_leadership_executive is None %}
+                        {% elif not overview_leadership_executive %}
                             <article class="leader-card leader-card-primary">
                                 <div class="leader-avatar leader-avatar-primary">--</div>
                                 <div class="leader-label">
@@ -600,7 +600,7 @@
                                     <div class="leader-avatar leader-avatar-secondary">--</div>
                                     <div class="leader-label">
                                         <span class="leader-tag">Assistant Provincial Engineer</span>
-                                        <h4>Egnr. RANFORD T. VILLEGAS</h4>
+                                        <h4>Engr. RANFORD T. VILLEGAS</h4>
                                         <p>PGADH (Assistant Provincial Engineer)</p>
                                     </div>
                                 </article>
@@ -631,7 +631,7 @@
                                 <article class="leader-card">
                                     <div class="leader-avatar leader-avatar-admin">--</div>
                                     <div class="leader-label">
-                                        <span class="leader-dept">Admin Division</span>
+                                        <span class="leader-dept">Administrative Division</span>
                                         <h4>Engr. PEARL ANGELIE L. PRADO</h4>
                                         <p>Division Head</p>
                                     </div>
@@ -655,7 +655,7 @@
                                 <article class="leader-card">
                                     <div class="leader-avatar leader-avatar-quality">--</div>
                                     <div class="leader-label">
-                                        <span class="leader-dept">Quality Division</span>
+                                        <span class="leader-dept">Quality Control Division</span>
                                         <h4>Engr. CHARISMA WY B. PROELLS</h4>
                                         <p>Division Head</p>
                                     </div>
@@ -664,7 +664,7 @@
                                     <div class="leader-avatar leader-avatar-maintenance">--</div>
                                     <div class="leader-label">
                                         <span class="leader-dept">Maintenance Division</span>
-                                        <h4>Egnr. GLENN J. CAYAPAS</h4>
+                                        <h4>Engr. GLENN J. CAYAPAS</h4>
                                         <p>Division Head</p>
                                     </div>
                                 </article>
@@ -739,14 +739,14 @@
                                 <span class="material-symbols-outlined">trending_up</span>
                                 <div>
                                     <small>Top Performer</small>
-                                    <strong>{{ overview_top_performer|default:"—" }}</strong>
+                                    <strong>{{ overview_top_performer|default:"--" }}</strong>
                                 </div>
                             </div>
                             <div class="summary-tile">
                                 <span class="material-symbols-outlined">monitoring</span>
                                 <div>
                                     <small>Overall Efficiency</small>
-                                    <strong>{{ overview_overall_efficiency|default:"—" }}</strong>
+                                    <strong>{{ overview_overall_efficiency|default:"--" }}</strong>
                                 </div>
                             </div>
                         </div>
@@ -788,7 +788,7 @@
                                                     </small>
                                                 {% endif %}
                                             </td>
-                                            <td>{{ row.manager|default:"—" }}</td>
+                                            <td>{{ row.manager|default:"--" }}</td>
                                             <td>
                                                 <div class="completion-wrap">
                                                     <div class="progress-track">
@@ -797,7 +797,7 @@
                                                     <span>{{ row.completion|default:0 }}%</span>
                                                 </div>
                                             </td>
-                                            <td><span class="pill {{ row.status_class|default:'pill-slate' }}">{{ row.status|default:"—" }}</span></td>
+                                            <td><span class="pill {{ row.status_class|default:'pill-slate' }}">{{ row.status|default:"--" }}</span></td>
                                             <td class="align-right">
                                                 <button
                                                     type="button"
@@ -820,9 +820,10 @@
                         </table>
                     </div>
                 </section>
-                {% endif %}
+            {% endif %}
             </section>
         </main>
     </div>
 
 {% endblock %}
+

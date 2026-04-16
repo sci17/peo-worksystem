@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth import get_user_model
@@ -40,6 +41,12 @@ from .models import (
     KEY_MAINTENANCE
 )
 
+try:
+    from channels.layers import get_channel_layer
+except ImportError:
+    def get_channel_layer():
+        return None
+
 
 def _safe_log_division_store_event(
     *,
@@ -69,6 +76,28 @@ def _safe_log_division_store_event(
         return
 
 
+def _broadcast_division_store_update(*, store_keys, actor=None, updated_at=None):
+    keys = [str(key or "").strip() for key in (store_keys or []) if str(key or "").strip()]
+    if not keys:
+        return
+
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return
+        async_to_sync(channel_layer.group_send)(
+            "division_store_updates",
+            {
+                "type": "store_update",
+                "store_keys": keys,
+                "updated_at": updated_at or timezone.now().isoformat(),
+                "actor": actor.get_username() if actor and getattr(actor, "is_authenticated", False) else "",
+            },
+        )
+    except Exception:
+        return
+
+
 def _get_user_profile(user):
     profile, _ = UserProfile.objects.get_or_create(user=user)
     return profile
@@ -87,6 +116,12 @@ def _normalize_division_key(value):
         "quality control": KEY_QUALITY,
         "maintenance": KEY_MAINTENANCE,
         "maitenance": KEY_MAINTENANCE,
+        "admin_division": KEY_ADMIN,
+        "planning_division": KEY_PLANNING,
+        "construction_division": KEY_CONSTRUCTION,
+        "quality_division": KEY_QUALITY,
+        "quality_control_division": KEY_QUALITY,
+        "maintenance_division": KEY_MAINTENANCE,
     }
     if text in group_to_key:
         return group_to_key[text]
@@ -98,6 +133,12 @@ def _normalize_division_key(value):
         "quality division": KEY_QUALITY,
         "quality control division": KEY_QUALITY,
         "maintenance division": KEY_MAINTENANCE,
+        "admin_division": KEY_ADMIN,
+        "planning_division": KEY_PLANNING,
+        "construction_division": KEY_CONSTRUCTION,
+        "quality_division": KEY_QUALITY,
+        "quality_control_division": KEY_QUALITY,
+        "maintenance_division": KEY_MAINTENANCE,
     }
 
     if text in label_to_key:
@@ -1683,7 +1724,7 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
             return "employer"
         if any(token in name for name in group_names for token in ("applicant", "jobseeker", "job seeker")):
             return "applicant"
-        if request.user.is_staff or user_division:
+        if user_division:
             return "staff"
         return "applicant"
 
@@ -2582,6 +2623,11 @@ def division_store_api(request, key):
         path=getattr(request, "path", ""),
         method=getattr(request, "method", ""),
     )
+    _broadcast_division_store_update(
+        store_keys=[key],
+        actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+        updated_at=store.updated_at.isoformat() if store.updated_at else timezone.now().isoformat(),
+    )
 
     return JsonResponse(
         {
@@ -2631,6 +2677,12 @@ def division_store_clear_all_api(request):
         pass
 
     _invalidate_store_cache()
+    if cleared:
+        _broadcast_division_store_update(
+            store_keys=cleared,
+            actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+            updated_at=timezone.now().isoformat(),
+        )
 
     return JsonResponse({"ok": True, "cleared": sorted(cleared)})
 

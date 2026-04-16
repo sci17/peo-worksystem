@@ -1,0 +1,228 @@
+[
+{
+  "model": "auth.user",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$Y2GxmQby2qu8GsF12fUlPR$ouSTd7/6soT9TvpcYbCe03uEPl5lr19cEZ9TKr+wGO0=",
+    "last_login": "2026-04-14T08:08:34.194Z",
+    "is_superuser": true,
+    "username": "peo_admin",
+    "first_name": "",
+    "last_name": "",
+    "email": "recarzekaycee@gmail.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-03-04T14:29:52.461Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 5,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$4EVJNd32REsJpeISgeixOs$PvFxDtt9fcrz169k3f1yD6Qpw0uki96HSAnabKxXBQw=",
+    "last_login": "2026-04-14T08:20:20.948Z",
+    "is_superuser": false,
+    "username": "admin_division",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-03-17T01:40:25Z",
+    "groups": [
+      1
+    ],
+    "user_permissions": [
+      29,
+      30,
+      31,
+      32,
+      36
+    ]
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 6,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$0T9cyuo0HtMEx71FrsWrTF$r2lSaczcb5IKRWrri1Ochl1CNRupR9ryl2xaQ8bKb+o=",
+    "last_login": "2026-03-18T05:52:46.879Z",
+    "is_superuser": false,
+    "username": "planning_division",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-03-17T01:40:58Z",
+    "groups": [
+      2
+    ],
+    "user_permissions": [
+      29,
+      30,
+      31,
+      32,
+      36
+    ]
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 7,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$q0apQwSifozPzUSVmIhf5s$vCfVJ64VKGeJPhPLOlsrJkoezrm+1fxfIkQVBe1rEPo=",
+    "last_login": "2026-03-19T01:25:57.870Z",
+    "is_superuser": false,
+    "username": "construction_division",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-03-17T01:41:56Z",
+    "groups": [
+      3
+    ],
+    "user_permissions": [
+      29,
+      30,
+      31,
+      32,
+      36
+    ]
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 8,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$ofWjnzc9sV1UNm0MjpZIpB$7Pyv6aqtCY4x8M9LTqzPJTmQf0BFkh31xNhAbZ0D4eU=",
+    "last_login": "2026-03-17T06:03:56.372Z",
+    "is_superuser": false,
+    "username": "quality_control",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-03-17T01:43:45Z",
+    "groups": [
+      4
+    ],
+    "user_permissions": [
+      29,
+      30,
+      31,
+      32,
+      36
+    ]
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 9,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$areJzho1eSN9onUlMornJE$UOGiWsbUk82O7LTuTn1cuYT7tDhL20HCRnowCkwbYw0=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "maintenance_division",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-03-17T01:44:41Z",
+    "groups": [
+      5
+    ],
+    "user_permissions": [
+      29,
+      30,
+      31,
+      32,
+      36
+    ]
+  }
+},
+{
+  "model": "my_app.userprofile",
+  "pk": 4,
+  "fields": {
+    "user": 5,
+    "profile_picture": "",
+    "email_notifications": true,
+    "portal_notifications": true,
+    "appearance_mode": "light",
+    "division": "admin",
+    "updated_at": "2026-03-17T01:45:45.506Z"
+  }
+},
+{
+  "model": "my_app.userprofile",
+  "pk": 5,
+  "fields": {
+    "user": 6,
+    "profile_picture": "",
+    "email_notifications": true,
+    "portal_notifications": true,
+    "appearance_mode": "light",
+    "division": "planning",
+    "updated_at": "2026-03-17T01:45:39.041Z"
+  }
+},
+{
+  "model": "my_app.userprofile",
+  "pk": 6,
+  "fields": {
+    "user": 7,
+    "profile_picture": "",
+    "email_notifications": true,
+    "portal_notifications": true,
+    "appearance_mode": "light",
+    "division": "construction",
+    "updated_at": "2026-03-17T01:45:31.438Z"
+  }
+},
+{
+  "model": "my_app.userprofile",
+  "pk": 7,
+  "fields": {
+    "user": 8,
+    "profile_picture": "",
+    "email_notifications": true,
+    "portal_notifications": true,
+    "appearance_mode": "light",
+    "division": "quality",
+    "updated_at": "2026-03-17T01:45:24.571Z"
+  }
+},
+{
+  "model": "my_app.userprofile",
+  "pk": 8,
+  "fields": {
+    "user": 9,
+    "profile_picture": "",
+    "email_notifications": true,
+    "portal_notifications": true,
+    "appearance_mode": "light",
+    "division": "maintenance",
+    "updated_at": "2026-03-17T01:45:14.224Z"
+  }
+},
+{
+  "model": "my_app.userprofile",
+  "pk": 9,
+  "fields": {
+    "user": 1,
+    "profile_picture": "",
+    "email_notifications": true,
+    "portal_notifications": true,
+    "appearance_mode": "light",
+    "division": null,
+    "updated_at": "2026-03-17T01:51:43.474Z"
+  }
+}
+]

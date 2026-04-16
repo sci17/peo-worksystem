@@ -250,6 +250,93 @@
 })();
 
 (function () {
+    const undoStack = [];
+    const MAX_UNDO_ITEMS = 20;
+
+    const getUndoShortcutLabel = () => {
+        const platform = String(window.navigator?.platform || "").toLowerCase();
+        return platform.includes("mac") ? "Cmd+Z" : "Ctrl+Z";
+    };
+
+    const isEditableTarget = (target) => {
+        if (!(target instanceof HTMLElement)) return false;
+        if (target.isContentEditable) return true;
+        return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+    };
+
+    const showUndoHintToast = (message) => {
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast(message, {
+                title: "Undo Available",
+                variant: "info",
+                duration: 4200,
+            });
+        }
+    };
+
+    const showUndoResultToast = (message, variant = "success") => {
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast(message, {
+                title: variant === "success" ? "Restored" : "Undo Error",
+                variant,
+                duration: variant === "success" ? 3200 : 4500,
+            });
+        }
+    };
+
+    const register = (action = {}) => {
+        if (!action || typeof action.undo !== "function") return false;
+        undoStack.push(action);
+        if (undoStack.length > MAX_UNDO_ITEMS) {
+            undoStack.splice(0, undoStack.length - MAX_UNDO_ITEMS);
+        }
+
+        const label = String(action.label || "Deleted item").trim() || "Deleted item";
+        const message = String(action.hintMessage || `${label} deleted. Press ${getUndoShortcutLabel()} to undo.`).trim();
+        if (message) {
+            showUndoHintToast(message);
+        }
+        return true;
+    };
+
+    const undoLatest = async () => {
+        const action = undoStack.pop();
+        if (!action) return false;
+
+        try {
+            await action.undo();
+            const successMessage = String(action.successMessage || `${String(action.label || "Deleted item").trim() || "Deleted item"} restored.`).trim();
+            showUndoResultToast(successMessage, "success");
+            return true;
+        } catch (error) {
+            const failureMessage = String(action.failureMessage || "Unable to restore the last deleted item.").trim();
+            showUndoResultToast(failureMessage, "danger");
+            return false;
+        }
+    };
+
+    document.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return;
+        if (String(event.key || "").toLowerCase() !== "z") return;
+        if (isEditableTarget(event.target)) return;
+        if (!undoStack.length) return;
+        event.preventDefault();
+        undoLatest();
+    });
+
+    window.peoUndoManager = {
+        register,
+        undoLatest,
+        clear() {
+            undoStack.length = 0;
+        },
+        get shortcutLabel() {
+            return getUndoShortcutLabel();
+        },
+    };
+})();
+
+(function () {
     const body = document.body;
     const readOnly = body && body.dataset ? body.dataset.peoDashboardReadonly === "1" : false;
     const divisionKey = body && body.dataset ? String(body.dataset.peoUserDivisionKey || "").trim().toLowerCase() : "";
@@ -1151,6 +1238,11 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         });
     };
 
+    const syncNow = (storeKey, payload) => {
+        queueSync(storeKey, payload, 0);
+        flushSync();
+    };
+
     const queueSync = (storeKey, payload, delayMs = 400) => {
         const normalizedKey = String(storeKey || "").trim();
         if (!normalizedKey) return;
@@ -1210,6 +1302,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
 
         const force = options && options.force === true;
         let didWrite = false;
+        const updatedStoreKeys = [];
 
         for (const def of list) {
             const storeKey = String(def?.storeKey || "").trim();
@@ -1248,9 +1341,18 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
                     fetched_at: new Date().toISOString(),
                 });
                 didWrite = true;
+                updatedStoreKeys.push(storeKey);
             } finally {
                 window.__peoReadonlyStorageBypass = prevBypass;
             }
+        }
+
+        if (updatedStoreKeys.length) {
+            window.dispatchEvent(new CustomEvent("peo:division-store-synced", {
+                detail: {
+                    storeKeys: updatedStoreKeys,
+                },
+            }));
         }
 
         return didWrite;
@@ -1259,6 +1361,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
     window.peoDivisionStore = {
         queueSync,
         flushSync,
+        syncNow,
         fetchStore,
         hydrateLocalStorageIfEmpty,
         syncToLocalStorage,
@@ -1281,6 +1384,8 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         quality: { storeKey: "quality", localStorageKey: "peo_quality_records_v1", type: "array" },
         maintenance: { storeKey: "maintenance", localStorageKey: "peo_maintenance_state_v1", type: "object" },
     };
+    let syncInFlight = null;
+    let syncQueued = false;
 
     const getDivisionKey = () => {
         const fromAccess = window.peoAccess && typeof window.peoAccess === "object" ? String(window.peoAccess.divisionKey || "") : "";
@@ -1288,9 +1393,13 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         return String(fromAccess || fromBody || "").trim().toLowerCase();
     };
 
-    const sync = async () => {
+    const sync = async (options = {}) => {
         const store = window.peoDivisionStore;
         if (!store || typeof store.syncToLocalStorage !== "function") return;
+        if (syncInFlight) {
+            syncQueued = true;
+            return syncInFlight;
+        }
 
         const isProjectRegistry = Boolean(document.querySelector(".project-board"));
         const divisionKey = getDivisionKey();
@@ -1301,20 +1410,94 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             defs.push(STORE_DEFS[divisionKey]);
         }
 
-        await store.syncToLocalStorage(defs);
+        syncInFlight = Promise.resolve(store.syncToLocalStorage(defs, options))
+            .finally(() => {
+                syncInFlight = null;
+                if (syncQueued) {
+                    syncQueued = false;
+                    sync({ force: true });
+                }
+            });
+        return syncInFlight;
+    };
+
+    const connectDivisionStoreSocket = () => {
+        if (typeof window.WebSocket !== "function") return;
+
+        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const socketUrl = `${scheme}://${window.location.host}/ws/division-store/`;
+        let reconnectTimer = null;
+        let socket = null;
+
+        const scheduleReconnect = () => {
+            if (reconnectTimer) return;
+            reconnectTimer = window.setTimeout(() => {
+                reconnectTimer = null;
+                openSocket();
+            }, 2000);
+        };
+
+        const openSocket = () => {
+            try {
+                socket = new window.WebSocket(socketUrl);
+            } catch (error) {
+                scheduleReconnect();
+                return;
+            }
+
+            socket.addEventListener("message", (event) => {
+                let payload = null;
+                try {
+                    payload = JSON.parse(String(event.data || "{}"));
+                } catch (error) {
+                    payload = null;
+                }
+                if (!payload || payload.type !== "store_update") return;
+
+                const storeKeys = Array.isArray(payload.store_keys) ? payload.store_keys : [];
+                window.dispatchEvent(new CustomEvent("peo:division-store-remote-update", {
+                    detail: {
+                        storeKeys,
+                        updatedAt: String(payload.updated_at || ""),
+                    },
+                }));
+                sync({ force: true });
+            });
+
+            socket.addEventListener("open", () => {
+                if (reconnectTimer) {
+                    window.clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
+                }
+            });
+
+            socket.addEventListener("close", scheduleReconnect);
+            socket.addEventListener("error", () => {
+                try {
+                    socket.close();
+                } catch (error) {
+                    scheduleReconnect();
+                }
+            });
+        };
+
+        openSocket();
     };
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => {
             sync();
+            connectDivisionStoreSocket();
         });
     } else {
         sync();
+        connectDivisionStoreSocket();
     }
 
     window.addEventListener("focus", () => {
         sync();
     });
+    window.setInterval(sync, 5000);
 })();
 
 (() => {
@@ -2875,6 +3058,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!root.dataset.submissionsStoreBound) {
             root.dataset.submissionsStoreBound = "true";
+            let adminSyncInFlight = null;
+            let adminSyncQueued = false;
+            let lastAdminSyncAt = 0;
 
             const handleAdminStoreUpdate = () => {
                 adminRecords = reconcileMaintenanceOutgoingSubmissions(readAdminStore());
@@ -2890,6 +3076,42 @@ document.addEventListener("DOMContentLoaded", () => {
                 syncRouteControls();
             };
 
+            const requestAdminSync = async (options = {}) => {
+                if (document.visibilityState === "hidden") return;
+                const force = options && options.force === true;
+                const now = Date.now();
+                if (!force && now - lastAdminSyncAt < 1000) {
+                    return;
+                }
+                lastAdminSyncAt = now;
+
+                const store = window.peoDivisionStore;
+                if (!store || typeof store.syncToLocalStorage !== "function") return;
+                if (adminSyncInFlight) {
+                    adminSyncQueued = adminSyncQueued || force;
+                    return adminSyncInFlight;
+                }
+
+                adminSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+                    { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
+                ], force ? { force: true } : {}))
+                    .then((didWrite) => {
+                        if (didWrite) {
+                            handleAdminStoreUpdate();
+                        }
+                    })
+                    .finally(() => {
+                        adminSyncInFlight = null;
+                        if (adminSyncQueued) {
+                            const queuedForce = adminSyncQueued === true;
+                            adminSyncQueued = false;
+                            requestAdminSync({ force: queuedForce });
+                        }
+                    });
+
+                return adminSyncInFlight;
+            };
+
             window.addEventListener("storage", (event) => {
                 if (String(event.key || "") !== "peo_admin_division_records_v1") return;
                 handleAdminStoreUpdate();
@@ -2902,25 +3124,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 handleAdminStoreUpdate();
             });
 
-            const poll = async () => {
-                if (document.visibilityState === "hidden") return;
-                const store = window.peoDivisionStore;
-                if (!store || typeof store.syncToLocalStorage !== "function") return;
-                const didWrite = await store.syncToLocalStorage([
-                    { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
-                ]);
-                if (didWrite) {
-                    handleAdminStoreUpdate();
-                }
-            };
+            window.addEventListener("peo:division-store-synced", (event) => {
+                const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+                if (!syncedStoreKeys.includes("admin")) return;
+                handleAdminStoreUpdate();
+            });
 
-            const pollTimer = window.setInterval(poll, 12000);
+            window.addEventListener("peo:division-store-remote-update", (event) => {
+                const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+                if (!storeKeys.includes("admin")) return;
+                requestAdminSync({ force: true });
+            });
+
+            const pollTimer = window.setInterval(() => {
+                requestAdminSync();
+            }, 3000);
             window.addEventListener("pagehide", () => window.clearInterval(pollTimer), { once: true });
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState !== "hidden") {
-                    poll();
+                    requestAdminSync({ force: true });
                 }
             });
+            requestAdminSync({ force: true });
         }
 
         render();
@@ -3951,8 +4176,19 @@ const portalDomReady = () => {
     const settingsSections = document.querySelectorAll("[data-settings-section]");
     const projectHistoryPaperSizeSelects = Array.from(document.querySelectorAll(".js-project-history-paper-size"));
 
+    const mobileSidebarMediaQuery = window.matchMedia("(max-width: 1024px)");
+    const syncSidebarState = () => {
+        const isOpen = body.classList.contains("sidebar-open");
+        if (sidebarToggle instanceof HTMLElement) {
+            sidebarToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        }
+        if (sidebarOverlay instanceof HTMLElement) {
+            sidebarOverlay.setAttribute("aria-hidden", isOpen ? "false" : "true");
+        }
+    };
     const closeSidebar = () => {
         body.classList.remove("sidebar-open");
+        syncSidebarState();
     };
 
     const normalizeProjectPdfPaperSize = (value) => {
@@ -4216,10 +4452,24 @@ const portalDomReady = () => {
     if (sidebarToggle && sidebarOverlay) {
         sidebarToggle.addEventListener("click", () => {
             body.classList.toggle("sidebar-open");
+            syncSidebarState();
         });
 
         sidebarOverlay.addEventListener("click", closeSidebar);
     }
+
+    syncSidebarState();
+    mobileSidebarMediaQuery.addEventListener("change", (event) => {
+        if (!event.matches) {
+            closeSidebar();
+        }
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && body.classList.contains("sidebar-open")) {
+            closeSidebar();
+        }
+    });
 
     if (navItems.length) {
         navItems.forEach((item) => {
@@ -4230,7 +4480,7 @@ const portalDomReady = () => {
                 if (item.classList.contains("js-construction-toggle")) {
                     return;
                 }
-                if (window.matchMedia("(max-width: 1024px)").matches) {
+                if (mobileSidebarMediaQuery.matches) {
                     closeSidebar();
                 }
             });
@@ -4240,7 +4490,7 @@ const portalDomReady = () => {
     if (navSubitems.length) {
         navSubitems.forEach((item) => {
             item.addEventListener("click", () => {
-                if (window.matchMedia("(max-width: 1024px)").matches) {
+                if (mobileSidebarMediaQuery.matches) {
                     closeSidebar();
                 }
             });
@@ -5292,11 +5542,11 @@ const portalDomReady = () => {
     };
 
     const writeAdminDivisionRecords = (records) => {
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+            window.peoDivisionStore.syncNow("admin", safeRecords);
         }
 
         if (!isLocalStorageAvailable()) return;
@@ -5672,6 +5922,19 @@ const portalDomReady = () => {
         const remainingRecords = readAdminDivisionRecords().filter((record) => !deleteSet.has(record.__record_id));
         writeAdminDivisionRecords(remainingRecords);
         renderAdminDivisionRecords(remainingRecords);
+    };
+
+    const registerAdminUndoDelete = (previousRecords, label = "Record") => {
+        const recordsSnapshot = Array.isArray(previousRecords) ? previousRecords.map((record) => ({ ...(record || {}) })) : [];
+        window.peoUndoManager?.register({
+            label,
+            hintMessage: `${label} deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+            successMessage: `${label} restored.`,
+            undo: () => {
+                writeAdminDivisionRecords(recordsSnapshot);
+                renderAdminDivisionRecords(recordsSnapshot);
+            },
+        });
     };
 
     const setFormStatusOptionsByMode = (form, tableType) => {
@@ -6656,8 +6919,9 @@ const portalDomReady = () => {
                 cancelLabel: "Cancel",
             });
             if (!shouldDelete) return;
+            const previousRecords = readAdminDivisionRecords();
             deleteRecordsByIds(selected);
-            showAdminStatusToast("This data was deleted permanently.", "success");
+            registerAdminUndoDelete(previousRecords, selected.length === 1 ? "Document" : `${selected.length} records`);
         });
     }
     if (billingBulkDeleteButton) {
@@ -6678,8 +6942,9 @@ const portalDomReady = () => {
                 cancelLabel: "Cancel",
             });
             if (!shouldDelete) return;
+            const previousRecords = readAdminDivisionRecords();
             deleteRecordsByIds(selected);
-            showAdminStatusToast("This data was deleted permanently.", "success");
+            registerAdminUndoDelete(previousRecords, selected.length === 1 ? "Billing record" : `${selected.length} billing records`);
         });
     }
     if (documentsTableBody) {
@@ -6736,8 +7001,9 @@ const portalDomReady = () => {
                     cancelLabel: "Cancel",
                 });
                 if (!shouldDelete) return;
+                const previousRecords = readAdminDivisionRecords();
                 deleteRecordsByIds([recordId]);
-                showAdminStatusToast("This data was deleted permanently.", "success");
+                registerAdminUndoDelete(previousRecords, "Document");
             }
         });
     }
@@ -6772,8 +7038,9 @@ const portalDomReady = () => {
                     cancelLabel: "Cancel",
                 });
                 if (!shouldDelete) return;
+                const previousRecords = readAdminDivisionRecords();
                 deleteRecordsByIds([recordId]);
-                showAdminStatusToast("This data was deleted permanently.", "success");
+                registerAdminUndoDelete(previousRecords, "Billing record");
             }
         });
     }
@@ -6783,6 +7050,27 @@ const portalDomReady = () => {
     applyDocumentFilters();
     applyBillingFilters();
     restoreAdminDivisionRecords();
+    window.addEventListener("peo:division-store-synced", (event) => {
+        const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!syncedStoreKeys.includes("admin")) return;
+        renderAdminDivisionRecords(readAdminDivisionRecords().map((record) => normalizeRecord(record)));
+    });
+    window.addEventListener("peo:division-store-remote-update", (event) => {
+        const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!storeKeys.includes("admin")) return;
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return;
+        Promise.resolve(store.syncToLocalStorage([
+            { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
+        ], { force: true }))
+            .then((didWrite) => {
+                if (!didWrite) return;
+                renderAdminDivisionRecords(readAdminDivisionRecords().map((record) => normalizeRecord(record)));
+            })
+            .catch(() => {
+                // Ignore transient sync errors.
+            });
+    });
     if ((documentsTableBody || billingTableBody) && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
         window.peoIncomingDocToast.check("admin", readAdminDivisionRecords());
     }
@@ -14054,6 +14342,11 @@ document.addEventListener("DOMContentLoaded", () => {
         window.addEventListener(MAINTENANCE_STATE_UPDATED_EVENT, () => {
             refreshTaskTableFromStorage();
         });
+        window.addEventListener("peo:division-store-remote-update", (event) => {
+            const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!storeKeys.includes("admin") && !storeKeys.includes("maintenance")) return;
+            requestMaintenanceHydrate();
+        });
 
         // Pull server state when localStorage is empty/stale (e.g., different user/session/device).
         requestMaintenanceHydrate();
@@ -14807,17 +15100,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionPersonnelList = constructionModal ? constructionModal.querySelector(".js-construction-personnel-list") : null;
     const constructionPersonnelEmpty = constructionModal ? constructionModal.querySelector(".js-construction-personnel-empty") : null;
     const constructionPersonnelMeta = constructionModal ? constructionModal.querySelector(".js-construction-personnel-meta") : null;
+    const constructionPersonnelLockNote = constructionModal ? constructionModal.querySelector(".js-construction-personnel-lock-note") : null;
     const addConstructionPersonnelButton = constructionModal ? constructionModal.querySelector(".js-construction-add-personnel") : null;
     const closeConstructionModalButtons = constructionModal
         ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
         : [];
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
+    const constructionUserDivisionKey = String(document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
+    const isConstructionDashboardReadonly = String(document.body?.dataset?.peoDashboardReadonly || "").trim() === "1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
-	    const CONSTRUCTION_MAX_IMAGE_COUNT = 10;
 	    const CONSTRUCTION_FIELDS = [
 	        "project_name",
 	        "location",
@@ -14981,7 +15276,7 @@ document.addEventListener("DOMContentLoaded", () => {
             seen.add(key);
             merged.push(img);
         });
-        return merged.slice(0, CONSTRUCTION_MAX_IMAGE_COUNT);
+        return merged;
     };
 
     const uploadConstructionPhotos = async (files) => {
@@ -15030,7 +15325,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }))
                 .filter((img) => img.dataUrl);
 
-            return { ok: true, images: images.slice(0, CONSTRUCTION_MAX_IMAGE_COUNT) };
+            return { ok: true, images };
         } catch (error) {
             return { ok: false, error: "Unable to upload photos right now." };
         }
@@ -15586,7 +15881,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage errors.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 const safe = record && typeof record === "object" ? { ...record } : {};
 
@@ -15638,7 +15933,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 return safe;
             });
-            window.peoDivisionStore.queueSync("construction", safeRecords, 0);
+            window.peoDivisionStore.syncNow("construction", safeRecords);
         }
     };
 
@@ -16551,6 +16846,43 @@ document.addEventListener("DOMContentLoaded", () => {
         return personnel;
     };
 
+    const canLoggedInUserEditConstructionPersonnel = () => {
+        return constructionUserDivisionKey === "construction" && !isConstructionDashboardReadonly;
+    };
+
+    const syncConstructionPersonnelEditAccess = () => {
+        const canEditPersonnel = canLoggedInUserEditConstructionPersonnel();
+
+        if (addConstructionPersonnelButton instanceof HTMLButtonElement) {
+            addConstructionPersonnelButton.disabled = !canEditPersonnel;
+            addConstructionPersonnelButton.hidden = !canEditPersonnel;
+        }
+
+        if (constructionPersonnelLockNote instanceof HTMLElement) {
+            constructionPersonnelLockNote.hidden = canEditPersonnel;
+        }
+
+        getConstructionPersonnelRows().forEach((row) => {
+            row.classList.toggle("is-readonly", !canEditPersonnel);
+
+            row.querySelectorAll("input").forEach((input) => {
+                if (!(input instanceof HTMLInputElement)) return;
+                input.readOnly = !canEditPersonnel;
+                if (!canEditPersonnel) {
+                    input.setAttribute("aria-readonly", "true");
+                } else {
+                    input.removeAttribute("aria-readonly");
+                }
+            });
+
+            const removeButton = row.querySelector(".js-construction-remove-personnel");
+            if (removeButton instanceof HTMLButtonElement) {
+                removeButton.disabled = !canEditPersonnel;
+                removeButton.hidden = !canEditPersonnel;
+            }
+        });
+    };
+
     const fillConstructionForm = (record) => {
         if (!constructionForm || !record) return;
         CONSTRUCTION_FIELDS.forEach((field) => {
@@ -16574,6 +16906,7 @@ document.addEventListener("DOMContentLoaded", () => {
         initConstructionScheduleAutofill();
         renderConstructionPersonnel(mode === "edit" && record ? record.personnel : []);
         setConstructionProjectOverviewReadonly(mode === "edit");
+        syncConstructionPersonnelEditAccess();
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
@@ -16611,6 +16944,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (constructionForm) constructionForm.reset();
         renderConstructionPersonnel([]);
         setConstructionProjectOverviewReadonly(false);
+        syncConstructionPersonnelEditAccess();
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
@@ -16642,7 +16976,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (addConstructionPersonnelButton instanceof HTMLButtonElement) {
         addConstructionPersonnelButton.addEventListener("click", () => {
+            if (addConstructionPersonnelButton.disabled) return;
             addConstructionPersonnelRow({}, { focus: true });
+            syncConstructionPersonnelEditAccess();
             syncConstructionRouteControls();
         });
     }
@@ -16651,10 +16987,12 @@ document.addEventListener("DOMContentLoaded", () => {
         constructionPersonnelList.addEventListener("click", (event) => {
             const target = event.target instanceof Element ? event.target.closest(".js-construction-remove-personnel") : null;
             if (!target) return;
+            if (target instanceof HTMLButtonElement && target.disabled) return;
             const row = target.closest("[data-construction-personnel-row]");
             if (row) {
                 row.remove();
                 syncConstructionPersonnelUi();
+                syncConstructionPersonnelEditAccess();
                 syncConstructionRouteControls();
             }
         });
@@ -16665,6 +17003,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const formData = new FormData(constructionForm);
         const projectName = getTrimmedFormValue(formData, "project_name");
         if (!projectName) return null;
+        const existingRecord = editingRecordId
+            ? records.find((record) => record.__id === editingRecordId)
+            : null;
+        const personnel = canLoggedInUserEditConstructionPersonnel()
+            ? readConstructionPersonnelFromForm()
+            : (Array.isArray(existingRecord?.personnel) ? existingRecord.personnel : []);
 
         return {
             __id: createRecordId(),
@@ -16685,7 +17029,7 @@ document.addEventListener("DOMContentLoaded", () => {
             time_elapsed: getTrimmedFormValue(formData, "time_elapsed"),
             slippage: getTrimmedFormValue(formData, "slippage"),
             remarks: getTrimmedFormValue(formData, "remarks"),
-            personnel: readConstructionPersonnelFromForm(),
+            personnel,
         };
     };
 
@@ -17273,15 +17617,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             let mergedImages = existingImages;
             if (pickedFiles.length) {
-                const remaining = Math.max(0, CONSTRUCTION_MAX_IMAGE_COUNT - existingImages.length);
-                const toUpload = pickedFiles.slice(0, remaining);
-                if (!toUpload.length) {
-                    showPeoGeneralToast(`You can upload up to ${CONSTRUCTION_MAX_IMAGE_COUNT} photos per record.`, {
-                        title: "Construction Division",
-                        variant: "warning",
-                    });
-                    return;
-                }
+                const toUpload = pickedFiles.slice();
 
                 if (submitButton instanceof HTMLButtonElement) {
                     submitButton.disabled = true;
@@ -17542,8 +17878,35 @@ document.addEventListener("DOMContentLoaded", () => {
         writeStoredRecords(records);
         renderTable();
     };
+    let constructionRemoteSyncInFlight = null;
+    const requestConstructionRemoteSync = () => {
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return;
+        if (constructionRemoteSyncInFlight) return constructionRemoteSyncInFlight;
+        constructionRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+            { storeKey: "admin", localStorageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
+            { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+        ], { force: true }))
+            .then(() => {
+                resyncAdminAssignedProjects();
+            })
+            .finally(() => {
+                constructionRemoteSyncInFlight = null;
+            });
+        return constructionRemoteSyncInFlight;
+    };
 
     window.addEventListener("focus", resyncAdminAssignedProjects);
+    window.addEventListener("peo:division-store-synced", (event) => {
+        const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("construction")) return;
+        resyncAdminAssignedProjects();
+    });
+    window.addEventListener("peo:division-store-remote-update", (event) => {
+        const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!storeKeys.includes("admin") && !storeKeys.includes("construction")) return;
+        requestConstructionRemoteSync();
+    });
     window.addEventListener("construction-records-updated", resyncAdminAssignedProjects);
     window.addEventListener("storage", (event) => {
         const key = String(event.key || "");
@@ -18064,7 +18427,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const currentUser = String(projectDashboard.dataset.currentUser || "").trim() || "Local User";
     const recordId = String(new URLSearchParams(window.location.search).get("id") || "").trim();
-    const MAX_IMAGE_COUNT = 10;
     const HISTORY_LIMIT = 12;
 
     const readConstructionTasks = () => {
@@ -18245,11 +18607,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!url) return;
 
             const card = document.createElement("div");
+            card.style.position = "relative";
             card.style.width = "180px";
             card.style.border = "1px solid #e5e7eb";
             card.style.borderRadius = "12px";
             card.style.overflow = "hidden";
             card.style.background = "#fff";
+            card.style.boxShadow = "0 10px 24px rgba(15, 23, 42, 0.08)";
 
             const thumb = document.createElement("img");
             thumb.src = url;
@@ -18259,12 +18623,34 @@ document.addEventListener("DOMContentLoaded", () => {
             thumb.style.objectFit = "cover";
             thumb.style.display = "block";
 
+            const removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.className = "construction-btn construction-btn-secondary";
+            removeBtn.style.position = "absolute";
+            removeBtn.style.right = "10px";
+            removeBtn.style.bottom = "52px";
+            removeBtn.style.width = "34px";
+            removeBtn.style.height = "34px";
+            removeBtn.style.padding = "0";
+            removeBtn.style.borderRadius = "999px";
+            removeBtn.style.border = "1px solid #fecaca";
+            removeBtn.style.background = "#fff1f2";
+            removeBtn.style.color = "#b91c1c";
+            removeBtn.style.display = "inline-flex";
+            removeBtn.style.alignItems = "center";
+            removeBtn.style.justifyContent = "center";
+            removeBtn.style.boxShadow = "0 8px 18px rgba(185, 28, 28, 0.15)";
+            removeBtn.style.cursor = "pointer";
+            removeBtn.dataset.imageIndex = String(index);
+            removeBtn.title = "Delete this photo";
+            removeBtn.setAttribute("aria-label", `Delete ${String(img?.name || `image ${index + 1}`).trim()}`);
+            removeBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px; line-height:1;">delete</span>';
+
             const footer = document.createElement("div");
             footer.style.padding = "10px";
             footer.style.display = "flex";
             footer.style.gap = "8px";
             footer.style.alignItems = "center";
-            footer.style.justifyContent = "space-between";
 
             const label = document.createElement("div");
             label.style.fontSize = "0.85rem";
@@ -18276,17 +18662,9 @@ document.addEventListener("DOMContentLoaded", () => {
             label.title = String(img?.name || "");
             label.textContent = String(img?.name || "Image");
 
-            const removeBtn = document.createElement("button");
-            removeBtn.type = "button";
-            removeBtn.className = "construction-btn construction-btn-secondary";
-            removeBtn.style.padding = "0.35rem 0.5rem";
-            removeBtn.style.whiteSpace = "nowrap";
-            removeBtn.dataset.imageIndex = String(index);
-            removeBtn.textContent = "Remove";
-
             footer.appendChild(label);
-            footer.appendChild(removeBtn);
             card.appendChild(thumb);
+            card.appendChild(removeBtn);
             card.appendChild(footer);
             imageGallery.appendChild(card);
         });
@@ -18297,8 +18675,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const results = [];
 
         for (const file of list) {
-            if (results.length >= MAX_IMAGE_COUNT) break;
-
             // eslint-disable-next-line no-await-in-loop
             const dataUrl = await new Promise((resolve) => {
                 const reader = new FileReader();
@@ -18427,7 +18803,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const legacyImageUrl = String(record.accomplishment_image || "").trim();
     const legacyImageName = String(record.accomplishment_image_name || "").trim();
     let pendingImages = Array.isArray(record.accomplishment_images)
-        ? record.accomplishment_images.slice(0, MAX_IMAGE_COUNT)
+        ? record.accomplishment_images.slice()
         : (legacyImageUrl ? [{ dataUrl: legacyImageUrl, name: legacyImageName || "Image", uploaded_at: "" }] : []);
     pendingImages = pendingImages
         .map((img) => ({ dataUrl: String(img?.dataUrl || ""), name: String(img?.name || ""), uploaded_at: String(img?.uploaded_at || "") }))
@@ -18445,24 +18821,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const files = imageInput.files ? Array.from(imageInput.files) : [];
             if (!files.length) return;
 
-            if (pendingImages.length >= MAX_IMAGE_COUNT) {
-                toast(`You can upload up to ${MAX_IMAGE_COUNT} images. Remove some first.`, {
-                    title: "Construction Project",
-                    variant: "warning",
-                });
-                imageInput.value = "";
-                return;
-            }
-
-            const remaining = Math.max(0, MAX_IMAGE_COUNT - pendingImages.length);
-            const nextFiles = files.slice(0, remaining);
-            const nextImages = await readFilesAsDataUrls(nextFiles);
+            const nextImages = await readFilesAsDataUrls(files);
             if (!nextImages.length) {
                 imageInput.value = "";
                 return;
             }
 
-            pendingImages = [...pendingImages, ...nextImages].slice(0, MAX_IMAGE_COUNT);
+            pendingImages = [...pendingImages, ...nextImages];
             renderGallery(pendingImages);
             imageInput.value = "";
         });
@@ -18478,16 +18843,37 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!idxRaw) return;
             const idx = Number.parseInt(idxRaw, 10);
             if (!Number.isFinite(idx) || idx < 0 || idx >= pendingImages.length) return;
+            const previousImages = pendingImages.slice();
             pendingImages = pendingImages.filter((_, i) => i !== idx);
             renderGallery(pendingImages);
+            window.peoUndoManager?.register({
+                label: "Photo",
+                hintMessage: `Photo deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+                successMessage: "Photo restored.",
+                undo: () => {
+                    pendingImages = previousImages.slice();
+                    renderGallery(pendingImages);
+                },
+            });
         });
     }
 
     if (removeImageButton) {
         removeImageButton.addEventListener("click", () => {
+            if (!pendingImages.length) return;
+            const previousImages = pendingImages.slice();
             pendingImages = [];
             if (imageInput instanceof HTMLInputElement) imageInput.value = "";
             renderGallery(pendingImages);
+            window.peoUndoManager?.register({
+                label: previousImages.length === 1 ? "Photo" : "Photos",
+                hintMessage: `${previousImages.length} photo${previousImages.length === 1 ? "" : "s"} removed. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore ${previousImages.length === 1 ? "it" : "them"}.`,
+                successMessage: `${previousImages.length} photo${previousImages.length === 1 ? "" : "s"} restored.`,
+                undo: () => {
+                    pendingImages = previousImages.slice();
+                    renderGallery(pendingImages);
+                },
+            });
         });
     }
 
@@ -18513,7 +18899,7 @@ document.addEventListener("DOMContentLoaded", () => {
             nextRecord.__report_date = nextRecord.__updated_at;
 
             if (pendingImages.length) {
-                nextRecord.accomplishment_images = pendingImages.slice(0, MAX_IMAGE_COUNT);
+                nextRecord.accomplishment_images = pendingImages.slice();
             } else {
                 delete nextRecord.accomplishment_images;
             }
@@ -18583,7 +18969,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const historyImages = (Array.isArray(pendingImages) ? pendingImages : [])
-                .slice(0, MAX_IMAGE_COUNT)
                 .map((img) => ({
                     dataUrl: String(img?.dataUrl || "").trim(),
                     name: String(img?.name || "").trim(),
@@ -19069,11 +19454,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+            window.peoDivisionStore.syncNow("admin", safeRecords);
         }
     };
 
@@ -19130,8 +19515,8 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
-            window.peoDivisionStore.queueSync("planning", records, 0);
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
+            window.peoDivisionStore.syncNow("planning", records);
         }
     };
 
@@ -21581,6 +21966,8 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             if (!approved) return;
 
+            const previousRecords = planningDocumentRecords.map((record) => ({ ...(record || {}) }));
+            const previousDeletedIds = readDeletedPlanningAdminIds();
             const deletingRecord = planningDocumentRecords[recordIndex];
             const sourceId = String(deletingRecord?.__admin_source_id || "").trim();
             if (sourceId) {
@@ -21595,7 +21982,20 @@ document.addEventListener("DOMContentLoaded", () => {
             renderPlanningBudgets(planningBudgetRecords);
             syncPpaFromPlanningDocuments(planningDocumentRecords);
             syncPpaTableState();
-            showPlanningToast("Planning document deleted.", "info");
+            window.peoUndoManager?.register({
+                label: "Planning document",
+                hintMessage: `Planning document deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+                successMessage: "Planning document restored.",
+                undo: () => {
+                    planningDocumentRecords = previousRecords.map((record) => ({ ...(record || {}) }));
+                    writeDeletedPlanningAdminIds(previousDeletedIds);
+                    writeStoredPlanningDocuments(planningDocumentRecords);
+                    renderPlanningDocumentsTable(planningDocumentRecords);
+                    renderPlanningBudgets(planningBudgetRecords);
+                    syncPpaFromPlanningDocuments(planningDocumentRecords);
+                    syncPpaTableState();
+                },
+            });
         });
     }
 
@@ -21641,6 +22041,39 @@ document.addEventListener("DOMContentLoaded", () => {
         syncPpaFromPlanningDocuments(planningDocumentRecords);
         syncPpaTableState();
         enablePlanningPpaCardFloat();
+        let planningRemoteSyncInFlight = null;
+        const requestPlanningRemoteSync = () => {
+            const store = window.peoDivisionStore;
+            if (!store || typeof store.syncToLocalStorage !== "function") return;
+            if (planningRemoteSyncInFlight) return planningRemoteSyncInFlight;
+            planningRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+                { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
+                { storeKey: "planning", localStorageKey: "peo_planning_document_records_v1", type: "array" },
+            ], { force: true }))
+                .then(() => {
+                    planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
+                    renderPlanningDocumentsTable(planningDocumentRecords);
+                    syncPpaFromPlanningDocuments(planningDocumentRecords);
+                    syncPpaTableState();
+                })
+                .finally(() => {
+                    planningRemoteSyncInFlight = null;
+                });
+            return planningRemoteSyncInFlight;
+        };
+        window.addEventListener("peo:division-store-synced", (event) => {
+            const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("planning")) return;
+            planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
+            renderPlanningDocumentsTable(planningDocumentRecords);
+            syncPpaFromPlanningDocuments(planningDocumentRecords);
+            syncPpaTableState();
+        });
+        window.addEventListener("peo:division-store-remote-update", (event) => {
+            const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!storeKeys.includes("admin") && !storeKeys.includes("planning")) return;
+            requestPlanningRemoteSync();
+        });
     }
 
     const projectBoard = document.querySelector(".project-board");
@@ -21992,6 +22425,107 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (error) {
                 // Ignore sync errors; local deletion still applies for this session.
             }
+        };
+
+        const canManageConstructionProjectImages = () => {
+            const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+            const divisionKey = String(access.divisionKey || "").trim().toLowerCase();
+            return divisionKey === "construction";
+        };
+
+        const removeConstructionImageFromStore = (recordId, imageUrl) => {
+            const targetRecordId = String(recordId || "").trim();
+            const targetImageUrl = String(imageUrl || "").trim();
+            if (!targetRecordId || !targetImageUrl) {
+                return { ok: false, error: "Invalid image target." };
+            }
+
+            const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+            let updatedRecord = null;
+            let changed = false;
+
+            const nextRecords = constructionRecords.map((record) => {
+                const current = record && typeof record === "object" ? { ...record } : {};
+                const currentId = String(current.__id || current.construction_id || current.id || "").trim();
+                if (currentId !== targetRecordId) {
+                    return current;
+                }
+
+                const nextRecord = { ...current };
+                const currentImages = Array.isArray(nextRecord.accomplishment_images) ? nextRecord.accomplishment_images : [];
+                const filteredImages = currentImages.filter((img) => {
+                    const url = String(typeof img === "string" ? img : (img?.dataUrl || img?.url || "")).trim();
+                    return url !== targetImageUrl;
+                });
+
+                if (filteredImages.length !== currentImages.length) {
+                    changed = true;
+                }
+
+                if (filteredImages.length) {
+                    nextRecord.accomplishment_images = filteredImages;
+                } else {
+                    delete nextRecord.accomplishment_images;
+                }
+
+                if (String(nextRecord.accomplishment_image || "").trim() === targetImageUrl) {
+                    delete nextRecord.accomplishment_image;
+                    delete nextRecord.accomplishment_image_name;
+                    changed = true;
+                }
+
+                if (Array.isArray(nextRecord.accomplishment_history)) {
+                    nextRecord.accomplishment_history = nextRecord.accomplishment_history.map((entry) => {
+                        const snapshot = entry && typeof entry === "object" ? { ...entry } : {};
+                        if (Array.isArray(snapshot.images)) {
+                            const nextImages = snapshot.images.filter((img) => {
+                                const url = String(typeof img === "string" ? img : (img?.dataUrl || img?.url || "")).trim();
+                                return url !== targetImageUrl;
+                            });
+                            if (nextImages.length !== snapshot.images.length) {
+                                changed = true;
+                            }
+                            if (nextImages.length) {
+                                snapshot.images = nextImages;
+                            } else {
+                                delete snapshot.images;
+                            }
+                        }
+
+                        if (String(snapshot.image_data_url || snapshot.dataUrl || snapshot.image || "").trim() === targetImageUrl) {
+                            delete snapshot.image_data_url;
+                            delete snapshot.dataUrl;
+                            delete snapshot.image;
+                            delete snapshot.image_name;
+                            changed = true;
+                        }
+
+                        return snapshot;
+                    });
+                }
+
+                if (!changed) {
+                    return current;
+                }
+
+                nextRecord.__updated_at = new Date().toISOString();
+                updatedRecord = nextRecord;
+                return nextRecord;
+            });
+
+            if (!changed || !updatedRecord) {
+                return { ok: false, error: "Image not found." };
+            }
+
+            const prevBypass = window.__peoReadonlyStorageBypass;
+            window.__peoReadonlyStorageBypass = true;
+            try {
+                writeJsonValue(CONSTRUCTION_STORAGE_KEY, nextRecords);
+            } finally {
+                window.__peoReadonlyStorageBypass = prevBypass;
+            }
+            queueStoreSync("construction", nextRecords);
+            return { ok: true, record: updatedRecord, previousRecords: constructionRecords };
         };
 
         const normalizeText = (value) => String(value || "").trim().toLowerCase();
@@ -23198,9 +23732,9 @@ document.addEventListener("DOMContentLoaded", () => {
 	                return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 	            };
 
-                const formatDateTime = (value) => {
-                    const text = String(value ?? "").trim();
-                    if (!text) return "";
+    const formatDateTime = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "";
 
                     const isoDateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
                     if (isoDateOnlyMatch) {
@@ -23254,10 +23788,28 @@ document.addEventListener("DOMContentLoaded", () => {
                                 const meta = uploadedAtLabel
                                     ? `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded ${escapeProjectHtml(uploadedAtLabel)}`
                                     : `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded -`;
+                                const deleteButton = canManageConstructionProjectImages()
+                                    ? `
+                                        <button
+                                            type="button"
+                                            class="project-history-image-delete"
+                                            data-project-history-delete-image="true"
+                                            data-record-id="${escapeProjectHtml(String(record.__id || ""))}"
+                                            data-image-url="${escapeProjectHtml(String(img.dataUrl || "").trim())}"
+                                            aria-label="Delete photo"
+                                            title="Delete photo"
+                                        >
+                                            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                        </button>
+                                    `
+                                    : "";
                                 return `
                                     <figure class="project-history-month-image">
                                         <img class="js-project-history-open-image" src="${escapeProjectHtml(img.dataUrl)}" alt="${escapeProjectHtml(img.name || record?.project_name || "Project image")}" loading="lazy" tabindex="0">
-                                        <figcaption class="project-history-image-meta">${meta}</figcaption>
+                                        <figcaption class="project-history-image-meta-wrap">
+                                            <div class="project-history-image-meta">${meta}</div>
+                                            ${deleteButton}
+                                        </figcaption>
                                     </figure>
                                 `;
                             }).join("")}
@@ -23402,6 +23954,72 @@ document.addEventListener("DOMContentLoaded", () => {
             openConstructionHistoryModal(record);
             return true;
         };
+
+        if (constructionHistoryCards instanceof HTMLElement) {
+            constructionHistoryCards.addEventListener("click", async (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                const deleteButton = target.closest("[data-project-history-delete-image]");
+                if (!(deleteButton instanceof HTMLButtonElement)) return;
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (!canManageConstructionProjectImages()) {
+                    showPeoGeneralToast("You do not have permission to delete project photos.", {
+                        title: "Project Details",
+                        variant: "warning",
+                    });
+                    return;
+                }
+
+                const recordId = String(deleteButton.dataset.recordId || "").trim();
+                const imageUrl = String(deleteButton.dataset.imageUrl || "").trim();
+                if (!recordId || !imageUrl) return;
+
+                const approved = await showPeoGeneralConfirm({
+                    title: "Delete Project Photo",
+                    message: "Remove this uploaded project photo from the project details?",
+                    confirmLabel: "Delete Photo",
+                    cancelLabel: "Cancel",
+                    variant: "danger",
+                });
+                if (!approved) return;
+
+                const result = removeConstructionImageFromStore(recordId, imageUrl);
+                if (!result.ok) {
+                    showPeoGeneralToast(String(result.error || "Unable to delete this photo."), {
+                        title: "Project Details",
+                        variant: "danger",
+                    });
+                    return;
+                }
+
+                refreshProjectBoard();
+                openConstructionHistoryModal(result.record);
+                const previousRecords = Array.isArray(result.previousRecords) ? result.previousRecords.map((record) => ({ ...(record || {}) })) : [];
+                window.peoUndoManager?.register({
+                    label: "Project photo",
+                    hintMessage: `Project photo deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+                    successMessage: "Project photo restored.",
+                    undo: () => {
+                        const prevBypass = window.__peoReadonlyStorageBypass;
+                        window.__peoReadonlyStorageBypass = true;
+                        try {
+                            writeJsonValue(CONSTRUCTION_STORAGE_KEY, previousRecords);
+                        } finally {
+                            window.__peoReadonlyStorageBypass = prevBypass;
+                        }
+                        queueStoreSync("construction", previousRecords);
+                        refreshProjectBoard();
+                        const restoredRecord = previousRecords.find((record) => String(record?.__id || record?.construction_id || record?.id || "").trim() === recordId);
+                        if (restoredRecord) {
+                            openConstructionHistoryModal(restoredRecord);
+                        }
+                    },
+                });
+            });
+        }
 
         openProjectButtons.forEach((button) => {
             button.addEventListener("click", () => {
@@ -23845,10 +24463,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
 
-	        const syncProjectStoresFromServer = async () => {
-	            if (!window.peoDivisionStore || typeof window.peoDivisionStore.fetchStore !== "function") {
-	                return;
-	            }
+        const syncProjectStoresFromServer = async () => {
+            if (!window.peoDivisionStore || typeof window.peoDivisionStore.fetchStore !== "function") {
+                return;
+            }
 
             const initialLocalProjectCount = buildProjectRecords().length;
 
@@ -23901,6 +24519,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             });
         };
+        let projectStoreSyncInFlight = null;
+        const requestProjectStoreSync = () => {
+            if (projectStoreSyncInFlight) return projectStoreSyncInFlight;
+            projectStoreSyncInFlight = Promise.resolve(syncProjectStoresFromServer())
+                .then(() => {
+                    refreshProjectBoard();
+                })
+                .finally(() => {
+                    projectStoreSyncInFlight = null;
+                });
+            return projectStoreSyncInFlight;
+        };
 
         const hydrateAndBootstrap = () => {
             // Bootstrap immediately so the sidebar "Projects" click shows something right away.
@@ -23929,6 +24559,13 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         hydrateAndBootstrap();
+        window.addEventListener("peo:division-store-remote-update", (event) => {
+            const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!storeKeys.some((key) => ["admin", "planning", "construction", "quality", "maintenance"].includes(String(key || "").trim()))) {
+                return;
+            }
+            requestProjectStoreSync();
+        });
     }
 
 });
@@ -24892,11 +25529,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+            window.peoDivisionStore.syncNow("admin", safeRecords);
         }
     };
 
@@ -25172,11 +25809,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage errors.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("quality", safeRecords, 0);
+            window.peoDivisionStore.syncNow("quality", safeRecords);
         }
     };
 
@@ -26533,7 +27170,34 @@ document.addEventListener("DOMContentLoaded", () => {
         currentPage = 1;
         renderTable();
     };
+    let qualityRemoteSyncInFlight = null;
+    const requestQualityRemoteSync = () => {
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return;
+        if (qualityRemoteSyncInFlight) return qualityRemoteSyncInFlight;
+        qualityRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+            { storeKey: "admin", localStorageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
+            { storeKey: "quality", localStorageKey: QUALITY_STORAGE_KEY, type: "array" },
+        ], { force: true }))
+            .then(() => {
+                refreshQualityRecordsFromAdmin();
+            })
+            .finally(() => {
+                qualityRemoteSyncInFlight = null;
+            });
+        return qualityRemoteSyncInFlight;
+    };
     window.addEventListener("focus", refreshQualityRecordsFromAdmin);
+    window.addEventListener("peo:division-store-synced", (event) => {
+        const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("quality")) return;
+        refreshQualityRecordsFromAdmin();
+    });
+    window.addEventListener("peo:division-store-remote-update", (event) => {
+        const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!storeKeys.includes("admin") && !storeKeys.includes("quality")) return;
+        requestQualityRemoteSync();
+    });
     window.addEventListener("storage", (event) => {
         if (event.key !== ADMIN_DIVISION_STORAGE_KEY && event.key !== QUALITY_STORAGE_KEY) return;
         refreshQualityRecordsFromAdmin();
@@ -26554,6 +27218,11 @@ if (document.readyState === "loading") {
     const sourceNode = document.getElementById("peo-project-history-source-id");
     const cardsWrap = document.querySelector(".js-project-history-page-cards");
     if (!sourceNode || !(cardsWrap instanceof HTMLElement)) return;
+    const canManageConstructionProjectImages = (() => {
+        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+        const divisionKey = String(access.divisionKey || "").trim().toLowerCase();
+        return divisionKey === "construction";
+    })();
 
     let sourceId = "";
     try {
@@ -26668,6 +27337,109 @@ if (document.readyState === "loading") {
             });
         };
 
+        const removeConstructionImageFromStore = (recordId, imageUrl) => {
+            const targetRecordId = String(recordId || "").trim();
+            const targetImageUrl = String(imageUrl || "").trim();
+            if (!targetRecordId || !targetImageUrl) {
+                return { ok: false, error: "Invalid image target." };
+            }
+
+            const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+            let updatedRecord = null;
+            let changed = false;
+
+            const nextRecords = constructionRecords.map((record) => {
+                const current = record && typeof record === "object" ? { ...record } : {};
+                const currentId = String(current.__id || current.construction_id || current.id || "").trim();
+                if (currentId !== targetRecordId) return current;
+
+                const nextRecord = { ...current };
+                const currentImages = Array.isArray(nextRecord.accomplishment_images) ? nextRecord.accomplishment_images : [];
+                const filteredImages = currentImages.filter((img) => {
+                    const url = String(typeof img === "string" ? img : (img?.dataUrl || img?.url || "")).trim();
+                    return url !== targetImageUrl;
+                });
+                if (filteredImages.length !== currentImages.length) {
+                    changed = true;
+                }
+
+                if (filteredImages.length) {
+                    nextRecord.accomplishment_images = filteredImages;
+                } else {
+                    delete nextRecord.accomplishment_images;
+                }
+
+                if (String(nextRecord.accomplishment_image || "").trim() === targetImageUrl) {
+                    delete nextRecord.accomplishment_image;
+                    delete nextRecord.accomplishment_image_name;
+                    changed = true;
+                }
+
+                if (Array.isArray(nextRecord.accomplishment_history)) {
+                    nextRecord.accomplishment_history = nextRecord.accomplishment_history.map((entry) => {
+                        const snapshot = entry && typeof entry === "object" ? { ...entry } : {};
+                        if (Array.isArray(snapshot.images)) {
+                            const nextImages = snapshot.images.filter((img) => {
+                                const url = String(typeof img === "string" ? img : (img?.dataUrl || img?.url || "")).trim();
+                                return url !== targetImageUrl;
+                            });
+                            if (nextImages.length !== snapshot.images.length) {
+                                changed = true;
+                            }
+                            if (nextImages.length) {
+                                snapshot.images = nextImages;
+                            } else {
+                                delete snapshot.images;
+                            }
+                        }
+
+                        if (String(snapshot.image_data_url || snapshot.dataUrl || snapshot.image || "").trim() === targetImageUrl) {
+                            delete snapshot.image_data_url;
+                            delete snapshot.dataUrl;
+                            delete snapshot.image;
+                            delete snapshot.image_name;
+                            changed = true;
+                        }
+
+                        return snapshot;
+                    });
+                }
+
+                if (!changed) return current;
+                nextRecord.__updated_at = new Date().toISOString();
+                updatedRecord = nextRecord;
+                return nextRecord;
+            });
+
+            if (!changed || !updatedRecord) {
+                return { ok: false, error: "Image not found." };
+            }
+
+        const prevBypass = window.__peoReadonlyStorageBypass;
+        window.__peoReadonlyStorageBypass = true;
+        try {
+            window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(nextRecords));
+        } catch (error) {
+            return { ok: false, error: "Unable to save the updated project photos." };
+        } finally {
+            window.__peoReadonlyStorageBypass = prevBypass;
+        }
+
+            const store = window.peoDivisionStore;
+            if (store && typeof store.queueSync === "function") {
+                try {
+                    store.queueSync("construction", nextRecords, 0);
+                    if (typeof store.flushSync === "function") {
+                        store.flushSync();
+                    }
+                } catch (error) {
+                    // Ignore sync failures; local changes are already saved.
+                }
+            }
+
+            return { ok: true, record: updatedRecord, previousRecords: constructionRecords };
+        };
+
         const buildDetailsImagesHtml = (record) => {
             const images = Array.isArray(record?.accomplishment_images)
                 ? record.accomplishment_images
@@ -26702,10 +27474,28 @@ if (document.readyState === "loading") {
                             const meta = uploadedAtLabel
                                 ? `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded ${escapeHtml(uploadedAtLabel)}`
                                 : `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded -`;
+                            const deleteButton = canManageConstructionProjectImages
+                                ? `
+                                    <button
+                                        type="button"
+                                        class="project-history-image-delete"
+                                        data-project-history-delete-image="true"
+                                        data-record-id="${escapeHtml(String(record.__id || ""))}"
+                                        data-image-url="${escapeHtml(String(img.dataUrl || "").trim())}"
+                                        aria-label="Delete photo"
+                                        title="Delete photo"
+                                    >
+                                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                    </button>
+                                `
+                                : "";
                             return `
                                 <figure class="project-history-month-image">
                                     <img class="js-project-history-open-image" src="${escapeHtml(img.dataUrl)}" alt="${escapeHtml(img.name || record?.project_name || "Project image")}" loading="lazy" tabindex="0">
-                                    <figcaption class="project-history-image-meta">${meta}</figcaption>
+                                    <figcaption class="project-history-image-meta-wrap">
+                                        <div class="project-history-image-meta">${meta}</div>
+                                        ${deleteButton}
+                                    </figcaption>
                                 </figure>
                             `;
                         }).join("")}
@@ -26792,7 +27582,7 @@ if (document.readyState === "loading") {
 
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
-    const record = constructionRecords.find((item) => String(item?.__id || "").trim() === sourceId);
+    let record = constructionRecords.find((item) => String(item?.__id || "").trim() === sourceId);
 
     if (subtitleEl instanceof HTMLElement) {
         const projectName = record ? String(record.project_name || "Construction Project").trim() : "Construction Project";
@@ -26815,6 +27605,80 @@ if (document.readyState === "loading") {
     }
     cardsWrap.innerHTML = buildMonthlyHistoryCards(record);
     projectHistoryImageViewer.bindRoot(cardsWrap);
+    cardsWrap.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const deleteButton = target.closest("[data-project-history-delete-image]");
+        if (!(deleteButton instanceof HTMLButtonElement)) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!canManageConstructionProjectImages) {
+            showPeoGeneralToast("You do not have permission to delete project photos.", {
+                title: "Project Details",
+                variant: "warning",
+            });
+            return;
+        }
+
+        const recordId = String(deleteButton.dataset.recordId || "").trim();
+        const imageUrl = String(deleteButton.dataset.imageUrl || "").trim();
+        if (!recordId || !imageUrl) return;
+
+        const approved = await showPeoGeneralConfirm({
+            title: "Delete Project Photo",
+            message: "Remove this uploaded project photo from the project details?",
+            confirmLabel: "Delete Photo",
+            cancelLabel: "Cancel",
+            variant: "danger",
+        });
+        if (!approved) return;
+
+        const result = removeConstructionImageFromStore(recordId, imageUrl);
+        if (!result.ok) {
+            showPeoGeneralToast(String(result.error || "Unable to delete this photo."), {
+                title: "Project Details",
+                variant: "danger",
+            });
+            return;
+        }
+
+        record = result.record;
+        cardsWrap.innerHTML = buildMonthlyHistoryCards(record);
+        projectHistoryImageViewer.bindRoot(cardsWrap);
+        const previousRecords = Array.isArray(result.previousRecords) ? result.previousRecords.map((entry) => ({ ...(entry || {}) })) : [];
+        window.peoUndoManager?.register({
+            label: "Project photo",
+            hintMessage: `Project photo deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+            successMessage: "Project photo restored.",
+            undo: () => {
+                const prevBypass = window.__peoReadonlyStorageBypass;
+                window.__peoReadonlyStorageBypass = true;
+                try {
+                    window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(previousRecords));
+                } finally {
+                    window.__peoReadonlyStorageBypass = prevBypass;
+                }
+
+                const store = window.peoDivisionStore;
+                if (store && typeof store.queueSync === "function") {
+                    try {
+                        store.queueSync("construction", previousRecords, 0);
+                        if (typeof store.flushSync === "function") {
+                            store.flushSync();
+                        }
+                    } catch (error) {
+                        // Ignore sync failures; local restoration is already saved.
+                    }
+                }
+
+                record = previousRecords.find((entry) => String(entry?.__id || entry?.construction_id || entry?.id || "").trim() === recordId) || record;
+                cardsWrap.innerHTML = buildMonthlyHistoryCards(record);
+                projectHistoryImageViewer.bindRoot(cardsWrap);
+            },
+        });
+    });
 
     if (exportPdfButton instanceof HTMLButtonElement) {
         exportPdfButton.disabled = false;
