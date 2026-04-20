@@ -1180,6 +1180,26 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
     const latestPayloads = new Map();
     const latestWriteTokens = new Map();
     const timers = new Map();
+    const emitDivisionStoreActivity = (detail = {}) => {
+        const storeKeys = Array.isArray(detail.storeKeys)
+            ? detail.storeKeys
+                .map((value) => String(value || "").trim().toLowerCase())
+                .filter(Boolean)
+            : [];
+        if (!storeKeys.length) return;
+        window.dispatchEvent(new CustomEvent("peo:division-store-sync-state", {
+            detail: {
+                storeKeys,
+                phase: String(detail.phase || "").trim().toLowerCase() === "start" ? "start" : "end",
+                source: String(detail.source || "sync").trim().toLowerCase() || "sync",
+                updatedAt: String(detail.updatedAt || "").trim(),
+                changedStoreKeys: Array.isArray(detail.changedStoreKeys)
+                    ? detail.changedStoreKeys.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean)
+                    : [],
+                at: new Date().toISOString(),
+            },
+        }));
+    };
 
     const nextWriteToken = (storeKey) => {
         const current = Number(latestWriteTokens.get(storeKey) || 0);
@@ -1207,6 +1227,12 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             nextMeta.fetched_at = new Date().toISOString();
         }
         writeStoreMeta(storeKey, nextMeta);
+        emitDivisionStoreActivity({
+            storeKeys: [storeKey],
+            phase: state ? "start" : "end",
+            source: "write",
+            updatedAt: serverUpdatedAt,
+        });
     };
 
     const sendLatestPayload = (storeKey, token) => {
@@ -1302,62 +1328,79 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         const list = Array.isArray(definitions) ? definitions : [];
         if (!list.length) return false;
 
+        const targetStoreKeys = list
+            .map((def) => String(def?.storeKey || "").trim().toLowerCase())
+            .filter(Boolean);
         const force = options && options.force === true;
         let didWrite = false;
         const updatedStoreKeys = [];
+        emitDivisionStoreActivity({
+            storeKeys: targetStoreKeys,
+            phase: "start",
+            source: "fetch",
+        });
 
-        for (const def of list) {
-            const storeKey = String(def?.storeKey || "").trim();
-            const localKey = String(def?.localStorageKey || "").trim();
-            const type = String(def?.type || "array").trim();
-            if (!storeKey || !localKey) continue;
+        try {
+            for (const def of list) {
+                const storeKey = String(def?.storeKey || "").trim();
+                const localKey = String(def?.localStorageKey || "").trim();
+                const type = String(def?.type || "array").trim();
+                if (!storeKey || !localKey) continue;
 
-            const server = await fetchStore(storeKey);
-            if (!server || typeof server !== "object") continue;
-            const serverData = server.data;
-            const serverUpdatedAt = String(server.updated_at || "").trim();
+                const server = await fetchStore(storeKey);
+                if (!server || typeof server !== "object") continue;
+                const serverData = server.data;
+                const serverUpdatedAt = String(server.updated_at || "").trim();
 
-            const isValid = type === "object"
-                ? (serverData && typeof serverData === "object" && !Array.isArray(serverData))
-                : Array.isArray(serverData);
-            if (!isValid) continue;
+                const isValid = type === "object"
+                    ? (serverData && typeof serverData === "object" && !Array.isArray(serverData))
+                    : Array.isArray(serverData);
+                if (!isValid) continue;
 
-            const meta = readStoreMeta(storeKey);
-            if (meta && meta.pending_local_write === true) {
-                continue;
+                const meta = readStoreMeta(storeKey);
+                if (meta && meta.pending_local_write === true) {
+                    continue;
+                }
+                const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
+                const serverUpdatedAtMs = Date.parse(serverUpdatedAt);
+
+                const shouldWrite = force
+                    || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs));
+
+                if (!shouldWrite) continue;
+
+                const prevBypass = window.__peoReadonlyStorageBypass;
+                window.__peoReadonlyStorageBypass = true;
+                try {
+                    safeLocalStorageSet(localKey, JSON.stringify(serverData));
+                    writeStoreMeta(storeKey, {
+                        updated_at: serverUpdatedAt,
+                        fetched_at: new Date().toISOString(),
+                    });
+                    didWrite = true;
+                    updatedStoreKeys.push(storeKey);
+                } finally {
+                    window.__peoReadonlyStorageBypass = prevBypass;
+                }
             }
-            const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
-            const serverUpdatedAtMs = Date.parse(serverUpdatedAt);
 
-            const shouldWrite = force
-                || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs));
-
-            if (!shouldWrite) continue;
-
-            const prevBypass = window.__peoReadonlyStorageBypass;
-            window.__peoReadonlyStorageBypass = true;
-            try {
-                safeLocalStorageSet(localKey, JSON.stringify(serverData));
-                writeStoreMeta(storeKey, {
-                    updated_at: serverUpdatedAt,
-                    fetched_at: new Date().toISOString(),
-                });
-                didWrite = true;
-                updatedStoreKeys.push(storeKey);
-            } finally {
-                window.__peoReadonlyStorageBypass = prevBypass;
+            if (updatedStoreKeys.length) {
+                window.dispatchEvent(new CustomEvent("peo:division-store-synced", {
+                    detail: {
+                        storeKeys: updatedStoreKeys,
+                    },
+                }));
             }
-        }
 
-        if (updatedStoreKeys.length) {
-            window.dispatchEvent(new CustomEvent("peo:division-store-synced", {
-                detail: {
-                    storeKeys: updatedStoreKeys,
-                },
-            }));
+            return didWrite;
+        } finally {
+            emitDivisionStoreActivity({
+                storeKeys: targetStoreKeys,
+                phase: "end",
+                source: "fetch",
+                changedStoreKeys: updatedStoreKeys,
+            });
         }
-
-        return didWrite;
     };
 
     window.peoDivisionStore = {
@@ -1375,6 +1418,107 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             flushSync();
         }
     });
+})();
+
+(() => {
+    const badgeSpecs = [
+        { storeKey: "admin", anchorSelector: "#pa-documents-found", mountClosest: ".admin-division-table-title" },
+        { storeKey: "admin", anchorSelector: "#pa-billing-count", mountClosest: ".admin-division-table-title" },
+        { storeKey: "planning", anchorSelector: ".planning-header-meta" },
+        { storeKey: "construction", anchorSelector: ".js-construction-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "construction", anchorSelector: ".js-construction-task-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "quality", anchorSelector: ".js-quality-record-meta", mountClosest: ".quality-shell-head > div" },
+        { storeKey: "maintenance", anchorSelector: ".js-road-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-equipment-record-meta", mountClosest: ".equipment-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-schedule-count-text", mountClosest: ".schedule-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-task-table-total", mountClosest: ".task-table-tools" },
+        { storeKey: "maintenance", anchorSelector: ".js-contractor-found-count", mountClosest: ".contractor-table-head" },
+    ];
+    const activeStateByStore = new Map();
+    const badges = [];
+
+    const getMountNode = (spec) => {
+        const anchor = document.querySelector(spec.anchorSelector);
+        if (!(anchor instanceof Element)) return null;
+        if (spec.mountClosest) {
+            const mounted = anchor.closest(spec.mountClosest);
+            if (mounted instanceof HTMLElement) return mounted;
+        }
+        return anchor instanceof HTMLElement ? anchor : null;
+    };
+
+    const getStoreState = (storeKey) => {
+        const key = String(storeKey || "").trim().toLowerCase();
+        if (!activeStateByStore.has(key)) {
+            activeStateByStore.set(key, { fetch: 0, write: 0 });
+        }
+        return activeStateByStore.get(key);
+    };
+
+    const renderBadges = () => {
+        badges.forEach(({ storeKey, badge }) => {
+            const state = getStoreState(storeKey);
+            const isSaving = Number(state?.write || 0) > 0;
+            const isSyncing = Number(state?.fetch || 0) > 0;
+            const label = badge.querySelector(".peo-sync-indicator__label");
+            badge.hidden = !isSaving && !isSyncing;
+            badge.classList.toggle("is-saving", isSaving);
+            badge.classList.toggle("is-syncing", !isSaving && isSyncing);
+            if (label) {
+                label.textContent = isSaving ? "Saving..." : "Syncing...";
+            }
+        });
+    };
+
+    const ensureBadges = () => {
+        if (badges.length) return;
+        badgeSpecs.forEach((spec) => {
+            const mountNode = getMountNode(spec);
+            if (!(mountNode instanceof HTMLElement)) return;
+            if (mountNode.querySelector(`.peo-sync-indicator[data-store-key="${spec.storeKey}"]`)) return;
+            const badge = document.createElement("span");
+            badge.className = "peo-sync-indicator";
+            badge.dataset.storeKey = spec.storeKey;
+            badge.hidden = true;
+            badge.innerHTML = `
+                <span class="peo-sync-indicator__spinner" aria-hidden="true"></span>
+                <span class="peo-sync-indicator__label">Syncing...</span>
+            `;
+            mountNode.classList.add("peo-sync-indicator-host");
+            mountNode.appendChild(badge);
+            badges.push({ storeKey: spec.storeKey, badge });
+        });
+        renderBadges();
+    };
+
+    const updateStoreState = (storeKeys, source, phase) => {
+        const normalizedSource = String(source || "").trim().toLowerCase();
+        const bucket = normalizedSource === "write" ? "write" : "fetch";
+        (Array.isArray(storeKeys) ? storeKeys : []).forEach((storeKey) => {
+            const state = getStoreState(storeKey);
+            if (!state) return;
+            if (phase === "start") {
+                state[bucket] += 1;
+            } else {
+                state[bucket] = Math.max(0, Number(state[bucket] || 0) - 1);
+            }
+        });
+        renderBadges();
+    };
+
+    const init = () => {
+        ensureBadges();
+        window.addEventListener("peo:division-store-sync-state", (event) => {
+            const detail = event?.detail || {};
+            updateStoreState(detail.storeKeys, detail.source, detail.phase);
+        });
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+        init();
+    }
 })();
 
 // Keep localStorage stores in sync with the server so routed/forwarded records show up for other users/devices.
@@ -14356,6 +14500,12 @@ document.addEventListener("DOMContentLoaded", () => {
             if (key === adminDivisionStorageKey || key === maintenanceStorageKey) {
                 refreshTaskTableFromStorage();
             }
+        });
+        window.addEventListener("peo:division-store-synced", (event) => {
+            const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("maintenance")) return;
+            restoreMaintenanceState();
+            refreshTaskTableFromStorage();
         });
         window.addEventListener(MAINTENANCE_STATE_UPDATED_EVENT, () => {
             refreshTaskTableFromStorage();
