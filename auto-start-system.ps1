@@ -55,6 +55,21 @@ if (-not $dockerReady) {
     exit 1
 }
 
+# Build images without pulling (uses local cache and existing images)
+Log "Building Docker Compose images..."
+try {
+    docker compose build --pull=false
+    if ($?) {
+        Log "Docker Compose images built successfully"
+    } else {
+        Log "ERROR: Failed to build Docker Compose images"
+        exit 1
+    }
+} catch {
+    Log "ERROR: Exception during docker compose build - $_"
+    exit 1
+}
+
 # Start Docker Compose services
 Log "Starting Docker Compose services..."
 try {
