@@ -8,6 +8,7 @@ This project can start automatically on Windows login without opening Command Pr
   - Starts Docker Desktop if needed
   - Waits until Docker is ready
   - Runs `docker compose up -d`
+  - Writes startup details to `auto-start-log.txt`
 - `scripts/register-peo-autostart.ps1`
   - Creates a Windows Scheduled Task at user logon
 - `scripts/start-peo-worksystem.bat`
@@ -37,3 +38,8 @@ This setup is designed for **automatic startup after Windows sign-in**. Docker D
 ```powershell
 .\scripts\start-peo-worksystem.bat
 ```
+
+## Troubleshooting
+
+- If the site does not open after reboot, check `auto-start-log.txt` in the project root.
+- `docker-compose.yml` now uses `8000:80` for Nginx so it listens on any current LAN IP, not just one fixed address.
