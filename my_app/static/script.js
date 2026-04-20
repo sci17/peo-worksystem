@@ -14931,15 +14931,39 @@ document.addEventListener("DOMContentLoaded", () => {
             || (Number.isFinite(percent) && percent >= 100);
     };
 
-    const getFirstConstructionImageUrl = (record) => {
+    const getConstructionImageEntries = (record) => {
+        const entries = [];
         const images = Array.isArray(record?.accomplishment_images) ? record.accomplishment_images : [];
-        for (const img of images) {
-            const url = (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim();
-            const normalizedUrl = normalizeConstructionSpotlightUrl(url);
-            if (normalizedUrl) return normalizedUrl;
+        images.forEach((img, index) => {
+            const rawUrl = typeof img === "string" ? img : String(img?.dataUrl || img?.url || "");
+            const normalizedUrl = normalizeConstructionSpotlightUrl(rawUrl);
+            if (!normalizedUrl) return;
+            entries.push({
+                url: normalizedUrl,
+                name: typeof img === "string" ? "" : String(img?.name || "").trim(),
+                uploadedAt: typeof img === "string"
+                    ? ""
+                    : String(img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || "").trim(),
+                key: `${normalizedUrl}::${index}`,
+            });
+        });
+
+        const legacy = normalizeConstructionSpotlightUrl(String(record?.accomplishment_image || "").trim());
+        if (legacy && !entries.some((entry) => entry.url === legacy)) {
+            entries.push({
+                url: legacy,
+                name: String(record?.accomplishment_image_name || "").trim(),
+                uploadedAt: "",
+                key: `${legacy}::legacy`,
+            });
         }
-        const legacy = String(record?.accomplishment_image || "").trim();
-        return normalizeConstructionSpotlightUrl(legacy);
+
+        return entries;
+    };
+
+    const getFirstConstructionImageUrl = (record) => {
+        const first = getConstructionImageEntries(record)[0];
+        return first ? first.url : "";
     };
 
     const buildConstructionSlides = (records) =>
@@ -14952,22 +14976,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const contractor = String(record.contractor || "").trim();
                 const subtitle = [location, contractor].filter(Boolean).join(" \u00b7 ");
 
-                const imagePool = [];
-                const images = Array.isArray(record.accomplishment_images) ? record.accomplishment_images : [];
-                images.forEach((img) => {
-                    const url = (typeof img === "string"
-                        ? img
-                        : String(img?.dataUrl || img?.url || ""))
-                        .trim();
-                    const normalizedUrl = normalizeConstructionSpotlightUrl(url);
-                    if (normalizedUrl) imagePool.push(normalizedUrl);
-                });
-
-                const legacy = String(record.accomplishment_image || "").trim();
-                const normalizedLegacy = normalizeConstructionSpotlightUrl(legacy);
-                if (normalizedLegacy) imagePool.push(normalizedLegacy);
-
-                const uniq = Array.from(new Set(imagePool));
+                const uniq = Array.from(new Set(getConstructionImageEntries(record).map((entry) => entry.url)));
                 return {
                     id,
                     title,
@@ -14996,6 +15005,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
             dotsWrap.style.display = "";
+            if (prevButton instanceof HTMLElement) prevButton.hidden = false;
+            if (nextButton instanceof HTMLElement) nextButton.hidden = false;
             const frag = document.createDocumentFragment();
             slides.forEach(() => {
                 const dot = document.createElement("span");
@@ -15003,6 +15014,11 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             dotsWrap.appendChild(frag);
         };
+
+        if (slides.length <= 1) {
+            if (prevButton instanceof HTMLElement) prevButton.hidden = true;
+            if (nextButton instanceof HTMLElement) nextButton.hidden = true;
+        }
 
         renderDots();
     };
@@ -15151,29 +15167,32 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!(spotlightGallery instanceof HTMLElement)) return;
         const list = Array.isArray(records) ? records : [];
         const cards = list
-            .filter((record) => record && typeof record === "object" && isConstructionCompleted(record))
-            .map((record) => {
-                const imageUrl = getFirstConstructionImageUrl(record);
-                if (!imageUrl) return null;
+            .filter((record) => record && typeof record === "object")
+            .flatMap((record) => {
+                const images = getConstructionImageEntries(record);
+                if (!images.length) return [];
                 const title = String(record.project_name || record.project || "Construction Project").trim();
                 const location = String(record.location || "").trim();
                 const contractor = String(record.contractor || "").trim();
-                const subtitle = [location, contractor].filter(Boolean).join(" \u00b7 ");
-                return `
-                    <article class="spotlight-gallery-card">
-                        <div class="spotlight-gallery-photo" style="background-image: url('${imageUrl.replace(/'/g, "%27")}')"></div>
-                        <div class="spotlight-gallery-copy">
-                            <h5>${escapeHtml(title)}</h5>
-                            ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
-                        </div>
-                    </article>
-                `;
+                return images.map((image, index) => {
+                    const uploadedLabel = String(image.uploadedAt || "").trim();
+                    const subtitle = [location, contractor, uploadedLabel].filter(Boolean).join(" \u00b7 ");
+                    return `
+                        <article class="spotlight-gallery-card" data-spotlight-gallery-project="${escapeHtml(title)}" data-spotlight-gallery-image-index="${index + 1}">
+                            <div class="spotlight-gallery-photo" style="background-image: url('${image.url.replace(/'/g, "%27")}')"></div>
+                            <div class="spotlight-gallery-copy">
+                                <h5>${escapeHtml(title)}</h5>
+                                ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+                            </div>
+                        </article>
+                    `;
+                });
             })
             .filter(Boolean);
 
         if (spotlightGalleryMeta instanceof HTMLElement) {
             spotlightGalleryMeta.textContent = cards.length
-                ? `${cards.length} completed project${cards.length === 1 ? "" : "s"} with photos.`
+                ? `${cards.length} uploaded photo${cards.length === 1 ? "" : "s"} from Construction Division.`
                 : "";
         }
 
@@ -16103,14 +16122,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const writeStoredRecords = (records) => {
+    const writeStoredRecords = (records, options = {}) => {
+        const syncRemote = options && options.syncRemote === false ? false : true;
         try {
             window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage errors.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
+        if (syncRemote && window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 const safe = record && typeof record === "object" ? { ...record } : {};
 
@@ -18226,7 +18246,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const resyncAdminAssignedProjects = () => {
         records = syncAdminRoutedConstructionRecords(readStoredRecords()).map((record) => normalizeConstructionRecord(record));
         clampCurrentPage();
-        writeStoredRecords(records);
+        writeStoredRecords(records, { syncRemote: false });
         renderTable();
     };
     let constructionRemoteSyncInFlight = null;

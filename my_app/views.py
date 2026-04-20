@@ -946,10 +946,32 @@ def _build_overview_context(user):
 
     overview_recent_updates_progress = ratio_to_percent(recent_updates, total_records)
 
-    # Spotlight (completed construction projects)
+    def construction_photo_urls(record):
+        if not isinstance(record, dict):
+            return []
+
+        urls = []
+        for image in record.get('accomplishment_images') or []:
+            if isinstance(image, str):
+                url = image.strip()
+            elif isinstance(image, dict):
+                url = str(image.get('dataUrl') or image.get('url') or '').strip()
+            else:
+                url = ''
+            if url:
+                urls.append(url)
+
+        legacy_url = str(record.get('accomplishment_image') or '').strip()
+        if legacy_url:
+            urls.append(legacy_url)
+
+        return list(dict.fromkeys(urls))
+
+    # Spotlight (construction projects with uploaded photos)
     completed_projects = []
     for record in construction_named:
-        if not is_construction_completed(record):
+        image_urls = construction_photo_urls(record)
+        if not image_urls:
             continue
         title = str(record.get('project_name') or '').strip()
         if not title:
@@ -970,6 +992,7 @@ def _build_overview_context(user):
                 'category': 'Construction',
                 'title': title,
                 'subtitle': subtitle,
+                'image_count': len(image_urls),
                 '__sort': completed_at.timestamp() if completed_at else 0,
             }
         )

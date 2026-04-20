@@ -430,71 +430,59 @@
                             <h3>Accomplished Projects</h3>
                         </div>
                         <div class="section-head-actions">
-                            {% if overview_spotlight_projects|length > 1 %}
-                                <button
-                                    type="button"
-                                    class="circle-action"
-                                    aria-label="Previous accomplished project"
-                                    data-spotlight-nav="prev"
-                                >
-                                    <span class="material-symbols-outlined">chevron_left</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="circle-action"
-                                    aria-label="Next accomplished project"
-                                    data-spotlight-nav="next"
-                                >
-                                    <span class="material-symbols-outlined">chevron_right</span>
-                                </button>
-                            {% endif %}
+                            <button
+                                type="button"
+                                class="circle-action"
+                                aria-label="Previous accomplished project"
+                                data-spotlight-nav="prev"
+                                {% if overview_spotlight_projects|length <= 1 %}hidden{% endif %}
+                            >
+                                <span class="material-symbols-outlined">chevron_left</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="circle-action"
+                                aria-label="Next accomplished project"
+                                data-spotlight-nav="next"
+                                {% if overview_spotlight_projects|length <= 1 %}hidden{% endif %}
+                            >
+                                <span class="material-symbols-outlined">chevron_right</span>
+                            </button>
                         </div>
                     </div>
-
-                    {% if overview_spotlight_projects %}
-                        {% with spotlight=overview_spotlight_projects.0 %}
-                            <article class="spotlight-card">
-                                <div class="spotlight-scene" data-spotlight-project-id="{{ spotlight.id|default:'' }}" data-spotlight-project-name="{{ spotlight.title|default:'' }}">
-                                    <div hidden>
-                                        {% for item in overview_spotlight_projects %}
-                                            <span
-                                                data-spotlight-item
-                                                data-project-id="{{ item.id|default:'' }}"
-                                                data-title="{{ item.title|default:'' }}"
-                                                data-subtitle="{{ item.subtitle|default:'' }}"
-                                                data-category="{{ item.category|default:'' }}"
-                                            ></span>
-                                        {% endfor %}
-                                    </div>
-                                    <div class="spotlight-copy">
-                                        <h4>{{ spotlight.title|default:"Accomplished Project" }}</h4>
-                                        <p>{{ spotlight.subtitle|default:"" }}</p>
-                                    </div>
-                                    <div class="spotlight-dots" aria-hidden="true">
-                                        {% for item in overview_spotlight_projects %}
-                                            <span {% if forloop.first %}class="is-active"{% endif %}></span>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </article>
-                        {% endwith %}
-                        <div class="spotlight-gallery">
-                            <div class="spotlight-gallery-head">
-                                <h4>All Accomplished Projects</h4>
-                                <p class="js-spotlight-gallery-meta">Showing completed projects with photos.</p>
-                            </div>
-                            <div class="spotlight-gallery-grid js-spotlight-gallery"></div>
-                        </div>
-                    {% else %}
+                    {% with spotlight=overview_spotlight_projects.0 %}
                         <article class="spotlight-card">
-                            <div class="spotlight-scene">
+                            <div class="spotlight-scene" data-spotlight-project-id="{{ spotlight.id|default:'' }}" data-spotlight-project-name="{{ spotlight.title|default:'' }}">
+                                <div hidden>
+                                    {% for item in overview_spotlight_projects %}
+                                        <span
+                                            data-spotlight-item
+                                            data-project-id="{{ item.id|default:'' }}"
+                                            data-title="{{ item.title|default:'' }}"
+                                            data-subtitle="{{ item.subtitle|default:'' }}"
+                                            data-category="{{ item.category|default:'' }}"
+                                        ></span>
+                                    {% endfor %}
+                                </div>
                                 <div class="spotlight-copy">
-                                    <h4>No accomplished projects yet</h4>
-                                    <p>Add projects to highlight progress here.</p>
+                                    <h4>{{ spotlight.title|default:"No uploaded project photos yet" }}</h4>
+                                    <p>{{ spotlight.subtitle|default:"Photos uploaded in Construction Division will appear here automatically." }}</p>
+                                </div>
+                                <div class="spotlight-dots" aria-hidden="true">
+                                    {% for item in overview_spotlight_projects %}
+                                        <span {% if forloop.first %}class="is-active"{% endif %}></span>
+                                    {% endfor %}
                                 </div>
                             </div>
                         </article>
-                    {% endif %}
+                    {% endwith %}
+                    <div class="spotlight-gallery">
+                        <div class="spotlight-gallery-head">
+                            <h4>All Uploaded Construction Photos</h4>
+                            <p class="js-spotlight-gallery-meta">Showing Construction Division projects with uploaded photos.</p>
+                        </div>
+                        <div class="spotlight-gallery-grid js-spotlight-gallery"></div>
+                    </div>
                 </section>
 
                 <section class="leadership-section is-orgchart">
@@ -821,7 +809,6 @@
                     </div>
                 </section>
             {% endif %}
-            </section>
         </main>
     </div>
 
