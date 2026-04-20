@@ -1,10 +1,12 @@
 param(
-    [string]$TaskName = "PEO Worksystem Autostart"
+    [string]$TaskName = "PEO Worksystem Autostart",
+    [string]$Delay = "PT30S"
 )
 
 $ErrorActionPreference = "Stop"
 
-$projectRoot = "C:\Users\Administrator\Desktop\peo-worksystem"
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent $scriptRoot
 $startupScript = Join-Path $projectRoot "scripts\start-peo-worksystem.ps1"
 
 if (-not (Test-Path -LiteralPath $startupScript)) {
@@ -16,6 +18,13 @@ $action = New-ScheduledTaskAction `
     -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$startupScript`""
 
 $trigger = New-ScheduledTaskTrigger -AtLogOn
+$trigger.Delay = $Delay
+
+$principal = New-ScheduledTaskPrincipal `
+    -UserId "$env:USERDOMAIN\$env:USERNAME" `
+    -LogonType Interactive `
+    -RunLevel Highest
+
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -StartWhenAvailable `
@@ -25,6 +34,7 @@ Register-ScheduledTask `
     -TaskName $TaskName `
     -Action $action `
     -Trigger $trigger `
+    -Principal $principal `
     -Settings $settings `
     -Description "Starts Docker Desktop and runs docker compose up -d for the PEO Worksystem." `
     -Force | Out-Null

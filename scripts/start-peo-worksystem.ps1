@@ -3,7 +3,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$projectRoot = "C:\Users\Administrator\Desktop\peo-worksystem"
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent $scriptRoot
 $logPath = Join-Path $projectRoot "auto-start-log.txt"
 $dockerDesktopPaths = @(
     "$Env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
@@ -59,6 +60,7 @@ function Invoke-DockerLogged {
 
 Set-Location -LiteralPath $projectRoot
 Write-Log "=== Autostart run started ==="
+Write-Log "Project root: $projectRoot"
 
 $dockerDesktop = $dockerDesktopPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $dockerDesktop) {
@@ -67,6 +69,11 @@ if (-not $dockerDesktop) {
 }
 
 $dockerCli = $dockerCliPaths | Where-Object { (Test-Path $_) -or ($_ -eq "docker.exe") } | Select-Object -First 1
+if (-not $dockerCli) {
+    Write-Log "Docker CLI executable not found."
+    throw "Docker CLI executable was not found."
+}
+
 Write-Log "Using Docker CLI: $dockerCli"
 
 $dockerReady = $false
