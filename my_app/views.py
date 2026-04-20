@@ -2746,6 +2746,35 @@ def division_store_api(request, key):
 
 
 @login_required
+@require_http_methods(["GET"])
+def division_store_snapshot_api(request):
+    requested_keys = [
+        _normalize_division_key(value)
+        for value in str(request.GET.get("keys", "") or "").split(",")
+    ]
+    requested_keys = [key for key in requested_keys if key in _STORE_KEYS]
+    keys = requested_keys or list(_STORE_KEYS)
+
+    stores = _load_shared_stores(request.user)
+    payload = {}
+    for key in keys:
+        store = stores.get(key)
+        if not store:
+            payload[key] = {
+                "data": _store_default_data(key),
+                "updated_at": None,
+            }
+            continue
+
+        payload[key] = {
+            "data": _normalize_store_data(key, getattr(store, "data", None)),
+            "updated_at": store.updated_at.isoformat() if getattr(store, "updated_at", None) else None,
+        }
+
+    return JsonResponse({"stores": payload})
+
+
+@login_required
 @require_http_methods(["POST"])
 def division_store_clear_all_api(request):
     user_division = _get_user_division_key(request.user)

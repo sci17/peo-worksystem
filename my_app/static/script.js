@@ -1091,6 +1091,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
 
 (() => {
     const API_BASE = "/api/division-store/";
+    const SNAPSHOT_API = "/api/division-store-snapshot/";
 
     const getCookie = (name) => {
         const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
@@ -1174,6 +1175,33 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             });
             if (!response.ok) return null;
             return await response.json();
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const fetchStoreSnapshot = async (storeKeys) => {
+        if (typeof window.fetch !== "function") return null;
+        const keys = Array.isArray(storeKeys)
+            ? Array.from(new Set(
+                storeKeys
+                    .map((value) => String(value || "").trim().toLowerCase())
+                    .filter(Boolean)
+            ))
+            : [];
+        if (!keys.length) return { stores: {} };
+
+        try {
+            const url = new URL(SNAPSHOT_API, window.location.origin);
+            url.searchParams.set("keys", keys.join(","));
+            const response = await window.fetch(url.toString(), {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" },
+            });
+            if (!response.ok) return null;
+            const payload = await response.json().catch(() => null);
+            return payload && typeof payload === "object" ? payload : null;
         } catch (error) {
             return null;
         }
@@ -1292,6 +1320,8 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         const list = Array.isArray(definitions) ? definitions : [];
         if (!list.length) return;
 
+        const emptyDefs = [];
+
         for (const def of list) {
             const storeKey = String(def?.storeKey || "").trim();
             const localKey = String(def?.localStorageKey || "").trim();
@@ -1303,16 +1333,28 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             const isEmpty = type === "object"
                 ? (!localParsed || typeof localParsed !== "object" || Array.isArray(localParsed) || Object.keys(localParsed).length === 0)
                 : (!Array.isArray(localParsed) || localParsed.length === 0);
-            if (!isEmpty) continue;
+            if (isEmpty) {
+                emptyDefs.push({ storeKey, localKey, type });
+            }
+        }
 
-            const server = await fetchStore(storeKey);
+        if (!emptyDefs.length) return;
+
+        const snapshot = await fetchStoreSnapshot(emptyDefs.map((def) => def.storeKey));
+        const stores = snapshot && typeof snapshot === "object" && snapshot.stores && typeof snapshot.stores === "object"
+            ? snapshot.stores
+            : {};
+
+        for (const def of emptyDefs) {
+            const server = stores[def.storeKey];
             const serverData = server && typeof server === "object" ? server.data : null;
+            const type = String(def.type || "array").trim();
             const hasServerData = type === "object"
                 ? (serverData && typeof serverData === "object" && !Array.isArray(serverData) && Object.keys(serverData).length > 0)
                 : (Array.isArray(serverData) && serverData.length > 0);
             if (!hasServerData) continue;
 
-            safeLocalStorageSet(localKey, JSON.stringify(serverData));
+            safeLocalStorageSet(def.localKey, JSON.stringify(serverData));
         }
     };
 
@@ -1343,13 +1385,18 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         });
 
         try {
+            const snapshot = await fetchStoreSnapshot(targetStoreKeys);
+            const stores = snapshot && typeof snapshot === "object" && snapshot.stores && typeof snapshot.stores === "object"
+                ? snapshot.stores
+                : {};
+
             for (const def of list) {
                 const storeKey = String(def?.storeKey || "").trim();
                 const localKey = String(def?.localStorageKey || "").trim();
                 const type = String(def?.type || "array").trim();
                 if (!storeKey || !localKey) continue;
 
-                const server = await fetchStore(storeKey);
+                const server = stores[storeKey];
                 if (!server || typeof server !== "object") continue;
                 const serverData = server.data;
                 const serverUpdatedAt = String(server.updated_at || "").trim();
@@ -1410,6 +1457,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         flushSync,
         syncNow,
         fetchStore,
+        fetchStoreSnapshot,
         hydrateLocalStorageIfEmpty,
         syncToLocalStorage,
     };
