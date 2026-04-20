@@ -150,7 +150,9 @@
         }
 
         document.addEventListener('click', (ev) => {
-            const trigger = ev.target.closest('[data-peo-toast-message]');
+            const clickTarget = ev.target instanceof Element ? ev.target : null;
+            if (!clickTarget) return;
+            const trigger = clickTarget.closest('[data-peo-toast-message]');
             if (!trigger) return;
             if (trigger.matches(":disabled, [aria-disabled='true']")) return;
             const message = trigger.getAttribute('data-peo-toast-message') || '';
@@ -5082,7 +5084,9 @@ const portalDomReady = () => {
 	        });
 
         menu.addEventListener("click", (event) => {
-            const optionButton = event.target.closest(".pa-select-custom__option");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const optionButton = clickTarget.closest(".pa-select-custom__option");
             if (!optionButton || optionButton.disabled) return;
             const nextValue = String(optionButton.dataset.value || "");
             if (select.value !== nextValue) {
@@ -5157,7 +5161,8 @@ const portalDomReady = () => {
     });
 
     document.addEventListener("click", (event) => {
-        if (!event.target.closest(".pa-select-custom")) {
+        const clickTarget = event.target instanceof Element ? event.target : null;
+        if (!clickTarget || !clickTarget.closest(".pa-select-custom")) {
             closeAdminSelectDropdowns();
         }
     });
@@ -6955,7 +6960,9 @@ const portalDomReady = () => {
             }
         });
         documentsTableBody.addEventListener("click", async (event) => {
-            const actionButton = event.target.closest("[data-admin-action]");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const actionButton = clickTarget.closest("[data-admin-action]");
             if (!actionButton) return;
             const action = actionButton.dataset.adminAction;
             const recordId = actionButton.dataset.recordId;
@@ -7015,7 +7022,9 @@ const portalDomReady = () => {
             }
         });
         billingTableBody.addEventListener("click", async (event) => {
-            const actionButton = event.target.closest("[data-admin-action]");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const actionButton = clickTarget.closest("[data-admin-action]");
             if (!actionButton) return;
             const action = actionButton.dataset.adminAction;
             const recordId = actionButton.dataset.recordId;
@@ -7508,6 +7517,156 @@ document.addEventListener("DOMContentLoaded", () => {
         return Number.isFinite(parsed) ? parsed : null;
     };
 
+    const ROAD_SURFACE_TYPES = [
+        { key: "concrete", label: "Concrete" },
+        { key: "asphalt", label: "Asphalt" },
+        { key: "earth", label: "Earth" },
+        { key: "gravel", label: "Gravel" },
+        { key: "mixed", label: "Mixed" },
+    ];
+
+    const ROAD_SURFACE_LABEL_BY_KEY = ROAD_SURFACE_TYPES.reduce((map, item) => {
+        map[item.key] = item.label;
+        return map;
+    }, {});
+
+    const extractSurfaceTypeNumbers = (value) => {
+        const matches = String(value || "").replaceAll(",", "").match(/-?\d+(?:\.\d+)?/g) || [];
+        return matches
+            .map((entry) => Number.parseFloat(entry))
+            .filter((entry) => Number.isFinite(entry));
+    };
+
+    const parseSurfaceTypeValues = (surfaceValue) => {
+        const values = {};
+        const labelOrder = [];
+        const textValue = String(surfaceValue || "");
+        const matcher = /(concrete|asphalt|earth|gravel|mixed)\s*:?\s*(-?\d+(?:\.\d+)?)/gi;
+        let match = matcher.exec(textValue);
+        while (match) {
+            const key = normalizeKey(match[1]);
+            const numericValue = parseNumber(match[2]);
+            if (ROAD_SURFACE_LABEL_BY_KEY[key] && numericValue !== null) {
+                values[key] = numericValue;
+                if (!labelOrder.includes(key)) {
+                    labelOrder.push(key);
+                }
+            }
+            match = matcher.exec(textValue);
+        }
+        return { values, labelOrder };
+    };
+
+    const formatSurfaceTypeDistance = (value) => {
+        const numericValue = parseNumber(value);
+        if (!(numericValue > 0)) {
+            return "";
+        }
+        const roundedValue = Math.round(numericValue * 1000) / 1000;
+        const compactValue = String(roundedValue)
+            .replace(/\.0+$/, "")
+            .replace(/(\.\d*?[1-9])0+$/, "$1");
+        return `${compactValue}km`;
+    };
+
+    const formatSurfaceTypeText = (surfaceValues, preferredOrder = []) => {
+        const keyOrder = preferredOrder.length
+            ? [...new Set(preferredOrder)]
+            : ROAD_SURFACE_TYPES.map((item) => item.key);
+        Object.keys(surfaceValues || {}).forEach((key) => {
+            if (ROAD_SURFACE_LABEL_BY_KEY[key] && !keyOrder.includes(key)) {
+                keyOrder.push(key);
+            }
+        });
+
+        const chunks = [];
+        keyOrder.forEach((key) => {
+            const label = ROAD_SURFACE_LABEL_BY_KEY[key];
+            if (!label) {
+                return;
+            }
+            const formattedDistance = formatSurfaceTypeDistance(surfaceValues?.[key]);
+            if (!formattedDistance) {
+                return;
+            }
+            chunks.push(`${label}: ${formattedDistance}`);
+        });
+
+        return chunks.length ? chunks.join("  ") : "-";
+    };
+
+    const normalizeSurfaceTypeValue = (rawValue, preferredOrder = []) => {
+        const compactValue = String(rawValue || "").replace(/\s+/g, " ").trim();
+        if (!compactValue) {
+            return "-";
+        }
+
+        const parsed = parseSurfaceTypeValues(compactValue);
+        if (Object.keys(parsed.values).length) {
+            const order = parsed.labelOrder.length ? parsed.labelOrder : preferredOrder;
+            return formatSurfaceTypeText(parsed.values, order);
+        }
+
+        return compactValue;
+    };
+
+    const mergeSurfaceTypeUpdate = (originalValue, updatedValue) => {
+        const inputValue = String(updatedValue || "").replace(/\s+/g, " ").trim();
+        if (!inputValue) {
+            return "-";
+        }
+
+        const originalParsed = parseSurfaceTypeValues(originalValue);
+        const updatedParsed = parseSurfaceTypeValues(inputValue);
+        const updatedEntries = Object.keys(updatedParsed.values);
+
+        if (updatedEntries.length) {
+            const mergedValues = { ...originalParsed.values };
+            updatedEntries.forEach((key) => {
+                const numericValue = updatedParsed.values[key];
+                if (numericValue > 0) {
+                    mergedValues[key] = numericValue;
+                } else {
+                    delete mergedValues[key];
+                }
+            });
+
+            const outputOrder = originalParsed.labelOrder.length
+                ? [...originalParsed.labelOrder]
+                : [...updatedParsed.labelOrder];
+            updatedParsed.labelOrder.forEach((key) => {
+                if (!outputOrder.includes(key)) {
+                    outputOrder.push(key);
+                }
+            });
+            return formatSurfaceTypeText(mergedValues, outputOrder);
+        }
+
+        const rawNumbers = extractSurfaceTypeNumbers(inputValue);
+        const fallbackOrder = ROAD_SURFACE_TYPES
+            .filter((item) => item.key !== "mixed")
+            .map((item) => item.key);
+        const outputOrder = originalParsed.labelOrder.length ? [...originalParsed.labelOrder] : fallbackOrder;
+
+        if (rawNumbers.length && outputOrder.length) {
+            const mergedValues = { ...originalParsed.values };
+            outputOrder.forEach((key, index) => {
+                if (index >= rawNumbers.length) {
+                    return;
+                }
+                const numericValue = parseNumber(rawNumbers[index]);
+                if (numericValue !== null && numericValue > 0) {
+                    mergedValues[key] = numericValue;
+                } else {
+                    delete mergedValues[key];
+                }
+            });
+            return formatSurfaceTypeText(mergedValues, outputOrder);
+        }
+
+        return normalizeSurfaceTypeValue(inputValue);
+    };
+
     const getFilterValue = (filterKey) => {
         const filterLabel = document.querySelector(`[data-road-filter="${filterKey}"] .dropdown-label`);
         return filterLabel ? filterLabel.textContent.trim() : "";
@@ -7718,16 +7877,23 @@ document.addEventListener("DOMContentLoaded", () => {
             return "-";
         }
 
-        const chunks = [];
+        const surfaceValues = {};
+        const outputOrder = [];
         surfaceColumns.forEach((surfaceColumn) => {
             const rawValue = String(rowValues[surfaceColumn.index] || "").trim();
             const numericValue = parseNumber(rawValue);
             if (numericValue && numericValue > 0) {
-                chunks.push(`${surfaceColumn.label}: ${numericValue.toFixed(3)}km`);
+                const key = normalizeKey(surfaceColumn.label);
+                if (ROAD_SURFACE_LABEL_BY_KEY[key]) {
+                    surfaceValues[key] = numericValue;
+                    if (!outputOrder.includes(key)) {
+                        outputOrder.push(key);
+                    }
+                }
             }
         });
 
-        return chunks.length ? chunks.join("  ") : "-";
+        return formatSurfaceTypeText(surfaceValues, outputOrder);
     };
 
     const dedupeRoadRecords = (records) => {
@@ -7791,13 +7957,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const surfaceColumns = [];
             const addSurfaceColumn = (normalizedCells, sourceRow) => {
-                [
-                    { key: "concrete", label: "Concrete" },
-                    { key: "asphalt", label: "Asphalt" },
-                    { key: "earth", label: "Earth" },
-                    { key: "gravel", label: "Gravel" },
-                    { key: "mixed", label: "Mixed" },
-                ].forEach((surfaceType) => {
+                ROAD_SURFACE_TYPES.forEach((surfaceType) => {
                     const index = normalizedCells.findIndex((cell) => cell === surfaceType.key || cell.includes(surfaceType.key));
                     if (index >= 0 && !surfaceColumns.some((item) => item.index === index)) {
                         surfaceColumns.push({ index, label: surfaceType.label, sourceRow });
@@ -8362,10 +8522,15 @@ document.addEventListener("DOMContentLoaded", () => {
             const areaFromMunicipality = resolveMunicipalityArea(selectedMunicipality);
             const resolvedLocation = selectedLocation
                 || (areaFromMunicipality ? toTitleCase(areaFromMunicipality) : "");
+            const selectedSurfaceTypeKey = normalizeKey(selectedSurfaceType);
+            const preferredSurfaceOrder = ROAD_SURFACE_LABEL_BY_KEY[selectedSurfaceTypeKey] ? [selectedSurfaceTypeKey] : [];
             const formattedSurfaceType = selectedSurfaceTypeDetails
-                ? (selectedSurfaceTypeDetails.includes(":")
-                    ? selectedSurfaceTypeDetails
-                    : `${selectedSurfaceType}: ${selectedSurfaceTypeDetails}`)
+                ? normalizeSurfaceTypeValue(
+                    selectedSurfaceTypeDetails.includes(":")
+                        ? selectedSurfaceTypeDetails
+                        : `${selectedSurfaceType}: ${selectedSurfaceTypeDetails}`,
+                    preferredSurfaceOrder,
+                )
                 : (selectedSurfaceType || "-");
 
             roadRecords.push({
@@ -8806,7 +8971,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 : "";
         }
         if (roadEditConditionInput) roadEditConditionInput.value = getConditionFormValue(record.condition);
-        if (roadEditSurfaceTypeInput) roadEditSurfaceTypeInput.value = String(record.surfaceType || "");
+        if (roadEditSurfaceTypeInput) {
+            const normalizedSurfaceType = normalizeSurfaceTypeValue(record.surfaceType);
+            roadEditSurfaceTypeInput.value = normalizedSurfaceType === "-" ? String(record.surfaceType || "-") : normalizedSurfaceType;
+        }
     };
 
     const renderRoadEditRecordRows = (recordIndexes, selectedIndex) => {
@@ -8984,6 +9152,16 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    if (roadEditSurfaceTypeInput && roadEditRecordSelect) {
+        roadEditSurfaceTypeInput.addEventListener("blur", () => {
+            const selectedIndex = Number.parseInt(roadEditRecordSelect.value, 10);
+            const baseSurfaceType = Number.isInteger(selectedIndex) && roadRecords[selectedIndex]
+                ? roadRecords[selectedIndex].surfaceType
+                : "";
+            roadEditSurfaceTypeInput.value = mergeSurfaceTypeUpdate(baseSurfaceType, roadEditSurfaceTypeInput.value);
+        });
+    }
+
     if (roadEditRecordsBody && roadEditRecordSelect) {
         roadEditRecordsBody.addEventListener("click", (event) => {
             const clickTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
@@ -9026,7 +9204,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const updatedCondition = ["good", "fair", "poor", "bad"].includes(selectedCondition)
                 ? selectedCondition
                 : "unknown";
-            const updatedSurfaceType = (roadEditSurfaceTypeInput?.value || "").trim() || "-";
+            const updatedSurfaceType = mergeSurfaceTypeUpdate(targetRecord.surfaceType, roadEditSurfaceTypeInput?.value || "");
             const originalSnapshot = {
                 roadId: String(targetRecord.roadId || "-"),
                 roadName: String(targetRecord.roadName || "-"),
@@ -10787,7 +10965,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         contractorManagement.addEventListener("click", (event) => {
-            const evaluationOpener = event.target.closest(".js-contractor-open-eval");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) {
+                return;
+            }
+
+            const evaluationOpener = clickTarget.closest(".js-contractor-open-eval");
             if (evaluationOpener) {
                 const row = evaluationOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10797,7 +10980,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const editOpener = event.target.closest(".js-contractor-open-edit");
+            const editOpener = clickTarget.closest(".js-contractor-open-edit");
             if (editOpener) {
                 const row = editOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10807,7 +10990,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const deleteOpener = event.target.closest(".js-contractor-delete");
+            const deleteOpener = clickTarget.closest(".js-contractor-delete");
             if (deleteOpener) {
                 const row = deleteOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10817,7 +11000,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const opener = event.target.closest(".js-contractor-open-card");
+            const opener = clickTarget.closest(".js-contractor-open-card");
             if (!opener) {
                 return;
             }
@@ -11019,7 +11202,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (dropdownMenu) {
             dropdownMenu.addEventListener("click", (event) => {
-                const option = event.target.closest(".dropdown-option");
+                const clickTarget = event.target instanceof Element ? event.target : null;
+                if (!clickTarget) {
+                    return;
+                }
+                const option = clickTarget.closest(".dropdown-option");
                 if (!option) {
                     return;
                 }
@@ -14344,7 +14531,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (dropdownMenu) {
                 dropdownMenu.addEventListener("click", (event) => {
-                    const option = event.target.closest(".dropdown-option");
+                    const clickTarget = event.target instanceof Element ? event.target : null;
+                    if (!clickTarget) {
+                        return;
+                    }
+                    const option = clickTarget.closest(".dropdown-option");
                     if (!option) {
                         return;
                     }
@@ -18090,7 +18281,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (tableBody) {
         tableBody.addEventListener("click", async (event) => {
-            const deleteTrigger = event.target.closest(".js-construction-task-delete");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+
+            const deleteTrigger = clickTarget.closest(".js-construction-task-delete");
             if (deleteTrigger) {
                 event.preventDefault();
                 const recordId = String(deleteTrigger.dataset.recordId || deleteTrigger.closest("tr")?.dataset.recordId || "").trim();
@@ -18136,7 +18330,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const trigger = event.target.closest(".js-open-construction-task-modal");
+            const trigger = clickTarget.closest(".js-open-construction-task-modal");
             if (!trigger) return;
             event.preventDefault();
             const recordId = String(trigger.dataset.recordId || "").trim();
@@ -22581,7 +22775,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (menu instanceof HTMLElement) {
                 menu.addEventListener("click", (event) => {
-                    const optionButton = event.target.closest(".project-filter-dropdown__option");
+                    const clickTarget = event.target instanceof Element ? event.target : null;
+                    if (!clickTarget) {
+                        return;
+                    }
+                    const optionButton = clickTarget.closest(".project-filter-dropdown__option");
                     if (!(optionButton instanceof HTMLButtonElement)) {
                         return;
                     }
