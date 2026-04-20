@@ -29,59 +29,57 @@ Log "Waiting for Docker daemon to be ready..."
 Start-Sleep -Seconds 5
 
 # Check if Docker is running
-$maxRetries = 30
-$retryCount = 0
-$dockerReady = $false
+function Wait-Docker {
+    param(
+        [int]$MaxRetries = 30,
+        [int]$DelaySecs = 2
+    )
+    for ($i = 0; $i -lt $MaxRetries; $i++) {
+        try {
+            docker ps >$null 2>&1
+            if ($?) {
+                Log "Docker daemon is ready"
+                return $true
+            }
+        } catch {}
+        Log "Docker not ready yet, waiting... (attempt $($i + 1)/$MaxRetries)"
+        Start-Sleep -Seconds $DelaySecs
+    }
+    return $false
+}
 
-while ($retryCount -lt $maxRetries) {
+# Execute Docker Compose command with error handling
+function Invoke-DockerCompose {
+    param(
+        [string]$Command,
+        [string]$Description
+    )
+    Log $Description
     try {
-        docker ps >$null 2>&1
+        & docker compose $Command.Split()
         if ($?) {
-            $dockerReady = $true
-            Log "Docker daemon is ready"
-            break
+            Log "$Description succeeded"
+            return $true
+        } else {
+            Log "ERROR: $Description failed"
+            return $false
         }
     } catch {
-        $retryCount++
-        if ($retryCount -lt $maxRetries) {
-            Log "Docker not ready yet, waiting... (attempt $retryCount/$maxRetries)"
-            Start-Sleep -Seconds 2
-        }
+        Log "ERROR: Exception during $Description - $_"
+        return $false
     }
 }
 
-if (-not $dockerReady) {
+if (-not (Wait-Docker)) {
     Log "ERROR: Docker daemon did not become ready after waiting"
     exit 1
 }
 
-# Build images without pulling (uses local cache and existing images)
-Log "Building Docker Compose images..."
-try {
-    docker compose build --pull=false
-    if ($?) {
-        Log "Docker Compose images built successfully"
-    } else {
-        Log "ERROR: Failed to build Docker Compose images"
-        exit 1
-    }
-} catch {
-    Log "ERROR: Exception during docker compose build - $_"
+if (-not (Invoke-DockerCompose "build --pull=false" "Building Docker Compose images...")) {
     exit 1
 }
 
-# Start Docker Compose services
-Log "Starting Docker Compose services..."
-try {
-    docker compose up -d
-    if ($?) {
-        Log "Docker Compose services started successfully"
-    } else {
-        Log "ERROR: Failed to start Docker Compose services"
-        exit 1
-    }
-} catch {
-    Log "ERROR: Exception during docker compose up - $_"
+if (-not (Invoke-DockerCompose "up -d" "Starting Docker Compose services...")) {
     exit 1
 }
 
