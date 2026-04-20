@@ -16577,7 +16577,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const payload = {
             __id: existing?.__id || constructionId,
             construction_id: constructionId,
-            task_name: String(record?.project_name || "").trim(),
+            task_name: String(record?.project_name || "").trim(),   
             assigned_to: getConstructionPersonnelNames(record),
             date_received: existing?.date_received || getTodayIso(),
             status: "",
