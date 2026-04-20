@@ -342,10 +342,12 @@
     const body = document.body;
     const readOnly = body && body.dataset ? body.dataset.peoDashboardReadonly === "1" : false;
     const divisionKey = body && body.dataset ? String(body.dataset.peoUserDivisionKey || "").trim().toLowerCase() : "";
+    const hasGlobalAccess = body && body.dataset ? body.dataset.peoHasGlobalAccess === "1" : false;
 
     window.peoAccess = {
         readOnly,
         divisionKey,
+        hasGlobalAccess,
     };
 
     const getCookieValue = (name) => {
@@ -1089,6 +1091,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
 
 (() => {
     const API_BASE = "/api/division-store/";
+    const SNAPSHOT_API = "/api/division-store-snapshot/";
 
     const getCookie = (name) => {
         const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
@@ -1177,9 +1180,56 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         }
     };
 
+    const fetchStoreSnapshot = async (storeKeys) => {
+        if (typeof window.fetch !== "function") return null;
+        const keys = Array.isArray(storeKeys)
+            ? Array.from(new Set(
+                storeKeys
+                    .map((value) => String(value || "").trim().toLowerCase())
+                    .filter(Boolean)
+            ))
+            : [];
+        if (!keys.length) return { stores: {} };
+
+        try {
+            const url = new URL(SNAPSHOT_API, window.location.origin);
+            url.searchParams.set("keys", keys.join(","));
+            const response = await window.fetch(url.toString(), {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" },
+            });
+            if (!response.ok) return null;
+            const payload = await response.json().catch(() => null);
+            return payload && typeof payload === "object" ? payload : null;
+        } catch (error) {
+            return null;
+        }
+    };
+
     const latestPayloads = new Map();
     const latestWriteTokens = new Map();
     const timers = new Map();
+    const emitDivisionStoreActivity = (detail = {}) => {
+        const storeKeys = Array.isArray(detail.storeKeys)
+            ? detail.storeKeys
+                .map((value) => String(value || "").trim().toLowerCase())
+                .filter(Boolean)
+            : [];
+        if (!storeKeys.length) return;
+        window.dispatchEvent(new CustomEvent("peo:division-store-sync-state", {
+            detail: {
+                storeKeys,
+                phase: String(detail.phase || "").trim().toLowerCase() === "start" ? "start" : "end",
+                source: String(detail.source || "sync").trim().toLowerCase() || "sync",
+                updatedAt: String(detail.updatedAt || "").trim(),
+                changedStoreKeys: Array.isArray(detail.changedStoreKeys)
+                    ? detail.changedStoreKeys.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean)
+                    : [],
+                at: new Date().toISOString(),
+            },
+        }));
+    };
 
     const nextWriteToken = (storeKey) => {
         const current = Number(latestWriteTokens.get(storeKey) || 0);
@@ -1207,6 +1257,12 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             nextMeta.fetched_at = new Date().toISOString();
         }
         writeStoreMeta(storeKey, nextMeta);
+        emitDivisionStoreActivity({
+            storeKeys: [storeKey],
+            phase: state ? "start" : "end",
+            source: "write",
+            updatedAt: serverUpdatedAt,
+        });
     };
 
     const sendLatestPayload = (storeKey, token) => {
@@ -1264,6 +1320,8 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         const list = Array.isArray(definitions) ? definitions : [];
         if (!list.length) return;
 
+        const emptyDefs = [];
+
         for (const def of list) {
             const storeKey = String(def?.storeKey || "").trim();
             const localKey = String(def?.localStorageKey || "").trim();
@@ -1275,16 +1333,28 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             const isEmpty = type === "object"
                 ? (!localParsed || typeof localParsed !== "object" || Array.isArray(localParsed) || Object.keys(localParsed).length === 0)
                 : (!Array.isArray(localParsed) || localParsed.length === 0);
-            if (!isEmpty) continue;
+            if (isEmpty) {
+                emptyDefs.push({ storeKey, localKey, type });
+            }
+        }
 
-            const server = await fetchStore(storeKey);
+        if (!emptyDefs.length) return;
+
+        const snapshot = await fetchStoreSnapshot(emptyDefs.map((def) => def.storeKey));
+        const stores = snapshot && typeof snapshot === "object" && snapshot.stores && typeof snapshot.stores === "object"
+            ? snapshot.stores
+            : {};
+
+        for (const def of emptyDefs) {
+            const server = stores[def.storeKey];
             const serverData = server && typeof server === "object" ? server.data : null;
+            const type = String(def.type || "array").trim();
             const hasServerData = type === "object"
                 ? (serverData && typeof serverData === "object" && !Array.isArray(serverData) && Object.keys(serverData).length > 0)
                 : (Array.isArray(serverData) && serverData.length > 0);
             if (!hasServerData) continue;
 
-            safeLocalStorageSet(localKey, JSON.stringify(serverData));
+            safeLocalStorageSet(def.localKey, JSON.stringify(serverData));
         }
     };
 
@@ -1302,62 +1372,84 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         const list = Array.isArray(definitions) ? definitions : [];
         if (!list.length) return false;
 
+        const targetStoreKeys = list
+            .map((def) => String(def?.storeKey || "").trim().toLowerCase())
+            .filter(Boolean);
         const force = options && options.force === true;
         let didWrite = false;
         const updatedStoreKeys = [];
+        emitDivisionStoreActivity({
+            storeKeys: targetStoreKeys,
+            phase: "start",
+            source: "fetch",
+        });
 
-        for (const def of list) {
-            const storeKey = String(def?.storeKey || "").trim();
-            const localKey = String(def?.localStorageKey || "").trim();
-            const type = String(def?.type || "array").trim();
-            if (!storeKey || !localKey) continue;
+        try {
+            const snapshot = await fetchStoreSnapshot(targetStoreKeys);
+            const stores = snapshot && typeof snapshot === "object" && snapshot.stores && typeof snapshot.stores === "object"
+                ? snapshot.stores
+                : {};
 
-            const server = await fetchStore(storeKey);
-            if (!server || typeof server !== "object") continue;
-            const serverData = server.data;
-            const serverUpdatedAt = String(server.updated_at || "").trim();
+            for (const def of list) {
+                const storeKey = String(def?.storeKey || "").trim();
+                const localKey = String(def?.localStorageKey || "").trim();
+                const type = String(def?.type || "array").trim();
+                if (!storeKey || !localKey) continue;
 
-            const isValid = type === "object"
-                ? (serverData && typeof serverData === "object" && !Array.isArray(serverData))
-                : Array.isArray(serverData);
-            if (!isValid) continue;
+                const server = stores[storeKey];
+                if (!server || typeof server !== "object") continue;
+                const serverData = server.data;
+                const serverUpdatedAt = String(server.updated_at || "").trim();
 
-            const meta = readStoreMeta(storeKey);
-            if (meta && meta.pending_local_write === true) {
-                continue;
+                const isValid = type === "object"
+                    ? (serverData && typeof serverData === "object" && !Array.isArray(serverData))
+                    : Array.isArray(serverData);
+                if (!isValid) continue;
+
+                const meta = readStoreMeta(storeKey);
+                if (meta && meta.pending_local_write === true) {
+                    continue;
+                }
+                const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
+                const serverUpdatedAtMs = Date.parse(serverUpdatedAt);
+
+                const shouldWrite = force
+                    || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs));
+
+                if (!shouldWrite) continue;
+
+                const prevBypass = window.__peoReadonlyStorageBypass;
+                window.__peoReadonlyStorageBypass = true;
+                try {
+                    safeLocalStorageSet(localKey, JSON.stringify(serverData));
+                    writeStoreMeta(storeKey, {
+                        updated_at: serverUpdatedAt,
+                        fetched_at: new Date().toISOString(),
+                    });
+                    didWrite = true;
+                    updatedStoreKeys.push(storeKey);
+                } finally {
+                    window.__peoReadonlyStorageBypass = prevBypass;
+                }
             }
-            const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
-            const serverUpdatedAtMs = Date.parse(serverUpdatedAt);
 
-            const shouldWrite = force
-                || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs));
-
-            if (!shouldWrite) continue;
-
-            const prevBypass = window.__peoReadonlyStorageBypass;
-            window.__peoReadonlyStorageBypass = true;
-            try {
-                safeLocalStorageSet(localKey, JSON.stringify(serverData));
-                writeStoreMeta(storeKey, {
-                    updated_at: serverUpdatedAt,
-                    fetched_at: new Date().toISOString(),
-                });
-                didWrite = true;
-                updatedStoreKeys.push(storeKey);
-            } finally {
-                window.__peoReadonlyStorageBypass = prevBypass;
+            if (updatedStoreKeys.length) {
+                window.dispatchEvent(new CustomEvent("peo:division-store-synced", {
+                    detail: {
+                        storeKeys: updatedStoreKeys,
+                    },
+                }));
             }
-        }
 
-        if (updatedStoreKeys.length) {
-            window.dispatchEvent(new CustomEvent("peo:division-store-synced", {
-                detail: {
-                    storeKeys: updatedStoreKeys,
-                },
-            }));
+            return didWrite;
+        } finally {
+            emitDivisionStoreActivity({
+                storeKeys: targetStoreKeys,
+                phase: "end",
+                source: "fetch",
+                changedStoreKeys: updatedStoreKeys,
+            });
         }
-
-        return didWrite;
     };
 
     window.peoDivisionStore = {
@@ -1365,6 +1457,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         flushSync,
         syncNow,
         fetchStore,
+        fetchStoreSnapshot,
         hydrateLocalStorageIfEmpty,
         syncToLocalStorage,
     };
@@ -1375,6 +1468,107 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             flushSync();
         }
     });
+})();
+
+(() => {
+    const badgeSpecs = [
+        { storeKey: "admin", anchorSelector: "#pa-documents-found", mountClosest: ".admin-division-table-title" },
+        { storeKey: "admin", anchorSelector: "#pa-billing-count", mountClosest: ".admin-division-table-title" },
+        { storeKey: "planning", anchorSelector: ".planning-header-meta" },
+        { storeKey: "construction", anchorSelector: ".js-construction-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "construction", anchorSelector: ".js-construction-task-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "quality", anchorSelector: ".js-quality-record-meta", mountClosest: ".quality-shell-head > div" },
+        { storeKey: "maintenance", anchorSelector: ".js-road-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-equipment-record-meta", mountClosest: ".equipment-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-schedule-count-text", mountClosest: ".schedule-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-task-table-total", mountClosest: ".task-table-tools" },
+        { storeKey: "maintenance", anchorSelector: ".js-contractor-found-count", mountClosest: ".contractor-table-head" },
+    ];
+    const activeStateByStore = new Map();
+    const badges = [];
+
+    const getMountNode = (spec) => {
+        const anchor = document.querySelector(spec.anchorSelector);
+        if (!(anchor instanceof Element)) return null;
+        if (spec.mountClosest) {
+            const mounted = anchor.closest(spec.mountClosest);
+            if (mounted instanceof HTMLElement) return mounted;
+        }
+        return anchor instanceof HTMLElement ? anchor : null;
+    };
+
+    const getStoreState = (storeKey) => {
+        const key = String(storeKey || "").trim().toLowerCase();
+        if (!activeStateByStore.has(key)) {
+            activeStateByStore.set(key, { fetch: 0, write: 0 });
+        }
+        return activeStateByStore.get(key);
+    };
+
+    const renderBadges = () => {
+        badges.forEach(({ storeKey, badge }) => {
+            const state = getStoreState(storeKey);
+            const isSaving = Number(state?.write || 0) > 0;
+            const isSyncing = Number(state?.fetch || 0) > 0;
+            const label = badge.querySelector(".peo-sync-indicator__label");
+            badge.hidden = !isSaving && !isSyncing;
+            badge.classList.toggle("is-saving", isSaving);
+            badge.classList.toggle("is-syncing", !isSaving && isSyncing);
+            if (label) {
+                label.textContent = isSaving ? "Saving..." : "Syncing...";
+            }
+        });
+    };
+
+    const ensureBadges = () => {
+        if (badges.length) return;
+        badgeSpecs.forEach((spec) => {
+            const mountNode = getMountNode(spec);
+            if (!(mountNode instanceof HTMLElement)) return;
+            if (mountNode.querySelector(`.peo-sync-indicator[data-store-key="${spec.storeKey}"]`)) return;
+            const badge = document.createElement("span");
+            badge.className = "peo-sync-indicator";
+            badge.dataset.storeKey = spec.storeKey;
+            badge.hidden = true;
+            badge.innerHTML = `
+                <span class="peo-sync-indicator__spinner" aria-hidden="true"></span>
+                <span class="peo-sync-indicator__label">Syncing...</span>
+            `;
+            mountNode.classList.add("peo-sync-indicator-host");
+            mountNode.appendChild(badge);
+            badges.push({ storeKey: spec.storeKey, badge });
+        });
+        renderBadges();
+    };
+
+    const updateStoreState = (storeKeys, source, phase) => {
+        const normalizedSource = String(source || "").trim().toLowerCase();
+        const bucket = normalizedSource === "write" ? "write" : "fetch";
+        (Array.isArray(storeKeys) ? storeKeys : []).forEach((storeKey) => {
+            const state = getStoreState(storeKey);
+            if (!state) return;
+            if (phase === "start") {
+                state[bucket] += 1;
+            } else {
+                state[bucket] = Math.max(0, Number(state[bucket] || 0) - 1);
+            }
+        });
+        renderBadges();
+    };
+
+    const init = () => {
+        ensureBadges();
+        window.addEventListener("peo:division-store-sync-state", (event) => {
+            const detail = event?.detail || {};
+            updateStoreState(detail.storeKeys, detail.source, detail.phase);
+        });
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+        init();
+    }
 })();
 
 // Keep localStorage stores in sync with the server so routed/forwarded records show up for other users/devices.
@@ -14357,6 +14551,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 refreshTaskTableFromStorage();
             }
         });
+        window.addEventListener("peo:division-store-synced", (event) => {
+            const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("maintenance")) return;
+            restoreMaintenanceState();
+            refreshTaskTableFromStorage();
+        });
         window.addEventListener(MAINTENANCE_STATE_UPDATED_EVENT, () => {
             refreshTaskTableFromStorage();
         });
@@ -15130,6 +15330,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
     const constructionUserDivisionKey = String(document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
     const isConstructionDashboardReadonly = String(document.body?.dataset?.peoDashboardReadonly || "").trim() === "1";
+    const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
+    const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
+    const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
+    const peoUsername = String(document.body?.dataset?.peoUsername || "").trim().toLowerCase();
+    const peoUserEmail = String(document.body?.dataset?.peoUserEmail || "").trim().toLowerCase();
+    const isConstructionMainDivisionIdentity = peoUsername === "construction_division" || peoUserEmail === "engr.elmon@gmail.com";
+    const canManageConstructionRegister = !isConstructionDashboardReadonly && (hasGlobalAccess || (constructionUserDivisionKey === "construction" && (isPeoSuperuser || isPeoMainDivisionAccount || isConstructionMainDivisionIdentity)));
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
@@ -16376,7 +16583,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const selectedCount = rowCheckboxes.filter((checkbox) => checkbox.checked).length;
 
         if (deleteSelectedButton) {
-            deleteSelectedButton.disabled = selectedCount === 0;
+            deleteSelectedButton.disabled = !canManageConstructionRegister || selectedCount === 0;
             deleteSelectedButton.textContent = selectedCount
                 ? `Delete Selected (${selectedCount})`
                 : "Delete Selected";
@@ -16425,7 +16632,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         : projectLabel;
 		                row.innerHTML = `
 		                    <td class="pa-select-col">
-		                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}">
+	                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}" ${canManageConstructionRegister ? "" : "disabled"}>
 		                    </td>
 		                    <td>${pageStartIndex + index + 1}</td>
 		                    <td>${projectCell}</td>
@@ -16707,9 +16914,65 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const constructionEngineerOptions = (() => {
+        const script = document.getElementById("construction-engineer-options");
+        if (!(script instanceof HTMLScriptElement)) return [];
+        try {
+            const parsed = JSON.parse(script.textContent || "[]");
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    })();
+
+    const findConstructionEngineerOption = (value, fallbackName = "") => {
+        const normalizedValue = String(value || "").trim().toLowerCase();
+        const normalizedName = String(fallbackName || "").trim().toLowerCase();
+        return constructionEngineerOptions.find((item) => {
+            const itemValue = String(item?.value || "").trim().toLowerCase();
+            const itemLabel = String(item?.label || "").trim().toLowerCase();
+            const itemSubtitle = String(item?.subtitle || "").trim().toLowerCase();
+            return Boolean(
+                (normalizedValue && itemValue === normalizedValue)
+                || (normalizedName && itemLabel === normalizedName)
+                || (normalizedValue && itemSubtitle === normalizedValue)
+            );
+        }) || null;
+    };
+
+    const buildConstructionEngineerSelectOptions = (selectedValue = "", selectedName = "", selectedRole = "") => {
+        const normalizedSelectedValue = String(selectedValue || "").trim();
+        const fallbackName = String(selectedName || "").trim();
+        const fallbackRole = String(selectedRole || "").trim();
+        const items = Array.isArray(constructionEngineerOptions) ? constructionEngineerOptions.slice() : [];
+
+        if (fallbackName && !findConstructionEngineerOption(normalizedSelectedValue, fallbackName)) {
+            items.unshift({
+                value: normalizedSelectedValue || fallbackName,
+                label: fallbackName,
+                role: fallbackRole || "Engineer",
+                subtitle: "",
+                division: "",
+            });
+        }
+
+        const optionMarkup = items.map((item) => {
+            const value = String(item?.value || "").trim();
+            const label = String(item?.label || value).trim();
+            const role = String(item?.role || "").trim();
+            const subtitle = String(item?.subtitle || "").trim();
+            const selected = value === normalizedSelectedValue || (!normalizedSelectedValue && label === fallbackName);
+            const suffix = [role, subtitle].filter(Boolean).join(" | ");
+            return `<option value="${escapeHtml(value)}" data-engineer-role="${escapeHtml(role)}"${selected ? " selected" : ""}>${escapeHtml(suffix ? `${label} (${suffix})` : label)}</option>`;
+        }).join("");
+
+        return `<option value="">Select engineer</option>${optionMarkup}`;
+    };
+
     const normalizeConstructionPersonnelRow = (value) => {
         const row = value && typeof value === "object" ? value : {};
         return {
+            engineer_value: String(row.engineer_value || row.username || row.user_id || row.user || "").trim(),
             name: String(row.name || row.personnel_name || row.full_name || "").trim(),
             role: String(row.role || row.position || row.title || "").trim(),
             contact: String(row.contact || row.phone || row.email || "").trim(),
@@ -16768,7 +17031,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const payload = {
             __id: existing?.__id || constructionId,
             construction_id: constructionId,
-            task_name: String(record?.project_name || "").trim(),
+            task_name: String(record?.project_name || "").trim(),   
             assigned_to: getConstructionPersonnelNames(record),
             date_received: existing?.date_received || getTodayIso(),
             status: "",
@@ -16802,6 +17065,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const addConstructionPersonnelRow = (seed = {}, options = {}) => {
         if (!(constructionPersonnelList instanceof HTMLElement)) return;
         const person = normalizeConstructionPersonnelRow(seed);
+        const matchedEngineer = findConstructionEngineerOption(person.engineer_value, person.name);
+        const engineerValue = String(matchedEngineer?.value || person.engineer_value || person.name || "").trim();
+        const engineerName = String(matchedEngineer?.label || person.name || "").trim();
+        const engineerRole = String(matchedEngineer?.role || person.role || "").trim();
 
         const wrapper = document.createElement("div");
         wrapper.className = "construction-personnel-row";
@@ -16815,16 +17082,14 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="construction-personnel-grid">
                 <label class="construction-field">
-                    <span>Personnel Name</span>
-                    <input type="text" data-personnel-name placeholder="Full name" value="${escapeHtml(person.name)}">
+                    <span>Select Engineer</span>
+                    <select data-personnel-engineer data-personnel-role="${escapeHtml(engineerRole)}">
+                        ${buildConstructionEngineerSelectOptions(engineerValue, engineerName, engineerRole)}
+                    </select>
                 </label>
                 <label class="construction-field">
-                    <span>Role / Position</span>
-                    <input type="text" data-personnel-role placeholder="Role or position" value="${escapeHtml(person.role)}">
-                </label>
-                <label class="construction-field">
-                    <span>Contact (optional)</span>
-                    <input type="text" data-personnel-contact placeholder="Contact number or email" value="${escapeHtml(person.contact)}">
+                    <span>Number (Optional)</span>
+                    <input type="text" inputmode="numeric" data-personnel-contact placeholder="Number" value="${escapeHtml(person.contact)}">
                 </label>
             </div>
         `;
@@ -16835,10 +17100,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (options.focus !== false) {
-            const firstInput = wrapper.querySelector("[data-personnel-name]");
-            if (firstInput instanceof HTMLInputElement) {
+            const firstInput = wrapper.querySelector("[data-personnel-engineer]");
+            if (firstInput instanceof HTMLSelectElement) {
                 firstInput.focus();
             }
+        }
+
+        const engineerSelect = wrapper.querySelector("[data-personnel-engineer]");
+        if (engineerSelect instanceof HTMLSelectElement) {
+            engineerSelect.addEventListener("change", () => {
+                const selected = engineerSelect.selectedOptions[0];
+                engineerSelect.dataset.personnelRole = String(selected?.dataset?.engineerRole || "").trim();
+            });
         }
     };
 
@@ -16859,17 +17132,46 @@ document.addEventListener("DOMContentLoaded", () => {
         const rows = getConstructionPersonnelRows();
         const personnel = rows
             .map((row) => {
-                const name = String(row.querySelector("[data-personnel-name]")?.value || "").trim();
-                const role = String(row.querySelector("[data-personnel-role]")?.value || "").trim();
+                const engineerSelect = row.querySelector("[data-personnel-engineer]");
+                const selectedOption = engineerSelect instanceof HTMLSelectElement ? engineerSelect.selectedOptions[0] : null;
+                const name = String(selectedOption?.textContent || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+                const role = String(selectedOption?.dataset?.engineerRole || engineerSelect?.dataset?.personnelRole || "").trim();
                 const contact = String(row.querySelector("[data-personnel-contact]")?.value || "").trim();
-                return { name, role, contact };
+                const engineerValue = engineerSelect instanceof HTMLSelectElement ? String(engineerSelect.value || "").trim() : "";
+                return { engineer_value: engineerValue, name, role, contact };
             })
             .filter((item) => item.name || item.role || item.contact);
         return personnel;
     };
 
     const canLoggedInUserEditConstructionPersonnel = () => {
-        return constructionUserDivisionKey === "construction" && !isConstructionDashboardReadonly;
+        return canManageConstructionRegister;
+    };
+
+    const showConstructionRegisterLockedToast = () => {
+        showPeoGeneralToast("Only the Construction Division main admin can edit the Construction Project Table.", {
+            title: "Construction Division",
+            variant: "warning",
+        });
+    };
+
+    const syncConstructionRegisterAccess = () => {
+        if (addRecordButton instanceof HTMLButtonElement) {
+            addRecordButton.disabled = !canManageConstructionRegister;
+        }
+        if (uploadInput instanceof HTMLInputElement) {
+            uploadInput.disabled = !canManageConstructionRegister;
+        }
+        if (deleteSelectedButton instanceof HTMLButtonElement) {
+            deleteSelectedButton.disabled = !canManageConstructionRegister;
+        }
+        if (selectAllCheckbox instanceof HTMLInputElement) {
+            selectAllCheckbox.disabled = !canManageConstructionRegister;
+            if (!canManageConstructionRegister) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+        }
     };
 
     const syncConstructionPersonnelEditAccess = () => {
@@ -17096,7 +17398,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	            ? router.resolveDivisionKey(constructionRouteDivisionSelect?.value)
 	            : "";
 	        const hasSource = Boolean(getConstructionRouteSourceRecord());
-	        constructionRouteSubmitButton.disabled = !targetKey || !hasSource;
+	        constructionRouteSubmitButton.disabled = !canManageConstructionRegister || !targetKey || !hasSource;
 	    };
 
 	    if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
@@ -17107,6 +17409,10 @@ document.addEventListener("DOMContentLoaded", () => {
 	    }
 	    if (constructionRouteSubmitButton instanceof HTMLButtonElement) {
 	        constructionRouteSubmitButton.addEventListener("click", async () => {
+                if (!canManageConstructionRegister) {
+                    showConstructionRegisterLockedToast();
+                    return;
+                }
 	            const router = window.peoProjectRouter;
 	            if (!router || typeof router.submitToDivision !== "function") {
 	                showPeoGeneralToast("Project submission is not available right now.", {
@@ -17569,8 +17875,14 @@ document.addEventListener("DOMContentLoaded", () => {
             });
     };
 
+    syncConstructionRegisterAccess();
+
     if (addRecordButton) {
         addRecordButton.addEventListener("click", () => {
+            if (!canManageConstructionRegister) {
+                showConstructionRegisterLockedToast();
+                return;
+            }
             openConstructionModal("create");
         });
     }
@@ -17619,6 +17931,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (constructionForm) {
         constructionForm.addEventListener("submit", async (event) => {
             event.preventDefault();
+            if (!canManageConstructionRegister) {
+                showConstructionRegisterLockedToast();
+                return;
+            }
             if (!constructionForm.checkValidity()) {
                 constructionForm.reportValidity();
                 return;
@@ -17739,6 +18055,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (uploadInput) {
         uploadInput.addEventListener("change", async (event) => {
+            if (!canManageConstructionRegister) {
+                uploadInput.value = "";
+                showConstructionRegisterLockedToast();
+                return;
+            }
             const selectedFiles = Array.from(event.target.files || []);
             if (!selectedFiles.length) return;
 
@@ -17844,6 +18165,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const record = records.find((item) => item.__id === recordId);
             if (!record) return;
 
+            if (!canManageConstructionRegister) {
+                showConstructionRegisterLockedToast();
+                return;
+            }
             openConstructionModal("edit", record);
         });
 
@@ -17857,6 +18182,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (deleteSelectedButton) {
         deleteSelectedButton.addEventListener("click", async () => {
+            if (!canManageConstructionRegister) {
+                showConstructionRegisterLockedToast();
+                return;
+            }
             const selectedIds = getVisibleRowCheckboxes()
                 .filter((checkbox) => checkbox.checked)
                 .map((checkbox) => checkbox.dataset.recordId);
@@ -17957,6 +18286,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+    const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
+    const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
+    const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
+    const canDeleteTasks = !access.readOnly && (hasGlobalAccess || isPeoSuperuser || isPeoMainDivisionAccount);
 
     const escapeHtml = (value) => String(value || "")
         .replaceAll("&", "&amp;")
@@ -18079,19 +18413,74 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const writeConstructionRecords = (items) => {
         const safeItems = Array.isArray(items) ? items : [];
+        let wrote = false;
         try {
             window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(safeItems));
-            window.dispatchEvent(new Event("construction-records-updated"));
-            return true;
+            wrote = true;
         } catch (error) {
-            return false;
+            wrote = false;
         }
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeForSync = safeItems.map((record) => {
+                const safe = record && typeof record === "object" ? { ...record } : {};
+
+                const sanitizeUrl = (value) => {
+                    const url = String(value || "").trim();
+                    if (!url || url.startsWith("data:")) return "";
+                    return url;
+                };
+
+                const normalizeImages = (value) => {
+                    const list = Array.isArray(value) ? value : [];
+                    return list
+                        .map((img) => {
+                            if (typeof img === "string") {
+                                const dataUrl = sanitizeUrl(img);
+                                return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                            }
+                            if (!img || typeof img !== "object") return null;
+                            const dataUrl = sanitizeUrl(img.dataUrl || img.url || "");
+                            if (!dataUrl) return null;
+                            return {
+                                dataUrl,
+                                name: String(img.name || "").trim(),
+                                uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || "").trim(),
+                            };
+                        })
+                        .filter(Boolean);
+                };
+
+                if (Array.isArray(safe.accomplishment_images)) {
+                    safe.accomplishment_images = normalizeImages(safe.accomplishment_images);
+                }
+
+                if (Array.isArray(safe.accomplishment_history)) {
+                    safe.accomplishment_history = safe.accomplishment_history
+                        .map((entry) => {
+                            const snapshot = entry && typeof entry === "object" ? { ...entry } : {};
+                            if (Array.isArray(snapshot.images)) {
+                                snapshot.images = normalizeImages(snapshot.images);
+                            }
+                            return snapshot;
+                        })
+                        .filter((entry) => entry && typeof entry === "object");
+                }
+
+                if (typeof safe.accomplishment_image === "string") {
+                    safe.accomplishment_image = sanitizeUrl(safe.accomplishment_image);
+                }
+
+                return safe;
+            });
+            window.peoDivisionStore.queueSync("construction", safeForSync, 0);
+        }
+        window.dispatchEvent(new Event("construction-records-updated"));
+        return wrote;
     };
 
     const deleteAllTaskData = async () => {
-        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
-        if (access.readOnly) {
-            showPeoGeneralToast("Read-only access: you cannot delete records on this dashboard.", {
+        if (!canDeleteTasks) {
+            showPeoGeneralToast("Only the Construction Division main admin can delete task rows.", {
                 title: "Construction Division",
                 variant: "warning",
             });
@@ -18116,12 +18505,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         if (!approved) return;
 
-        const deletedRecordIds = new Set(
-            tasks
-                .map((task) => String(task?.construction_id || task?.__id || "").trim())
-                .filter(Boolean)
-        );
-
         const wroteTasks = writeTasks([]);
         if (!wroteTasks) {
             showPeoGeneralToast("Unable to delete all tasks. Storage is unavailable.", {
@@ -18129,17 +18512,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 variant: "danger",
             });
             return;
-        }
-
-        if (deletedRecordIds.size > 0) {
-            const constructionRecords = readConstructionRecords();
-            const nextConstructionRecords = constructionRecords.filter((record) => {
-                const id = String(record?.__id || record?.construction_id || "").trim();
-                return !id || !deletedRecordIds.has(id);
-            });
-            if (nextConstructionRecords.length !== constructionRecords.length) {
-                writeConstructionRecords(nextConstructionRecords);
-            }
         }
 
         showPeoGeneralToast("All construction task data deleted successfully.", {
@@ -18150,6 +18522,29 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const FORM_FIELDS = [
+        "location",
+        "mun",
+        "contractor",
+        "contract_cost",
+        "revised_contract_cost",
+        "ntp_date",
+        "cd",
+        "original_expiry_date",
+        "addl_cd",
+        "revised_expiry_date",
+        "date_completed",
+        "status_previous",
+        "status_current",
+        "time_elapsed",
+        "slippage",
+        "project_remarks",
+        "project_name",
+        "assigned_to",
+        "date_received",
+        "status",
+        "remarks",
+    ];
+    const DISPLAY_FIELDS = [
         "project_name",
         "location",
         "mun",
@@ -18166,6 +18561,10 @@ document.addEventListener("DOMContentLoaded", () => {
         "status_current",
         "time_elapsed",
         "slippage",
+        "project_remarks",
+        "assigned_to",
+        "date_received",
+        "status",
         "remarks",
     ];
 
@@ -18173,20 +18572,219 @@ document.addEventListener("DOMContentLoaded", () => {
     const form = formModal ? formModal.querySelector(".js-construction-task-form") : null;
     const taskContractCostInput = form ? form.querySelector('input[name="contract_cost"]') : null;
     const taskRevisedContractCostInput = form ? form.querySelector('input[name="revised_contract_cost"]') : null;
+    const taskPhotoInput = form ? form.querySelector(".js-construction-task-photo-input") : null;
+    const taskPhotoTrigger = form ? form.querySelector(".js-construction-task-photo-trigger") : null;
+    const taskPhotoMeta = form ? form.querySelector(".js-construction-task-photo-meta") : null;
+    const taskPhotoGallery = form ? form.querySelector(".js-construction-task-photo-gallery") : null;
     const modalDialog = formModal ? formModal.querySelector(".construction-modal-dialog") : null;
     const modalBackdrop = formModal ? formModal.querySelector(".construction-modal-backdrop") : null;
     const closeModalButtons = formModal ? Array.from(formModal.querySelectorAll(".js-close-construction-task-modal")) : [];
+    const constructionPhotoUploadUrl = String(taskDashboard.dataset.photoUploadUrl || "").trim();
+    let taskExistingImages = [];
+    let taskSelectedPhotoPreviews = [];
+
+    const getTaskCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            if (cookie.slice(0, eqIndex).trim() !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getTaskCsrfToken = () => {
+        const fromCookie = getTaskCookie("csrftoken");
+        if (fromCookie) return fromCookie;
+        const fromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return fromDom instanceof HTMLInputElement ? String(fromDom.value || "").trim() : "";
+    };
+
+    const normalizeTaskImages = (value) => {
+        const list = Array.isArray(value) ? value : [];
+        return list
+            .map((img) => {
+                if (typeof img === "string") {
+                    const dataUrl = img.trim();
+                    return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                }
+                if (!img || typeof img !== "object") return null;
+                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                if (!dataUrl) return null;
+                return {
+                    dataUrl,
+                    name: String(img.name || "").trim(),
+                    uploaded_at: String(img.uploaded_at || "").trim(),
+                };
+            })
+            .filter(Boolean);
+    };
+
+    const mergeTaskImages = (existing, incoming) => {
+        const merged = [];
+        const seen = new Set();
+        [...normalizeTaskImages(incoming), ...normalizeTaskImages(existing)].forEach((img) => {
+            const key = String(img?.dataUrl || "").trim();
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            merged.push(img);
+        });
+        return merged;
+    };
+
+    const uploadTaskConstructionPhotos = async (files) => {
+        const list = Array.isArray(files) ? files : [];
+        if (!list.length) return { ok: true, images: [] };
+        if (!constructionPhotoUploadUrl) {
+            return { ok: false, error: "Photo upload URL is not configured." };
+        }
+
+        const csrfToken = getTaskCsrfToken();
+        if (!csrfToken) {
+            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
+        }
+
+        const filesForUpload = await Promise.all(
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+        );
+        const payload = new FormData();
+        filesForUpload.forEach((file) => {
+            payload.append("photos", file, file?.name || "photo");
+        });
+
+        try {
+            const response = await window.fetch(constructionPhotoUploadUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Accept": "application/json",
+                },
+                body: payload,
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data || data.ok !== true) {
+                return { ok: false, error: String(data?.error || "Photo upload failed.") };
+            }
+
+            const nowIso = new Date().toISOString();
+            const images = (Array.isArray(data.files) ? data.files : [])
+                .map((item) => ({
+                    dataUrl: String(item?.url || "").trim(),
+                    name: String(item?.original_name || item?.name || "").trim(),
+                    uploaded_at: nowIso,
+                }))
+                .filter((img) => img.dataUrl);
+
+            return { ok: true, images };
+        } catch (error) {
+            return { ok: false, error: "Unable to upload photos right now." };
+        }
+    };
+
+    const updateTaskPhotoMeta = () => {
+        if (!(taskPhotoMeta instanceof HTMLElement)) return;
+        const count = taskPhotoInput instanceof HTMLInputElement && taskPhotoInput.files
+            ? taskPhotoInput.files.length
+            : 0;
+        taskPhotoMeta.textContent = count
+            ? `${count} photo${count === 1 ? "" : "s"} selected.`
+            : "No photos selected.";
+    };
+
+    const clearTaskSelectedPhotoPreviews = () => {
+        taskSelectedPhotoPreviews.forEach((url) => {
+            try {
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                // Ignore preview cleanup errors.
+            }
+        });
+        taskSelectedPhotoPreviews = [];
+    };
+
+    const renderTaskPhotoGallery = () => {
+        if (!(taskPhotoGallery instanceof HTMLElement)) return;
+        taskPhotoGallery.innerHTML = "";
+
+        const existingItems = normalizeTaskImages(taskExistingImages).map((img) => ({
+            url: String(img?.dataUrl || "").trim(),
+            label: String(img?.name || "").trim() || "Saved photo",
+            kind: "saved",
+        }));
+        const selectedItems = taskSelectedPhotoPreviews.map((url, index) => ({
+            url,
+            label: `Selected photo ${index + 1}`,
+            kind: "selected",
+        }));
+        const items = [...existingItems, ...selectedItems].filter((item) => item.url);
+
+        if (!items.length) {
+            const empty = document.createElement("div");
+            empty.style.fontSize = "13px";
+            empty.style.color = "#6b7280";
+            empty.textContent = "No photos uploaded yet.";
+            taskPhotoGallery.appendChild(empty);
+            return;
+        }
+
+        items.forEach((item) => {
+            const card = document.createElement("div");
+            card.style.width = "180px";
+            card.style.border = "1px solid #dbe4f0";
+            card.style.borderRadius = "14px";
+            card.style.background = "#f8fbff";
+            card.style.overflow = "hidden";
+            card.style.boxShadow = "0 8px 22px rgba(15, 23, 42, 0.06)";
+
+            const preview = document.createElement("div");
+            preview.style.height = "132px";
+            preview.style.background = "#e2e8f0";
+            preview.style.backgroundImage = `url('${item.url.replace(/'/g, "%27")}')`;
+            preview.style.backgroundSize = "cover";
+            preview.style.backgroundPosition = "center";
+
+            const meta = document.createElement("div");
+            meta.style.padding = "10px 12px";
+            meta.style.display = "grid";
+            meta.style.gap = "4px";
+
+            const title = document.createElement("strong");
+            title.style.fontSize = "13px";
+            title.style.color = "#102a43";
+            title.textContent = item.label;
+
+            const badge = document.createElement("span");
+            badge.style.fontSize = "12px";
+            badge.style.color = item.kind === "saved" ? "#1d4ed8" : "#b45309";
+            badge.textContent = item.kind === "saved" ? "Saved on project" : "Selected for upload";
+
+            meta.appendChild(title);
+            meta.appendChild(badge);
+            card.appendChild(preview);
+            card.appendChild(meta);
+            taskPhotoGallery.appendChild(card);
+        });
+    };
 
     const fillForm = (record = {}) => {
         if (!form) return;
         form.reset();
-        FORM_FIELDS.forEach((field) => {
+        DISPLAY_FIELDS.forEach((field) => {
             const input = form.querySelector(`[name="${field}"]`);
             if (!input) return;
-            const value = record[field] ?? "";
+            const value = field === "project_remarks"
+                ? (record.project_remarks ?? record.remarks ?? "")
+                : (record[field] ?? "");
             input.value = value;
         });
         syncConstructionTaskCurrencyInputs();
+        clearTaskSelectedPhotoPreviews();
+        taskExistingImages = normalizeTaskImages(record.accomplishment_images);
+        updateTaskPhotoMeta();
+        renderTaskPhotoGallery();
         form.dataset.recordId = String(record.__id || record.construction_id || record.id || "");
     };
 
@@ -18204,6 +18802,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!formModal) return;
         formModal.hidden = true;
         document.body.classList.remove("construction-task-modal-open");
+        clearTaskSelectedPhotoPreviews();
     };
 
     closeModalButtons.forEach((button) => {
@@ -18223,8 +18822,38 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    const saveFormToStorage = () => {
+    if (taskPhotoTrigger instanceof HTMLButtonElement && taskPhotoInput instanceof HTMLInputElement) {
+        taskPhotoTrigger.addEventListener("click", () => {
+            taskPhotoInput.click();
+        });
+        taskPhotoInput.addEventListener("change", () => {
+            clearTaskSelectedPhotoPreviews();
+            const files = taskPhotoInput.files ? Array.from(taskPhotoInput.files) : [];
+            taskSelectedPhotoPreviews = files.map((file) => {
+                try {
+                    return window.URL.createObjectURL(file);
+                } catch (error) {
+                    return "";
+                }
+            }).filter(Boolean);
+            updateTaskPhotoMeta();
+            renderTaskPhotoGallery();
+        });
+    }
+
+    const saveFormToStorage = async () => {
         if (!form) return "";
+        if (access.readOnly) {
+            showPeoGeneralToast("Read-only access: you cannot edit tasks on this dashboard.", {
+                title: "Construction Division",
+                variant: "warning",
+            });
+            return "";
+        }
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return "";
+        }
         const recordId = String(form.dataset.recordId || "").trim() || `construction-${Date.now()}`;
         const data = FORM_FIELDS.reduce((acc, field) => {
             const input = form.querySelector(`[name="${field}"]`);
@@ -18234,48 +18863,123 @@ document.addEventListener("DOMContentLoaded", () => {
             return acc;
         }, {});
 
-        const records = readConstructionRecords();
-        const existingIndex = records.findIndex((item) => String(item?.__id || item?.construction_id || "") === recordId);
-        const baseRecord = existingIndex >= 0 ? records[existingIndex] : {};
-        const updatedRecord = {
-            ...baseRecord,
-            ...data,
-            __id: baseRecord.__id || recordId,
-            construction_id: baseRecord.construction_id || recordId,
-        };
-        if (existingIndex >= 0) {
-            records[existingIndex] = updatedRecord;
-        } else {
-            records.unshift(updatedRecord);
-        }
-        writeConstructionRecords(records);
-
         const tasks = readTasks();
+        const constructionRecords = readConstructionRecords();
         const existingTaskIndex = tasks.findIndex((task) => String(task?.construction_id || task?.__id || "") === recordId);
-        const taskPayload = {
-            __id: updatedRecord.construction_id || updatedRecord.__id || recordId,
-            construction_id: updatedRecord.construction_id || updatedRecord.__id || recordId,
-            task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
-            assigned_to: existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : "",
-            date_received: existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : "",
-            status: existingTaskIndex >= 0 ? tasks[existingTaskIndex].status : "",
-            remarks: existingTaskIndex >= 0 ? tasks[existingTaskIndex].remarks : "",
+        const existingConstructionIndex = constructionRecords.findIndex((record) => String(record?.__id || record?.construction_id || "") === recordId);
+        const existingConstructionRecord = existingConstructionIndex >= 0 ? constructionRecords[existingConstructionIndex] : {};
+        const submitButton = form.querySelector('button[type="submit"]');
+        const pickedFiles = taskPhotoInput instanceof HTMLInputElement && taskPhotoInput.files
+            ? Array.from(taskPhotoInput.files)
+            : [];
+        let mergedImages = normalizeTaskImages(existingConstructionRecord?.accomplishment_images);
+
+        if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = true;
+        }
+
+        if (pickedFiles.length) {
+            const uploadResult = await uploadTaskConstructionPhotos(pickedFiles.slice());
+            if (!uploadResult?.ok) {
+                if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = false;
+                }
+                showPeoGeneralToast(String(uploadResult?.error || "Unable to upload photos."), {
+                    title: "Construction Division",
+                    variant: "danger",
+                });
+                return "";
+            }
+            mergedImages = mergeTaskImages(existingConstructionRecord?.accomplishment_images, uploadResult.images);
+            if (taskPhotoInput instanceof HTMLInputElement) {
+                taskPhotoInput.value = "";
+            }
+            taskExistingImages = mergedImages;
+            clearTaskSelectedPhotoPreviews();
+            updateTaskPhotoMeta();
+            renderTaskPhotoGallery();
+        }
+
+        const nowIso = new Date().toISOString();
+        const constructionPayload = {
+            ...existingConstructionRecord,
+            __id: recordId,
+            project_name: data.project_name,
+            location: data.location,
+            mun: data.mun,
+            contractor: data.contractor,
+            contract_cost: data.contract_cost,
+            revised_contract_cost: data.revised_contract_cost,
+            ntp_date: data.ntp_date,
+            cd: data.cd,
+            original_expiry_date: data.original_expiry_date,
+            addl_cd: data.addl_cd,
+            revised_expiry_date: data.revised_expiry_date,
+            date_completed: data.date_completed,
+            status_previous: data.status_previous,
+            status_current: data.status_current,
+            time_elapsed: data.time_elapsed,
+            slippage: data.slippage,
+            remarks: data.project_remarks,
+            __updated_at: nowIso,
         };
+        if (mergedImages.length) {
+            constructionPayload.accomplishment_images = mergedImages;
+        }
+
+        const taskPayload = {
+            ...(existingTaskIndex >= 0 ? tasks[existingTaskIndex] : {}),
+            __id: recordId,
+            construction_id: recordId,
+            task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
+            project_name: data.project_name,
+            assigned_to: data.assigned_to || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : ""),
+            date_received: data.date_received || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : ""),
+            status: data.status,
+            remarks: data.remarks,
+        };
+
+        if (existingConstructionIndex >= 0) {
+            constructionRecords[existingConstructionIndex] = constructionPayload;
+        } else {
+            constructionRecords.unshift(constructionPayload);
+        }
         if (existingTaskIndex >= 0) {
             tasks[existingTaskIndex] = { ...tasks[existingTaskIndex], ...taskPayload };
         } else {
             tasks.unshift(taskPayload);
         }
-        writeTasks(tasks);
+
+        const wroteConstruction = writeConstructionRecords(constructionRecords);
+        const wroteTasks = writeTasks(tasks);
+        if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = false;
+        }
+        if (!wroteConstruction || !wroteTasks) {
+            showPeoGeneralToast("Unable to save this assigned project right now.", {
+                title: "Construction Division",
+                variant: "danger",
+            });
+            return "";
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+            window.peoDivisionStore.flushSync();
+        }
         return recordId;
     };
 
     if (form) {
-        form.addEventListener("submit", (event) => {
+        form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            saveFormToStorage();
+            const savedRecordId = await saveFormToStorage();
+            if (!savedRecordId) return;
             closeModal();
             render();
+            showPeoGeneralToast("Assigned project and task updated successfully.", {
+                title: "Construction Division",
+                variant: "success",
+            });
         });
     }
 
@@ -18287,6 +18991,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const deleteTrigger = clickTarget.closest(".js-construction-task-delete");
             if (deleteTrigger) {
                 event.preventDefault();
+                if (!canDeleteTasks) {
+                    showPeoGeneralToast("Only the Construction Division main admin can delete task rows.", {
+                        title: "Construction Division",
+                        variant: "warning",
+                    });
+                    return;
+                }
                 const recordId = String(deleteTrigger.dataset.recordId || deleteTrigger.closest("tr")?.dataset.recordId || "").trim();
                 if (!recordId) return;
 
@@ -18316,12 +19027,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                const constructionRecords = readConstructionRecords();
-                const nextConstructionRecords = constructionRecords.filter((item) => String(item?.__id || item?.construction_id || "") !== recordId);
-                if (nextConstructionRecords.length !== constructionRecords.length) {
-                    writeConstructionRecords(nextConstructionRecords);
-                }
-
                 showPeoGeneralToast("Task deleted successfully.", {
                     title: "Construction Division",
                     variant: "success",
@@ -18342,7 +19047,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const constructionRecord = recordId
                 ? constructionRecords.find((item) => String(item?.__id || item?.construction_id || "") === recordId)
                 : null;
-            openModal(constructionRecord || taskRecord || {});
+            openModal({
+                ...(constructionRecord || {}),
+                ...(taskRecord || {}),
+                project_name: String(constructionRecord?.project_name || taskRecord?.task_name || "").trim(),
+                project_remarks: String(constructionRecord?.remarks || "").trim(),
+            });
         });
     }
 
@@ -18393,17 +19103,19 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td>${escapeHtml(toDisplay(status))}</td>
                     <td>${escapeHtml(toDisplay(remarks))}</td>
                     <td>
-                        <div class="construction-actions">
-                            <button
-                                type="button"
-                                class="construction-action-btn construction-action-btn--delete js-construction-task-delete"
-                                ${constructionId ? `data-record-id="${escapeHtml(constructionId)}"` : ""}
-                                aria-label="Delete task"
-                                title="Delete task"
-                            >
-                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                            </button>
-                        </div>
+                        ${canDeleteTasks ? `
+                            <div class="construction-actions">
+                                <button
+                                    type="button"
+                                    class="construction-action-btn construction-action-btn--delete js-construction-task-delete"
+                                    ${constructionId ? `data-record-id="${escapeHtml(constructionId)}"` : ""}
+                                    aria-label="Delete task"
+                                    title="Delete task"
+                                >
+                                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                </button>
+                            </div>
+                        ` : '<span style="color:#9ca3af;">-</span>'}
                     </td>
                 `;
                 tableBody.appendChild(row);
@@ -18414,7 +19126,7 @@ document.addEventListener("DOMContentLoaded", () => {
             recordMeta.textContent = `${totalCount} task${totalCount === 1 ? "" : "s"}`;
         }
         if (deleteAllButton instanceof HTMLButtonElement) {
-            deleteAllButton.disabled = totalCount === 0;
+            deleteAllButton.disabled = totalCount === 0 || !canDeleteTasks;
         }
     };
 

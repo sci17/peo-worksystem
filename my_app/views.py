@@ -103,6 +103,106 @@ def _get_user_profile(user):
     return profile
 
 
+_MAIN_DIVISION_ACCOUNT_IDENTITIES = {
+    "admin_division": {
+        "emails": set(),
+    },
+    "planning_division": {
+        "emails": set(),
+    },
+    "construction_division": {
+        "emails": {"engr.elmon@gmail.com"},
+    },
+    "maintenance_division": {
+        "emails": set(),
+    },
+    "quality_control": {
+        "emails": set(),
+    },
+}
+
+
+def _has_global_division_access(user):
+    if not user:
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    username = str(getattr(user, "username", "") or "").strip().lower()
+    return username == "peo_admin"
+
+
+def _is_main_division_account(user):
+    if not user or _has_global_division_access(user):
+        return False
+    username = str(getattr(user, "username", "") or "").strip().lower()
+    email = str(getattr(user, "email", "") or "").strip().lower()
+    if username in _MAIN_DIVISION_ACCOUNT_IDENTITIES:
+        return True
+    return any(email and email in identity.get("emails", set()) for identity in _MAIN_DIVISION_ACCOUNT_IDENTITIES.values())
+
+
+def _build_construction_engineer_options():
+    User = get_user_model()
+    options = []
+
+    try:
+        queryset = (
+            User.objects.filter(is_active=True)
+            .select_related("profile")
+            .prefetch_related("groups")
+            .order_by("first_name", "last_name", "username")
+        )
+    except Exception:
+        return options
+
+    for user in queryset:
+        if _is_main_division_account(user):
+            continue
+
+        profile = getattr(user, "profile", None)
+        profile_division_key = _normalize_division_key(getattr(profile, "division", ""))
+        group_division_key = _normalize_division_key(_division_key_from_groups(user))
+        if KEY_CONSTRUCTION not in {profile_division_key, group_division_key}:
+            continue
+
+        division_label = _division_label_for_key(KEY_CONSTRUCTION)
+        full_name = str(user.get_full_name() or "").strip()
+        username = str(getattr(user, "username", "") or "").strip()
+        email = str(getattr(user, "email", "") or "").strip()
+
+        label = full_name or username or email
+        if not label:
+            continue
+
+        role = "Construction Engineer"
+
+        value = username or email or label
+        subtitle = email or username
+
+        options.append(
+            {
+                "value": value,
+                "label": label,
+                "role": role,
+                "subtitle": subtitle,
+                "division": division_label,
+            }
+        )
+
+    deduped = []
+    seen = set()
+    for item in options:
+        key = (
+            str(item.get("value", "")).strip().lower(),
+            str(item.get("label", "")).strip().lower(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
 def _normalize_division_key(value):
     text = str(value or "").strip().lower()
     if not text:
@@ -250,7 +350,7 @@ def _get_user_division_key(user):
 
 
 def _store_write_mode(user, store_key):
-    if user.is_superuser:
+    if _has_global_division_access(user):
         return "full"
 
     user_division = _get_user_division_key(user)
@@ -377,8 +477,10 @@ def _build_user_identity(user, profile=None):
         alnum_name = ''.join(char for char in display_name if char.isalnum())
         initials = (alnum_name[:2] or 'US').upper()
 
-    if user.is_superuser:
+    if _has_global_division_access(user):
         role_label = 'System Administrator'
+    elif _is_main_division_account(user):
+        role_label = 'Main Division Account'
     elif user.is_staff:
         role_label = 'Staff User'
     else:
@@ -410,8 +512,11 @@ def _build_user_identity(user, profile=None):
     return {
         'dashboard_user_profile_picture_url': picture_url,
         'dashboard_user_name': display_name,
+        'dashboard_user_email': str(getattr(user, "email", "") or "").strip(),
         'dashboard_user_initials': initials,
         'dashboard_user_role': role_label,
+        'dashboard_is_main_division_account': _is_main_division_account(user),
+        'dashboard_has_global_division_access': _has_global_division_access(user),
     }
 
 
@@ -1683,7 +1788,7 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
     stores = _load_shared_stores(request.user)
     admin_records = _safe_list(stores.get(KEY_ADMIN).data if stores.get(KEY_ADMIN) else [])
     user_division = _get_user_division_key(request.user)
-    is_super = bool(getattr(request.user, "is_superuser", False))
+    is_super = _has_global_division_access(request.user)
 
     def parse_event_datetime(value):
         parsed = _parse_loose_datetime(value)
@@ -1711,7 +1816,7 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
         return _division_label_for_key(key) or raw
 
     def resolve_user_role():
-        if request.user.is_superuser:
+        if _has_global_division_access(request.user):
             return "admin"
 
         group_names = set()
@@ -2192,7 +2297,7 @@ def _build_dashboard_notifications(request, profile, current_section='', page_he
         page_heading,
         current_maintenance,
         int(bool(getattr(request.user, "is_staff", False))),
-        int(bool(getattr(request.user, "is_superuser", False))),
+        int(bool(_has_global_division_access(request.user))),
     )
     return _cache_get_or_set(
         cache_key_value,
@@ -2220,7 +2325,7 @@ def _build_dashboard_context(request, **extra):
     division_mismatch = bool(group_division_key and profile_division_key and group_division_key != profile_division_key)
     division_sections = {KEY_ADMIN, KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE}
     dashboard_readonly = (
-        not request.user.is_superuser
+        not _has_global_division_access(request.user)
         and current_section in division_sections
         and (not user_division_key or current_section != user_division_key)
     )
@@ -2243,6 +2348,9 @@ def _build_dashboard_context(request, **extra):
         )
     )
     context.update(extra)
+
+    if current_section == KEY_CONSTRUCTION:
+        context.setdefault("construction_engineer_options", _build_construction_engineer_options())
 
     if current_section in ('', 'workflow'):
         overview_defaults = _build_overview_context(request.user)
@@ -2638,10 +2746,39 @@ def division_store_api(request, key):
 
 
 @login_required
+@require_http_methods(["GET"])
+def division_store_snapshot_api(request):
+    requested_keys = [
+        _normalize_division_key(value)
+        for value in str(request.GET.get("keys", "") or "").split(",")
+    ]
+    requested_keys = [key for key in requested_keys if key in _STORE_KEYS]
+    keys = requested_keys or list(_STORE_KEYS)
+
+    stores = _load_shared_stores(request.user)
+    payload = {}
+    for key in keys:
+        store = stores.get(key)
+        if not store:
+            payload[key] = {
+                "data": _store_default_data(key),
+                "updated_at": None,
+            }
+            continue
+
+        payload[key] = {
+            "data": _normalize_store_data(key, getattr(store, "data", None)),
+            "updated_at": store.updated_at.isoformat() if getattr(store, "updated_at", None) else None,
+        }
+
+    return JsonResponse({"stores": payload})
+
+
+@login_required
 @require_http_methods(["POST"])
 def division_store_clear_all_api(request):
     user_division = _get_user_division_key(request.user)
-    if not request.user.is_superuser and user_division != KEY_ADMIN:
+    if not _has_global_division_access(request.user) and user_division != KEY_ADMIN:
         return JsonResponse({"error": "Forbidden."}, status=403)
 
     allowed_keys = {choice[0] for choice in SharedDivisionStore.KEY_CHOICES}
@@ -2690,7 +2827,7 @@ def division_store_clear_all_api(request):
 @login_required
 @require_http_methods(["POST"])
 def construction_photo_upload(request):
-    if not request.user.is_superuser:
+    if not _has_global_division_access(request.user):
         user_division = _get_user_division_key(request.user)
         if user_division != KEY_CONSTRUCTION:
             return JsonResponse({"error": "Read-only access for construction uploads."}, status=403)
