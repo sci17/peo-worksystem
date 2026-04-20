@@ -342,10 +342,12 @@
     const body = document.body;
     const readOnly = body && body.dataset ? body.dataset.peoDashboardReadonly === "1" : false;
     const divisionKey = body && body.dataset ? String(body.dataset.peoUserDivisionKey || "").trim().toLowerCase() : "";
+    const hasGlobalAccess = body && body.dataset ? body.dataset.peoHasGlobalAccess === "1" : false;
 
     window.peoAccess = {
         readOnly,
         divisionKey,
+        hasGlobalAccess,
     };
 
     const getCookieValue = (name) => {
@@ -15281,11 +15283,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionUserDivisionKey = String(document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
     const isConstructionDashboardReadonly = String(document.body?.dataset?.peoDashboardReadonly || "").trim() === "1";
     const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
+    const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
     const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
     const peoUsername = String(document.body?.dataset?.peoUsername || "").trim().toLowerCase();
     const peoUserEmail = String(document.body?.dataset?.peoUserEmail || "").trim().toLowerCase();
     const isConstructionMainDivisionIdentity = peoUsername === "construction_division" || peoUserEmail === "engr.elmon@gmail.com";
-    const canManageConstructionRegister = constructionUserDivisionKey === "construction" && !isConstructionDashboardReadonly && (isPeoSuperuser || isPeoMainDivisionAccount || isConstructionMainDivisionIdentity);
+    const canManageConstructionRegister = !isConstructionDashboardReadonly && (hasGlobalAccess || (constructionUserDivisionKey === "construction" && (isPeoSuperuser || isPeoMainDivisionAccount || isConstructionMainDivisionIdentity)));
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
@@ -18237,8 +18240,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
     const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
+    const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
     const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
-    const canDeleteTasks = !access.readOnly && (isPeoSuperuser || isPeoMainDivisionAccount);
+    const canDeleteTasks = !access.readOnly && (hasGlobalAccess || isPeoSuperuser || isPeoMainDivisionAccount);
 
     const escapeHtml = (value) => String(value || "")
         .replaceAll("&", "&amp;")

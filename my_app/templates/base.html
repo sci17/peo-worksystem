@@ -19,6 +19,7 @@
     data-peo-dashboard-readonly="{% if dashboard_readonly %}1{% else %}0{% endif %}"
     data-peo-user-division-key="{{ user_division_key|default:'' }}"
     data-peo-is-superuser="{% if request.user.is_superuser %}1{% else %}0{% endif %}"
+    data-peo-has-global-access="{% if dashboard_has_global_division_access %}1{% else %}0{% endif %}"
     data-peo-is-main-division-account="{% if dashboard_is_main_division_account %}1{% else %}0{% endif %}"
     data-peo-username="{{ request.user.username|default:'' }}"
     data-peo-user-email="{{ dashboard_user_email|default:'' }}"
