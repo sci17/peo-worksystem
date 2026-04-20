@@ -63,9 +63,10 @@ if find_spec('django_celery_beat') is not None:
 if find_spec('django_celery_results') is not None:
     INSTALLED_APPS.append('django_celery_results')
 
+_has_whitenoise = find_spec('whitenoise') is not None
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -73,6 +74,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if _has_whitenoise:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'my_site.urls'
 ASGI_APPLICATION = 'my_site.asgi.application'
@@ -212,7 +216,8 @@ CELERY_TIMEZONE = TIME_ZONE
 # /accounts/login/ (relative paths would resolve to /accounts/login/static/...).
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+if _has_whitenoise:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
 MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT', str(BASE_DIR / 'media')))
 DATA_UPLOAD_MAX_MEMORY_SIZE = _env_int('DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE', 262144000)

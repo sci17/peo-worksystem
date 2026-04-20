@@ -20,7 +20,9 @@ DIVISION_KEY_CHOICES = [
     (KEY_CONSTRUCTION, 'Construction Division'),
     (KEY_QUALITY, 'Quality Division'),
     (KEY_MAINTENANCE, 'Maintenance Division'),
-    ]
+]
+
+
 class UserProfile(models.Model):
     APPEARANCE_LIGHT = 'light'
     APPEARANCE_SYSTEM = 'system'
@@ -36,14 +38,11 @@ class UserProfile(models.Model):
     email_notifications = models.BooleanField(default=True)
     portal_notifications = models.BooleanField(default=True)
     appearance_mode = models.CharField(max_length=10, choices=APPEARANCE_CHOICES, default=APPEARANCE_LIGHT)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    # addition
     division = models.CharField(
         max_length=20,
         choices=DIVISION_KEY_CHOICES,
-        blank = True,
-        null = True 
+        blank=True,
+        null=True,
     )
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -73,7 +72,7 @@ class DivisionStore(models.Model):
 
 class SharedDivisionStore(models.Model):
     # Global store per division key (shared across users).
-    KEY_CHOICES =DIVISION_KEY_CHOICES
+    KEY_CHOICES = DIVISION_KEY_CHOICES
 
     key = models.CharField(max_length=20, choices=KEY_CHOICES, unique=True)
     data = models.JSONField(default=dict, blank=True)
