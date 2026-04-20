@@ -217,6 +217,8 @@
     </div>
 </div>
 
+{{ construction_engineer_options|json_script:"construction-engineer-options" }}
+
 <section class="road-filter-panel js-construction-dashboard" aria-label="Construction project register" data-current-user="{{ dashboard_user_name|default:request.user.username }}" data-project-dashboard-url="{% url 'construction_project_dashboard' %}" data-photo-upload-url="{% url 'construction_photo_upload' %}">
 	    <div class="schedule-toolbar-row">
 	        <div></div>

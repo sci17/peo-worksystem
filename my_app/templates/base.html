@@ -18,6 +18,10 @@
     class="{% block body_class %}{% endblock %}"
     data-peo-dashboard-readonly="{% if dashboard_readonly %}1{% else %}0{% endif %}"
     data-peo-user-division-key="{{ user_division_key|default:'' }}"
+    data-peo-is-superuser="{% if request.user.is_superuser %}1{% else %}0{% endif %}"
+    data-peo-is-main-division-account="{% if dashboard_is_main_division_account %}1{% else %}0{% endif %}"
+    data-peo-username="{{ request.user.username|default:'' }}"
+    data-peo-user-email="{{ dashboard_user_email|default:'' }}"
 >
     <div id="systemLoader" role="status" aria-live="polite" aria-label="Loading PEO Portal">
         <div class="loader-box">
@@ -47,7 +51,7 @@
     {# Ensures a CSRF token is always present in the DOM for JSON fetch helpers. #}
     <form id="csrf-token-probe" style="display:none">{% csrf_token %}</form>
 
-    <script src="{% static 'script.js' %}?v=20260319_3"></script>
+    <script src="{% static 'script.js' %}?v=20260420_6"></script>
     {% block extra_scripts %}{% endblock %}
     <script>
         window.addEventListener("load", function () {

@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import Group
+from django.db import models
 
 from .models import (
     UserProfile,
@@ -123,6 +124,34 @@ def _sync_user_division_group(user, division_key):
 
 User = get_user_model()
 
+MAIN_DIVISION_ACCOUNT_IDENTITIES = {
+    "admin_division": {
+        "emails": set(),
+    },
+    "planning_division": {
+        "emails": set(),
+    },
+    "construction_division": {
+        "emails": {"engr.elmon@gmail.com"},
+    },
+    "maintenance_division": {
+        "emails": set(),
+    },
+    "quality_control": {
+        "emails": set(),
+    },
+}
+
+
+def _is_main_division_account(user):
+    if not user or getattr(user, "is_superuser", False):
+        return False
+    username = str(getattr(user, "username", "") or "").strip().lower()
+    email = str(getattr(user, "email", "") or "").strip().lower()
+    if username in MAIN_DIVISION_ACCOUNT_IDENTITIES:
+        return True
+    return any(email and email in identity.get("emails", set()) for identity in MAIN_DIVISION_ACCOUNT_IDENTITIES.values())
+
 
 class UserAccountTypeFilter(admin.SimpleListFilter):
     title = "account type"
@@ -131,7 +160,7 @@ class UserAccountTypeFilter(admin.SimpleListFilter):
     def lookups(self, request, model_admin):
         return (
             ("superadmin", "Super Admin"),
-            ("division_admin", "Division Admin"),
+            ("main_division_account", "Main Division Account"),
             ("staff_user", "Staff User"),
             ("portal_user", "Portal User"),
         )
@@ -140,22 +169,19 @@ class UserAccountTypeFilter(admin.SimpleListFilter):
         value = self.value()
         if value == "superadmin":
             return queryset.filter(is_superuser=True)
-        if value == "division_admin":
-            return queryset.filter(is_superuser=False, username__in=[
-                "admin_division",
-                "planning_division",
-                "construction_division",
-                "quality_division",
-                "maintenance_division",
-            ])
+        if value == "main_division_account":
+            usernames = sorted(MAIN_DIVISION_ACCOUNT_IDENTITIES.keys())
+            emails = sorted({email for identity in MAIN_DIVISION_ACCOUNT_IDENTITIES.values() for email in identity.get("emails", set())})
+            if emails:
+                return queryset.filter(is_superuser=False).filter(models.Q(username__in=usernames) | models.Q(email__in=emails))
+            return queryset.filter(is_superuser=False, username__in=usernames)
         if value == "staff_user":
-            return queryset.filter(is_superuser=False, is_staff=True).exclude(username__in=[
-                "admin_division",
-                "planning_division",
-                "construction_division",
-                "quality_division",
-                "maintenance_division",
-            ])
+            usernames = sorted(MAIN_DIVISION_ACCOUNT_IDENTITIES.keys())
+            emails = sorted({email for identity in MAIN_DIVISION_ACCOUNT_IDENTITIES.values() for email in identity.get("emails", set())})
+            queryset = queryset.filter(is_superuser=False, is_staff=True).exclude(username__in=usernames)
+            if emails:
+                queryset = queryset.exclude(email__in=emails)
+            return queryset
         if value == "portal_user":
             return queryset.filter(is_superuser=False, is_staff=False)
         return queryset
@@ -217,18 +243,10 @@ class UserAdmin(BaseUserAdmin):
 
     @admin.display(description="Account Type")
     def account_type_label(self, obj):
-        username = str(getattr(obj, "username", "") or "").strip().lower()
-        division_admin_usernames = {
-            "admin_division",
-            "planning_division",
-            "construction_division",
-            "quality_division",
-            "maintenance_division",
-        }
         if obj.is_superuser:
             return "Super Admin"
-        if username in division_admin_usernames:
-            return "Division Admin"
+        if _is_main_division_account(obj):
+            return "Main Division Account"
         if obj.is_staff:
             return "Staff User"
         return "Portal User"

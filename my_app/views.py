@@ -103,6 +103,97 @@ def _get_user_profile(user):
     return profile
 
 
+_MAIN_DIVISION_ACCOUNT_IDENTITIES = {
+    "admin_division": {
+        "emails": set(),
+    },
+    "planning_division": {
+        "emails": set(),
+    },
+    "construction_division": {
+        "emails": {"engr.elmon@gmail.com"},
+    },
+    "maintenance_division": {
+        "emails": set(),
+    },
+    "quality_control": {
+        "emails": set(),
+    },
+}
+
+
+def _is_main_division_account(user):
+    if not user or getattr(user, "is_superuser", False):
+        return False
+    username = str(getattr(user, "username", "") or "").strip().lower()
+    email = str(getattr(user, "email", "") or "").strip().lower()
+    if username in _MAIN_DIVISION_ACCOUNT_IDENTITIES:
+        return True
+    return any(email and email in identity.get("emails", set()) for identity in _MAIN_DIVISION_ACCOUNT_IDENTITIES.values())
+
+
+def _build_construction_engineer_options():
+    User = get_user_model()
+    options = []
+
+    try:
+        queryset = (
+            User.objects.filter(is_active=True)
+            .select_related("profile")
+            .prefetch_related("groups")
+            .order_by("first_name", "last_name", "username")
+        )
+    except Exception:
+        return options
+
+    for user in queryset:
+        if _is_main_division_account(user):
+            continue
+
+        profile = getattr(user, "profile", None)
+        profile_division_key = _normalize_division_key(getattr(profile, "division", ""))
+        group_division_key = _normalize_division_key(_division_key_from_groups(user))
+        if KEY_CONSTRUCTION not in {profile_division_key, group_division_key}:
+            continue
+
+        division_label = _division_label_for_key(KEY_CONSTRUCTION)
+        full_name = str(user.get_full_name() or "").strip()
+        username = str(getattr(user, "username", "") or "").strip()
+        email = str(getattr(user, "email", "") or "").strip()
+
+        label = full_name or username or email
+        if not label:
+            continue
+
+        role = "Construction Engineer"
+
+        value = username or email or label
+        subtitle = email or username
+
+        options.append(
+            {
+                "value": value,
+                "label": label,
+                "role": role,
+                "subtitle": subtitle,
+                "division": division_label,
+            }
+        )
+
+    deduped = []
+    seen = set()
+    for item in options:
+        key = (
+            str(item.get("value", "")).strip().lower(),
+            str(item.get("label", "")).strip().lower(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
 def _normalize_division_key(value):
     text = str(value or "").strip().lower()
     if not text:
@@ -379,6 +470,8 @@ def _build_user_identity(user, profile=None):
 
     if user.is_superuser:
         role_label = 'System Administrator'
+    elif _is_main_division_account(user):
+        role_label = 'Main Division Account'
     elif user.is_staff:
         role_label = 'Staff User'
     else:
@@ -410,8 +503,10 @@ def _build_user_identity(user, profile=None):
     return {
         'dashboard_user_profile_picture_url': picture_url,
         'dashboard_user_name': display_name,
+        'dashboard_user_email': str(getattr(user, "email", "") or "").strip(),
         'dashboard_user_initials': initials,
         'dashboard_user_role': role_label,
+        'dashboard_is_main_division_account': _is_main_division_account(user),
     }
 
 
@@ -2243,6 +2338,9 @@ def _build_dashboard_context(request, **extra):
         )
     )
     context.update(extra)
+
+    if current_section == KEY_CONSTRUCTION:
+        context.setdefault("construction_engineer_options", _build_construction_engineer_options())
 
     if current_section in ('', 'workflow'):
         overview_defaults = _build_overview_context(request.user)
