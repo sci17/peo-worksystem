@@ -150,7 +150,9 @@
         }
 
         document.addEventListener('click', (ev) => {
-            const trigger = ev.target.closest('[data-peo-toast-message]');
+            const clickTarget = ev.target instanceof Element ? ev.target : null;
+            if (!clickTarget) return;
+            const trigger = clickTarget.closest('[data-peo-toast-message]');
             if (!trigger) return;
             if (trigger.matches(":disabled, [aria-disabled='true']")) return;
             const message = trigger.getAttribute('data-peo-toast-message') || '';
@@ -250,13 +252,102 @@
 })();
 
 (function () {
+    const undoStack = [];
+    const MAX_UNDO_ITEMS = 20;
+
+    const getUndoShortcutLabel = () => {
+        const platform = String(window.navigator?.platform || "").toLowerCase();
+        return platform.includes("mac") ? "Cmd+Z" : "Ctrl+Z";
+    };
+
+    const isEditableTarget = (target) => {
+        if (!(target instanceof HTMLElement)) return false;
+        if (target.isContentEditable) return true;
+        return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+    };
+
+    const showUndoHintToast = (message) => {
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast(message, {
+                title: "Undo Available",
+                variant: "info",
+                duration: 4200,
+            });
+        }
+    };
+
+    const showUndoResultToast = (message, variant = "success") => {
+        if (typeof window.showPeoGeneralToast === "function") {
+            window.showPeoGeneralToast(message, {
+                title: variant === "success" ? "Restored" : "Undo Error",
+                variant,
+                duration: variant === "success" ? 3200 : 4500,
+            });
+        }
+    };
+
+    const register = (action = {}) => {
+        if (!action || typeof action.undo !== "function") return false;
+        undoStack.push(action);
+        if (undoStack.length > MAX_UNDO_ITEMS) {
+            undoStack.splice(0, undoStack.length - MAX_UNDO_ITEMS);
+        }
+
+        const label = String(action.label || "Deleted item").trim() || "Deleted item";
+        const message = String(action.hintMessage || `${label} deleted. Press ${getUndoShortcutLabel()} to undo.`).trim();
+        if (message) {
+            showUndoHintToast(message);
+        }
+        return true;
+    };
+
+    const undoLatest = async () => {
+        const action = undoStack.pop();
+        if (!action) return false;
+
+        try {
+            await action.undo();
+            const successMessage = String(action.successMessage || `${String(action.label || "Deleted item").trim() || "Deleted item"} restored.`).trim();
+            showUndoResultToast(successMessage, "success");
+            return true;
+        } catch (error) {
+            const failureMessage = String(action.failureMessage || "Unable to restore the last deleted item.").trim();
+            showUndoResultToast(failureMessage, "danger");
+            return false;
+        }
+    };
+
+    document.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return;
+        if (String(event.key || "").toLowerCase() !== "z") return;
+        if (isEditableTarget(event.target)) return;
+        if (!undoStack.length) return;
+        event.preventDefault();
+        undoLatest();
+    });
+
+    window.peoUndoManager = {
+        register,
+        undoLatest,
+        clear() {
+            undoStack.length = 0;
+        },
+        get shortcutLabel() {
+            return getUndoShortcutLabel();
+        },
+    };
+})();
+
+(function () {
     const body = document.body;
     const readOnly = body && body.dataset ? body.dataset.peoDashboardReadonly === "1" : false;
     const divisionKey = body && body.dataset ? String(body.dataset.peoUserDivisionKey || "").trim().toLowerCase() : "";
+    const hasGlobalAccess = body && body.dataset ? body.dataset.peoHasGlobalAccess === "1" : false;
 
     window.peoAccess = {
         readOnly,
         divisionKey,
+        hasGlobalAccess,
     };
 
     const getCookieValue = (name) => {
@@ -1000,6 +1091,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
 
 (() => {
     const API_BASE = "/api/division-store/";
+    const SNAPSHOT_API = "/api/division-store-snapshot/";
 
     const getCookie = (name) => {
         const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
@@ -1088,9 +1180,56 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         }
     };
 
+    const fetchStoreSnapshot = async (storeKeys) => {
+        if (typeof window.fetch !== "function") return null;
+        const keys = Array.isArray(storeKeys)
+            ? Array.from(new Set(
+                storeKeys
+                    .map((value) => String(value || "").trim().toLowerCase())
+                    .filter(Boolean)
+            ))
+            : [];
+        if (!keys.length) return { stores: {} };
+
+        try {
+            const url = new URL(SNAPSHOT_API, window.location.origin);
+            url.searchParams.set("keys", keys.join(","));
+            const response = await window.fetch(url.toString(), {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" },
+            });
+            if (!response.ok) return null;
+            const payload = await response.json().catch(() => null);
+            return payload && typeof payload === "object" ? payload : null;
+        } catch (error) {
+            return null;
+        }
+    };
+
     const latestPayloads = new Map();
     const latestWriteTokens = new Map();
     const timers = new Map();
+    const emitDivisionStoreActivity = (detail = {}) => {
+        const storeKeys = Array.isArray(detail.storeKeys)
+            ? detail.storeKeys
+                .map((value) => String(value || "").trim().toLowerCase())
+                .filter(Boolean)
+            : [];
+        if (!storeKeys.length) return;
+        window.dispatchEvent(new CustomEvent("peo:division-store-sync-state", {
+            detail: {
+                storeKeys,
+                phase: String(detail.phase || "").trim().toLowerCase() === "start" ? "start" : "end",
+                source: String(detail.source || "sync").trim().toLowerCase() || "sync",
+                updatedAt: String(detail.updatedAt || "").trim(),
+                changedStoreKeys: Array.isArray(detail.changedStoreKeys)
+                    ? detail.changedStoreKeys.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean)
+                    : [],
+                at: new Date().toISOString(),
+            },
+        }));
+    };
 
     const nextWriteToken = (storeKey) => {
         const current = Number(latestWriteTokens.get(storeKey) || 0);
@@ -1118,6 +1257,12 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             nextMeta.fetched_at = new Date().toISOString();
         }
         writeStoreMeta(storeKey, nextMeta);
+        emitDivisionStoreActivity({
+            storeKeys: [storeKey],
+            phase: state ? "start" : "end",
+            source: "write",
+            updatedAt: serverUpdatedAt,
+        });
     };
 
     const sendLatestPayload = (storeKey, token) => {
@@ -1175,6 +1320,8 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         const list = Array.isArray(definitions) ? definitions : [];
         if (!list.length) return;
 
+        const emptyDefs = [];
+
         for (const def of list) {
             const storeKey = String(def?.storeKey || "").trim();
             const localKey = String(def?.localStorageKey || "").trim();
@@ -1186,16 +1333,28 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             const isEmpty = type === "object"
                 ? (!localParsed || typeof localParsed !== "object" || Array.isArray(localParsed) || Object.keys(localParsed).length === 0)
                 : (!Array.isArray(localParsed) || localParsed.length === 0);
-            if (!isEmpty) continue;
+            if (isEmpty) {
+                emptyDefs.push({ storeKey, localKey, type });
+            }
+        }
 
-            const server = await fetchStore(storeKey);
+        if (!emptyDefs.length) return;
+
+        const snapshot = await fetchStoreSnapshot(emptyDefs.map((def) => def.storeKey));
+        const stores = snapshot && typeof snapshot === "object" && snapshot.stores && typeof snapshot.stores === "object"
+            ? snapshot.stores
+            : {};
+
+        for (const def of emptyDefs) {
+            const server = stores[def.storeKey];
             const serverData = server && typeof server === "object" ? server.data : null;
+            const type = String(def.type || "array").trim();
             const hasServerData = type === "object"
                 ? (serverData && typeof serverData === "object" && !Array.isArray(serverData) && Object.keys(serverData).length > 0)
                 : (Array.isArray(serverData) && serverData.length > 0);
             if (!hasServerData) continue;
 
-            safeLocalStorageSet(localKey, JSON.stringify(serverData));
+            safeLocalStorageSet(def.localKey, JSON.stringify(serverData));
         }
     };
 
@@ -1213,62 +1372,84 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         const list = Array.isArray(definitions) ? definitions : [];
         if (!list.length) return false;
 
+        const targetStoreKeys = list
+            .map((def) => String(def?.storeKey || "").trim().toLowerCase())
+            .filter(Boolean);
         const force = options && options.force === true;
         let didWrite = false;
         const updatedStoreKeys = [];
+        emitDivisionStoreActivity({
+            storeKeys: targetStoreKeys,
+            phase: "start",
+            source: "fetch",
+        });
 
-        for (const def of list) {
-            const storeKey = String(def?.storeKey || "").trim();
-            const localKey = String(def?.localStorageKey || "").trim();
-            const type = String(def?.type || "array").trim();
-            if (!storeKey || !localKey) continue;
+        try {
+            const snapshot = await fetchStoreSnapshot(targetStoreKeys);
+            const stores = snapshot && typeof snapshot === "object" && snapshot.stores && typeof snapshot.stores === "object"
+                ? snapshot.stores
+                : {};
 
-            const server = await fetchStore(storeKey);
-            if (!server || typeof server !== "object") continue;
-            const serverData = server.data;
-            const serverUpdatedAt = String(server.updated_at || "").trim();
+            for (const def of list) {
+                const storeKey = String(def?.storeKey || "").trim();
+                const localKey = String(def?.localStorageKey || "").trim();
+                const type = String(def?.type || "array").trim();
+                if (!storeKey || !localKey) continue;
 
-            const isValid = type === "object"
-                ? (serverData && typeof serverData === "object" && !Array.isArray(serverData))
-                : Array.isArray(serverData);
-            if (!isValid) continue;
+                const server = stores[storeKey];
+                if (!server || typeof server !== "object") continue;
+                const serverData = server.data;
+                const serverUpdatedAt = String(server.updated_at || "").trim();
 
-            const meta = readStoreMeta(storeKey);
-            if (meta && meta.pending_local_write === true) {
-                continue;
+                const isValid = type === "object"
+                    ? (serverData && typeof serverData === "object" && !Array.isArray(serverData))
+                    : Array.isArray(serverData);
+                if (!isValid) continue;
+
+                const meta = readStoreMeta(storeKey);
+                if (meta && meta.pending_local_write === true) {
+                    continue;
+                }
+                const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
+                const serverUpdatedAtMs = Date.parse(serverUpdatedAt);
+
+                const shouldWrite = force
+                    || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs));
+
+                if (!shouldWrite) continue;
+
+                const prevBypass = window.__peoReadonlyStorageBypass;
+                window.__peoReadonlyStorageBypass = true;
+                try {
+                    safeLocalStorageSet(localKey, JSON.stringify(serverData));
+                    writeStoreMeta(storeKey, {
+                        updated_at: serverUpdatedAt,
+                        fetched_at: new Date().toISOString(),
+                    });
+                    didWrite = true;
+                    updatedStoreKeys.push(storeKey);
+                } finally {
+                    window.__peoReadonlyStorageBypass = prevBypass;
+                }
             }
-            const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
-            const serverUpdatedAtMs = Date.parse(serverUpdatedAt);
 
-            const shouldWrite = force
-                || (Number.isFinite(serverUpdatedAtMs) && (!Number.isFinite(metaUpdatedAtMs) || serverUpdatedAtMs > metaUpdatedAtMs));
-
-            if (!shouldWrite) continue;
-
-            const prevBypass = window.__peoReadonlyStorageBypass;
-            window.__peoReadonlyStorageBypass = true;
-            try {
-                safeLocalStorageSet(localKey, JSON.stringify(serverData));
-                writeStoreMeta(storeKey, {
-                    updated_at: serverUpdatedAt,
-                    fetched_at: new Date().toISOString(),
-                });
-                didWrite = true;
-                updatedStoreKeys.push(storeKey);
-            } finally {
-                window.__peoReadonlyStorageBypass = prevBypass;
+            if (updatedStoreKeys.length) {
+                window.dispatchEvent(new CustomEvent("peo:division-store-synced", {
+                    detail: {
+                        storeKeys: updatedStoreKeys,
+                    },
+                }));
             }
-        }
 
-        if (updatedStoreKeys.length) {
-            window.dispatchEvent(new CustomEvent("peo:division-store-synced", {
-                detail: {
-                    storeKeys: updatedStoreKeys,
-                },
-            }));
+            return didWrite;
+        } finally {
+            emitDivisionStoreActivity({
+                storeKeys: targetStoreKeys,
+                phase: "end",
+                source: "fetch",
+                changedStoreKeys: updatedStoreKeys,
+            });
         }
-
-        return didWrite;
     };
 
     window.peoDivisionStore = {
@@ -1276,6 +1457,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         flushSync,
         syncNow,
         fetchStore,
+        fetchStoreSnapshot,
         hydrateLocalStorageIfEmpty,
         syncToLocalStorage,
     };
@@ -1286,6 +1468,107 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
             flushSync();
         }
     });
+})();
+
+(() => {
+    const badgeSpecs = [
+        { storeKey: "admin", anchorSelector: "#pa-documents-found", mountClosest: ".admin-division-table-title" },
+        { storeKey: "admin", anchorSelector: "#pa-billing-count", mountClosest: ".admin-division-table-title" },
+        { storeKey: "planning", anchorSelector: ".planning-header-meta" },
+        { storeKey: "construction", anchorSelector: ".js-construction-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "construction", anchorSelector: ".js-construction-task-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "quality", anchorSelector: ".js-quality-record-meta", mountClosest: ".quality-shell-head > div" },
+        { storeKey: "maintenance", anchorSelector: ".js-road-record-meta", mountClosest: ".road-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-equipment-record-meta", mountClosest: ".equipment-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-schedule-count-text", mountClosest: ".schedule-table-head" },
+        { storeKey: "maintenance", anchorSelector: ".js-task-table-total", mountClosest: ".task-table-tools" },
+        { storeKey: "maintenance", anchorSelector: ".js-contractor-found-count", mountClosest: ".contractor-table-head" },
+    ];
+    const activeStateByStore = new Map();
+    const badges = [];
+
+    const getMountNode = (spec) => {
+        const anchor = document.querySelector(spec.anchorSelector);
+        if (!(anchor instanceof Element)) return null;
+        if (spec.mountClosest) {
+            const mounted = anchor.closest(spec.mountClosest);
+            if (mounted instanceof HTMLElement) return mounted;
+        }
+        return anchor instanceof HTMLElement ? anchor : null;
+    };
+
+    const getStoreState = (storeKey) => {
+        const key = String(storeKey || "").trim().toLowerCase();
+        if (!activeStateByStore.has(key)) {
+            activeStateByStore.set(key, { fetch: 0, write: 0 });
+        }
+        return activeStateByStore.get(key);
+    };
+
+    const renderBadges = () => {
+        badges.forEach(({ storeKey, badge }) => {
+            const state = getStoreState(storeKey);
+            const isSaving = Number(state?.write || 0) > 0;
+            const isSyncing = Number(state?.fetch || 0) > 0;
+            const label = badge.querySelector(".peo-sync-indicator__label");
+            badge.hidden = !isSaving && !isSyncing;
+            badge.classList.toggle("is-saving", isSaving);
+            badge.classList.toggle("is-syncing", !isSaving && isSyncing);
+            if (label) {
+                label.textContent = isSaving ? "Saving..." : "Syncing...";
+            }
+        });
+    };
+
+    const ensureBadges = () => {
+        if (badges.length) return;
+        badgeSpecs.forEach((spec) => {
+            const mountNode = getMountNode(spec);
+            if (!(mountNode instanceof HTMLElement)) return;
+            if (mountNode.querySelector(`.peo-sync-indicator[data-store-key="${spec.storeKey}"]`)) return;
+            const badge = document.createElement("span");
+            badge.className = "peo-sync-indicator";
+            badge.dataset.storeKey = spec.storeKey;
+            badge.hidden = true;
+            badge.innerHTML = `
+                <span class="peo-sync-indicator__spinner" aria-hidden="true"></span>
+                <span class="peo-sync-indicator__label">Syncing...</span>
+            `;
+            mountNode.classList.add("peo-sync-indicator-host");
+            mountNode.appendChild(badge);
+            badges.push({ storeKey: spec.storeKey, badge });
+        });
+        renderBadges();
+    };
+
+    const updateStoreState = (storeKeys, source, phase) => {
+        const normalizedSource = String(source || "").trim().toLowerCase();
+        const bucket = normalizedSource === "write" ? "write" : "fetch";
+        (Array.isArray(storeKeys) ? storeKeys : []).forEach((storeKey) => {
+            const state = getStoreState(storeKey);
+            if (!state) return;
+            if (phase === "start") {
+                state[bucket] += 1;
+            } else {
+                state[bucket] = Math.max(0, Number(state[bucket] || 0) - 1);
+            }
+        });
+        renderBadges();
+    };
+
+    const init = () => {
+        ensureBadges();
+        window.addEventListener("peo:division-store-sync-state", (event) => {
+            const detail = event?.detail || {};
+            updateStoreState(detail.storeKeys, detail.source, detail.phase);
+        });
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+        init();
+    }
 })();
 
 // Keep localStorage stores in sync with the server so routed/forwarded records show up for other users/devices.
@@ -1410,7 +1693,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
     window.addEventListener("focus", () => {
         sync();
     });
-    window.setInterval(sync, 15000);
+    window.setInterval(sync, 5000);
 })();
 
 (() => {
@@ -2971,6 +3254,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!root.dataset.submissionsStoreBound) {
             root.dataset.submissionsStoreBound = "true";
+            let adminSyncInFlight = null;
+            let adminSyncQueued = false;
+            let lastAdminSyncAt = 0;
 
             const handleAdminStoreUpdate = () => {
                 adminRecords = reconcileMaintenanceOutgoingSubmissions(readAdminStore());
@@ -2986,6 +3272,42 @@ document.addEventListener("DOMContentLoaded", () => {
                 syncRouteControls();
             };
 
+            const requestAdminSync = async (options = {}) => {
+                if (document.visibilityState === "hidden") return;
+                const force = options && options.force === true;
+                const now = Date.now();
+                if (!force && now - lastAdminSyncAt < 1000) {
+                    return;
+                }
+                lastAdminSyncAt = now;
+
+                const store = window.peoDivisionStore;
+                if (!store || typeof store.syncToLocalStorage !== "function") return;
+                if (adminSyncInFlight) {
+                    adminSyncQueued = adminSyncQueued || force;
+                    return adminSyncInFlight;
+                }
+
+                adminSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+                    { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
+                ], force ? { force: true } : {}))
+                    .then((didWrite) => {
+                        if (didWrite) {
+                            handleAdminStoreUpdate();
+                        }
+                    })
+                    .finally(() => {
+                        adminSyncInFlight = null;
+                        if (adminSyncQueued) {
+                            const queuedForce = adminSyncQueued === true;
+                            adminSyncQueued = false;
+                            requestAdminSync({ force: queuedForce });
+                        }
+                    });
+
+                return adminSyncInFlight;
+            };
+
             window.addEventListener("storage", (event) => {
                 if (String(event.key || "") !== "peo_admin_division_records_v1") return;
                 handleAdminStoreUpdate();
@@ -2998,25 +3320,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 handleAdminStoreUpdate();
             });
 
-            const poll = async () => {
-                if (document.visibilityState === "hidden") return;
-                const store = window.peoDivisionStore;
-                if (!store || typeof store.syncToLocalStorage !== "function") return;
-                const didWrite = await store.syncToLocalStorage([
-                    { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
-                ]);
-                if (didWrite) {
-                    handleAdminStoreUpdate();
-                }
-            };
+            window.addEventListener("peo:division-store-synced", (event) => {
+                const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+                if (!syncedStoreKeys.includes("admin")) return;
+                handleAdminStoreUpdate();
+            });
 
-            const pollTimer = window.setInterval(poll, 12000);
+            window.addEventListener("peo:division-store-remote-update", (event) => {
+                const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+                if (!storeKeys.includes("admin")) return;
+                requestAdminSync({ force: true });
+            });
+
+            const pollTimer = window.setInterval(() => {
+                requestAdminSync();
+            }, 3000);
             window.addEventListener("pagehide", () => window.clearInterval(pollTimer), { once: true });
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState !== "hidden") {
-                    poll();
+                    requestAdminSync({ force: true });
                 }
             });
+            requestAdminSync({ force: true });
         }
 
         render();
@@ -4047,8 +4372,19 @@ const portalDomReady = () => {
     const settingsSections = document.querySelectorAll("[data-settings-section]");
     const projectHistoryPaperSizeSelects = Array.from(document.querySelectorAll(".js-project-history-paper-size"));
 
+    const mobileSidebarMediaQuery = window.matchMedia("(max-width: 1024px)");
+    const syncSidebarState = () => {
+        const isOpen = body.classList.contains("sidebar-open");
+        if (sidebarToggle instanceof HTMLElement) {
+            sidebarToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        }
+        if (sidebarOverlay instanceof HTMLElement) {
+            sidebarOverlay.setAttribute("aria-hidden", isOpen ? "false" : "true");
+        }
+    };
     const closeSidebar = () => {
         body.classList.remove("sidebar-open");
+        syncSidebarState();
     };
 
     const normalizeProjectPdfPaperSize = (value) => {
@@ -4312,10 +4648,24 @@ const portalDomReady = () => {
     if (sidebarToggle && sidebarOverlay) {
         sidebarToggle.addEventListener("click", () => {
             body.classList.toggle("sidebar-open");
+            syncSidebarState();
         });
 
         sidebarOverlay.addEventListener("click", closeSidebar);
     }
+
+    syncSidebarState();
+    mobileSidebarMediaQuery.addEventListener("change", (event) => {
+        if (!event.matches) {
+            closeSidebar();
+        }
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && body.classList.contains("sidebar-open")) {
+            closeSidebar();
+        }
+    });
 
     if (navItems.length) {
         navItems.forEach((item) => {
@@ -4326,7 +4676,7 @@ const portalDomReady = () => {
                 if (item.classList.contains("js-construction-toggle")) {
                     return;
                 }
-                if (window.matchMedia("(max-width: 1024px)").matches) {
+                if (mobileSidebarMediaQuery.matches) {
                     closeSidebar();
                 }
             });
@@ -4336,7 +4686,7 @@ const portalDomReady = () => {
     if (navSubitems.length) {
         navSubitems.forEach((item) => {
             item.addEventListener("click", () => {
-                if (window.matchMedia("(max-width: 1024px)").matches) {
+                if (mobileSidebarMediaQuery.matches) {
                     closeSidebar();
                 }
             });
@@ -4928,7 +5278,9 @@ const portalDomReady = () => {
 	        });
 
         menu.addEventListener("click", (event) => {
-            const optionButton = event.target.closest(".pa-select-custom__option");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const optionButton = clickTarget.closest(".pa-select-custom__option");
             if (!optionButton || optionButton.disabled) return;
             const nextValue = String(optionButton.dataset.value || "");
             if (select.value !== nextValue) {
@@ -5003,7 +5355,8 @@ const portalDomReady = () => {
     });
 
     document.addEventListener("click", (event) => {
-        if (!event.target.closest(".pa-select-custom")) {
+        const clickTarget = event.target instanceof Element ? event.target : null;
+        if (!clickTarget || !clickTarget.closest(".pa-select-custom")) {
             closeAdminSelectDropdowns();
         }
     });
@@ -5768,6 +6121,19 @@ const portalDomReady = () => {
         const remainingRecords = readAdminDivisionRecords().filter((record) => !deleteSet.has(record.__record_id));
         writeAdminDivisionRecords(remainingRecords);
         renderAdminDivisionRecords(remainingRecords);
+    };
+
+    const registerAdminUndoDelete = (previousRecords, label = "Record") => {
+        const recordsSnapshot = Array.isArray(previousRecords) ? previousRecords.map((record) => ({ ...(record || {}) })) : [];
+        window.peoUndoManager?.register({
+            label,
+            hintMessage: `${label} deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+            successMessage: `${label} restored.`,
+            undo: () => {
+                writeAdminDivisionRecords(recordsSnapshot);
+                renderAdminDivisionRecords(recordsSnapshot);
+            },
+        });
     };
 
     const setFormStatusOptionsByMode = (form, tableType) => {
@@ -6752,8 +7118,9 @@ const portalDomReady = () => {
                 cancelLabel: "Cancel",
             });
             if (!shouldDelete) return;
+            const previousRecords = readAdminDivisionRecords();
             deleteRecordsByIds(selected);
-            showAdminStatusToast("This data was deleted permanently.", "success");
+            registerAdminUndoDelete(previousRecords, selected.length === 1 ? "Document" : `${selected.length} records`);
         });
     }
     if (billingBulkDeleteButton) {
@@ -6774,8 +7141,9 @@ const portalDomReady = () => {
                 cancelLabel: "Cancel",
             });
             if (!shouldDelete) return;
+            const previousRecords = readAdminDivisionRecords();
             deleteRecordsByIds(selected);
-            showAdminStatusToast("This data was deleted permanently.", "success");
+            registerAdminUndoDelete(previousRecords, selected.length === 1 ? "Billing record" : `${selected.length} billing records`);
         });
     }
     if (documentsTableBody) {
@@ -6786,7 +7154,9 @@ const portalDomReady = () => {
             }
         });
         documentsTableBody.addEventListener("click", async (event) => {
-            const actionButton = event.target.closest("[data-admin-action]");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const actionButton = clickTarget.closest("[data-admin-action]");
             if (!actionButton) return;
             const action = actionButton.dataset.adminAction;
             const recordId = actionButton.dataset.recordId;
@@ -6832,8 +7202,9 @@ const portalDomReady = () => {
                     cancelLabel: "Cancel",
                 });
                 if (!shouldDelete) return;
+                const previousRecords = readAdminDivisionRecords();
                 deleteRecordsByIds([recordId]);
-                showAdminStatusToast("This data was deleted permanently.", "success");
+                registerAdminUndoDelete(previousRecords, "Document");
             }
         });
     }
@@ -6845,7 +7216,9 @@ const portalDomReady = () => {
             }
         });
         billingTableBody.addEventListener("click", async (event) => {
-            const actionButton = event.target.closest("[data-admin-action]");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const actionButton = clickTarget.closest("[data-admin-action]");
             if (!actionButton) return;
             const action = actionButton.dataset.adminAction;
             const recordId = actionButton.dataset.recordId;
@@ -6868,8 +7241,9 @@ const portalDomReady = () => {
                     cancelLabel: "Cancel",
                 });
                 if (!shouldDelete) return;
+                const previousRecords = readAdminDivisionRecords();
                 deleteRecordsByIds([recordId]);
-                showAdminStatusToast("This data was deleted permanently.", "success");
+                registerAdminUndoDelete(previousRecords, "Billing record");
             }
         });
     }
@@ -6883,6 +7257,22 @@ const portalDomReady = () => {
         const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!syncedStoreKeys.includes("admin")) return;
         renderAdminDivisionRecords(readAdminDivisionRecords().map((record) => normalizeRecord(record)));
+    });
+    window.addEventListener("peo:division-store-remote-update", (event) => {
+        const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!storeKeys.includes("admin")) return;
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return;
+        Promise.resolve(store.syncToLocalStorage([
+            { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
+        ], { force: true }))
+            .then((didWrite) => {
+                if (!didWrite) return;
+                renderAdminDivisionRecords(readAdminDivisionRecords().map((record) => normalizeRecord(record)));
+            })
+            .catch(() => {
+                // Ignore transient sync errors.
+            });
     });
     if ((documentsTableBody || billingTableBody) && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
         window.peoIncomingDocToast.check("admin", readAdminDivisionRecords());
@@ -7321,6 +7711,156 @@ document.addEventListener("DOMContentLoaded", () => {
         return Number.isFinite(parsed) ? parsed : null;
     };
 
+    const ROAD_SURFACE_TYPES = [
+        { key: "concrete", label: "Concrete" },
+        { key: "asphalt", label: "Asphalt" },
+        { key: "earth", label: "Earth" },
+        { key: "gravel", label: "Gravel" },
+        { key: "mixed", label: "Mixed" },
+    ];
+
+    const ROAD_SURFACE_LABEL_BY_KEY = ROAD_SURFACE_TYPES.reduce((map, item) => {
+        map[item.key] = item.label;
+        return map;
+    }, {});
+
+    const extractSurfaceTypeNumbers = (value) => {
+        const matches = String(value || "").replaceAll(",", "").match(/-?\d+(?:\.\d+)?/g) || [];
+        return matches
+            .map((entry) => Number.parseFloat(entry))
+            .filter((entry) => Number.isFinite(entry));
+    };
+
+    const parseSurfaceTypeValues = (surfaceValue) => {
+        const values = {};
+        const labelOrder = [];
+        const textValue = String(surfaceValue || "");
+        const matcher = /(concrete|asphalt|earth|gravel|mixed)\s*:?\s*(-?\d+(?:\.\d+)?)/gi;
+        let match = matcher.exec(textValue);
+        while (match) {
+            const key = normalizeKey(match[1]);
+            const numericValue = parseNumber(match[2]);
+            if (ROAD_SURFACE_LABEL_BY_KEY[key] && numericValue !== null) {
+                values[key] = numericValue;
+                if (!labelOrder.includes(key)) {
+                    labelOrder.push(key);
+                }
+            }
+            match = matcher.exec(textValue);
+        }
+        return { values, labelOrder };
+    };
+
+    const formatSurfaceTypeDistance = (value) => {
+        const numericValue = parseNumber(value);
+        if (!(numericValue > 0)) {
+            return "";
+        }
+        const roundedValue = Math.round(numericValue * 1000) / 1000;
+        const compactValue = String(roundedValue)
+            .replace(/\.0+$/, "")
+            .replace(/(\.\d*?[1-9])0+$/, "$1");
+        return `${compactValue}km`;
+    };
+
+    const formatSurfaceTypeText = (surfaceValues, preferredOrder = []) => {
+        const keyOrder = preferredOrder.length
+            ? [...new Set(preferredOrder)]
+            : ROAD_SURFACE_TYPES.map((item) => item.key);
+        Object.keys(surfaceValues || {}).forEach((key) => {
+            if (ROAD_SURFACE_LABEL_BY_KEY[key] && !keyOrder.includes(key)) {
+                keyOrder.push(key);
+            }
+        });
+
+        const chunks = [];
+        keyOrder.forEach((key) => {
+            const label = ROAD_SURFACE_LABEL_BY_KEY[key];
+            if (!label) {
+                return;
+            }
+            const formattedDistance = formatSurfaceTypeDistance(surfaceValues?.[key]);
+            if (!formattedDistance) {
+                return;
+            }
+            chunks.push(`${label}: ${formattedDistance}`);
+        });
+
+        return chunks.length ? chunks.join("  ") : "-";
+    };
+
+    const normalizeSurfaceTypeValue = (rawValue, preferredOrder = []) => {
+        const compactValue = String(rawValue || "").replace(/\s+/g, " ").trim();
+        if (!compactValue) {
+            return "-";
+        }
+
+        const parsed = parseSurfaceTypeValues(compactValue);
+        if (Object.keys(parsed.values).length) {
+            const order = parsed.labelOrder.length ? parsed.labelOrder : preferredOrder;
+            return formatSurfaceTypeText(parsed.values, order);
+        }
+
+        return compactValue;
+    };
+
+    const mergeSurfaceTypeUpdate = (originalValue, updatedValue) => {
+        const inputValue = String(updatedValue || "").replace(/\s+/g, " ").trim();
+        if (!inputValue) {
+            return "-";
+        }
+
+        const originalParsed = parseSurfaceTypeValues(originalValue);
+        const updatedParsed = parseSurfaceTypeValues(inputValue);
+        const updatedEntries = Object.keys(updatedParsed.values);
+
+        if (updatedEntries.length) {
+            const mergedValues = { ...originalParsed.values };
+            updatedEntries.forEach((key) => {
+                const numericValue = updatedParsed.values[key];
+                if (numericValue > 0) {
+                    mergedValues[key] = numericValue;
+                } else {
+                    delete mergedValues[key];
+                }
+            });
+
+            const outputOrder = originalParsed.labelOrder.length
+                ? [...originalParsed.labelOrder]
+                : [...updatedParsed.labelOrder];
+            updatedParsed.labelOrder.forEach((key) => {
+                if (!outputOrder.includes(key)) {
+                    outputOrder.push(key);
+                }
+            });
+            return formatSurfaceTypeText(mergedValues, outputOrder);
+        }
+
+        const rawNumbers = extractSurfaceTypeNumbers(inputValue);
+        const fallbackOrder = ROAD_SURFACE_TYPES
+            .filter((item) => item.key !== "mixed")
+            .map((item) => item.key);
+        const outputOrder = originalParsed.labelOrder.length ? [...originalParsed.labelOrder] : fallbackOrder;
+
+        if (rawNumbers.length && outputOrder.length) {
+            const mergedValues = { ...originalParsed.values };
+            outputOrder.forEach((key, index) => {
+                if (index >= rawNumbers.length) {
+                    return;
+                }
+                const numericValue = parseNumber(rawNumbers[index]);
+                if (numericValue !== null && numericValue > 0) {
+                    mergedValues[key] = numericValue;
+                } else {
+                    delete mergedValues[key];
+                }
+            });
+            return formatSurfaceTypeText(mergedValues, outputOrder);
+        }
+
+        return normalizeSurfaceTypeValue(inputValue);
+    };
+
     const getFilterValue = (filterKey) => {
         const filterLabel = document.querySelector(`[data-road-filter="${filterKey}"] .dropdown-label`);
         return filterLabel ? filterLabel.textContent.trim() : "";
@@ -7531,16 +8071,23 @@ document.addEventListener("DOMContentLoaded", () => {
             return "-";
         }
 
-        const chunks = [];
+        const surfaceValues = {};
+        const outputOrder = [];
         surfaceColumns.forEach((surfaceColumn) => {
             const rawValue = String(rowValues[surfaceColumn.index] || "").trim();
             const numericValue = parseNumber(rawValue);
             if (numericValue && numericValue > 0) {
-                chunks.push(`${surfaceColumn.label}: ${numericValue.toFixed(3)}km`);
+                const key = normalizeKey(surfaceColumn.label);
+                if (ROAD_SURFACE_LABEL_BY_KEY[key]) {
+                    surfaceValues[key] = numericValue;
+                    if (!outputOrder.includes(key)) {
+                        outputOrder.push(key);
+                    }
+                }
             }
         });
 
-        return chunks.length ? chunks.join("  ") : "-";
+        return formatSurfaceTypeText(surfaceValues, outputOrder);
     };
 
     const dedupeRoadRecords = (records) => {
@@ -7604,13 +8151,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const surfaceColumns = [];
             const addSurfaceColumn = (normalizedCells, sourceRow) => {
-                [
-                    { key: "concrete", label: "Concrete" },
-                    { key: "asphalt", label: "Asphalt" },
-                    { key: "earth", label: "Earth" },
-                    { key: "gravel", label: "Gravel" },
-                    { key: "mixed", label: "Mixed" },
-                ].forEach((surfaceType) => {
+                ROAD_SURFACE_TYPES.forEach((surfaceType) => {
                     const index = normalizedCells.findIndex((cell) => cell === surfaceType.key || cell.includes(surfaceType.key));
                     if (index >= 0 && !surfaceColumns.some((item) => item.index === index)) {
                         surfaceColumns.push({ index, label: surfaceType.label, sourceRow });
@@ -8175,10 +8716,15 @@ document.addEventListener("DOMContentLoaded", () => {
             const areaFromMunicipality = resolveMunicipalityArea(selectedMunicipality);
             const resolvedLocation = selectedLocation
                 || (areaFromMunicipality ? toTitleCase(areaFromMunicipality) : "");
+            const selectedSurfaceTypeKey = normalizeKey(selectedSurfaceType);
+            const preferredSurfaceOrder = ROAD_SURFACE_LABEL_BY_KEY[selectedSurfaceTypeKey] ? [selectedSurfaceTypeKey] : [];
             const formattedSurfaceType = selectedSurfaceTypeDetails
-                ? (selectedSurfaceTypeDetails.includes(":")
-                    ? selectedSurfaceTypeDetails
-                    : `${selectedSurfaceType}: ${selectedSurfaceTypeDetails}`)
+                ? normalizeSurfaceTypeValue(
+                    selectedSurfaceTypeDetails.includes(":")
+                        ? selectedSurfaceTypeDetails
+                        : `${selectedSurfaceType}: ${selectedSurfaceTypeDetails}`,
+                    preferredSurfaceOrder,
+                )
                 : (selectedSurfaceType || "-");
 
             roadRecords.push({
@@ -8619,7 +9165,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 : "";
         }
         if (roadEditConditionInput) roadEditConditionInput.value = getConditionFormValue(record.condition);
-        if (roadEditSurfaceTypeInput) roadEditSurfaceTypeInput.value = String(record.surfaceType || "");
+        if (roadEditSurfaceTypeInput) {
+            const normalizedSurfaceType = normalizeSurfaceTypeValue(record.surfaceType);
+            roadEditSurfaceTypeInput.value = normalizedSurfaceType === "-" ? String(record.surfaceType || "-") : normalizedSurfaceType;
+        }
     };
 
     const renderRoadEditRecordRows = (recordIndexes, selectedIndex) => {
@@ -8797,6 +9346,16 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    if (roadEditSurfaceTypeInput && roadEditRecordSelect) {
+        roadEditSurfaceTypeInput.addEventListener("blur", () => {
+            const selectedIndex = Number.parseInt(roadEditRecordSelect.value, 10);
+            const baseSurfaceType = Number.isInteger(selectedIndex) && roadRecords[selectedIndex]
+                ? roadRecords[selectedIndex].surfaceType
+                : "";
+            roadEditSurfaceTypeInput.value = mergeSurfaceTypeUpdate(baseSurfaceType, roadEditSurfaceTypeInput.value);
+        });
+    }
+
     if (roadEditRecordsBody && roadEditRecordSelect) {
         roadEditRecordsBody.addEventListener("click", (event) => {
             const clickTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
@@ -8839,7 +9398,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const updatedCondition = ["good", "fair", "poor", "bad"].includes(selectedCondition)
                 ? selectedCondition
                 : "unknown";
-            const updatedSurfaceType = (roadEditSurfaceTypeInput?.value || "").trim() || "-";
+            const updatedSurfaceType = mergeSurfaceTypeUpdate(targetRecord.surfaceType, roadEditSurfaceTypeInput?.value || "");
             const originalSnapshot = {
                 roadId: String(targetRecord.roadId || "-"),
                 roadName: String(targetRecord.roadName || "-"),
@@ -10600,7 +11159,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         contractorManagement.addEventListener("click", (event) => {
-            const evaluationOpener = event.target.closest(".js-contractor-open-eval");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) {
+                return;
+            }
+
+            const evaluationOpener = clickTarget.closest(".js-contractor-open-eval");
             if (evaluationOpener) {
                 const row = evaluationOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10610,7 +11174,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const editOpener = event.target.closest(".js-contractor-open-edit");
+            const editOpener = clickTarget.closest(".js-contractor-open-edit");
             if (editOpener) {
                 const row = editOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10620,7 +11184,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const deleteOpener = event.target.closest(".js-contractor-delete");
+            const deleteOpener = clickTarget.closest(".js-contractor-delete");
             if (deleteOpener) {
                 const row = deleteOpener.closest(".js-contractor-row");
                 if (!row) {
@@ -10630,7 +11194,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const opener = event.target.closest(".js-contractor-open-card");
+            const opener = clickTarget.closest(".js-contractor-open-card");
             if (!opener) {
                 return;
             }
@@ -10832,7 +11396,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (dropdownMenu) {
             dropdownMenu.addEventListener("click", (event) => {
-                const option = event.target.closest(".dropdown-option");
+                const clickTarget = event.target instanceof Element ? event.target : null;
+                if (!clickTarget) {
+                    return;
+                }
+                const option = clickTarget.closest(".dropdown-option");
                 if (!option) {
                     return;
                 }
@@ -13983,8 +14551,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 refreshTaskTableFromStorage();
             }
         });
+        window.addEventListener("peo:division-store-synced", (event) => {
+            const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("maintenance")) return;
+            restoreMaintenanceState();
+            refreshTaskTableFromStorage();
+        });
         window.addEventListener(MAINTENANCE_STATE_UPDATED_EVENT, () => {
             refreshTaskTableFromStorage();
+        });
+        window.addEventListener("peo:division-store-remote-update", (event) => {
+            const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!storeKeys.includes("admin") && !storeKeys.includes("maintenance")) return;
+            requestMaintenanceHydrate();
         });
 
         // Pull server state when localStorage is empty/stale (e.g., different user/session/device).
@@ -14152,7 +14731,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (dropdownMenu) {
                 dropdownMenu.addEventListener("click", (event) => {
-                    const option = event.target.closest(".dropdown-option");
+                    const clickTarget = event.target instanceof Element ? event.target : null;
+                    if (!clickTarget) {
+                        return;
+                    }
+                    const option = clickTarget.closest(".dropdown-option");
                     if (!option) {
                         return;
                     }
@@ -14739,17 +15322,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionPersonnelList = constructionModal ? constructionModal.querySelector(".js-construction-personnel-list") : null;
     const constructionPersonnelEmpty = constructionModal ? constructionModal.querySelector(".js-construction-personnel-empty") : null;
     const constructionPersonnelMeta = constructionModal ? constructionModal.querySelector(".js-construction-personnel-meta") : null;
+    const constructionPersonnelLockNote = constructionModal ? constructionModal.querySelector(".js-construction-personnel-lock-note") : null;
     const addConstructionPersonnelButton = constructionModal ? constructionModal.querySelector(".js-construction-add-personnel") : null;
     const closeConstructionModalButtons = constructionModal
         ? Array.from(constructionModal.querySelectorAll(".js-close-construction-modal"))
         : [];
     const constructionPhotoUploadUrl = String(constructionDashboard.dataset.photoUploadUrl || "").trim();
+    const constructionUserDivisionKey = String(document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
+    const isConstructionDashboardReadonly = String(document.body?.dataset?.peoDashboardReadonly || "").trim() === "1";
+    const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
+    const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
+    const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
+    const peoUsername = String(document.body?.dataset?.peoUsername || "").trim().toLowerCase();
+    const peoUserEmail = String(document.body?.dataset?.peoUserEmail || "").trim().toLowerCase();
+    const isConstructionMainDivisionIdentity = peoUsername === "construction_division" || peoUserEmail === "engr.elmon@gmail.com";
+    const canManageConstructionRegister = !isConstructionDashboardReadonly && (hasGlobalAccess || (constructionUserDivisionKey === "construction" && (isPeoSuperuser || isPeoMainDivisionAccount || isConstructionMainDivisionIdentity)));
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
     const CONSTRUCTION_PAGE_SIZE = 10;
-	    const CONSTRUCTION_MAX_IMAGE_COUNT = 10;
 	    const CONSTRUCTION_FIELDS = [
 	        "project_name",
 	        "location",
@@ -14913,7 +15505,7 @@ document.addEventListener("DOMContentLoaded", () => {
             seen.add(key);
             merged.push(img);
         });
-        return merged.slice(0, CONSTRUCTION_MAX_IMAGE_COUNT);
+        return merged;
     };
 
     const uploadConstructionPhotos = async (files) => {
@@ -14962,7 +15554,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }))
                 .filter((img) => img.dataUrl);
 
-            return { ok: true, images: images.slice(0, CONSTRUCTION_MAX_IMAGE_COUNT) };
+            return { ok: true, images };
         } catch (error) {
             return { ok: false, error: "Unable to upload photos right now." };
         }
@@ -15991,7 +16583,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const selectedCount = rowCheckboxes.filter((checkbox) => checkbox.checked).length;
 
         if (deleteSelectedButton) {
-            deleteSelectedButton.disabled = selectedCount === 0;
+            deleteSelectedButton.disabled = !canManageConstructionRegister || selectedCount === 0;
             deleteSelectedButton.textContent = selectedCount
                 ? `Delete Selected (${selectedCount})`
                 : "Delete Selected";
@@ -16040,7 +16632,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         : projectLabel;
 		                row.innerHTML = `
 		                    <td class="pa-select-col">
-		                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}">
+	                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}" ${canManageConstructionRegister ? "" : "disabled"}>
 		                    </td>
 		                    <td>${pageStartIndex + index + 1}</td>
 		                    <td>${projectCell}</td>
@@ -16322,9 +16914,65 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const constructionEngineerOptions = (() => {
+        const script = document.getElementById("construction-engineer-options");
+        if (!(script instanceof HTMLScriptElement)) return [];
+        try {
+            const parsed = JSON.parse(script.textContent || "[]");
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    })();
+
+    const findConstructionEngineerOption = (value, fallbackName = "") => {
+        const normalizedValue = String(value || "").trim().toLowerCase();
+        const normalizedName = String(fallbackName || "").trim().toLowerCase();
+        return constructionEngineerOptions.find((item) => {
+            const itemValue = String(item?.value || "").trim().toLowerCase();
+            const itemLabel = String(item?.label || "").trim().toLowerCase();
+            const itemSubtitle = String(item?.subtitle || "").trim().toLowerCase();
+            return Boolean(
+                (normalizedValue && itemValue === normalizedValue)
+                || (normalizedName && itemLabel === normalizedName)
+                || (normalizedValue && itemSubtitle === normalizedValue)
+            );
+        }) || null;
+    };
+
+    const buildConstructionEngineerSelectOptions = (selectedValue = "", selectedName = "", selectedRole = "") => {
+        const normalizedSelectedValue = String(selectedValue || "").trim();
+        const fallbackName = String(selectedName || "").trim();
+        const fallbackRole = String(selectedRole || "").trim();
+        const items = Array.isArray(constructionEngineerOptions) ? constructionEngineerOptions.slice() : [];
+
+        if (fallbackName && !findConstructionEngineerOption(normalizedSelectedValue, fallbackName)) {
+            items.unshift({
+                value: normalizedSelectedValue || fallbackName,
+                label: fallbackName,
+                role: fallbackRole || "Engineer",
+                subtitle: "",
+                division: "",
+            });
+        }
+
+        const optionMarkup = items.map((item) => {
+            const value = String(item?.value || "").trim();
+            const label = String(item?.label || value).trim();
+            const role = String(item?.role || "").trim();
+            const subtitle = String(item?.subtitle || "").trim();
+            const selected = value === normalizedSelectedValue || (!normalizedSelectedValue && label === fallbackName);
+            const suffix = [role, subtitle].filter(Boolean).join(" | ");
+            return `<option value="${escapeHtml(value)}" data-engineer-role="${escapeHtml(role)}"${selected ? " selected" : ""}>${escapeHtml(suffix ? `${label} (${suffix})` : label)}</option>`;
+        }).join("");
+
+        return `<option value="">Select engineer</option>${optionMarkup}`;
+    };
+
     const normalizeConstructionPersonnelRow = (value) => {
         const row = value && typeof value === "object" ? value : {};
         return {
+            engineer_value: String(row.engineer_value || row.username || row.user_id || row.user || "").trim(),
             name: String(row.name || row.personnel_name || row.full_name || "").trim(),
             role: String(row.role || row.position || row.title || "").trim(),
             contact: String(row.contact || row.phone || row.email || "").trim(),
@@ -16383,7 +17031,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const payload = {
             __id: existing?.__id || constructionId,
             construction_id: constructionId,
-            task_name: String(record?.project_name || "").trim(),
+            task_name: String(record?.project_name || "").trim(),   
             assigned_to: getConstructionPersonnelNames(record),
             date_received: existing?.date_received || getTodayIso(),
             status: "",
@@ -16417,6 +17065,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const addConstructionPersonnelRow = (seed = {}, options = {}) => {
         if (!(constructionPersonnelList instanceof HTMLElement)) return;
         const person = normalizeConstructionPersonnelRow(seed);
+        const matchedEngineer = findConstructionEngineerOption(person.engineer_value, person.name);
+        const engineerValue = String(matchedEngineer?.value || person.engineer_value || person.name || "").trim();
+        const engineerName = String(matchedEngineer?.label || person.name || "").trim();
+        const engineerRole = String(matchedEngineer?.role || person.role || "").trim();
 
         const wrapper = document.createElement("div");
         wrapper.className = "construction-personnel-row";
@@ -16430,16 +17082,14 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="construction-personnel-grid">
                 <label class="construction-field">
-                    <span>Personnel Name</span>
-                    <input type="text" data-personnel-name placeholder="Full name" value="${escapeHtml(person.name)}">
+                    <span>Select Engineer</span>
+                    <select data-personnel-engineer data-personnel-role="${escapeHtml(engineerRole)}">
+                        ${buildConstructionEngineerSelectOptions(engineerValue, engineerName, engineerRole)}
+                    </select>
                 </label>
                 <label class="construction-field">
-                    <span>Role / Position</span>
-                    <input type="text" data-personnel-role placeholder="Role or position" value="${escapeHtml(person.role)}">
-                </label>
-                <label class="construction-field">
-                    <span>Contact (optional)</span>
-                    <input type="text" data-personnel-contact placeholder="Contact number or email" value="${escapeHtml(person.contact)}">
+                    <span>Number (Optional)</span>
+                    <input type="text" inputmode="numeric" data-personnel-contact placeholder="Number" value="${escapeHtml(person.contact)}">
                 </label>
             </div>
         `;
@@ -16450,10 +17100,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (options.focus !== false) {
-            const firstInput = wrapper.querySelector("[data-personnel-name]");
-            if (firstInput instanceof HTMLInputElement) {
+            const firstInput = wrapper.querySelector("[data-personnel-engineer]");
+            if (firstInput instanceof HTMLSelectElement) {
                 firstInput.focus();
             }
+        }
+
+        const engineerSelect = wrapper.querySelector("[data-personnel-engineer]");
+        if (engineerSelect instanceof HTMLSelectElement) {
+            engineerSelect.addEventListener("change", () => {
+                const selected = engineerSelect.selectedOptions[0];
+                engineerSelect.dataset.personnelRole = String(selected?.dataset?.engineerRole || "").trim();
+            });
         }
     };
 
@@ -16474,13 +17132,79 @@ document.addEventListener("DOMContentLoaded", () => {
         const rows = getConstructionPersonnelRows();
         const personnel = rows
             .map((row) => {
-                const name = String(row.querySelector("[data-personnel-name]")?.value || "").trim();
-                const role = String(row.querySelector("[data-personnel-role]")?.value || "").trim();
+                const engineerSelect = row.querySelector("[data-personnel-engineer]");
+                const selectedOption = engineerSelect instanceof HTMLSelectElement ? engineerSelect.selectedOptions[0] : null;
+                const name = String(selectedOption?.textContent || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+                const role = String(selectedOption?.dataset?.engineerRole || engineerSelect?.dataset?.personnelRole || "").trim();
                 const contact = String(row.querySelector("[data-personnel-contact]")?.value || "").trim();
-                return { name, role, contact };
+                const engineerValue = engineerSelect instanceof HTMLSelectElement ? String(engineerSelect.value || "").trim() : "";
+                return { engineer_value: engineerValue, name, role, contact };
             })
             .filter((item) => item.name || item.role || item.contact);
         return personnel;
+    };
+
+    const canLoggedInUserEditConstructionPersonnel = () => {
+        return canManageConstructionRegister;
+    };
+
+    const showConstructionRegisterLockedToast = () => {
+        showPeoGeneralToast("Only the Construction Division main admin can edit the Construction Project Table.", {
+            title: "Construction Division",
+            variant: "warning",
+        });
+    };
+
+    const syncConstructionRegisterAccess = () => {
+        if (addRecordButton instanceof HTMLButtonElement) {
+            addRecordButton.disabled = !canManageConstructionRegister;
+        }
+        if (uploadInput instanceof HTMLInputElement) {
+            uploadInput.disabled = !canManageConstructionRegister;
+        }
+        if (deleteSelectedButton instanceof HTMLButtonElement) {
+            deleteSelectedButton.disabled = !canManageConstructionRegister;
+        }
+        if (selectAllCheckbox instanceof HTMLInputElement) {
+            selectAllCheckbox.disabled = !canManageConstructionRegister;
+            if (!canManageConstructionRegister) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+        }
+    };
+
+    const syncConstructionPersonnelEditAccess = () => {
+        const canEditPersonnel = canLoggedInUserEditConstructionPersonnel();
+
+        if (addConstructionPersonnelButton instanceof HTMLButtonElement) {
+            addConstructionPersonnelButton.disabled = !canEditPersonnel;
+            addConstructionPersonnelButton.hidden = !canEditPersonnel;
+        }
+
+        if (constructionPersonnelLockNote instanceof HTMLElement) {
+            constructionPersonnelLockNote.hidden = canEditPersonnel;
+        }
+
+        getConstructionPersonnelRows().forEach((row) => {
+            row.classList.toggle("is-readonly", !canEditPersonnel);
+
+            row.querySelectorAll("input").forEach((input) => {
+                if (!(input instanceof HTMLInputElement)) return;
+                input.readOnly = !canEditPersonnel;
+                if (!canEditPersonnel) {
+                    input.setAttribute("aria-readonly", "true");
+                } else {
+                    input.removeAttribute("aria-readonly");
+                }
+            });
+
+            const removeButton = row.querySelector(".js-construction-remove-personnel");
+            if (removeButton instanceof HTMLButtonElement) {
+                removeButton.disabled = !canEditPersonnel;
+                removeButton.hidden = !canEditPersonnel;
+            }
+        });
     };
 
     const fillConstructionForm = (record) => {
@@ -16506,6 +17230,7 @@ document.addEventListener("DOMContentLoaded", () => {
         initConstructionScheduleAutofill();
         renderConstructionPersonnel(mode === "edit" && record ? record.personnel : []);
         setConstructionProjectOverviewReadonly(mode === "edit");
+        syncConstructionPersonnelEditAccess();
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
@@ -16543,6 +17268,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (constructionForm) constructionForm.reset();
         renderConstructionPersonnel([]);
         setConstructionProjectOverviewReadonly(false);
+        syncConstructionPersonnelEditAccess();
         if (constructionPhotoInput instanceof HTMLInputElement) {
             constructionPhotoInput.value = "";
         }
@@ -16574,7 +17300,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (addConstructionPersonnelButton instanceof HTMLButtonElement) {
         addConstructionPersonnelButton.addEventListener("click", () => {
+            if (addConstructionPersonnelButton.disabled) return;
             addConstructionPersonnelRow({}, { focus: true });
+            syncConstructionPersonnelEditAccess();
             syncConstructionRouteControls();
         });
     }
@@ -16583,10 +17311,12 @@ document.addEventListener("DOMContentLoaded", () => {
         constructionPersonnelList.addEventListener("click", (event) => {
             const target = event.target instanceof Element ? event.target.closest(".js-construction-remove-personnel") : null;
             if (!target) return;
+            if (target instanceof HTMLButtonElement && target.disabled) return;
             const row = target.closest("[data-construction-personnel-row]");
             if (row) {
                 row.remove();
                 syncConstructionPersonnelUi();
+                syncConstructionPersonnelEditAccess();
                 syncConstructionRouteControls();
             }
         });
@@ -16597,6 +17327,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const formData = new FormData(constructionForm);
         const projectName = getTrimmedFormValue(formData, "project_name");
         if (!projectName) return null;
+        const existingRecord = editingRecordId
+            ? records.find((record) => record.__id === editingRecordId)
+            : null;
+        const personnel = canLoggedInUserEditConstructionPersonnel()
+            ? readConstructionPersonnelFromForm()
+            : (Array.isArray(existingRecord?.personnel) ? existingRecord.personnel : []);
 
         return {
             __id: createRecordId(),
@@ -16617,7 +17353,7 @@ document.addEventListener("DOMContentLoaded", () => {
             time_elapsed: getTrimmedFormValue(formData, "time_elapsed"),
             slippage: getTrimmedFormValue(formData, "slippage"),
             remarks: getTrimmedFormValue(formData, "remarks"),
-            personnel: readConstructionPersonnelFromForm(),
+            personnel,
         };
     };
 
@@ -16662,7 +17398,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	            ? router.resolveDivisionKey(constructionRouteDivisionSelect?.value)
 	            : "";
 	        const hasSource = Boolean(getConstructionRouteSourceRecord());
-	        constructionRouteSubmitButton.disabled = !targetKey || !hasSource;
+	        constructionRouteSubmitButton.disabled = !canManageConstructionRegister || !targetKey || !hasSource;
 	    };
 
 	    if (constructionRouteDivisionSelect instanceof HTMLSelectElement) {
@@ -16673,6 +17409,10 @@ document.addEventListener("DOMContentLoaded", () => {
 	    }
 	    if (constructionRouteSubmitButton instanceof HTMLButtonElement) {
 	        constructionRouteSubmitButton.addEventListener("click", async () => {
+                if (!canManageConstructionRegister) {
+                    showConstructionRegisterLockedToast();
+                    return;
+                }
 	            const router = window.peoProjectRouter;
 	            if (!router || typeof router.submitToDivision !== "function") {
 	                showPeoGeneralToast("Project submission is not available right now.", {
@@ -17135,8 +17875,14 @@ document.addEventListener("DOMContentLoaded", () => {
             });
     };
 
+    syncConstructionRegisterAccess();
+
     if (addRecordButton) {
         addRecordButton.addEventListener("click", () => {
+            if (!canManageConstructionRegister) {
+                showConstructionRegisterLockedToast();
+                return;
+            }
             openConstructionModal("create");
         });
     }
@@ -17185,6 +17931,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (constructionForm) {
         constructionForm.addEventListener("submit", async (event) => {
             event.preventDefault();
+            if (!canManageConstructionRegister) {
+                showConstructionRegisterLockedToast();
+                return;
+            }
             if (!constructionForm.checkValidity()) {
                 constructionForm.reportValidity();
                 return;
@@ -17205,15 +17955,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             let mergedImages = existingImages;
             if (pickedFiles.length) {
-                const remaining = Math.max(0, CONSTRUCTION_MAX_IMAGE_COUNT - existingImages.length);
-                const toUpload = pickedFiles.slice(0, remaining);
-                if (!toUpload.length) {
-                    showPeoGeneralToast(`You can upload up to ${CONSTRUCTION_MAX_IMAGE_COUNT} photos per record.`, {
-                        title: "Construction Division",
-                        variant: "warning",
-                    });
-                    return;
-                }
+                const toUpload = pickedFiles.slice();
 
                 if (submitButton instanceof HTMLButtonElement) {
                     submitButton.disabled = true;
@@ -17313,6 +18055,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (uploadInput) {
         uploadInput.addEventListener("change", async (event) => {
+            if (!canManageConstructionRegister) {
+                uploadInput.value = "";
+                showConstructionRegisterLockedToast();
+                return;
+            }
             const selectedFiles = Array.from(event.target.files || []);
             if (!selectedFiles.length) return;
 
@@ -17418,6 +18165,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const record = records.find((item) => item.__id === recordId);
             if (!record) return;
 
+            if (!canManageConstructionRegister) {
+                showConstructionRegisterLockedToast();
+                return;
+            }
             openConstructionModal("edit", record);
         });
 
@@ -17431,6 +18182,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (deleteSelectedButton) {
         deleteSelectedButton.addEventListener("click", async () => {
+            if (!canManageConstructionRegister) {
+                showConstructionRegisterLockedToast();
+                return;
+            }
             const selectedIds = getVisibleRowCheckboxes()
                 .filter((checkbox) => checkbox.checked)
                 .map((checkbox) => checkbox.dataset.recordId);
@@ -17474,12 +18229,34 @@ document.addEventListener("DOMContentLoaded", () => {
         writeStoredRecords(records);
         renderTable();
     };
+    let constructionRemoteSyncInFlight = null;
+    const requestConstructionRemoteSync = () => {
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return;
+        if (constructionRemoteSyncInFlight) return constructionRemoteSyncInFlight;
+        constructionRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+            { storeKey: "admin", localStorageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
+            { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+        ], { force: true }))
+            .then(() => {
+                resyncAdminAssignedProjects();
+            })
+            .finally(() => {
+                constructionRemoteSyncInFlight = null;
+            });
+        return constructionRemoteSyncInFlight;
+    };
 
     window.addEventListener("focus", resyncAdminAssignedProjects);
     window.addEventListener("peo:division-store-synced", (event) => {
         const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("construction")) return;
         resyncAdminAssignedProjects();
+    });
+    window.addEventListener("peo:division-store-remote-update", (event) => {
+        const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!storeKeys.includes("admin") && !storeKeys.includes("construction")) return;
+        requestConstructionRemoteSync();
     });
     window.addEventListener("construction-records-updated", resyncAdminAssignedProjects);
     window.addEventListener("storage", (event) => {
@@ -17509,6 +18286,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+    const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
+    const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
+    const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
+    const canDeleteTasks = !access.readOnly && (hasGlobalAccess || isPeoSuperuser || isPeoMainDivisionAccount);
 
     const escapeHtml = (value) => String(value || "")
         .replaceAll("&", "&amp;")
@@ -17631,19 +18413,74 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const writeConstructionRecords = (items) => {
         const safeItems = Array.isArray(items) ? items : [];
+        let wrote = false;
         try {
             window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(safeItems));
-            window.dispatchEvent(new Event("construction-records-updated"));
-            return true;
+            wrote = true;
         } catch (error) {
-            return false;
+            wrote = false;
         }
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+            const safeForSync = safeItems.map((record) => {
+                const safe = record && typeof record === "object" ? { ...record } : {};
+
+                const sanitizeUrl = (value) => {
+                    const url = String(value || "").trim();
+                    if (!url || url.startsWith("data:")) return "";
+                    return url;
+                };
+
+                const normalizeImages = (value) => {
+                    const list = Array.isArray(value) ? value : [];
+                    return list
+                        .map((img) => {
+                            if (typeof img === "string") {
+                                const dataUrl = sanitizeUrl(img);
+                                return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                            }
+                            if (!img || typeof img !== "object") return null;
+                            const dataUrl = sanitizeUrl(img.dataUrl || img.url || "");
+                            if (!dataUrl) return null;
+                            return {
+                                dataUrl,
+                                name: String(img.name || "").trim(),
+                                uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || "").trim(),
+                            };
+                        })
+                        .filter(Boolean);
+                };
+
+                if (Array.isArray(safe.accomplishment_images)) {
+                    safe.accomplishment_images = normalizeImages(safe.accomplishment_images);
+                }
+
+                if (Array.isArray(safe.accomplishment_history)) {
+                    safe.accomplishment_history = safe.accomplishment_history
+                        .map((entry) => {
+                            const snapshot = entry && typeof entry === "object" ? { ...entry } : {};
+                            if (Array.isArray(snapshot.images)) {
+                                snapshot.images = normalizeImages(snapshot.images);
+                            }
+                            return snapshot;
+                        })
+                        .filter((entry) => entry && typeof entry === "object");
+                }
+
+                if (typeof safe.accomplishment_image === "string") {
+                    safe.accomplishment_image = sanitizeUrl(safe.accomplishment_image);
+                }
+
+                return safe;
+            });
+            window.peoDivisionStore.queueSync("construction", safeForSync, 0);
+        }
+        window.dispatchEvent(new Event("construction-records-updated"));
+        return wrote;
     };
 
     const deleteAllTaskData = async () => {
-        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
-        if (access.readOnly) {
-            showPeoGeneralToast("Read-only access: you cannot delete records on this dashboard.", {
+        if (!canDeleteTasks) {
+            showPeoGeneralToast("Only the Construction Division main admin can delete task rows.", {
                 title: "Construction Division",
                 variant: "warning",
             });
@@ -17668,12 +18505,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         if (!approved) return;
 
-        const deletedRecordIds = new Set(
-            tasks
-                .map((task) => String(task?.construction_id || task?.__id || "").trim())
-                .filter(Boolean)
-        );
-
         const wroteTasks = writeTasks([]);
         if (!wroteTasks) {
             showPeoGeneralToast("Unable to delete all tasks. Storage is unavailable.", {
@@ -17681,17 +18512,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 variant: "danger",
             });
             return;
-        }
-
-        if (deletedRecordIds.size > 0) {
-            const constructionRecords = readConstructionRecords();
-            const nextConstructionRecords = constructionRecords.filter((record) => {
-                const id = String(record?.__id || record?.construction_id || "").trim();
-                return !id || !deletedRecordIds.has(id);
-            });
-            if (nextConstructionRecords.length !== constructionRecords.length) {
-                writeConstructionRecords(nextConstructionRecords);
-            }
         }
 
         showPeoGeneralToast("All construction task data deleted successfully.", {
@@ -17702,6 +18522,29 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const FORM_FIELDS = [
+        "location",
+        "mun",
+        "contractor",
+        "contract_cost",
+        "revised_contract_cost",
+        "ntp_date",
+        "cd",
+        "original_expiry_date",
+        "addl_cd",
+        "revised_expiry_date",
+        "date_completed",
+        "status_previous",
+        "status_current",
+        "time_elapsed",
+        "slippage",
+        "project_remarks",
+        "project_name",
+        "assigned_to",
+        "date_received",
+        "status",
+        "remarks",
+    ];
+    const DISPLAY_FIELDS = [
         "project_name",
         "location",
         "mun",
@@ -17718,6 +18561,10 @@ document.addEventListener("DOMContentLoaded", () => {
         "status_current",
         "time_elapsed",
         "slippage",
+        "project_remarks",
+        "assigned_to",
+        "date_received",
+        "status",
         "remarks",
     ];
 
@@ -17725,20 +18572,219 @@ document.addEventListener("DOMContentLoaded", () => {
     const form = formModal ? formModal.querySelector(".js-construction-task-form") : null;
     const taskContractCostInput = form ? form.querySelector('input[name="contract_cost"]') : null;
     const taskRevisedContractCostInput = form ? form.querySelector('input[name="revised_contract_cost"]') : null;
+    const taskPhotoInput = form ? form.querySelector(".js-construction-task-photo-input") : null;
+    const taskPhotoTrigger = form ? form.querySelector(".js-construction-task-photo-trigger") : null;
+    const taskPhotoMeta = form ? form.querySelector(".js-construction-task-photo-meta") : null;
+    const taskPhotoGallery = form ? form.querySelector(".js-construction-task-photo-gallery") : null;
     const modalDialog = formModal ? formModal.querySelector(".construction-modal-dialog") : null;
     const modalBackdrop = formModal ? formModal.querySelector(".construction-modal-backdrop") : null;
     const closeModalButtons = formModal ? Array.from(formModal.querySelectorAll(".js-close-construction-task-modal")) : [];
+    const constructionPhotoUploadUrl = String(taskDashboard.dataset.photoUploadUrl || "").trim();
+    let taskExistingImages = [];
+    let taskSelectedPhotoPreviews = [];
+
+    const getTaskCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            if (cookie.slice(0, eqIndex).trim() !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getTaskCsrfToken = () => {
+        const fromCookie = getTaskCookie("csrftoken");
+        if (fromCookie) return fromCookie;
+        const fromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return fromDom instanceof HTMLInputElement ? String(fromDom.value || "").trim() : "";
+    };
+
+    const normalizeTaskImages = (value) => {
+        const list = Array.isArray(value) ? value : [];
+        return list
+            .map((img) => {
+                if (typeof img === "string") {
+                    const dataUrl = img.trim();
+                    return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                }
+                if (!img || typeof img !== "object") return null;
+                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                if (!dataUrl) return null;
+                return {
+                    dataUrl,
+                    name: String(img.name || "").trim(),
+                    uploaded_at: String(img.uploaded_at || "").trim(),
+                };
+            })
+            .filter(Boolean);
+    };
+
+    const mergeTaskImages = (existing, incoming) => {
+        const merged = [];
+        const seen = new Set();
+        [...normalizeTaskImages(incoming), ...normalizeTaskImages(existing)].forEach((img) => {
+            const key = String(img?.dataUrl || "").trim();
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            merged.push(img);
+        });
+        return merged;
+    };
+
+    const uploadTaskConstructionPhotos = async (files) => {
+        const list = Array.isArray(files) ? files : [];
+        if (!list.length) return { ok: true, images: [] };
+        if (!constructionPhotoUploadUrl) {
+            return { ok: false, error: "Photo upload URL is not configured." };
+        }
+
+        const csrfToken = getTaskCsrfToken();
+        if (!csrfToken) {
+            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
+        }
+
+        const filesForUpload = await Promise.all(
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+        );
+        const payload = new FormData();
+        filesForUpload.forEach((file) => {
+            payload.append("photos", file, file?.name || "photo");
+        });
+
+        try {
+            const response = await window.fetch(constructionPhotoUploadUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Accept": "application/json",
+                },
+                body: payload,
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data || data.ok !== true) {
+                return { ok: false, error: String(data?.error || "Photo upload failed.") };
+            }
+
+            const nowIso = new Date().toISOString();
+            const images = (Array.isArray(data.files) ? data.files : [])
+                .map((item) => ({
+                    dataUrl: String(item?.url || "").trim(),
+                    name: String(item?.original_name || item?.name || "").trim(),
+                    uploaded_at: nowIso,
+                }))
+                .filter((img) => img.dataUrl);
+
+            return { ok: true, images };
+        } catch (error) {
+            return { ok: false, error: "Unable to upload photos right now." };
+        }
+    };
+
+    const updateTaskPhotoMeta = () => {
+        if (!(taskPhotoMeta instanceof HTMLElement)) return;
+        const count = taskPhotoInput instanceof HTMLInputElement && taskPhotoInput.files
+            ? taskPhotoInput.files.length
+            : 0;
+        taskPhotoMeta.textContent = count
+            ? `${count} photo${count === 1 ? "" : "s"} selected.`
+            : "No photos selected.";
+    };
+
+    const clearTaskSelectedPhotoPreviews = () => {
+        taskSelectedPhotoPreviews.forEach((url) => {
+            try {
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                // Ignore preview cleanup errors.
+            }
+        });
+        taskSelectedPhotoPreviews = [];
+    };
+
+    const renderTaskPhotoGallery = () => {
+        if (!(taskPhotoGallery instanceof HTMLElement)) return;
+        taskPhotoGallery.innerHTML = "";
+
+        const existingItems = normalizeTaskImages(taskExistingImages).map((img) => ({
+            url: String(img?.dataUrl || "").trim(),
+            label: String(img?.name || "").trim() || "Saved photo",
+            kind: "saved",
+        }));
+        const selectedItems = taskSelectedPhotoPreviews.map((url, index) => ({
+            url,
+            label: `Selected photo ${index + 1}`,
+            kind: "selected",
+        }));
+        const items = [...existingItems, ...selectedItems].filter((item) => item.url);
+
+        if (!items.length) {
+            const empty = document.createElement("div");
+            empty.style.fontSize = "13px";
+            empty.style.color = "#6b7280";
+            empty.textContent = "No photos uploaded yet.";
+            taskPhotoGallery.appendChild(empty);
+            return;
+        }
+
+        items.forEach((item) => {
+            const card = document.createElement("div");
+            card.style.width = "180px";
+            card.style.border = "1px solid #dbe4f0";
+            card.style.borderRadius = "14px";
+            card.style.background = "#f8fbff";
+            card.style.overflow = "hidden";
+            card.style.boxShadow = "0 8px 22px rgba(15, 23, 42, 0.06)";
+
+            const preview = document.createElement("div");
+            preview.style.height = "132px";
+            preview.style.background = "#e2e8f0";
+            preview.style.backgroundImage = `url('${item.url.replace(/'/g, "%27")}')`;
+            preview.style.backgroundSize = "cover";
+            preview.style.backgroundPosition = "center";
+
+            const meta = document.createElement("div");
+            meta.style.padding = "10px 12px";
+            meta.style.display = "grid";
+            meta.style.gap = "4px";
+
+            const title = document.createElement("strong");
+            title.style.fontSize = "13px";
+            title.style.color = "#102a43";
+            title.textContent = item.label;
+
+            const badge = document.createElement("span");
+            badge.style.fontSize = "12px";
+            badge.style.color = item.kind === "saved" ? "#1d4ed8" : "#b45309";
+            badge.textContent = item.kind === "saved" ? "Saved on project" : "Selected for upload";
+
+            meta.appendChild(title);
+            meta.appendChild(badge);
+            card.appendChild(preview);
+            card.appendChild(meta);
+            taskPhotoGallery.appendChild(card);
+        });
+    };
 
     const fillForm = (record = {}) => {
         if (!form) return;
         form.reset();
-        FORM_FIELDS.forEach((field) => {
+        DISPLAY_FIELDS.forEach((field) => {
             const input = form.querySelector(`[name="${field}"]`);
             if (!input) return;
-            const value = record[field] ?? "";
+            const value = field === "project_remarks"
+                ? (record.project_remarks ?? record.remarks ?? "")
+                : (record[field] ?? "");
             input.value = value;
         });
         syncConstructionTaskCurrencyInputs();
+        clearTaskSelectedPhotoPreviews();
+        taskExistingImages = normalizeTaskImages(record.accomplishment_images);
+        updateTaskPhotoMeta();
+        renderTaskPhotoGallery();
         form.dataset.recordId = String(record.__id || record.construction_id || record.id || "");
     };
 
@@ -17756,6 +18802,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!formModal) return;
         formModal.hidden = true;
         document.body.classList.remove("construction-task-modal-open");
+        clearTaskSelectedPhotoPreviews();
     };
 
     closeModalButtons.forEach((button) => {
@@ -17775,8 +18822,38 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    const saveFormToStorage = () => {
+    if (taskPhotoTrigger instanceof HTMLButtonElement && taskPhotoInput instanceof HTMLInputElement) {
+        taskPhotoTrigger.addEventListener("click", () => {
+            taskPhotoInput.click();
+        });
+        taskPhotoInput.addEventListener("change", () => {
+            clearTaskSelectedPhotoPreviews();
+            const files = taskPhotoInput.files ? Array.from(taskPhotoInput.files) : [];
+            taskSelectedPhotoPreviews = files.map((file) => {
+                try {
+                    return window.URL.createObjectURL(file);
+                } catch (error) {
+                    return "";
+                }
+            }).filter(Boolean);
+            updateTaskPhotoMeta();
+            renderTaskPhotoGallery();
+        });
+    }
+
+    const saveFormToStorage = async () => {
         if (!form) return "";
+        if (access.readOnly) {
+            showPeoGeneralToast("Read-only access: you cannot edit tasks on this dashboard.", {
+                title: "Construction Division",
+                variant: "warning",
+            });
+            return "";
+        }
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return "";
+        }
         const recordId = String(form.dataset.recordId || "").trim() || `construction-${Date.now()}`;
         const data = FORM_FIELDS.reduce((acc, field) => {
             const input = form.querySelector(`[name="${field}"]`);
@@ -17786,56 +18863,141 @@ document.addEventListener("DOMContentLoaded", () => {
             return acc;
         }, {});
 
-        const records = readConstructionRecords();
-        const existingIndex = records.findIndex((item) => String(item?.__id || item?.construction_id || "") === recordId);
-        const baseRecord = existingIndex >= 0 ? records[existingIndex] : {};
-        const updatedRecord = {
-            ...baseRecord,
-            ...data,
-            __id: baseRecord.__id || recordId,
-            construction_id: baseRecord.construction_id || recordId,
-        };
-        if (existingIndex >= 0) {
-            records[existingIndex] = updatedRecord;
-        } else {
-            records.unshift(updatedRecord);
-        }
-        writeConstructionRecords(records);
-
         const tasks = readTasks();
+        const constructionRecords = readConstructionRecords();
         const existingTaskIndex = tasks.findIndex((task) => String(task?.construction_id || task?.__id || "") === recordId);
-        const taskPayload = {
-            __id: updatedRecord.construction_id || updatedRecord.__id || recordId,
-            construction_id: updatedRecord.construction_id || updatedRecord.__id || recordId,
-            task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
-            assigned_to: existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : "",
-            date_received: existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : "",
-            status: existingTaskIndex >= 0 ? tasks[existingTaskIndex].status : "",
-            remarks: existingTaskIndex >= 0 ? tasks[existingTaskIndex].remarks : "",
+        const existingConstructionIndex = constructionRecords.findIndex((record) => String(record?.__id || record?.construction_id || "") === recordId);
+        const existingConstructionRecord = existingConstructionIndex >= 0 ? constructionRecords[existingConstructionIndex] : {};
+        const submitButton = form.querySelector('button[type="submit"]');
+        const pickedFiles = taskPhotoInput instanceof HTMLInputElement && taskPhotoInput.files
+            ? Array.from(taskPhotoInput.files)
+            : [];
+        let mergedImages = normalizeTaskImages(existingConstructionRecord?.accomplishment_images);
+
+        if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = true;
+        }
+
+        if (pickedFiles.length) {
+            const uploadResult = await uploadTaskConstructionPhotos(pickedFiles.slice());
+            if (!uploadResult?.ok) {
+                if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = false;
+                }
+                showPeoGeneralToast(String(uploadResult?.error || "Unable to upload photos."), {
+                    title: "Construction Division",
+                    variant: "danger",
+                });
+                return "";
+            }
+            mergedImages = mergeTaskImages(existingConstructionRecord?.accomplishment_images, uploadResult.images);
+            if (taskPhotoInput instanceof HTMLInputElement) {
+                taskPhotoInput.value = "";
+            }
+            taskExistingImages = mergedImages;
+            clearTaskSelectedPhotoPreviews();
+            updateTaskPhotoMeta();
+            renderTaskPhotoGallery();
+        }
+
+        const nowIso = new Date().toISOString();
+        const constructionPayload = {
+            ...existingConstructionRecord,
+            __id: recordId,
+            project_name: data.project_name,
+            location: data.location,
+            mun: data.mun,
+            contractor: data.contractor,
+            contract_cost: data.contract_cost,
+            revised_contract_cost: data.revised_contract_cost,
+            ntp_date: data.ntp_date,
+            cd: data.cd,
+            original_expiry_date: data.original_expiry_date,
+            addl_cd: data.addl_cd,
+            revised_expiry_date: data.revised_expiry_date,
+            date_completed: data.date_completed,
+            status_previous: data.status_previous,
+            status_current: data.status_current,
+            time_elapsed: data.time_elapsed,
+            slippage: data.slippage,
+            remarks: data.project_remarks,
+            __updated_at: nowIso,
         };
+        if (mergedImages.length) {
+            constructionPayload.accomplishment_images = mergedImages;
+        }
+
+        const taskPayload = {
+            ...(existingTaskIndex >= 0 ? tasks[existingTaskIndex] : {}),
+            __id: recordId,
+            construction_id: recordId,
+            task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
+            project_name: data.project_name,
+            assigned_to: data.assigned_to || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : ""),
+            date_received: data.date_received || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : ""),
+            status: data.status,
+            remarks: data.remarks,
+        };
+
+        if (existingConstructionIndex >= 0) {
+            constructionRecords[existingConstructionIndex] = constructionPayload;
+        } else {
+            constructionRecords.unshift(constructionPayload);
+        }
         if (existingTaskIndex >= 0) {
             tasks[existingTaskIndex] = { ...tasks[existingTaskIndex], ...taskPayload };
         } else {
             tasks.unshift(taskPayload);
         }
-        writeTasks(tasks);
+
+        const wroteConstruction = writeConstructionRecords(constructionRecords);
+        const wroteTasks = writeTasks(tasks);
+        if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = false;
+        }
+        if (!wroteConstruction || !wroteTasks) {
+            showPeoGeneralToast("Unable to save this assigned project right now.", {
+                title: "Construction Division",
+                variant: "danger",
+            });
+            return "";
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+            window.peoDivisionStore.flushSync();
+        }
         return recordId;
     };
 
     if (form) {
-        form.addEventListener("submit", (event) => {
+        form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            saveFormToStorage();
+            const savedRecordId = await saveFormToStorage();
+            if (!savedRecordId) return;
             closeModal();
             render();
+            showPeoGeneralToast("Assigned project and task updated successfully.", {
+                title: "Construction Division",
+                variant: "success",
+            });
         });
     }
 
     if (tableBody) {
         tableBody.addEventListener("click", async (event) => {
-            const deleteTrigger = event.target.closest(".js-construction-task-delete");
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+
+            const deleteTrigger = clickTarget.closest(".js-construction-task-delete");
             if (deleteTrigger) {
                 event.preventDefault();
+                if (!canDeleteTasks) {
+                    showPeoGeneralToast("Only the Construction Division main admin can delete task rows.", {
+                        title: "Construction Division",
+                        variant: "warning",
+                    });
+                    return;
+                }
                 const recordId = String(deleteTrigger.dataset.recordId || deleteTrigger.closest("tr")?.dataset.recordId || "").trim();
                 if (!recordId) return;
 
@@ -17865,12 +19027,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                const constructionRecords = readConstructionRecords();
-                const nextConstructionRecords = constructionRecords.filter((item) => String(item?.__id || item?.construction_id || "") !== recordId);
-                if (nextConstructionRecords.length !== constructionRecords.length) {
-                    writeConstructionRecords(nextConstructionRecords);
-                }
-
                 showPeoGeneralToast("Task deleted successfully.", {
                     title: "Construction Division",
                     variant: "success",
@@ -17879,7 +19035,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const trigger = event.target.closest(".js-open-construction-task-modal");
+            const trigger = clickTarget.closest(".js-open-construction-task-modal");
             if (!trigger) return;
             event.preventDefault();
             const recordId = String(trigger.dataset.recordId || "").trim();
@@ -17891,7 +19047,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const constructionRecord = recordId
                 ? constructionRecords.find((item) => String(item?.__id || item?.construction_id || "") === recordId)
                 : null;
-            openModal(constructionRecord || taskRecord || {});
+            openModal({
+                ...(constructionRecord || {}),
+                ...(taskRecord || {}),
+                project_name: String(constructionRecord?.project_name || taskRecord?.task_name || "").trim(),
+                project_remarks: String(constructionRecord?.remarks || "").trim(),
+            });
         });
     }
 
@@ -17942,17 +19103,19 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td>${escapeHtml(toDisplay(status))}</td>
                     <td>${escapeHtml(toDisplay(remarks))}</td>
                     <td>
-                        <div class="construction-actions">
-                            <button
-                                type="button"
-                                class="construction-action-btn construction-action-btn--delete js-construction-task-delete"
-                                ${constructionId ? `data-record-id="${escapeHtml(constructionId)}"` : ""}
-                                aria-label="Delete task"
-                                title="Delete task"
-                            >
-                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                            </button>
-                        </div>
+                        ${canDeleteTasks ? `
+                            <div class="construction-actions">
+                                <button
+                                    type="button"
+                                    class="construction-action-btn construction-action-btn--delete js-construction-task-delete"
+                                    ${constructionId ? `data-record-id="${escapeHtml(constructionId)}"` : ""}
+                                    aria-label="Delete task"
+                                    title="Delete task"
+                                >
+                                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                </button>
+                            </div>
+                        ` : '<span style="color:#9ca3af;">-</span>'}
                     </td>
                 `;
                 tableBody.appendChild(row);
@@ -17963,7 +19126,7 @@ document.addEventListener("DOMContentLoaded", () => {
             recordMeta.textContent = `${totalCount} task${totalCount === 1 ? "" : "s"}`;
         }
         if (deleteAllButton instanceof HTMLButtonElement) {
-            deleteAllButton.disabled = totalCount === 0;
+            deleteAllButton.disabled = totalCount === 0 || !canDeleteTasks;
         }
     };
 
@@ -18001,7 +19164,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const currentUser = String(projectDashboard.dataset.currentUser || "").trim() || "Local User";
     const recordId = String(new URLSearchParams(window.location.search).get("id") || "").trim();
-    const MAX_IMAGE_COUNT = 10;
     const HISTORY_LIMIT = 12;
 
     const readConstructionTasks = () => {
@@ -18182,11 +19344,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!url) return;
 
             const card = document.createElement("div");
+            card.style.position = "relative";
             card.style.width = "180px";
             card.style.border = "1px solid #e5e7eb";
             card.style.borderRadius = "12px";
             card.style.overflow = "hidden";
             card.style.background = "#fff";
+            card.style.boxShadow = "0 10px 24px rgba(15, 23, 42, 0.08)";
 
             const thumb = document.createElement("img");
             thumb.src = url;
@@ -18196,12 +19360,34 @@ document.addEventListener("DOMContentLoaded", () => {
             thumb.style.objectFit = "cover";
             thumb.style.display = "block";
 
+            const removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.className = "construction-btn construction-btn-secondary";
+            removeBtn.style.position = "absolute";
+            removeBtn.style.right = "10px";
+            removeBtn.style.bottom = "52px";
+            removeBtn.style.width = "34px";
+            removeBtn.style.height = "34px";
+            removeBtn.style.padding = "0";
+            removeBtn.style.borderRadius = "999px";
+            removeBtn.style.border = "1px solid #fecaca";
+            removeBtn.style.background = "#fff1f2";
+            removeBtn.style.color = "#b91c1c";
+            removeBtn.style.display = "inline-flex";
+            removeBtn.style.alignItems = "center";
+            removeBtn.style.justifyContent = "center";
+            removeBtn.style.boxShadow = "0 8px 18px rgba(185, 28, 28, 0.15)";
+            removeBtn.style.cursor = "pointer";
+            removeBtn.dataset.imageIndex = String(index);
+            removeBtn.title = "Delete this photo";
+            removeBtn.setAttribute("aria-label", `Delete ${String(img?.name || `image ${index + 1}`).trim()}`);
+            removeBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px; line-height:1;">delete</span>';
+
             const footer = document.createElement("div");
             footer.style.padding = "10px";
             footer.style.display = "flex";
             footer.style.gap = "8px";
             footer.style.alignItems = "center";
-            footer.style.justifyContent = "space-between";
 
             const label = document.createElement("div");
             label.style.fontSize = "0.85rem";
@@ -18213,17 +19399,9 @@ document.addEventListener("DOMContentLoaded", () => {
             label.title = String(img?.name || "");
             label.textContent = String(img?.name || "Image");
 
-            const removeBtn = document.createElement("button");
-            removeBtn.type = "button";
-            removeBtn.className = "construction-btn construction-btn-secondary";
-            removeBtn.style.padding = "0.35rem 0.5rem";
-            removeBtn.style.whiteSpace = "nowrap";
-            removeBtn.dataset.imageIndex = String(index);
-            removeBtn.textContent = "Remove";
-
             footer.appendChild(label);
-            footer.appendChild(removeBtn);
             card.appendChild(thumb);
+            card.appendChild(removeBtn);
             card.appendChild(footer);
             imageGallery.appendChild(card);
         });
@@ -18234,8 +19412,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const results = [];
 
         for (const file of list) {
-            if (results.length >= MAX_IMAGE_COUNT) break;
-
             // eslint-disable-next-line no-await-in-loop
             const dataUrl = await new Promise((resolve) => {
                 const reader = new FileReader();
@@ -18364,7 +19540,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const legacyImageUrl = String(record.accomplishment_image || "").trim();
     const legacyImageName = String(record.accomplishment_image_name || "").trim();
     let pendingImages = Array.isArray(record.accomplishment_images)
-        ? record.accomplishment_images.slice(0, MAX_IMAGE_COUNT)
+        ? record.accomplishment_images.slice()
         : (legacyImageUrl ? [{ dataUrl: legacyImageUrl, name: legacyImageName || "Image", uploaded_at: "" }] : []);
     pendingImages = pendingImages
         .map((img) => ({ dataUrl: String(img?.dataUrl || ""), name: String(img?.name || ""), uploaded_at: String(img?.uploaded_at || "") }))
@@ -18382,24 +19558,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const files = imageInput.files ? Array.from(imageInput.files) : [];
             if (!files.length) return;
 
-            if (pendingImages.length >= MAX_IMAGE_COUNT) {
-                toast(`You can upload up to ${MAX_IMAGE_COUNT} images. Remove some first.`, {
-                    title: "Construction Project",
-                    variant: "warning",
-                });
-                imageInput.value = "";
-                return;
-            }
-
-            const remaining = Math.max(0, MAX_IMAGE_COUNT - pendingImages.length);
-            const nextFiles = files.slice(0, remaining);
-            const nextImages = await readFilesAsDataUrls(nextFiles);
+            const nextImages = await readFilesAsDataUrls(files);
             if (!nextImages.length) {
                 imageInput.value = "";
                 return;
             }
 
-            pendingImages = [...pendingImages, ...nextImages].slice(0, MAX_IMAGE_COUNT);
+            pendingImages = [...pendingImages, ...nextImages];
             renderGallery(pendingImages);
             imageInput.value = "";
         });
@@ -18415,16 +19580,37 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!idxRaw) return;
             const idx = Number.parseInt(idxRaw, 10);
             if (!Number.isFinite(idx) || idx < 0 || idx >= pendingImages.length) return;
+            const previousImages = pendingImages.slice();
             pendingImages = pendingImages.filter((_, i) => i !== idx);
             renderGallery(pendingImages);
+            window.peoUndoManager?.register({
+                label: "Photo",
+                hintMessage: `Photo deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+                successMessage: "Photo restored.",
+                undo: () => {
+                    pendingImages = previousImages.slice();
+                    renderGallery(pendingImages);
+                },
+            });
         });
     }
 
     if (removeImageButton) {
         removeImageButton.addEventListener("click", () => {
+            if (!pendingImages.length) return;
+            const previousImages = pendingImages.slice();
             pendingImages = [];
             if (imageInput instanceof HTMLInputElement) imageInput.value = "";
             renderGallery(pendingImages);
+            window.peoUndoManager?.register({
+                label: previousImages.length === 1 ? "Photo" : "Photos",
+                hintMessage: `${previousImages.length} photo${previousImages.length === 1 ? "" : "s"} removed. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore ${previousImages.length === 1 ? "it" : "them"}.`,
+                successMessage: `${previousImages.length} photo${previousImages.length === 1 ? "" : "s"} restored.`,
+                undo: () => {
+                    pendingImages = previousImages.slice();
+                    renderGallery(pendingImages);
+                },
+            });
         });
     }
 
@@ -18450,7 +19636,7 @@ document.addEventListener("DOMContentLoaded", () => {
             nextRecord.__report_date = nextRecord.__updated_at;
 
             if (pendingImages.length) {
-                nextRecord.accomplishment_images = pendingImages.slice(0, MAX_IMAGE_COUNT);
+                nextRecord.accomplishment_images = pendingImages.slice();
             } else {
                 delete nextRecord.accomplishment_images;
             }
@@ -18520,7 +19706,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const historyImages = (Array.isArray(pendingImages) ? pendingImages : [])
-                .slice(0, MAX_IMAGE_COUNT)
                 .map((img) => ({
                     dataUrl: String(img?.dataUrl || "").trim(),
                     name: String(img?.name || "").trim(),
@@ -21518,6 +22703,8 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             if (!approved) return;
 
+            const previousRecords = planningDocumentRecords.map((record) => ({ ...(record || {}) }));
+            const previousDeletedIds = readDeletedPlanningAdminIds();
             const deletingRecord = planningDocumentRecords[recordIndex];
             const sourceId = String(deletingRecord?.__admin_source_id || "").trim();
             if (sourceId) {
@@ -21532,7 +22719,20 @@ document.addEventListener("DOMContentLoaded", () => {
             renderPlanningBudgets(planningBudgetRecords);
             syncPpaFromPlanningDocuments(planningDocumentRecords);
             syncPpaTableState();
-            showPlanningToast("Planning document deleted.", "info");
+            window.peoUndoManager?.register({
+                label: "Planning document",
+                hintMessage: `Planning document deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+                successMessage: "Planning document restored.",
+                undo: () => {
+                    planningDocumentRecords = previousRecords.map((record) => ({ ...(record || {}) }));
+                    writeDeletedPlanningAdminIds(previousDeletedIds);
+                    writeStoredPlanningDocuments(planningDocumentRecords);
+                    renderPlanningDocumentsTable(planningDocumentRecords);
+                    renderPlanningBudgets(planningBudgetRecords);
+                    syncPpaFromPlanningDocuments(planningDocumentRecords);
+                    syncPpaTableState();
+                },
+            });
         });
     }
 
@@ -21578,6 +22778,26 @@ document.addEventListener("DOMContentLoaded", () => {
         syncPpaFromPlanningDocuments(planningDocumentRecords);
         syncPpaTableState();
         enablePlanningPpaCardFloat();
+        let planningRemoteSyncInFlight = null;
+        const requestPlanningRemoteSync = () => {
+            const store = window.peoDivisionStore;
+            if (!store || typeof store.syncToLocalStorage !== "function") return;
+            if (planningRemoteSyncInFlight) return planningRemoteSyncInFlight;
+            planningRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+                { storeKey: "admin", localStorageKey: "peo_admin_division_records_v1", type: "array" },
+                { storeKey: "planning", localStorageKey: "peo_planning_document_records_v1", type: "array" },
+            ], { force: true }))
+                .then(() => {
+                    planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
+                    renderPlanningDocumentsTable(planningDocumentRecords);
+                    syncPpaFromPlanningDocuments(planningDocumentRecords);
+                    syncPpaTableState();
+                })
+                .finally(() => {
+                    planningRemoteSyncInFlight = null;
+                });
+            return planningRemoteSyncInFlight;
+        };
         window.addEventListener("peo:division-store-synced", (event) => {
             const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
             if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("planning")) return;
@@ -21585,6 +22805,11 @@ document.addEventListener("DOMContentLoaded", () => {
             renderPlanningDocumentsTable(planningDocumentRecords);
             syncPpaFromPlanningDocuments(planningDocumentRecords);
             syncPpaTableState();
+        });
+        window.addEventListener("peo:division-store-remote-update", (event) => {
+            const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!storeKeys.includes("admin") && !storeKeys.includes("planning")) return;
+            requestPlanningRemoteSync();
         });
     }
 
@@ -21939,6 +23164,107 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
 
+        const canManageConstructionProjectImages = () => {
+            const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+            const divisionKey = String(access.divisionKey || "").trim().toLowerCase();
+            return divisionKey === "construction";
+        };
+
+        const removeConstructionImageFromStore = (recordId, imageUrl) => {
+            const targetRecordId = String(recordId || "").trim();
+            const targetImageUrl = String(imageUrl || "").trim();
+            if (!targetRecordId || !targetImageUrl) {
+                return { ok: false, error: "Invalid image target." };
+            }
+
+            const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+            let updatedRecord = null;
+            let changed = false;
+
+            const nextRecords = constructionRecords.map((record) => {
+                const current = record && typeof record === "object" ? { ...record } : {};
+                const currentId = String(current.__id || current.construction_id || current.id || "").trim();
+                if (currentId !== targetRecordId) {
+                    return current;
+                }
+
+                const nextRecord = { ...current };
+                const currentImages = Array.isArray(nextRecord.accomplishment_images) ? nextRecord.accomplishment_images : [];
+                const filteredImages = currentImages.filter((img) => {
+                    const url = String(typeof img === "string" ? img : (img?.dataUrl || img?.url || "")).trim();
+                    return url !== targetImageUrl;
+                });
+
+                if (filteredImages.length !== currentImages.length) {
+                    changed = true;
+                }
+
+                if (filteredImages.length) {
+                    nextRecord.accomplishment_images = filteredImages;
+                } else {
+                    delete nextRecord.accomplishment_images;
+                }
+
+                if (String(nextRecord.accomplishment_image || "").trim() === targetImageUrl) {
+                    delete nextRecord.accomplishment_image;
+                    delete nextRecord.accomplishment_image_name;
+                    changed = true;
+                }
+
+                if (Array.isArray(nextRecord.accomplishment_history)) {
+                    nextRecord.accomplishment_history = nextRecord.accomplishment_history.map((entry) => {
+                        const snapshot = entry && typeof entry === "object" ? { ...entry } : {};
+                        if (Array.isArray(snapshot.images)) {
+                            const nextImages = snapshot.images.filter((img) => {
+                                const url = String(typeof img === "string" ? img : (img?.dataUrl || img?.url || "")).trim();
+                                return url !== targetImageUrl;
+                            });
+                            if (nextImages.length !== snapshot.images.length) {
+                                changed = true;
+                            }
+                            if (nextImages.length) {
+                                snapshot.images = nextImages;
+                            } else {
+                                delete snapshot.images;
+                            }
+                        }
+
+                        if (String(snapshot.image_data_url || snapshot.dataUrl || snapshot.image || "").trim() === targetImageUrl) {
+                            delete snapshot.image_data_url;
+                            delete snapshot.dataUrl;
+                            delete snapshot.image;
+                            delete snapshot.image_name;
+                            changed = true;
+                        }
+
+                        return snapshot;
+                    });
+                }
+
+                if (!changed) {
+                    return current;
+                }
+
+                nextRecord.__updated_at = new Date().toISOString();
+                updatedRecord = nextRecord;
+                return nextRecord;
+            });
+
+            if (!changed || !updatedRecord) {
+                return { ok: false, error: "Image not found." };
+            }
+
+            const prevBypass = window.__peoReadonlyStorageBypass;
+            window.__peoReadonlyStorageBypass = true;
+            try {
+                writeJsonValue(CONSTRUCTION_STORAGE_KEY, nextRecords);
+            } finally {
+                window.__peoReadonlyStorageBypass = prevBypass;
+            }
+            queueStoreSync("construction", nextRecords);
+            return { ok: true, record: updatedRecord, previousRecords: constructionRecords };
+        };
+
         const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
 	        const normalizeDivisionName = (value) => {
@@ -22161,7 +23487,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (menu instanceof HTMLElement) {
                 menu.addEventListener("click", (event) => {
-                    const optionButton = event.target.closest(".project-filter-dropdown__option");
+                    const clickTarget = event.target instanceof Element ? event.target : null;
+                    if (!clickTarget) {
+                        return;
+                    }
+                    const optionButton = clickTarget.closest(".project-filter-dropdown__option");
                     if (!(optionButton instanceof HTMLButtonElement)) {
                         return;
                     }
@@ -23143,9 +24473,9 @@ document.addEventListener("DOMContentLoaded", () => {
 	                return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 	            };
 
-                const formatDateTime = (value) => {
-                    const text = String(value ?? "").trim();
-                    if (!text) return "";
+    const formatDateTime = (value) => {
+        const text = String(value ?? "").trim();
+        if (!text) return "";
 
                     const isoDateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
                     if (isoDateOnlyMatch) {
@@ -23199,10 +24529,28 @@ document.addEventListener("DOMContentLoaded", () => {
                                 const meta = uploadedAtLabel
                                     ? `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded ${escapeProjectHtml(uploadedAtLabel)}`
                                     : `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded -`;
+                                const deleteButton = canManageConstructionProjectImages()
+                                    ? `
+                                        <button
+                                            type="button"
+                                            class="project-history-image-delete"
+                                            data-project-history-delete-image="true"
+                                            data-record-id="${escapeProjectHtml(String(record.__id || ""))}"
+                                            data-image-url="${escapeProjectHtml(String(img.dataUrl || "").trim())}"
+                                            aria-label="Delete photo"
+                                            title="Delete photo"
+                                        >
+                                            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                        </button>
+                                    `
+                                    : "";
                                 return `
                                     <figure class="project-history-month-image">
                                         <img class="js-project-history-open-image" src="${escapeProjectHtml(img.dataUrl)}" alt="${escapeProjectHtml(img.name || record?.project_name || "Project image")}" loading="lazy" tabindex="0">
-                                        <figcaption class="project-history-image-meta">${meta}</figcaption>
+                                        <figcaption class="project-history-image-meta-wrap">
+                                            <div class="project-history-image-meta">${meta}</div>
+                                            ${deleteButton}
+                                        </figcaption>
                                     </figure>
                                 `;
                             }).join("")}
@@ -23347,6 +24695,72 @@ document.addEventListener("DOMContentLoaded", () => {
             openConstructionHistoryModal(record);
             return true;
         };
+
+        if (constructionHistoryCards instanceof HTMLElement) {
+            constructionHistoryCards.addEventListener("click", async (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                const deleteButton = target.closest("[data-project-history-delete-image]");
+                if (!(deleteButton instanceof HTMLButtonElement)) return;
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (!canManageConstructionProjectImages()) {
+                    showPeoGeneralToast("You do not have permission to delete project photos.", {
+                        title: "Project Details",
+                        variant: "warning",
+                    });
+                    return;
+                }
+
+                const recordId = String(deleteButton.dataset.recordId || "").trim();
+                const imageUrl = String(deleteButton.dataset.imageUrl || "").trim();
+                if (!recordId || !imageUrl) return;
+
+                const approved = await showPeoGeneralConfirm({
+                    title: "Delete Project Photo",
+                    message: "Remove this uploaded project photo from the project details?",
+                    confirmLabel: "Delete Photo",
+                    cancelLabel: "Cancel",
+                    variant: "danger",
+                });
+                if (!approved) return;
+
+                const result = removeConstructionImageFromStore(recordId, imageUrl);
+                if (!result.ok) {
+                    showPeoGeneralToast(String(result.error || "Unable to delete this photo."), {
+                        title: "Project Details",
+                        variant: "danger",
+                    });
+                    return;
+                }
+
+                refreshProjectBoard();
+                openConstructionHistoryModal(result.record);
+                const previousRecords = Array.isArray(result.previousRecords) ? result.previousRecords.map((record) => ({ ...(record || {}) })) : [];
+                window.peoUndoManager?.register({
+                    label: "Project photo",
+                    hintMessage: `Project photo deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+                    successMessage: "Project photo restored.",
+                    undo: () => {
+                        const prevBypass = window.__peoReadonlyStorageBypass;
+                        window.__peoReadonlyStorageBypass = true;
+                        try {
+                            writeJsonValue(CONSTRUCTION_STORAGE_KEY, previousRecords);
+                        } finally {
+                            window.__peoReadonlyStorageBypass = prevBypass;
+                        }
+                        queueStoreSync("construction", previousRecords);
+                        refreshProjectBoard();
+                        const restoredRecord = previousRecords.find((record) => String(record?.__id || record?.construction_id || record?.id || "").trim() === recordId);
+                        if (restoredRecord) {
+                            openConstructionHistoryModal(restoredRecord);
+                        }
+                    },
+                });
+            });
+        }
 
         openProjectButtons.forEach((button) => {
             button.addEventListener("click", () => {
@@ -23790,10 +25204,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
 
-	        const syncProjectStoresFromServer = async () => {
-	            if (!window.peoDivisionStore || typeof window.peoDivisionStore.fetchStore !== "function") {
-	                return;
-	            }
+        const syncProjectStoresFromServer = async () => {
+            if (!window.peoDivisionStore || typeof window.peoDivisionStore.fetchStore !== "function") {
+                return;
+            }
 
             const initialLocalProjectCount = buildProjectRecords().length;
 
@@ -23846,6 +25260,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             });
         };
+        let projectStoreSyncInFlight = null;
+        const requestProjectStoreSync = () => {
+            if (projectStoreSyncInFlight) return projectStoreSyncInFlight;
+            projectStoreSyncInFlight = Promise.resolve(syncProjectStoresFromServer())
+                .then(() => {
+                    refreshProjectBoard();
+                })
+                .finally(() => {
+                    projectStoreSyncInFlight = null;
+                });
+            return projectStoreSyncInFlight;
+        };
 
         const hydrateAndBootstrap = () => {
             // Bootstrap immediately so the sidebar "Projects" click shows something right away.
@@ -23874,6 +25300,13 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         hydrateAndBootstrap();
+        window.addEventListener("peo:division-store-remote-update", (event) => {
+            const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+            if (!storeKeys.some((key) => ["admin", "planning", "construction", "quality", "maintenance"].includes(String(key || "").trim()))) {
+                return;
+            }
+            requestProjectStoreSync();
+        });
     }
 
 });
@@ -26478,11 +27911,33 @@ document.addEventListener("DOMContentLoaded", () => {
         currentPage = 1;
         renderTable();
     };
+    let qualityRemoteSyncInFlight = null;
+    const requestQualityRemoteSync = () => {
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return;
+        if (qualityRemoteSyncInFlight) return qualityRemoteSyncInFlight;
+        qualityRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+            { storeKey: "admin", localStorageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
+            { storeKey: "quality", localStorageKey: QUALITY_STORAGE_KEY, type: "array" },
+        ], { force: true }))
+            .then(() => {
+                refreshQualityRecordsFromAdmin();
+            })
+            .finally(() => {
+                qualityRemoteSyncInFlight = null;
+            });
+        return qualityRemoteSyncInFlight;
+    };
     window.addEventListener("focus", refreshQualityRecordsFromAdmin);
     window.addEventListener("peo:division-store-synced", (event) => {
         const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("quality")) return;
         refreshQualityRecordsFromAdmin();
+    });
+    window.addEventListener("peo:division-store-remote-update", (event) => {
+        const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!storeKeys.includes("admin") && !storeKeys.includes("quality")) return;
+        requestQualityRemoteSync();
     });
     window.addEventListener("storage", (event) => {
         if (event.key !== ADMIN_DIVISION_STORAGE_KEY && event.key !== QUALITY_STORAGE_KEY) return;
@@ -26504,6 +27959,11 @@ if (document.readyState === "loading") {
     const sourceNode = document.getElementById("peo-project-history-source-id");
     const cardsWrap = document.querySelector(".js-project-history-page-cards");
     if (!sourceNode || !(cardsWrap instanceof HTMLElement)) return;
+    const canManageConstructionProjectImages = (() => {
+        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+        const divisionKey = String(access.divisionKey || "").trim().toLowerCase();
+        return divisionKey === "construction";
+    })();
 
     let sourceId = "";
     try {
@@ -26618,6 +28078,109 @@ if (document.readyState === "loading") {
             });
         };
 
+        const removeConstructionImageFromStore = (recordId, imageUrl) => {
+            const targetRecordId = String(recordId || "").trim();
+            const targetImageUrl = String(imageUrl || "").trim();
+            if (!targetRecordId || !targetImageUrl) {
+                return { ok: false, error: "Invalid image target." };
+            }
+
+            const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
+            let updatedRecord = null;
+            let changed = false;
+
+            const nextRecords = constructionRecords.map((record) => {
+                const current = record && typeof record === "object" ? { ...record } : {};
+                const currentId = String(current.__id || current.construction_id || current.id || "").trim();
+                if (currentId !== targetRecordId) return current;
+
+                const nextRecord = { ...current };
+                const currentImages = Array.isArray(nextRecord.accomplishment_images) ? nextRecord.accomplishment_images : [];
+                const filteredImages = currentImages.filter((img) => {
+                    const url = String(typeof img === "string" ? img : (img?.dataUrl || img?.url || "")).trim();
+                    return url !== targetImageUrl;
+                });
+                if (filteredImages.length !== currentImages.length) {
+                    changed = true;
+                }
+
+                if (filteredImages.length) {
+                    nextRecord.accomplishment_images = filteredImages;
+                } else {
+                    delete nextRecord.accomplishment_images;
+                }
+
+                if (String(nextRecord.accomplishment_image || "").trim() === targetImageUrl) {
+                    delete nextRecord.accomplishment_image;
+                    delete nextRecord.accomplishment_image_name;
+                    changed = true;
+                }
+
+                if (Array.isArray(nextRecord.accomplishment_history)) {
+                    nextRecord.accomplishment_history = nextRecord.accomplishment_history.map((entry) => {
+                        const snapshot = entry && typeof entry === "object" ? { ...entry } : {};
+                        if (Array.isArray(snapshot.images)) {
+                            const nextImages = snapshot.images.filter((img) => {
+                                const url = String(typeof img === "string" ? img : (img?.dataUrl || img?.url || "")).trim();
+                                return url !== targetImageUrl;
+                            });
+                            if (nextImages.length !== snapshot.images.length) {
+                                changed = true;
+                            }
+                            if (nextImages.length) {
+                                snapshot.images = nextImages;
+                            } else {
+                                delete snapshot.images;
+                            }
+                        }
+
+                        if (String(snapshot.image_data_url || snapshot.dataUrl || snapshot.image || "").trim() === targetImageUrl) {
+                            delete snapshot.image_data_url;
+                            delete snapshot.dataUrl;
+                            delete snapshot.image;
+                            delete snapshot.image_name;
+                            changed = true;
+                        }
+
+                        return snapshot;
+                    });
+                }
+
+                if (!changed) return current;
+                nextRecord.__updated_at = new Date().toISOString();
+                updatedRecord = nextRecord;
+                return nextRecord;
+            });
+
+            if (!changed || !updatedRecord) {
+                return { ok: false, error: "Image not found." };
+            }
+
+        const prevBypass = window.__peoReadonlyStorageBypass;
+        window.__peoReadonlyStorageBypass = true;
+        try {
+            window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(nextRecords));
+        } catch (error) {
+            return { ok: false, error: "Unable to save the updated project photos." };
+        } finally {
+            window.__peoReadonlyStorageBypass = prevBypass;
+        }
+
+            const store = window.peoDivisionStore;
+            if (store && typeof store.queueSync === "function") {
+                try {
+                    store.queueSync("construction", nextRecords, 0);
+                    if (typeof store.flushSync === "function") {
+                        store.flushSync();
+                    }
+                } catch (error) {
+                    // Ignore sync failures; local changes are already saved.
+                }
+            }
+
+            return { ok: true, record: updatedRecord, previousRecords: constructionRecords };
+        };
+
         const buildDetailsImagesHtml = (record) => {
             const images = Array.isArray(record?.accomplishment_images)
                 ? record.accomplishment_images
@@ -26652,10 +28215,28 @@ if (document.readyState === "loading") {
                             const meta = uploadedAtLabel
                                 ? `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded ${escapeHtml(uploadedAtLabel)}`
                                 : `<span class="material-symbols-outlined" aria-hidden="true">schedule</span> Uploaded -`;
+                            const deleteButton = canManageConstructionProjectImages
+                                ? `
+                                    <button
+                                        type="button"
+                                        class="project-history-image-delete"
+                                        data-project-history-delete-image="true"
+                                        data-record-id="${escapeHtml(String(record.__id || ""))}"
+                                        data-image-url="${escapeHtml(String(img.dataUrl || "").trim())}"
+                                        aria-label="Delete photo"
+                                        title="Delete photo"
+                                    >
+                                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                    </button>
+                                `
+                                : "";
                             return `
                                 <figure class="project-history-month-image">
                                     <img class="js-project-history-open-image" src="${escapeHtml(img.dataUrl)}" alt="${escapeHtml(img.name || record?.project_name || "Project image")}" loading="lazy" tabindex="0">
-                                    <figcaption class="project-history-image-meta">${meta}</figcaption>
+                                    <figcaption class="project-history-image-meta-wrap">
+                                        <div class="project-history-image-meta">${meta}</div>
+                                        ${deleteButton}
+                                    </figcaption>
                                 </figure>
                             `;
                         }).join("")}
@@ -26742,7 +28323,7 @@ if (document.readyState === "loading") {
 
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const constructionRecords = readJsonArray(CONSTRUCTION_STORAGE_KEY);
-    const record = constructionRecords.find((item) => String(item?.__id || "").trim() === sourceId);
+    let record = constructionRecords.find((item) => String(item?.__id || "").trim() === sourceId);
 
     if (subtitleEl instanceof HTMLElement) {
         const projectName = record ? String(record.project_name || "Construction Project").trim() : "Construction Project";
@@ -26765,6 +28346,80 @@ if (document.readyState === "loading") {
     }
     cardsWrap.innerHTML = buildMonthlyHistoryCards(record);
     projectHistoryImageViewer.bindRoot(cardsWrap);
+    cardsWrap.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const deleteButton = target.closest("[data-project-history-delete-image]");
+        if (!(deleteButton instanceof HTMLButtonElement)) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!canManageConstructionProjectImages) {
+            showPeoGeneralToast("You do not have permission to delete project photos.", {
+                title: "Project Details",
+                variant: "warning",
+            });
+            return;
+        }
+
+        const recordId = String(deleteButton.dataset.recordId || "").trim();
+        const imageUrl = String(deleteButton.dataset.imageUrl || "").trim();
+        if (!recordId || !imageUrl) return;
+
+        const approved = await showPeoGeneralConfirm({
+            title: "Delete Project Photo",
+            message: "Remove this uploaded project photo from the project details?",
+            confirmLabel: "Delete Photo",
+            cancelLabel: "Cancel",
+            variant: "danger",
+        });
+        if (!approved) return;
+
+        const result = removeConstructionImageFromStore(recordId, imageUrl);
+        if (!result.ok) {
+            showPeoGeneralToast(String(result.error || "Unable to delete this photo."), {
+                title: "Project Details",
+                variant: "danger",
+            });
+            return;
+        }
+
+        record = result.record;
+        cardsWrap.innerHTML = buildMonthlyHistoryCards(record);
+        projectHistoryImageViewer.bindRoot(cardsWrap);
+        const previousRecords = Array.isArray(result.previousRecords) ? result.previousRecords.map((entry) => ({ ...(entry || {}) })) : [];
+        window.peoUndoManager?.register({
+            label: "Project photo",
+            hintMessage: `Project photo deleted. Press ${window.peoUndoManager?.shortcutLabel || "Ctrl+Z"} to restore it.`,
+            successMessage: "Project photo restored.",
+            undo: () => {
+                const prevBypass = window.__peoReadonlyStorageBypass;
+                window.__peoReadonlyStorageBypass = true;
+                try {
+                    window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(previousRecords));
+                } finally {
+                    window.__peoReadonlyStorageBypass = prevBypass;
+                }
+
+                const store = window.peoDivisionStore;
+                if (store && typeof store.queueSync === "function") {
+                    try {
+                        store.queueSync("construction", previousRecords, 0);
+                        if (typeof store.flushSync === "function") {
+                            store.flushSync();
+                        }
+                    } catch (error) {
+                        // Ignore sync failures; local restoration is already saved.
+                    }
+                }
+
+                record = previousRecords.find((entry) => String(entry?.__id || entry?.construction_id || entry?.id || "").trim() === recordId) || record;
+                cardsWrap.innerHTML = buildMonthlyHistoryCards(record);
+                projectHistoryImageViewer.bindRoot(cardsWrap);
+            },
+        });
+    });
 
     if (exportPdfButton instanceof HTMLButtonElement) {
         exportPdfButton.disabled = false;
