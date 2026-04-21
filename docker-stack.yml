@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   db:
     image: mysql:8.4
@@ -32,7 +30,7 @@ services:
 
   web:
     image: peo-worksystem-web:latest
-    command: sh -c "python manage.py migrate && gunicorn my_site.wsgi:application --bind 0.0.0.0:8000 --workers 4"
+    command: gunicorn my_site.wsgi:application --bind 0.0.0.0:8000 --workers 4
     ports:
       - "8000:8000"
     environment:
@@ -44,8 +42,13 @@ services:
       DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:-django_pass}
       DJANGO_DB_HOST: db
       DJANGO_DB_PORT: "3306"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-this-to-a-long-random-secret}
+      DJANGO_MEDIA_URL: /media/
+      DJANGO_MEDIA_ROOT: /shared/media
+      RUN_MIGRATIONS: "true"
+      COLLECT_STATIC: "true"
     volumes:
-      - django_media:/app/media
+      - shared_media:/shared/media
       - django_static:/app/staticfiles
     depends_on:
       db:
@@ -70,7 +73,7 @@ services:
 volumes:
   mysql_data:
     driver: local
-  django_media:
+  shared_media:
     driver: local
   django_static:
     driver: local
