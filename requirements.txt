@@ -1,14 +1,14 @@
 asgiref==3.11.1
 Django==6.0.3
-mysqlclient==2.2.8
+PyMySQL==1.1.1
 pillow==12.1.1
 sqlparse==0.5.5
 tzdata==2025.3
 gunicorn==23.0.0
 redis==5.0.1
 celery==5.3.4
-django-celery-beat==2.5.0
-django-celery-results==2.5.1
+django-celery-beat==2.9.0
+django-celery-results==2.6.0
 django-redis==5.4.0
 channels==4.0.0
 channels-redis==4.1.0
