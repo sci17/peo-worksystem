@@ -387,428 +387,429 @@
                                 </div>
                             </article>
 
-                    <article class="status-card">
-                        <div class="status-head">
-                            <span class="material-symbols-outlined icon-amber">pending_actions</span>
-                            {% if overview_pending_approvals_delta %}
-                                <span class="delta delta-down">{{ overview_pending_approvals_delta }}</span>
-                            {% endif %}
-                        </div>
-                        <p class="status-label">Pending Approvals</p>
-                        <p class="status-value">{{ overview_pending_approvals|default:"0" }}</p>
-                        <div class="progress-track">
-                            <span
-                                class="progress-fill progress-amber"
-                                style='width: {{ overview_pending_approvals_progress|default:"0" }}%;'
-                                aria-hidden="true"
-                            ></span>
-                        </div>
-                    </article>
-
-                    <article class="status-card">
-                        <div class="status-head">
-                            <span class="material-symbols-outlined icon-green">autorenew</span>
-                            {% if overview_recent_updates_delta %}
-                                <span class="delta delta-up">{{ overview_recent_updates_delta }}</span>
-                            {% endif %}
-                        </div>
-                        <p class="status-label">Recent Updates</p>
-                        <p class="status-value">{{ overview_recent_updates|default:"0" }}</p>
-                        <div class="progress-track">
-                            <span
-                                class="progress-fill progress-green"
-                                style='width: {{ overview_recent_updates_progress|default:"0" }}%;'
-                                aria-hidden="true"
-                            ></span>
-                        </div>
-                    </article>
-                </section>
-
-                <section class="spotlight-section">
-                    <div class="section-head">
-                        <div>
-                            <h3>Accomplished Projects</h3>
-                        </div>
-                        <div class="section-head-actions">
-                            <button
-                                type="button"
-                                class="circle-action"
-                                aria-label="Previous accomplished project"
-                                data-spotlight-nav="prev"
-                                {% if overview_spotlight_projects|length <= 1 %}hidden{% endif %}
-                            >
-                                <span class="material-symbols-outlined">chevron_left</span>
-                            </button>
-                            <button
-                                type="button"
-                                class="circle-action"
-                                aria-label="Next accomplished project"
-                                data-spotlight-nav="next"
-                                {% if overview_spotlight_projects|length <= 1 %}hidden{% endif %}
-                            >
-                                <span class="material-symbols-outlined">chevron_right</span>
-                            </button>
-                        </div>
-                    </div>
-                    {% with spotlight=overview_spotlight_projects.0 %}
-                        <article class="spotlight-card">
-                            <div class="spotlight-scene" data-spotlight-project-id="{{ spotlight.id|default:'' }}" data-spotlight-project-name="{{ spotlight.title|default:'' }}">
-                                <div hidden>
-                                    {% for item in overview_spotlight_projects %}
-                                        <span
-                                            data-spotlight-item
-                                            data-project-id="{{ item.id|default:'' }}"
-                                            data-title="{{ item.title|default:'' }}"
-                                            data-subtitle="{{ item.subtitle|default:'' }}"
-                                            data-category="{{ item.category|default:'' }}"
-                                        ></span>
-                                    {% endfor %}
-                                </div>
-                                <div class="spotlight-copy">
-                                    <h4>{{ spotlight.title|default:"No uploaded project photos yet" }}</h4>
-                                    <p>{{ spotlight.subtitle|default:"Photos uploaded in Construction Division will appear here automatically." }}</p>
-                                </div>
-                                <div class="spotlight-dots" aria-hidden="true">
-                                    {% for item in overview_spotlight_projects %}
-                                        <span {% if forloop.first %}class="is-active"{% endif %}></span>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </article>
-                    {% endwith %}
-                    <div class="spotlight-gallery">
-                        <div class="spotlight-gallery-head">
-                            <h4>All Uploaded Construction Photos</h4>
-                            <p class="js-spotlight-gallery-meta">Showing Construction Division projects with uploaded photos.</p>
-                        </div>
-                        <div class="spotlight-gallery-grid js-spotlight-gallery"></div>
-                    </div>
-                </section>
-
-                <section class="leadership-section is-orgchart">
-                    <div class="section-head">
-                        <div>
-                            <h3>Division Leadership</h3>
-                            <p>Executive heads managing respective strategic divisions</p>
-                        </div>
-                        <button
-                            type="button"
-                            class="text-action"
-                            data-peo-toast-message="Leadership directory will open here when the staff directory is connected."
-                            data-peo-toast-variant="info"
-                        >
-                            <span>Directory</span>
-                            <span class="material-symbols-outlined">open_in_new</span>
-                        </button>
-                    </div>
-
-                    <div class="leadership-tree">
-                        {% if overview_leadership_executive %}
-                            <article class="leader-card leader-card-primary">
-                                <div class="leader-avatar leader-avatar-primary">
-                                    {% if overview_leadership_executive.photo_url %}
-                                        <img src="{{ overview_leadership_executive.photo_url }}" alt="{{ overview_leadership_executive.name|default:'Leader photo' }}">
-                                    {% else %}
-                                        {{ overview_leadership_executive.initials|default:"--" }}
+                            <article class="status-card">
+                                <div class="status-head">
+                                    <span class="material-symbols-outlined icon-amber">pending_actions</span>
+                                    {% if overview_pending_approvals_delta %}
+                                        <span class="delta delta-down">{{ overview_pending_approvals_delta }}</span>
                                     {% endif %}
                                 </div>
-                                <div class="leader-label">
-                                    <span class="leader-tag">{{ overview_leadership_executive.tag|default:"Executive Office" }}</span>
-                                    <h4>{{ overview_leadership_executive.name|default:"Hon. AMY ROA ALVAREZ" }}</h4>
-                                    <p>{{ overview_leadership_executive.title|default:"Governor" }}</p>
+                                <p class="status-label">Pending Approvals</p>
+                                <p class="status-value">{{ overview_pending_approvals|default:"0" }}</p>
+                                <div class="progress-track">
+                                    <span
+                                        class="progress-fill progress-amber"
+                                        style='width: {{ overview_pending_approvals_progress|default:0 }}%;'
+                                        aria-hidden="true"
+                                    ></span>
                                 </div>
                             </article>
-                        {% elif not overview_leadership_executive %}
-                            <article class="leader-card leader-card-primary">
-                                <div class="leader-avatar leader-avatar-primary">--</div>
-                                <div class="leader-label">
-                                    <span class="leader-tag">Executive Office</span>
-                                    <h4>Hon. AMY ROA ALVAREZ</h4>
-                                    <p>Governor</p>
-                                </div>
-                            </article>
-                        {% else %}
-                            <article class="leader-card leader-card-primary">
-                                <div class="leader-avatar leader-avatar-primary">--</div>
-                                <div class="leader-label">
-                                    <span class="leader-tag">Leadership</span>
-                                    <h4>Engr. AIREEN C. LAGUISMA</h4>
-                                    <p>Connect the staff directory to populate leadership.</p>
-                                </div>
-                            </article>
-                        {% endif %}
 
-                        <div class="leadership-tree-line" aria-hidden="true"></div>
+                            <article class="status-card">
+                                <div class="status-head">
+                                    <span class="material-symbols-outlined icon-green">autorenew</span>
+                                    {% if overview_recent_updates_delta %}
+                                        <span class="delta delta-up">{{ overview_recent_updates_delta }}</span>
+                                    {% endif %}
+                                </div>
+                                <p class="status-label">Recent Updates</p>
+                                <p class="status-value">{{ overview_recent_updates|default:"0" }}</p>
+                                <div class="progress-track">
+                                    <span
+                                        class="progress-fill progress-green"
+                                        style='width: {{ overview_recent_updates_progress|default:"0" }}%;'
+                                        aria-hidden="true"
+                                    ></span>
+                                </div>
+                            </article>
+                        </section>
 
-                        <article class="leader-card leader-card-secondary">
-                            <div class="leader-avatar leader-avatar-secondary">
-                                {% if overview_leadership_under_executive.photo_url %}
-                                    <img src="{{ overview_leadership_under_executive.photo_url }}" alt="{{ overview_leadership_under_executive.name|default:'Leader photo' }}">
+                        <section class="spotlight-section">
+                            <div class="section-head">
+                                <div>
+                                    <h3>Accomplished Projects</h3>
+                                </div>
+                                <div class="section-head-actions">
+                                    <button
+                                        type="button"
+                                        class="circle-action"
+                                        aria-label="Previous accomplished project"
+                                        data-spotlight-nav="prev"
+                                        {% if overview_spotlight_projects|length <= 1 %}hidden{% endif %}
+                                    >
+                                        <span class="material-symbols-outlined">chevron_left</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="circle-action"
+                                        aria-label="Next accomplished project"
+                                        data-spotlight-nav="next"
+                                        {% if overview_spotlight_projects|length <= 1 %}hidden{% endif %}
+                                    >
+                                        <span class="material-symbols-outlined">chevron_right</span>
+                                    </button>
+                                </div>
+                            </div>
+                            {% with spotlight=overview_spotlight_projects.0 %}
+                                <article class="spotlight-card">
+                                    <div class="spotlight-scene" data-spotlight-project-id="{{ spotlight.id|default:'' }}" data-spotlight-project-name="{{ spotlight.title|default:'' }}">
+                                        <div hidden>
+                                            {% for item in overview_spotlight_projects %}
+                                                <span
+                                                    data-spotlight-item
+                                                    data-project-id="{{ item.id|default:'' }}"
+                                                    data-title="{{ item.title|default:'' }}"
+                                                    data-subtitle="{{ item.subtitle|default:'' }}"
+                                                    data-category="{{ item.category|default:'' }}"
+                                                ></span>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="spotlight-copy">
+                                            <h4>{{ spotlight.title|default:"No uploaded project photos yet" }}</h4>
+                                            <p>{{ spotlight.subtitle|default:"Photos uploaded in Construction Division will appear here automatically." }}</p>
+                                        </div>
+                                        <div class="spotlight-dots" aria-hidden="true">
+                                            {% for item in overview_spotlight_projects %}
+                                                <span {% if forloop.first %}class="is-active"{% endif %}></span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </article>
+                            {% endwith %}
+                            <div class="spotlight-gallery">
+                                <div class="spotlight-gallery-head">
+                                    <h4>All Uploaded Construction Photos</h4>
+                                    <p class="js-spotlight-gallery-meta">Showing Construction Division projects with uploaded photos.</p>
+                                </div>
+                                <div class="spotlight-gallery-grid js-spotlight-gallery"></div>
+                            </div>
+                        </section>
+
+                        <section class="leadership-section is-orgchart">
+                            <div class="section-head">
+                                <div>
+                                    <h3>Division Leadership</h3>
+                                    <p>Executive heads managing respective strategic divisions</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="text-action"
+                                    data-peo-toast-message="Leadership directory will open here when the staff directory is connected."
+                                    data-peo-toast-variant="info"
+                                >
+                                    <span>Directory</span>
+                                    <span class="material-symbols-outlined">open_in_new</span>
+                                </button>
+                            </div>
+
+                            <div class="leadership-tree">
+                                {% if overview_leadership_executive %}
+                                    <article class="leader-card leader-card-primary">
+                                        <div class="leader-avatar leader-avatar-primary">
+                                            {% if overview_leadership_executive.photo_url %}
+                                                <img src="{{ overview_leadership_executive.photo_url }}" alt="{{ overview_leadership_executive.name|default:'Leader photo' }}">
+                                            {% else %}
+                                                {{ overview_leadership_executive.initials|default:"--" }}
+                                            {% endif %}
+                                        </div>
+                                        <div class="leader-label">
+                                            <span class="leader-tag">{{ overview_leadership_executive.tag|default:"Executive Office" }}</span>
+                                            <h4>{{ overview_leadership_executive.name|default:"Hon. AMY ROA ALVAREZ" }}</h4>
+                                            <p>{{ overview_leadership_executive.title|default:"Governor" }}</p>
+                                        </div>
+                                    </article>
+                                {% elif not overview_leadership_executive %}
+                                    <article class="leader-card leader-card-primary">
+                                        <div class="leader-avatar leader-avatar-primary">--</div>
+                                        <div class="leader-label">
+                                            <span class="leader-tag">Executive Office</span>
+                                            <h4>Hon. AMY ROA ALVAREZ</h4>
+                                            <p>Governor</p>
+                                        </div>
+                                    </article>
                                 {% else %}
-                                    {{ overview_leadership_under_executive.initials|default:"--" }}
+                                    <article class="leader-card leader-card-primary">
+                                        <div class="leader-avatar leader-avatar-primary">--</div>
+                                        <div class="leader-label">
+                                            <span class="leader-tag">Leadership</span>
+                                            <h4>Engr. AIREEN C. LAGUISMA</h4>
+                                            <p>Connect the staff directory to populate leadership.</p>
+                                        </div>
+                                    </article>
                                 {% endif %}
-                            </div>
-                            <div class="leader-label">
-                                <span class="leader-tag">{{ overview_leadership_under_executive.tag|default:"Provincial Engineer Office" }}</span>
-                                <h4>{{ overview_leadership_under_executive.name|default:"Engr. AIREEN C. LAGUISMA" }}</h4>
-                                <p>{{ overview_leadership_under_executive.title|default:"PGDH (Provincial Engineer)" }}</p>
-                            </div>
-                        </article>
 
-                        <div class="leadership-tree-line" aria-hidden="true"></div>
+                                <div class="leadership-tree-line" aria-hidden="true"></div>
 
-                        <div class="assistant-grid" aria-label="Assistant Provincial Engineers">
-                            {% if overview_leadership_assistants %}
-                                {% for assistant in overview_leadership_assistants %}
-                                    <article class="leader-card leader-card-assistant">
-                                        <div class="leader-avatar leader-avatar-secondary {{ assistant.avatar_class|default:'' }}">
-                                            {% if assistant.photo_url %}
-                                                <img src="{{ assistant.photo_url }}" alt="{{ assistant.name|default:'Leader photo' }}">
-                                            {% else %}
-                                                {{ assistant.initials|default:"--" }}
-                                            {% endif %}
-                                        </div>
-                                        <div class="leader-label">
-                                            <span class="leader-tag">{{ assistant.tag|default:"Assistant Provincial Engineer" }}</span>
-                                            <h4>{{ assistant.name|default:"Not assigned" }}</h4>
-                                            <p>{{ assistant.title|default:"Assistant Provincial Engineer" }}</p>
-                                        </div>
-                                    </article>
-                                {% endfor %}
-                            {% else %}
-                                <article class="leader-card leader-card-assistant">
-                                    <div class="leader-avatar leader-avatar-secondary">--</div>
+                                <article class="leader-card leader-card-secondary">
+                                    <div class="leader-avatar leader-avatar-secondary">
+                                        {% if overview_leadership_under_executive.photo_url %}
+                                            <img src="{{ overview_leadership_under_executive.photo_url }}" alt="{{ overview_leadership_under_executive.name|default:'Leader photo' }}">
+                                        {% else %}
+                                            {{ overview_leadership_under_executive.initials|default:"--" }}
+                                        {% endif %}
+                                    </div>
                                     <div class="leader-label">
-                                        <span class="leader-tag">Assistant Provincial Engineer</span>
-                                        <h4>Engr. ELMON RAY M. JURATIL</h4>
-                                        <p>PGADH (Assistant Provincial Engineer)</p>
+                                        <span class="leader-tag">{{ overview_leadership_under_executive.tag|default:"Provincial Engineer Office" }}</span>
+                                        <h4>{{ overview_leadership_under_executive.name|default:"Engr. AIREEN C. LAGUISMA" }}</h4>
+                                        <p>{{ overview_leadership_under_executive.title|default:"PGDH (Provincial Engineer)" }}</p>
                                     </div>
                                 </article>
-                                <article class="leader-card leader-card-assistant">
-                                    <div class="leader-avatar leader-avatar-secondary">--</div>
-                                    <div class="leader-label">
-                                        <span class="leader-tag">Assistant Provincial Engineer</span>
-                                        <h4>Engr. RANFORD T. VILLEGAS</h4>
-                                        <p>PGADH (Assistant Provincial Engineer)</p>
-                                    </div>
-                                </article>
-                            {% endif %}
-                        </div>
 
-                        <div class="leadership-tree-line" aria-hidden="true"></div>
+                                <div class="leadership-tree-line" aria-hidden="true"></div>
 
-                        <div class="leader-grid" aria-label="Division Heads">
-                            {% if overview_leadership_divisions %}
-                                {% for leader in overview_leadership_divisions %}
-                                    <article class="leader-card">
-                                        <div class="leader-avatar {{ leader.avatar_class|default:'' }}">
-                                            {% if leader.photo_url %}
-                                                <img src="{{ leader.photo_url }}" alt="{{ leader.name|default:'Leader photo' }}">
-                                            {% else %}
-                                                {{ leader.initials|default:"--" }}
-                                            {% endif %}
-                                        </div>
-                                        <div class="leader-label">
-                                            <span class="leader-dept">{{ leader.department|default:"" }}</span>
-                                            <h4>{{ leader.name|default:"Not assigned" }}</h4>
-                                            <p>{{ leader.title|default:"Division Head" }}</p>
-                                        </div>
-                                    </article>
-                                {% endfor %}
-                            {% else %}
-                                <article class="leader-card">
-                                    <div class="leader-avatar leader-avatar-admin">--</div>
-                                    <div class="leader-label">
-                                        <span class="leader-dept">Administrative Division</span>
-                                        <h4>Engr. PEARL ANGELIE L. PRADO</h4>
-                                        <p>Division Head</p>
-                                    </div>
-                                </article>
-                                <article class="leader-card">
-                                    <div class="leader-avatar leader-avatar-planning">--</div>
-                                    <div class="leader-label">
-                                        <span class="leader-dept">Planning Division</span>
-                                        <h4>Engr. ARLENE N. GAMO</h4>
-                                        <p>Division Head</p>
-                                    </div>
-                                </article>
-                                <article class="leader-card">
-                                    <div class="leader-avatar leader-avatar-construction">--</div>
-                                    <div class="leader-label">
-                                        <span class="leader-dept">Construction Division</span>
-                                        <h4>Engr. ELMON RAY M. JURATIL</h4>
-                                        <p>Division Head</p>
-                                    </div>
-                                </article>
-                                <article class="leader-card">
-                                    <div class="leader-avatar leader-avatar-quality">--</div>
-                                    <div class="leader-label">
-                                        <span class="leader-dept">Quality Control Division</span>
-                                        <h4>Engr. CHARISMA WY B. PROELLS</h4>
-                                        <p>Division Head</p>
-                                    </div>
-                                </article>
-                                <article class="leader-card">
-                                    <div class="leader-avatar leader-avatar-maintenance">--</div>
-                                    <div class="leader-label">
-                                        <span class="leader-dept">Maintenance Division</span>
-                                        <h4>Engr. GLENN J. CAYAPAS</h4>
-                                        <p>Division Head</p>
-                                    </div>
-                                </article>
-                            {% endif %}
-                        </div>
-                    </div>
-                </section>
-
-                <section class="overview-analytics">
-                    <article class="panel activity-panel">
-                        <div class="panel-head">
-                            <h3>Recent Activity</h3>
-                        </div>
-                        <ul class="activity-list">
-                            {% if overview_recent_activity %}
-                                {% for event in overview_recent_activity %}
-                                    <li>
-                                        <span class="activity-dot {{ event.dot_class|default:'dot-slate' }}"></span>
-                                        <div>
-                                            <p>{{ event.title|default:"" }}</p>
-                                            <small>{{ event.meta|default:"" }}</small>
-                                            {% if event.file %}
-                                                <span class="activity-file">{{ event.file }}</span>
-                                            {% endif %}
-                                            {% if event.note %}
-                                                <span class="activity-note">{{ event.note }}</span>
-                                            {% endif %}
-                                        </div>
-                                    </li>
-                                {% endfor %}
-                            {% else %}
-                                <li class="activity-empty">
-                                    <span class="activity-dot dot-slate"></span>
-                                    <div>
-                                        <p>No recent activity yet</p>
-                                        <small>Connect division workflows to see updates here.</small>
-                                    </div>
-                                </li>
-                            {% endif %}
-                        </ul>
-                    </article>
-
-                    <article class="panel analytics-panel">
-                        <div class="panel-head">
-                            <h3>Division Performance</h3>
-                            <div class="chart-legend" aria-label="Chart legend">
-                                <span><i class="legend-dot legend-dot-light"></i>Target</span>
-                                <span><i class="legend-dot legend-dot-strong"></i>Actual</span>
-                            </div>
-                        </div>
-
-                        {% if overview_division_performance %}
-                            <div class="performance-chart" aria-hidden="true">
-                                {% for metric in overview_division_performance %}
-                                    <div class="chart-group">
-                                        <div class="chart-bars">
-                                            <span class="chart-bar chart-bar-target" style="height: {{ metric.target|default:0 }}%;"></span>
-                                            <span class="chart-bar chart-bar-actual" style="height: {{ metric.actual|default:0 }}%;"></span>
-                                        </div>
-                                        <p>{{ metric.label|default:"" }}</p>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <div class="performance-chart">
-                                <p class="overview-empty">No performance metrics yet.</p>
-                            </div>
-                        {% endif %}
-
-                        <div class="performance-summary">
-                            <div class="summary-tile">
-                                <span class="material-symbols-outlined">trending_up</span>
-                                <div>
-                                    <small>Top Performer</small>
-                                    <strong>{{ overview_top_performer|default:"--" }}</strong>
-                                </div>
-                            </div>
-                            <div class="summary-tile">
-                                <span class="material-symbols-outlined">monitoring</span>
-                                <div>
-                                    <small>Overall Efficiency</small>
-                                    <strong>{{ overview_overall_efficiency|default:"--" }}</strong>
-                                </div>
-                            </div>
-                        </div>
-                    </article>
-                </section>
-
-                <section class="panel panel-progress">
-                    <div class="panel-head">
-                        <h3>Detailed Division Progress</h3>
-                        <a href="{% url 'tracking_details' %}" class="text-action" aria-label="View full progress report">
-                            <span>View Full Report</span>
-                            <span class="material-symbols-outlined">arrow_forward</span>
-                        </a>
-                    </div>
-
-                    <div class="table-wrap">
-                        <table class="division-table">
-                            <thead>
-                                <tr>
-                                    <th>Division</th>
-                                    <th>Manager</th>
-                                    <th>Completion</th>
-                                    <th>Status</th>
-                                    <th class="align-right">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% if overview_division_progress %}
-                                    {% for row in overview_division_progress %}
-                                        <tr>
-                                            <td>
-                                                <span class="division-name">
-                                                    <span class="material-symbols-outlined">{{ row.icon|default:"dashboard" }}</span>
-                                                    {{ row.division|default:"" }}
-                                                </span>
-                                                {% if row.meta or row.last_synced %}
-                                                    <small class="division-meta">
-                                                        {{ row.meta|default:"" }}{% if row.meta and row.last_synced %} &middot; {% endif %}{{ row.last_synced|default:"" }}
-                                                    </small>
-                                                {% endif %}
-                                            </td>
-                                            <td>{{ row.manager|default:"--" }}</td>
-                                            <td>
-                                                <div class="completion-wrap">
-                                                    <div class="progress-track">
-                                                        <span class="progress-fill {{ row.progress_class|default:'progress-blue' }}" style="width: {{ row.completion|default:0 }}%;"></span>
-                                                    </div>
-                                                    <span>{{ row.completion|default:0 }}%</span>
+                                <div class="assistant-grid" aria-label="Assistant Provincial Engineers">
+                                    {% if overview_leadership_assistants %}
+                                        {% for assistant in overview_leadership_assistants %}
+                                            <article class="leader-card leader-card-assistant">
+                                                <div class="leader-avatar leader-avatar-secondary {{ assistant.avatar_class|default:'' }}">
+                                                    {% if assistant.photo_url %}
+                                                        <img src="{{ assistant.photo_url }}" alt="{{ assistant.name|default:'Leader photo' }}">
+                                                    {% else %}
+                                                        {{ assistant.initials|default:"--" }}
+                                                    {% endif %}
                                                 </div>
-                                            </td>
-                                            <td><span class="pill {{ row.status_class|default:'pill-slate' }}">{{ row.status|default:"--" }}</span></td>
-                                            <td class="align-right">
-                                                <button
-                                                    type="button"
-                                                    class="row-action"
-                                                    aria-label="Open division actions"
-                                                    data-peo-toast-message="Division actions will open here."
-                                                    data-peo-toast-variant="info"
-                                                >
-                                                    <span class="material-symbols-outlined">more_vert</span>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
+                                                <div class="leader-label">
+                                                    <span class="leader-tag">{{ assistant.tag|default:"Assistant Provincial Engineer" }}</span>
+                                                    <h4>{{ assistant.name|default:"Not assigned" }}</h4>
+                                                    <p>{{ assistant.title|default:"Assistant Provincial Engineer" }}</p>
+                                                </div>
+                                            </article>
+                                        {% endfor %}
+                                    {% else %}
+                                        <article class="leader-card leader-card-assistant">
+                                            <div class="leader-avatar leader-avatar-secondary">--</div>
+                                            <div class="leader-label">
+                                                <span class="leader-tag">Assistant Provincial Engineer</span>
+                                                <h4>Engr. ELMON RAY M. JURATIL</h4>
+                                                <p>PGADH (Assistant Provincial Engineer)</p>
+                                            </div>
+                                        </article>
+                                        <article class="leader-card leader-card-assistant">
+                                            <div class="leader-avatar leader-avatar-secondary">--</div>
+                                            <div class="leader-label">
+                                                <span class="leader-tag">Assistant Provincial Engineer</span>
+                                                <h4>Engr. RANFORD T. VILLEGAS</h4>
+                                                <p>PGADH (Assistant Provincial Engineer)</p>
+                                            </div>
+                                        </article>
+                                    {% endif %}
+                                </div>
+
+                                <div class="leadership-tree-line" aria-hidden="true"></div>
+
+                                <div class="leader-grid" aria-label="Division Heads">
+                                    {% if overview_leadership_divisions %}
+                                        {% for leader in overview_leadership_divisions %}
+                                            <article class="leader-card">
+                                                <div class="leader-avatar {{ leader.avatar_class|default:'' }}">
+                                                    {% if leader.photo_url %}
+                                                        <img src="{{ leader.photo_url }}" alt="{{ leader.name|default:'Leader photo' }}">
+                                                    {% else %}
+                                                        {{ leader.initials|default:"--" }}
+                                                    {% endif %}
+                                                </div>
+                                                <div class="leader-label">
+                                                    <span class="leader-dept">{{ leader.department|default:"" }}</span>
+                                                    <h4>{{ leader.name|default:"Not assigned" }}</h4>
+                                                    <p>{{ leader.title|default:"Division Head" }}</p>
+                                                </div>
+                                            </article>
+                                        {% endfor %}
+                                    {% else %}
+                                        <article class="leader-card">
+                                            <div class="leader-avatar leader-avatar-admin">--</div>
+                                            <div class="leader-label">
+                                                <span class="leader-dept">Administrative Division</span>
+                                                <h4>Engr. PEARL ANGELIE L. PRADO</h4>
+                                                <p>Division Head</p>
+                                            </div>
+                                        </article>
+                                        <article class="leader-card">
+                                            <div class="leader-avatar leader-avatar-planning">--</div>
+                                            <div class="leader-label">
+                                                <span class="leader-dept">Planning Division</span>
+                                                <h4>Engr. ARLENE N. GAMO</h4>
+                                                <p>Division Head</p>
+                                            </div>
+                                        </article>
+                                        <article class="leader-card">
+                                            <div class="leader-avatar leader-avatar-construction">--</div>
+                                            <div class="leader-label">
+                                                <span class="leader-dept">Construction Division</span>
+                                                <h4>Engr. ELMON RAY M. JURATIL</h4>
+                                                <p>Division Head</p>
+                                            </div>
+                                        </article>
+                                        <article class="leader-card">
+                                            <div class="leader-avatar leader-avatar-quality">--</div>
+                                            <div class="leader-label">
+                                                <span class="leader-dept">Quality Control Division</span>
+                                                <h4>Engr. CHARISMA WY B. PROELLS</h4>
+                                                <p>Division Head</p>
+                                            </div>
+                                        </article>
+                                        <article class="leader-card">
+                                            <div class="leader-avatar leader-avatar-maintenance">--</div>
+                                            <div class="leader-label">
+                                                <span class="leader-dept">Maintenance Division</span>
+                                                <h4>Engr. GLENN J. CAYAPAS</h4>
+                                                <p>Division Head</p>
+                                            </div>
+                                        </article>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="overview-analytics">
+                            <article class="panel activity-panel">
+                                <div class="panel-head">
+                                    <h3>Recent Activity</h3>
+                                </div>
+                                <ul class="activity-list">
+                                    {% if overview_recent_activity %}
+                                        {% for event in overview_recent_activity %}
+                                            <li>
+                                                <span class="activity-dot {{ event.dot_class|default:'dot-slate' }}"></span>
+                                                <div>
+                                                    <p>{{ event.title|default:"" }}</p>
+                                                    <small>{{ event.meta|default:"" }}</small>
+                                                    {% if event.file %}
+                                                        <span class="activity-file">{{ event.file }}</span>
+                                                    {% endif %}
+                                                    {% if event.note %}
+                                                        <span class="activity-note">{{ event.note }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            </li>
+                                        {% endfor %}
+                                    {% else %}
+                                        <li class="activity-empty">
+                                            <span class="activity-dot dot-slate"></span>
+                                            <div>
+                                                <p>No recent activity yet</p>
+                                                <small>Connect division workflows to see updates here.</small>
+                                            </div>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </article>
+
+                            <article class="panel analytics-panel">
+                                <div class="panel-head">
+                                    <h3>Division Performance</h3>
+                                    <div class="chart-legend" aria-label="Chart legend">
+                                        <span><i class="legend-dot legend-dot-light"></i>Target</span>
+                                        <span><i class="legend-dot legend-dot-strong"></i>Actual</span>
+                                    </div>
+                                </div>
+
+                                {% if overview_division_performance %}
+                                    <div class="performance-chart" aria-hidden="true">
+                                        {% for metric in overview_division_performance %}
+                                            <div class="chart-group">
+                                                <div class="chart-bars">
+                                                    <span class="chart-bar chart-bar-target" style="height: {{ metric.target|default:0 }}%;"></span>
+                                                    <span class="chart-bar chart-bar-actual" style="height: {{ metric.actual|default:0 }}%;"></span>
+                                                </div>
+                                                <p>{{ metric.label|default:"" }}</p>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
                                 {% else %}
-                                    <tr class="division-table-empty">
-                                        <td colspan="5">No division progress data yet.</td>
-                                    </tr>
+                                    <div class="performance-chart">
+                                        <p class="overview-empty">No performance metrics yet.</p>
+                                    </div>
                                 {% endif %}
-                            </tbody>
-                        </table>
-                    </div>
+
+                                <div class="performance-summary">
+                                    <div class="summary-tile">
+                                        <span class="material-symbols-outlined">trending_up</span>
+                                        <div>
+                                            <small>Top Performer</small>
+                                            <strong>{{ overview_top_performer|default:"--" }}</strong>
+                                        </div>
+                                    </div>
+                                    <div class="summary-tile">
+                                        <span class="material-symbols-outlined">monitoring</span>
+                                        <div>
+                                            <small>Overall Efficiency</small>
+                                            <strong>{{ overview_overall_efficiency|default:"--" }}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        </section>
+
+                        <section class="panel panel-progress">
+                            <div class="panel-head">
+                                <h3>Detailed Division Progress</h3>
+                                <a href="{% url 'tracking_details' %}" class="text-action" aria-label="View full progress report">
+                                    <span>View Full Report</span>
+                                    <span class="material-symbols-outlined">arrow_forward</span>
+                                </a>
+                            </div>
+
+                            <div class="table-wrap">
+                                <table class="division-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Division</th>
+                                            <th>Manager</th>
+                                            <th>Completion</th>
+                                            <th>Status</th>
+                                            <th class="align-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% if overview_division_progress %}
+                                            {% for row in overview_division_progress %}
+                                                <tr>
+                                                    <td>
+                                                        <span class="division-name">
+                                                            <span class="material-symbols-outlined">{{ row.icon|default:"dashboard" }}</span>
+                                                            {{ row.division|default:"" }}
+                                                        </span>
+                                                        {% if row.meta or row.last_synced %}
+                                                            <small class="division-meta">
+                                                                {{ row.meta|default:"" }}{% if row.meta and row.last_synced %} &middot; {% endif %}{{ row.last_synced|default:"" }}
+                                                            </small>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{{ row.manager|default:"--" }}</td>
+                                                    <td>
+                                                        <div class="completion-wrap">
+                                                            <div class="progress-track">
+                                                                <span class="progress-fill {{ row.progress_class|default:'progress-blue' }}" style="width: {{ row.completion|default:0 }}%;"></span>
+                                                            </div>
+                                                            <span>{{ row.completion|default:0 }}%</span>
+                                                        </div>
+                                                    </td>
+                                                    <td><span class="pill {{ row.status_class|default:'pill-slate' }}">{{ row.status|default:"--" }}</span></td>
+                                                    <td class="align-right">
+                                                        <button
+                                                            type="button"
+                                                            class="row-action"
+                                                            aria-label="Open division actions"
+                                                            data-peo-toast-message="Division actions will open here."
+                                                            data-peo-toast-variant="info"
+                                                        >
+                                                            <span class="material-symbols-outlined">more_vert</span>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        {% else %}
+                                            <tr class="division-table-empty">
+                                                <td colspan="5">No division progress data yet.</td>
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    {% endif %}
                 </section>
-            {% endif %}
         </main>
     </div>
 
