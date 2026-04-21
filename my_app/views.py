@@ -1,6 +1,7 @@
 import json
 import hashlib
 import re
+import shutil
 import uuid
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -96,6 +97,30 @@ def _broadcast_division_store_update(*, store_keys, actor=None, updated_at=None)
         )
     except Exception:
         return
+
+
+def _sync_legacy_construction_uploads():
+    legacy_dir = Path(__file__).resolve().parent / "static" / "uploads"
+    media_root = Path(getattr(settings, "MEDIA_ROOT", "") or "")
+    if not legacy_dir.exists() or not media_root:
+        return
+
+    target_dir = media_root / "construction_uploads"
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+
+    for legacy_file in legacy_dir.iterdir():
+        if not legacy_file.is_file():
+            continue
+        destination = target_dir / legacy_file.name
+        if destination.exists():
+            continue
+        try:
+            shutil.copy2(legacy_file, destination)
+        except OSError:
+            continue
 
 
 def _get_user_profile(user):
@@ -2435,6 +2460,7 @@ def account_settings(request):
 
 @login_required
 def user_dashboard(request):
+    _sync_legacy_construction_uploads()
     return render(
         request,
         'Dashboard/dashboard.html',
@@ -2461,6 +2487,7 @@ def admin_division_dashboard(request):
 
 @login_required
 def construction_division_dashboard(request):
+    _sync_legacy_construction_uploads()
     return render(
         request,
         'Dashboard/dashboard.html',
@@ -2476,6 +2503,7 @@ def construction_division_dashboard(request):
 
 @login_required
 def construction_project_dashboard(request):
+    _sync_legacy_construction_uploads()
     return render(
         request,
         'Dashboard/dashboard.html',
@@ -2491,6 +2519,7 @@ def construction_project_dashboard(request):
 
 @login_required
 def construction_task_table(request):
+    _sync_legacy_construction_uploads()
     return render(
         request,
         'Dashboard/dashboard.html',
@@ -2864,8 +2893,10 @@ def construction_photo_upload(request):
     if not files:
         return JsonResponse({"error": "No files uploaded."}, status=400)
 
+    _sync_legacy_construction_uploads()
+
     allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf"}
-    uploads_dir = Path(__file__).resolve().parent / "static" / "uploads"
+    uploads_dir = Path(settings.MEDIA_ROOT) / "construction_uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
     stored = []
@@ -2888,7 +2919,8 @@ def construction_photo_upload(request):
             for chunk in file.chunks():
                 handle.write(chunk)
 
-        url = f"/static/uploads/{filename}"
+        media_url = str(getattr(settings, "MEDIA_URL", "/media/") or "/media/").rstrip("/")
+        url = f"{media_url}/construction_uploads/{filename}"
         stored.append({"name": filename, "original_name": original_name, "url": url})
 
         try:

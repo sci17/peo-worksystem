@@ -1023,15 +1023,15 @@ const peoShouldCompressUploadImage = (file) => {
     const type = String(file.type || "").toLowerCase();
     if (!type.startsWith("image/")) return false;
     if (type === "image/gif" || type === "image/svg+xml") return false;
-    return file.size > (250 * 1024);
+    return file.size > (1024 * 1024);
 };
 
 const peoCompressUploadImageFile = async (file, options = {}) => {
     if (!peoShouldCompressUploadImage(file)) return file;
 
-    const maxDimension = Number(options.maxDimension) > 0 ? Number(options.maxDimension) : 2560;
-    const quality = Number(options.quality) > 0 ? Math.min(1, Number(options.quality)) : 0.92;
-    const minBytesSaved = Number(options.minBytesSaved) > 0 ? Number(options.minBytesSaved) : 32 * 1024;
+    const maxDimension = Number(options.maxDimension) > 0 ? Number(options.maxDimension) : 4096;
+    const quality = Number(options.quality) > 0 ? Math.min(1, Number(options.quality)) : 0.98;
+    const minBytesSaved = Number(options.minBytesSaved) > 0 ? Number(options.minBytesSaved) : 128 * 1024;
     const outputType = String(file.type || "").toLowerCase() === "image/png" ? "image/png" : "image/jpeg";
     const objectUrl = window.URL.createObjectURL(file);
 
@@ -1084,10 +1084,36 @@ const peoCompressUploadImageFile = async (file, options = {}) => {
 
 const compressImageUploadFile = (file, options = {}) => peoCompressUploadImageFile(file, options);
 const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
-    maxDimension: 2560,
-    quality: 0.92,
-    minBytesSaved: 32 * 1024,
+    maxDimension: 4096,
+    quality: 0.98,
+    minBytesSaved: 128 * 1024,
 });
+
+const normalizeConstructionSpotlightUrl = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+
+    let url = raw;
+    if (url.startsWith("static/uploads/")) {
+        url = `/${url}`;
+    } else if (url.startsWith("./static/uploads/")) {
+        url = url.slice(1);
+    } else if (url.startsWith("media/construction_uploads/")) {
+        url = `/${url}`;
+    } else if (url.startsWith("./media/construction_uploads/")) {
+        url = url.slice(1);
+    }
+
+    const isStaticUpload = url.startsWith("/static/uploads/");
+    const isMediaUpload = url.startsWith("/media/construction_uploads/");
+    if (!isStaticUpload && !isMediaUpload) return "";
+    const filename = isStaticUpload
+        ? url.slice("/static/uploads/".length).split("?")[0]
+        : url.slice("/media/construction_uploads/".length).split("?")[0];
+    if (!filename) return "";
+    if (filename.startsWith("profile_")) return "";
+    return isStaticUpload ? `/media/construction_uploads/${filename}` : url;
+};
 
 (() => {
     const API_BASE = "/api/division-store/";
@@ -14869,13 +14895,21 @@ document.addEventListener("DOMContentLoaded", () => {
             url = `/${url}`;
         } else if (url.startsWith("./static/uploads/")) {
             url = url.slice(1);
+        } else if (url.startsWith("media/construction_uploads/")) {
+            url = `/${url}`;
+        } else if (url.startsWith("./media/construction_uploads/")) {
+            url = url.slice(1);
         }
 
-        if (!url.startsWith("/static/uploads/")) return "";
-        const filename = url.slice("/static/uploads/".length).split("?")[0];
+        const isStaticUpload = url.startsWith("/static/uploads/");
+        const isMediaUpload = url.startsWith("/media/construction_uploads/");
+        if (!isStaticUpload && !isMediaUpload) return "";
+        const filename = isStaticUpload
+            ? url.slice("/static/uploads/".length).split("?")[0]
+            : url.slice("/media/construction_uploads/".length).split("?")[0];
         if (!filename) return "";
         if (filename.startsWith("profile_")) return "";
-        return url;
+        return isStaticUpload ? `/media/construction_uploads/${filename}` : url;
     };
     const clampIndex = (value) => {
         if (!slides.length) return 0;
@@ -15162,6 +15196,90 @@ document.addEventListener("DOMContentLoaded", () => {
     const spotlightGalleryWrap = spotlightSection.querySelector(".spotlight-gallery");
     const spotlightGallery = spotlightSection.querySelector(".js-spotlight-gallery");
     const spotlightGalleryMeta = spotlightSection.querySelector(".js-spotlight-gallery-meta");
+    const spotlightDetailModal = spotlightSection.querySelector(".js-spotlight-detail-modal");
+    const spotlightDetailDialog = spotlightDetailModal ? spotlightDetailModal.querySelector(".spotlight-detail-dialog") : null;
+    const spotlightDetailTitle = spotlightDetailModal ? spotlightDetailModal.querySelector(".js-spotlight-detail-title") : null;
+    const spotlightDetailSubtitle = spotlightDetailModal ? spotlightDetailModal.querySelector(".js-spotlight-detail-subtitle") : null;
+    const spotlightDetailFacts = spotlightDetailModal ? spotlightDetailModal.querySelector(".js-spotlight-detail-facts") : null;
+    const spotlightDetailImages = spotlightDetailModal ? spotlightDetailModal.querySelector(".js-spotlight-detail-images") : null;
+    const spotlightDetailCloseButtons = spotlightDetailModal
+        ? Array.from(spotlightDetailModal.querySelectorAll(".js-close-spotlight-detail-modal"))
+        : [];
+
+    const findConstructionRecord = (projectId, projectTitle) => {
+        const records = readConstructionRecords();
+        return records.find((candidate) => {
+            if (!candidate || typeof candidate !== "object") return false;
+            const candidateId = String(candidate.__id || "").trim();
+            const candidateTitle = String(candidate.project_name || candidate.project || "").trim();
+            if (projectId && candidateId === projectId) return true;
+            if (!projectId && projectTitle && normalize(candidateTitle) === normalize(projectTitle)) return true;
+            return false;
+        }) || null;
+    };
+
+    const buildSpotlightFact = (label, value) => `
+        <article class="spotlight-detail-fact">
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(String(value || "").trim() || "-")}</strong>
+        </article>
+    `;
+
+    const closeSpotlightDetailModal = () => {
+        if (!(spotlightDetailModal instanceof HTMLElement)) return;
+        spotlightDetailModal.hidden = true;
+        document.body.classList.remove("project-modal-open");
+    };
+
+    const openSpotlightDetailModal = (record) => {
+        if (!(spotlightDetailModal instanceof HTMLElement) || !(record && typeof record === "object")) return;
+        const title = String(record.project_name || record.project || "Construction Project").trim() || "Construction Project";
+        const location = String(record.location || "").trim();
+        const contractor = String(record.contractor || "").trim();
+        const municipality = String(record.mun || "").trim();
+        const status = String(record.status_current || "").trim();
+        const contractCost = String(record.contract_cost || "").trim();
+        const remarks = String(record.remarks || record.project_remarks || "").trim();
+        const images = getConstructionImageEntries(record);
+
+        if (spotlightDetailTitle instanceof HTMLElement) {
+            spotlightDetailTitle.textContent = title;
+        }
+        if (spotlightDetailSubtitle instanceof HTMLElement) {
+            spotlightDetailSubtitle.textContent = [location, contractor].filter(Boolean).join(" • ") || "Full construction details and uploaded images.";
+        }
+        if (spotlightDetailFacts instanceof HTMLElement) {
+            spotlightDetailFacts.innerHTML = [
+                buildSpotlightFact("Location", location),
+                buildSpotlightFact("Municipality", municipality),
+                buildSpotlightFact("Contractor", contractor),
+                buildSpotlightFact("Status", status),
+                buildSpotlightFact("Contract Cost", contractCost),
+                buildSpotlightFact("Remarks", remarks),
+            ].join("");
+        }
+        if (spotlightDetailImages instanceof HTMLElement) {
+            spotlightDetailImages.innerHTML = images.length
+                ? images.map((image, index) => `
+                    <article class="spotlight-detail-image-card">
+                        <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.name || `${title} image ${index + 1}`)}" loading="lazy">
+                        <div class="spotlight-detail-image-copy">
+                            <h5>${escapeHtml(image.name || `Uploaded Image ${index + 1}`)}</h5>
+                            <p>${escapeHtml(String(image.uploadedAt || "").trim() || "Construction photo uploaded for this project.")}</p>
+                        </div>
+                    </article>
+                `).join("")
+                : '<div class="spotlight-detail-fact"><span>Images</span><strong>No uploaded images yet.</strong></div>';
+        }
+
+        spotlightDetailModal.hidden = false;
+        document.body.classList.add("project-modal-open");
+        if (spotlightDetailDialog instanceof HTMLElement) {
+            window.requestAnimationFrame(() => {
+                spotlightDetailDialog.focus({ preventScroll: true });
+            });
+        }
+    };
 
     const renderSpotlightGallery = (records) => {
         if (!(spotlightGallery instanceof HTMLElement)) return;
@@ -15174,11 +15292,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 const title = String(record.project_name || record.project || "Construction Project").trim();
                 const location = String(record.location || "").trim();
                 const contractor = String(record.contractor || "").trim();
+                const recordId = String(record.__id || "").trim();
                 return images.map((image, index) => {
                     const uploadedLabel = String(image.uploadedAt || "").trim();
                     const subtitle = [location, contractor, uploadedLabel].filter(Boolean).join(" \u00b7 ");
                     return `
-                        <article class="spotlight-gallery-card" data-spotlight-gallery-project="${escapeHtml(title)}" data-spotlight-gallery-image-index="${index + 1}">
+                        <article class="spotlight-gallery-card" tabindex="0" role="button" aria-label="Open details for ${escapeHtml(title)}" data-spotlight-gallery-project="${escapeHtml(title)}" data-spotlight-gallery-project-id="${escapeHtml(recordId)}" data-spotlight-gallery-image-index="${index + 1}">
                             <div class="spotlight-gallery-photo" style="background-image: url('${image.url.replace(/'/g, "%27")}')"></div>
                             <div class="spotlight-gallery-copy">
                                 <h5>${escapeHtml(title)}</h5>
@@ -15204,6 +15323,53 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     renderSpotlightGallery(initialRecords);
+    if (spotlightGallery instanceof HTMLElement) {
+        const openCardDetails = (card) => {
+            if (!(card instanceof HTMLElement)) return;
+            const projectId = String(card.dataset.spotlightGalleryProjectId || "").trim();
+            const projectTitle = String(card.dataset.spotlightGalleryProject || "").trim();
+            const record = findConstructionRecord(projectId, projectTitle);
+            if (!record) return;
+            openSpotlightDetailModal(record);
+        };
+
+        spotlightGallery.addEventListener("click", (event) => {
+            const card = event.target instanceof HTMLElement
+                ? event.target.closest(".spotlight-gallery-card")
+                : null;
+            if (!(card instanceof HTMLElement)) return;
+            openCardDetails(card);
+        });
+
+        spotlightGallery.addEventListener("keydown", (event) => {
+            if (!(event.target instanceof HTMLElement)) return;
+            const card = event.target.closest(".spotlight-gallery-card");
+            if (!(card instanceof HTMLElement)) return;
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            openCardDetails(card);
+        });
+    }
+
+    spotlightDetailCloseButtons.forEach((button) => {
+        button.addEventListener("click", closeSpotlightDetailModal);
+    });
+
+    if (spotlightDetailModal instanceof HTMLElement) {
+        spotlightDetailModal.addEventListener("click", (event) => {
+            if (event.target === spotlightDetailModal) {
+                closeSpotlightDetailModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (spotlightDetailModal instanceof HTMLElement && !spotlightDetailModal.hidden) {
+            closeSpotlightDetailModal();
+        }
+    });
+
     if (!slides.length) {
         return;
     }
@@ -15500,11 +15666,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return list
             .map((img) => {
                 if (typeof img === "string") {
-                    const dataUrl = img.trim();
+                    const dataUrl = normalizeConstructionSpotlightUrl(img.trim()) || img.trim();
                     return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
                 }
                 if (!img || typeof img !== "object") return null;
-                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                const rawUrl = String(img.dataUrl || img.url || "").trim();
+                const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
                 if (!dataUrl) return null;
                 return {
                     dataUrl,
@@ -15540,7 +15707,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const filesForUpload = await Promise.all(
-            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
         );
         const payload = new FormData();
         filesForUpload.forEach((file) => {
@@ -17918,7 +18085,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return images
             .slice(0, 10)
             .map((img) => ({
-                dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
+                dataUrl: normalizeConstructionSpotlightUrl(typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")) || (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
                 name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
                 uploaded_at: String(typeof img === "string" ? "" : (img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || record?.__updated_at || record?.__created_at || "")).trim(),
             }))
@@ -18311,6 +18478,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
     const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
     const canDeleteTasks = !access.readOnly && (hasGlobalAccess || isPeoSuperuser || isPeoMainDivisionAccount);
+    const canSaveTaskForm = !access.readOnly
+        || String(access.divisionKey || "").trim().toLowerCase() === "construction"
+        || hasGlobalAccess
+        || isPeoSuperuser
+        || isPeoMainDivisionAccount;
 
     const escapeHtml = (value) => String(value || "")
         .replaceAll("&", "&amp;")
@@ -18627,11 +18799,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return list
             .map((img) => {
                 if (typeof img === "string") {
-                    const dataUrl = img.trim();
+                    const dataUrl = normalizeConstructionSpotlightUrl(img.trim()) || img.trim();
                     return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
                 }
                 if (!img || typeof img !== "object") return null;
-                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                const rawUrl = String(img.dataUrl || img.url || "").trim();
+                const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
                 if (!dataUrl) return null;
                 return {
                     dataUrl,
@@ -18667,7 +18840,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const filesForUpload = await Promise.all(
-            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
         );
         const payload = new FormData();
         filesForUpload.forEach((file) => {
@@ -18863,7 +19036,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const saveFormToStorage = async () => {
         if (!form) return "";
-        if (access.readOnly) {
+        if (!canSaveTaskForm) {
             showPeoGeneralToast("Read-only access: you cannot edit tasks on this dashboard.", {
                 title: "Construction Division",
                 variant: "warning",
@@ -18897,96 +19070,101 @@ document.addEventListener("DOMContentLoaded", () => {
         if (submitButton instanceof HTMLButtonElement) {
             submitButton.disabled = true;
         }
-
-        if (pickedFiles.length) {
-            const uploadResult = await uploadTaskConstructionPhotos(pickedFiles.slice());
-            if (!uploadResult?.ok) {
-                if (submitButton instanceof HTMLButtonElement) {
-                    submitButton.disabled = false;
+        try {
+            if (pickedFiles.length) {
+                const uploadResult = await uploadTaskConstructionPhotos(pickedFiles.slice());
+                if (!uploadResult?.ok) {
+                    showPeoGeneralToast(String(uploadResult?.error || "Unable to upload photos."), {
+                        title: "Construction Division",
+                        variant: "danger",
+                    });
+                    return "";
                 }
-                showPeoGeneralToast(String(uploadResult?.error || "Unable to upload photos."), {
+                mergedImages = mergeTaskImages(existingConstructionRecord?.accomplishment_images, uploadResult.images);
+                if (taskPhotoInput instanceof HTMLInputElement) {
+                    taskPhotoInput.value = "";
+                }
+                taskExistingImages = mergedImages;
+                clearTaskSelectedPhotoPreviews();
+                updateTaskPhotoMeta();
+                renderTaskPhotoGallery();
+            }
+
+            const nowIso = new Date().toISOString();
+            const constructionPayload = {
+                ...existingConstructionRecord,
+                __id: recordId,
+                project_name: data.project_name,
+                location: data.location,
+                mun: data.mun,
+                contractor: data.contractor,
+                contract_cost: data.contract_cost,
+                revised_contract_cost: data.revised_contract_cost,
+                ntp_date: data.ntp_date,
+                cd: data.cd,
+                original_expiry_date: data.original_expiry_date,
+                addl_cd: data.addl_cd,
+                revised_expiry_date: data.revised_expiry_date,
+                date_completed: data.date_completed,
+                status_previous: data.status_previous,
+                status_current: data.status_current,
+                time_elapsed: data.time_elapsed,
+                slippage: data.slippage,
+                remarks: data.project_remarks,
+                __updated_at: nowIso,
+            };
+            if (mergedImages.length) {
+                constructionPayload.accomplishment_images = mergedImages;
+            }
+
+            const taskPayload = {
+                ...(existingTaskIndex >= 0 ? tasks[existingTaskIndex] : {}),
+                __id: recordId,
+                construction_id: recordId,
+                task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
+                project_name: data.project_name,
+                assigned_to: data.assigned_to || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : ""),
+                date_received: data.date_received || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : ""),
+                status: data.status,
+                remarks: data.remarks,
+            };
+
+            if (existingConstructionIndex >= 0) {
+                constructionRecords[existingConstructionIndex] = constructionPayload;
+            } else {
+                constructionRecords.unshift(constructionPayload);
+            }
+            if (existingTaskIndex >= 0) {
+                tasks[existingTaskIndex] = { ...tasks[existingTaskIndex], ...taskPayload };
+            } else {
+                tasks.unshift(taskPayload);
+            }
+
+            const wroteConstruction = writeConstructionRecords(constructionRecords);
+            const wroteTasks = writeTasks(tasks);
+            if (!wroteConstruction || !wroteTasks) {
+                showPeoGeneralToast("Unable to save this assigned project right now.", {
                     title: "Construction Division",
                     variant: "danger",
                 });
                 return "";
             }
-            mergedImages = mergeTaskImages(existingConstructionRecord?.accomplishment_images, uploadResult.images);
-            if (taskPhotoInput instanceof HTMLInputElement) {
-                taskPhotoInput.value = "";
+
+            if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                window.peoDivisionStore.flushSync();
             }
-            taskExistingImages = mergedImages;
-            clearTaskSelectedPhotoPreviews();
-            updateTaskPhotoMeta();
-            renderTaskPhotoGallery();
-        }
-
-        const nowIso = new Date().toISOString();
-        const constructionPayload = {
-            ...existingConstructionRecord,
-            __id: recordId,
-            project_name: data.project_name,
-            location: data.location,
-            mun: data.mun,
-            contractor: data.contractor,
-            contract_cost: data.contract_cost,
-            revised_contract_cost: data.revised_contract_cost,
-            ntp_date: data.ntp_date,
-            cd: data.cd,
-            original_expiry_date: data.original_expiry_date,
-            addl_cd: data.addl_cd,
-            revised_expiry_date: data.revised_expiry_date,
-            date_completed: data.date_completed,
-            status_previous: data.status_previous,
-            status_current: data.status_current,
-            time_elapsed: data.time_elapsed,
-            slippage: data.slippage,
-            remarks: data.project_remarks,
-            __updated_at: nowIso,
-        };
-        if (mergedImages.length) {
-            constructionPayload.accomplishment_images = mergedImages;
-        }
-
-        const taskPayload = {
-            ...(existingTaskIndex >= 0 ? tasks[existingTaskIndex] : {}),
-            __id: recordId,
-            construction_id: recordId,
-            task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
-            project_name: data.project_name,
-            assigned_to: data.assigned_to || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : ""),
-            date_received: data.date_received || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : ""),
-            status: data.status,
-            remarks: data.remarks,
-        };
-
-        if (existingConstructionIndex >= 0) {
-            constructionRecords[existingConstructionIndex] = constructionPayload;
-        } else {
-            constructionRecords.unshift(constructionPayload);
-        }
-        if (existingTaskIndex >= 0) {
-            tasks[existingTaskIndex] = { ...tasks[existingTaskIndex], ...taskPayload };
-        } else {
-            tasks.unshift(taskPayload);
-        }
-
-        const wroteConstruction = writeConstructionRecords(constructionRecords);
-        const wroteTasks = writeTasks(tasks);
-        if (submitButton instanceof HTMLButtonElement) {
-            submitButton.disabled = false;
-        }
-        if (!wroteConstruction || !wroteTasks) {
-            showPeoGeneralToast("Unable to save this assigned project right now.", {
+            return recordId;
+        } catch (error) {
+            showPeoGeneralToast(String(error?.message || "Unable to save this assigned project right now."), {
                 title: "Construction Division",
                 variant: "danger",
             });
             return "";
+        } finally {
+            if (submitButton instanceof HTMLButtonElement) {
+                submitButton.disabled = false;
+            }
         }
-
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
-            window.peoDivisionStore.flushSync();
-        }
-        return recordId;
     };
 
     if (form) {
@@ -19371,7 +19549,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const filesForUpload = await Promise.all(
-            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
         );
         const payload = new FormData();
         filesForUpload.forEach((file) => {
@@ -19433,7 +19611,8 @@ document.addEventListener("DOMContentLoaded", () => {
         imageGallery.innerHTML = "";
 
         images.forEach((img, index) => {
-            const url = String(img?.dataUrl || "").trim();
+            const rawUrl = String(img?.dataUrl || img?.url || "").trim();
+            const url = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
             if (!url) return;
 
             const card = document.createElement("div");
@@ -19613,7 +19792,14 @@ document.addEventListener("DOMContentLoaded", () => {
         ? record.accomplishment_images.slice()
         : (legacyImageUrl ? [{ dataUrl: legacyImageUrl, name: legacyImageName || "Image", uploaded_at: "" }] : []);
     pendingImages = pendingImages
-        .map((img) => ({ dataUrl: String(img?.dataUrl || ""), name: String(img?.name || ""), uploaded_at: String(img?.uploaded_at || "") }))
+        .map((img) => {
+            const rawUrl = String(img?.dataUrl || img?.url || "").trim();
+            return {
+                dataUrl: normalizeConstructionSpotlightUrl(rawUrl) || rawUrl,
+                name: String(img?.name || ""),
+                uploaded_at: String(img?.uploaded_at || ""),
+            };
+        })
         .filter((img) => img.dataUrl);
     renderGallery(pendingImages);
 
@@ -24582,14 +24768,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         ? record.accomplishment_images
                             .map((img) => {
                                 if (typeof img === "string") {
-                                    const dataUrl = img.trim();
-                                    return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                                    const rawUrl = img.trim();
+                                    const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
+                                    return dataUrl ? { dataUrl, sourceUrl: rawUrl, name: "", uploaded_at: "" } : null;
                                 }
                                 if (!img || typeof img !== "object") return null;
-                                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                                const rawUrl = String(img.dataUrl || img.url || "").trim();
+                                const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
                                 if (!dataUrl) return null;
                                 return {
                                     dataUrl,
+                                    sourceUrl: rawUrl,
                                     name: String(img.name || "").trim(),
                                     uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || record?.__updated_at || record?.__created_at || "").trim(),
                                 };
@@ -24615,7 +24804,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                             class="project-history-image-delete"
                                             data-project-history-delete-image="true"
                                             data-record-id="${escapeProjectHtml(String(record.__id || ""))}"
-                                            data-image-url="${escapeProjectHtml(String(img.dataUrl || "").trim())}"
+                                            data-image-url="${escapeProjectHtml(String(img.sourceUrl || img.dataUrl || "").trim())}"
                                             aria-label="Delete photo"
                                             title="Delete photo"
                                         >
@@ -28265,14 +28454,17 @@ if (document.readyState === "loading") {
                 ? record.accomplishment_images
                     .map((img) => {
                         if (typeof img === "string") {
-                            const dataUrl = img.trim();
-                            return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                            const rawUrl = img.trim();
+                            const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
+                            return dataUrl ? { dataUrl, sourceUrl: rawUrl, name: "", uploaded_at: "" } : null;
                         }
                         if (!img || typeof img !== "object") return null;
-                        const dataUrl = String(img?.dataUrl || img?.url || "").trim();
+                        const rawUrl = String(img?.dataUrl || img?.url || "").trim();
+                        const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
                         if (!dataUrl) return null;
                         return {
                             dataUrl,
+                            sourceUrl: rawUrl,
                             name: String(img?.name || "").trim(),
                             uploaded_at: String(img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || record?.__updated_at || record?.__created_at || "").trim(),
                         };
@@ -28301,7 +28493,7 @@ if (document.readyState === "loading") {
                                         class="project-history-image-delete"
                                         data-project-history-delete-image="true"
                                         data-record-id="${escapeHtml(String(record.__id || ""))}"
-                                        data-image-url="${escapeHtml(String(img.dataUrl || "").trim())}"
+                                        data-image-url="${escapeHtml(String(img.sourceUrl || img.dataUrl || "").trim())}"
                                         aria-label="Delete photo"
                                         title="Delete photo"
                                     >
