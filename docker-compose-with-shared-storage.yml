@@ -20,6 +20,7 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    command: daphne -b 0.0.0.0 -p 8000 my_site.asgi:application
     expose:
       - "8000"
     environment:
@@ -63,7 +64,7 @@ services:
     image: nginx:1.27-alpine
     depends_on:
       web:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "8000:80"
     volumes:

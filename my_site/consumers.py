@@ -5,7 +5,6 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.core.cache import cache
-from django.contrib.auth.models import User
 
 
 class FileUpdateConsumer(AsyncWebsocketConsumer):

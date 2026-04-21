@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+export DJANGO_SETTINGS_MODULE=my_site.settings
+
 mkdir -p "${DJANGO_MEDIA_ROOT:-/shared/media}" /app/staticfiles /app/.cache/django
 
 if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then

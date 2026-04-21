@@ -6,7 +6,7 @@
     <a class="road-upload-btn" href="{% url 'construction_division_dashboard' %}">Back to Register</a>
 </section>
 
-<section class="road-filter-panel js-construction-project-dashboard" aria-label="Construction project editor" data-current-user="{{ dashboard_user_name|default:request.user.username }}">
+<section class="road-filter-panel js-construction-project-dashboard" aria-label="Construction project editor" data-current-user="{{ dashboard_user_name|default:request.user.username }}" data-photo-upload-url="{% url 'construction_photo_upload' %}">
     <div class="road-table-wrap construction-table-wrap">
         <div class="road-table-head">
             <h3>Project Details</h3>

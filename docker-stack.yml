@@ -30,7 +30,7 @@ services:
 
   web:
     image: peo-worksystem-web:latest
-    command: gunicorn my_site.wsgi:application --bind 0.0.0.0:8000 --workers 4
+    command: daphne -b 0.0.0.0 -p 8000 my_site.asgi:application
     ports:
       - "8000:8000"
     environment:

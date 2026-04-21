@@ -19183,6 +19183,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const currentUser = String(projectDashboard.dataset.currentUser || "").trim() || "Local User";
+    const constructionPhotoUploadUrl = String(projectDashboard.dataset.photoUploadUrl || "").trim();
     const recordId = String(new URLSearchParams(window.location.search).get("id") || "").trim();
     const HISTORY_LIMIT = 12;
 
@@ -19337,6 +19338,78 @@ document.addEventListener("DOMContentLoaded", () => {
         return wrote;
     };
 
+    const getCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getCsrfToken = () => {
+        const tokenFromCookie = getCookie("csrftoken");
+        if (tokenFromCookie) return tokenFromCookie;
+        const tokenFromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenFromDom instanceof HTMLInputElement ? String(tokenFromDom.value || "").trim() : "";
+    };
+
+    const uploadConstructionProjectPhotos = async (files) => {
+        const list = Array.isArray(files) ? files : [];
+        if (!list.length) return { ok: true, images: [] };
+        if (!constructionPhotoUploadUrl) {
+            return { ok: false, error: "Photo upload URL is not configured." };
+        }
+
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
+        }
+
+        const filesForUpload = await Promise.all(
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+        );
+        const payload = new FormData();
+        filesForUpload.forEach((file) => {
+            payload.append("photos", file, file?.name || "photo");
+        });
+
+        try {
+            const response = await window.fetch(constructionPhotoUploadUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Accept": "application/json",
+                },
+                body: payload,
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data || data.ok !== true) {
+                return { ok: false, error: String(data?.error || "Photo upload failed.") };
+            }
+
+            const nowIso = new Date().toISOString();
+            const uploaded = Array.isArray(data.files) ? data.files : [];
+            const images = uploaded
+                .map((item) => ({
+                    dataUrl: String(item?.url || "").trim(),
+                    name: String(item?.original_name || item?.name || "").trim(),
+                    uploaded_at: nowIso,
+                }))
+                .filter((img) => img.dataUrl);
+
+            return { ok: true, images };
+        } catch (error) {
+            return { ok: false, error: "Unable to upload photos right now." };
+        }
+    };
+
     const toast = (message, options = {}) => {
         if (typeof showPeoGeneralToast === "function") {
             showPeoGeneralToast(message, options);
@@ -19425,29 +19498,6 @@ document.addEventListener("DOMContentLoaded", () => {
             card.appendChild(footer);
             imageGallery.appendChild(card);
         });
-    };
-
-    const readFilesAsDataUrls = async (files) => {
-        const list = Array.from(files || []).filter(Boolean);
-        const results = [];
-
-        for (const file of list) {
-            // eslint-disable-next-line no-await-in-loop
-            const dataUrl = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result || ""));
-                reader.onerror = () => resolve("");
-                reader.readAsDataURL(file);
-            });
-            if (!dataUrl) continue;
-            results.push({
-                dataUrl,
-                name: String(file.name || ""),
-                uploaded_at: new Date().toISOString(),
-            });
-        }
-
-        return results;
     };
 
     const createHistoryId = () => {
@@ -19578,8 +19628,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const files = imageInput.files ? Array.from(imageInput.files) : [];
             if (!files.length) return;
 
-            const nextImages = await readFilesAsDataUrls(files);
+            imageInput.disabled = true;
+            const uploadResult = await uploadConstructionProjectPhotos(files);
+            imageInput.disabled = false;
+            const nextImages = uploadResult.ok ? uploadResult.images : [];
             if (!nextImages.length) {
+                if (!uploadResult.ok) {
+                    toast(String(uploadResult?.error || "Unable to upload photos."), {
+                        title: "Construction Project",
+                        variant: "warning",
+                    });
+                }
                 imageInput.value = "";
                 return;
             }
