@@ -87,13 +87,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Requesting Let's Encrypt certificate..."
-& (Join-Path $scriptRoot "request-letsencrypt-cert.bat") $Email
+& (Join-Path $scriptRoot "request-letsencrypt-cert.bat") $Email $Domain
 if ($LASTEXITCODE -ne 0) {
     throw "Certificate request failed."
 }
 
 Write-Host "Starting HTTPS stack..."
-& (Join-Path $scriptRoot "start-peo-worksystem-https.ps1") -LetsEncryptDir "C:\etc\letsencrypt" -Domain $Domain
+& (Join-Path $scriptRoot "start-peo-worksystem-https.ps1") -LetsEncryptDir "C:\etc\letsencrypt" -Domain $Domain -WwwDomain "www.$Domain" -CertificateName $Domain
 if ($LASTEXITCODE -ne 0) {
     throw "HTTPS startup failed."
 }

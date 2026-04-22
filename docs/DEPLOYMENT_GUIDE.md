@@ -9,6 +9,8 @@ This repo supports three public deployment paths for `peopalawan.com` and `www.p
 Use [GODADDY_DOMAIN_SETUP.md](C:/Users/Administrator/Desktop/peo-worksystem/docs/GODADDY_DOMAIN_SETUP.md:1) together with this guide.
 Use [GO_LIVE_CHECKLIST.md](C:/Users/Administrator/Desktop/peo-worksystem/docs/GO_LIVE_CHECKLIST.md:1) right before switching DNS.
 
+If you are hosting this on a machine inside your office or home network, do not point GoDaddy DNS to the machine's private LAN IP like `192.168.x.x`. Public DNS must point to your router's current public IP, and your router must forward public ports `80` and `443` to the local machine running Docker.
+
 ## 1. Docker On One Public Server
 
 Use this path when you have one VM or dedicated server with a public IPv4 address.
@@ -46,7 +48,7 @@ docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
 On Windows, you can also use:
 
 ```powershell
-.\scripts\start-peo-worksystem-https.ps1 -LetsEncryptDir "C:\etc\letsencrypt"
+.\scripts\start-peo-worksystem-https.ps1 -LetsEncryptDir "C:\etc\letsencrypt" -Domain "yourdomain.com"
 ```
 
 ### Notes
@@ -54,6 +56,7 @@ On Windows, you can also use:
 - Open inbound ports `80` and `443`
 - Once TLS works, the HTTPS override turns on secure cookies and HTTPS redirect
 - The TLS Nginx config serves ACME challenge files from `/var/www/certbot`
+- For a local machine behind a router, forward your public `80` and `443` to that machine's LAN IP on the matching local ports
 
 ## 2. Kubernetes
 

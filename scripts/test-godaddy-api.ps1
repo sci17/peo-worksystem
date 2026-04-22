@@ -35,6 +35,13 @@ $headers = @{
 
 $url = "$apiUrl/v1/domains/$Domain"
 
+if ($Domain -match '^(yourdomain\.com|example\.com|example\.org)$') {
+    Write-Host "GoDaddy API check skipped."
+    Write-Host "The domain argument is still a placeholder: $Domain"
+    Write-Host "Run the command again with your real GoDaddy domain."
+    exit 1
+}
+
 try {
     $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get
     Write-Host "GoDaddy API OK: $apiUrl"
@@ -46,12 +53,27 @@ try {
     exit 0
 } catch {
     $message = $_.Exception.Message
+    $statusCode = $null
+    if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+        $statusCode = [int]$_.Exception.Response.StatusCode
+    }
+
     Write-Host "GoDaddy API check failed against: $apiUrl"
     Write-Host $message
     Write-Host ""
-    Write-Host "If this is a test or OTE key, set:"
-    Write-Host "dns_godaddy_api_url = https://api.production-godaddy.com"
+
+    if ($statusCode -eq 404) {
+        Write-Host "A 404 here usually means one of these:"
+        Write-Host "1. The domain name passed to the script is wrong or still a placeholder."
+        Write-Host "2. The domain is not in the same GoDaddy account as this API key."
+        Write-Host "3. The API base URL does not match the key environment."
+        Write-Host ""
+    }
+
+    Write-Host "For a live Production key, use:"
+    Write-Host "dns_godaddy_api_url = https://api.godaddy.com"
     Write-Host ""
-    Write-Host "If this domain is your live GoDaddy domain, you usually need a Live/Production API key."
+    Write-Host "Only for OTE/test keys, use:"
+    Write-Host "dns_godaddy_api_url = https://api.ote-godaddy.com"
     exit 1
 }

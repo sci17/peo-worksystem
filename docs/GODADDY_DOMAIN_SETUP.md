@@ -11,6 +11,8 @@ The application configs in Docker Compose, Docker Swarm, Kubernetes, and ECS now
 
 Create these records in GoDaddy DNS for the deployment target you actually use.
 
+Important: for a server inside your own office or home network, the `A` record must point to your public internet IP, not to a private local IP such as `192.168.x.x` or `10.x.x.x`. The router then forwards ports `80` and `443` to your local server.
+
 ### Option 1: Docker on one public server
 
 Use this when Nginx/Docker is running on a single VM or physical server with a public IPv4 address.
