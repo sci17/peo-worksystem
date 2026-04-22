@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: peopalawan-cert
+  namespace: peo-worksystem
+spec:
+  secretName: peopalawan-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - peopalawan.com
+    - www.peopalawan.com

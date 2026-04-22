@@ -1,103 +1,163 @@
 # PEO Worksystem Deployment Guide
 
-## 1. Docker Hub / Private Registry Deployment
+This repo supports three public deployment paths for `peopalawan.com` and `www.peopalawan.com`:
 
-### Tag the image
+1. Docker on one public server
+2. Kubernetes with ingress-nginx and cert-manager
+3. AWS ECS/Fargate behind an Application Load Balancer
+
+Use [GODADDY_DOMAIN_SETUP.md](C:/Users/Administrator/Desktop/peo-worksystem/docs/GODADDY_DOMAIN_SETUP.md:1) together with this guide.
+Use [GO_LIVE_CHECKLIST.md](C:/Users/Administrator/Desktop/peo-worksystem/docs/GO_LIVE_CHECKLIST.md:1) right before switching DNS.
+
+## 1. Docker On One Public Server
+
+Use this path when you have one VM or dedicated server with a public IPv4 address.
+
+### Files used
+
+- `docker-compose.yml`
+- `docker-compose.https.yml`
+- `nginx/default.conf`
+- `nginx/default-ssl.conf`
+
+### GoDaddy DNS
+
+- `A` record: `@` -> server public IPv4
+- `CNAME` record: `www` -> `peopalawan.com`
+
+### HTTP-only start
+
 ```bash
-docker tag peo-worksystem-web:latest YOUR_REGISTRY/peo-worksystem-web:1.0.0
-docker tag peo-worksystem-web:latest YOUR_REGISTRY/peo-worksystem-web:latest
+docker compose up -d
 ```
 
-### Push to registry
+This brings the app up on port `80`.
+
+### HTTPS start
+
+1. Obtain a certificate for `peopalawan.com` and `www.peopalawan.com`
+2. Make sure the certificates exist under `/etc/letsencrypt/live/peopalawan.com/`
+3. Start with the HTTPS override:
+
 ```bash
-docker login YOUR_REGISTRY
-docker push YOUR_REGISTRY/peo-worksystem-web:1.0.0
-docker push YOUR_REGISTRY/peo-worksystem-web:latest
+docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
 ```
 
----
+On Windows, you can also use:
 
-## 2. Kubernetes Deployment
+```powershell
+.\scripts\start-peo-worksystem-https.ps1 -LetsEncryptDir "C:\etc\letsencrypt"
+```
+
+### Notes
+
+- Open inbound ports `80` and `443`
+- Once TLS works, the HTTPS override turns on secure cookies and HTTPS redirect
+- The TLS Nginx config serves ACME challenge files from `/var/www/certbot`
+
+## 2. Kubernetes
+
+Use this path when you already have a cluster and want TLS handled by ingress plus cert-manager.
 
 ### Prerequisites
-- kubectl configured with cluster access
-- Persistent volume provisioner available (StorageClass)
 
-### Deploy
+- `kubectl` configured for the target cluster
+- an ingress-nginx controller installed
+- cert-manager installed
+- a working default StorageClass or equivalent persistent storage
+
+### Files used
+
+- `kubernetes-manifest.yaml`
+- `issuer.yaml`
+- `certificate.yaml`
+
+### GoDaddy DNS
+
+Point both records to the public IP of the ingress controller:
+
+- `A` record: `@` -> ingress controller public IP
+- `A` record: `www` -> ingress controller public IP
+
+### Apply order
+
 ```bash
+kubectl apply -f issuer.yaml
+kubectl apply -f certificate.yaml
 kubectl apply -f kubernetes-manifest.yaml
 ```
 
-### Verify deployment
+### Verify
+
 ```bash
-kubectl get -n peo-worksystem pods
-kubectl get -n peo-worksystem svc
-kubectl logs -n peo-worksystem -l app=peo-worksystem-web
+kubectl get pods -n peo-worksystem
+kubectl get svc -n peo-worksystem
+kubectl get ingress -n peo-worksystem
+kubectl describe certificate -n peo-worksystem
+kubectl describe challenge -A
 ```
 
-### Update ALLOWED_HOSTS
-Edit `kubernetes-manifest.yaml` line 140 to your domain before deploying.
+### Notes
 
-### Access the app
+- The repo now expects `Ingress` to be the public entrypoint
+- The internal Nginx service is `ClusterIP`, not `LoadBalancer`
+- `cert-manager.io/cluster-issuer: letsencrypt-prod` is already wired into the ingress
+
+## 3. Docker Swarm
+
+Use this only if you are deploying with Swarm instead of plain Compose.
+
+### Files used
+
+- `docker-stack.yml`
+
+### Start
+
 ```bash
-# Get LoadBalancer IP
-kubectl get svc -n peo-worksystem peo-worksystem-web
-
-# Port-forward for local testing
-kubectl port-forward -n peo-worksystem svc/peo-worksystem-web 8000:80
-```
-
-### Scale replicas
-```bash
-kubectl scale deployment peo-worksystem-web -n peo-worksystem --replicas=5
-```
-
----
-
-## 3. Docker Swarm Deployment
-
-### Prerequisites
-- Docker Swarm initialized: `docker swarm init`
-- Nodes available (or single node for testing)
-
-### Deploy stack
-```bash
+docker swarm init
 docker stack deploy -c docker-stack.yml peo-worksystem
 ```
 
-### Verify services
-```bash
-docker stack services peo-worksystem
-docker service logs peo-worksystem_web
-```
+### Notes
 
-### Scale services
-```bash
-docker service scale peo-worksystem_web=5
-docker service scale peo-worksystem_db=1
-```
+- The stack file includes the domain hostnames
+- It does not include direct TLS termination by itself
+- Put a reverse proxy or load balancer with HTTPS in front of the Swarm services
 
-### Update service
-```bash
-docker service update --image peo-worksystem-web:v2 peo-worksystem_web
-```
+## 4. AWS ECS/Fargate
 
----
-
-## 4. AWS ECS/Fargate Deployment
+Use this path when the public entrypoint is an Application Load Balancer with ACM certificates.
 
 ### Prerequisites
-- AWS Account with ECS permissions
-- ECR repository created
-- CloudWatch log group created: `/ecs/peo-worksystem`
-- EFS file systems created (for persistent data)
 
-### Register task definition
+- ECR repository created
+- ECS cluster created
+- CloudWatch log group created: `/ecs/peo-worksystem`
+- EFS file systems created if you want persistent shared volumes
+- ACM certificate requested for `peopalawan.com` and `www.peopalawan.com`
+- ALB created with listeners on `80` and `443`
+
+### Files used
+
+- `ecs-task-definition.json`
+
+### GoDaddy DNS
+
+- `CNAME` record: `www` -> ALB DNS name
+
+For the root domain `@`, choose one:
+
+1. Forward `peopalawan.com` to `https://www.peopalawan.com` in GoDaddy
+2. Move DNS to a provider that supports apex alias records
+
+### Register the task definition
+
 ```bash
 aws ecs register-task-definition --cli-input-json file://ecs-task-definition.json --region REGION
 ```
 
-### Create ECS service
+### Create the ECS service
+
 ```bash
 aws ecs create-service \
   --cluster peo-worksystem \
@@ -110,88 +170,37 @@ aws ecs create-service \
   --region REGION
 ```
 
-### Update service with new image
-```bash
-aws ecs update-service \
-  --cluster peo-worksystem \
-  --service peo-worksystem \
-  --force-new-deployment \
-  --region REGION
-```
+### ALB requirements
 
----
+- HTTPS listener on `443` with ACM certificate
+- HTTP listener on `80` redirecting to `443`
+- target group forwarding to the ECS service on container port `8000`
+- health check path aligned with your app or reverse proxy setup
 
-## 5. Docker Compose (Development/Single Host)
+### Notes
 
-### Start locally
-```bash
-docker compose up -d
-```
-
-### Stop
-```bash
-docker compose down
-```
-
-### View logs
-```bash
-docker compose logs -f web
-docker compose logs -f db
-```
-
----
+- The task definition now includes the production domain names
+- HTTPS-related Django settings are enabled for ECS because the ALB terminates TLS
+- Replace placeholder values such as `REGION`, `ACCOUNT`, and repository URIs
 
 ## Environment Variables
 
-Create `.env` file with:
-```
-DJANGO_DB_NAME=peo_database
-DJANGO_DB_USER=django_user
-DJANGO_DB_PASSWORD=secure_password
-MYSQL_ROOT_PASSWORD=secure_root_password
-```
+Before going live, replace placeholder secrets:
 
-For Kubernetes/Swarm, update secrets in manifests.
-For AWS ECS, use AWS Secrets Manager.
+- `DJANGO_SECRET_KEY`
+- `DJANGO_DB_PASSWORD`
+- `MYSQL_ROOT_PASSWORD`
 
----
+For production:
 
-## Health Checks & Monitoring
+- store secrets in AWS Secrets Manager for ECS
+- use Kubernetes secrets for cluster deployments
+- use host-level secret management or `.env` protection for Docker
 
-- **MySQL**: Healthcheck via `mysqladmin ping`
-- **Django**: Healthcheck via `/admin/` endpoint
-- **Logs**: Check container logs for errors
-- **Memory**: Both containers limited to 1GB each
-- **CPU**: Appropriate resource requests/limits set
+## Final Checks
 
----
-
-## Rollback
-
-### Kubernetes
-```bash
-kubectl rollout history -n peo-worksystem deployment peo-worksystem-web
-kubectl rollout undo -n peo-worksystem deployment peo-worksystem-web
-```
-
-### Docker Swarm
-```bash
-docker service update --image peo-worksystem-web:old-version peo-worksystem_web
-```
-
-### AWS ECS
-```bash
-aws ecs update-service --cluster peo-worksystem --service peo-worksystem --task-definition peo-worksystem:PREVIOUS_VERSION
-```
-
----
-
-## Next Steps
-
-1. Replace `YOUR_REGISTRY` with your actual registry (Docker Hub, ECR, etc.)
-2. Replace `REGION` and `ACCOUNT` in AWS templates
-3. Update `DJANGO_ALLOWED_HOSTS` with your domain
-4. Store credentials securely (Secrets Manager, etc.)
-5. Test health endpoints after deployment
-6. Set up monitoring and alerting (CloudWatch, Prometheus, Datadog)
-7. Configure CI/CD pipeline for automatic image building and deployment
+- Confirm `peopalawan.com` resolves correctly
+- Confirm `www.peopalawan.com` resolves correctly
+- Confirm HTTPS is valid
+- Test login, static files, uploads, and WebSocket traffic
+- Review logs after first live traffic

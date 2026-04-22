@@ -1,0 +1,17 @@
+services:
+  nginx:
+    ports:
+      - "${HOST_HTTPS_PORT:-443}:443"
+    environment:
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx/conf.d
+      NGINX_CONF_PATH: ./nginx/default-ssl.conf
+    volumes:
+      - ${LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
+      - ${CERTBOT_WEBROOT_DIR:-./certbot/www}:/var/www/certbot:ro
+
+  web:
+    environment:
+      DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-True}
+      DJANGO_SESSION_COOKIE_SECURE: ${DJANGO_SESSION_COOKIE_SECURE:-True}
+      DJANGO_CSRF_COOKIE_SECURE: ${DJANGO_CSRF_COOKIE_SECURE:-True}
+      DJANGO_SECURE_HSTS_SECONDS: ${DJANGO_SECURE_HSTS_SECONDS:-31536000}

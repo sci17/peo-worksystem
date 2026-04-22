@@ -21709,15 +21709,20 @@ body.quality-scan-open {
     object-fit: cover;
 }
 
-.account-settings-profile h2 {
+.account-settings-profile-card h2 {
     margin: 18px 0 6px;
     font-size: 1.35rem;
     color: #16233a;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
-.account-settings-profile > p {
+.account-settings-profile-card > p {
     margin: 0;
     color: #6a7c94;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .account-settings-security {
