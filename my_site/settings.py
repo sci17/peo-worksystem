@@ -243,3 +243,21 @@ USE_X_FORWARDED_HOST = os.environ.get('DJANGO_USE_X_FORWARDED_HOST', 'False').lo
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+_division_store_log_level = os.environ.get('DJANGO_DIVISION_STORE_LOG_LEVEL', 'INFO').upper()
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'my_app.division_store': {
+            'handlers': ['console'],
+            'level': _division_store_log_level,
+            'propagate': False,
+        },
+    },
+}

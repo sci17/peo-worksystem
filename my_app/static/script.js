@@ -1291,6 +1291,27 @@ const normalizeConstructionSpotlightUrl = (value) => {
         });
     };
 
+    const clearPendingMetaAfterFailure = (storeKey, token) => {
+        const currentToken = Number(latestWriteTokens.get(storeKey) || 0);
+        if (token !== currentToken) {
+            return;
+        }
+
+        const prevMeta = readStoreMeta(storeKey);
+        writeStoreMeta(storeKey, {
+            ...prevMeta,
+            pending_local_write: false,
+            pending_write_token: token,
+            failed_at: new Date().toISOString(),
+        });
+        emitDivisionStoreActivity({
+            storeKeys: [storeKey],
+            phase: "end",
+            source: "write",
+            updatedAt: "",
+        });
+    };
+
     const sendLatestPayload = (storeKey, token) => {
         const latest = latestPayloads.get(storeKey);
         if (typeof latest === "undefined") {
@@ -1300,12 +1321,13 @@ const normalizeConstructionSpotlightUrl = (value) => {
         Promise.resolve(postStore(storeKey, latest))
             .then((responseData) => {
                 if (!responseData) {
+                    clearPendingMetaAfterFailure(storeKey, token);
                     return;
                 }
                 syncPendingMeta(storeKey, token, false, responseData);
             })
             .catch(() => {
-                // Ignore network failures.
+                clearPendingMetaAfterFailure(storeKey, token);
             });
     };
 
@@ -1327,7 +1349,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
         flushSync();
     };
 
-    const queueSync = (storeKey, payload, delayMs = 400) => {
+    const queueSync = (storeKey, payload, delayMs = 150) => {
         const normalizedKey = String(storeKey || "").trim();
         if (!normalizedKey) return;
 
@@ -1489,6 +1511,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
     };
 
     window.addEventListener("pagehide", flushSync);
+    window.addEventListener("beforeunload", flushSync);
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") {
             flushSync();
@@ -1615,6 +1638,11 @@ const normalizeConstructionSpotlightUrl = (value) => {
         return String(fromAccess || fromBody || "").trim().toLowerCase();
     };
 
+    const getCurrentSectionKey = () => {
+        const fromBody = document.body && document.body.dataset ? String(document.body.dataset.peoCurrentSection || "") : "";
+        return String(fromBody || "").trim().toLowerCase();
+    };
+
     const sync = async (options = {}) => {
         const store = window.peoDivisionStore;
         if (!store || typeof store.syncToLocalStorage !== "function") return;
@@ -1625,11 +1653,18 @@ const normalizeConstructionSpotlightUrl = (value) => {
 
         const isProjectRegistry = Boolean(document.querySelector(".project-board"));
         const divisionKey = getDivisionKey();
+        const currentSectionKey = getCurrentSectionKey();
         const defs = isProjectRegistry
             ? Object.values(STORE_DEFS)
             : [STORE_DEFS.admin];
         if (!isProjectRegistry && divisionKey && STORE_DEFS[divisionKey] && divisionKey !== "admin") {
             defs.push(STORE_DEFS[divisionKey]);
+        }
+        if (!isProjectRegistry && currentSectionKey && STORE_DEFS[currentSectionKey]) {
+            const alreadyIncluded = defs.some((def) => String(def?.storeKey || "").trim().toLowerCase() === currentSectionKey);
+            if (!alreadyIncluded) {
+                defs.push(STORE_DEFS[currentSectionKey]);
+            }
         }
 
         syncInFlight = Promise.resolve(store.syncToLocalStorage(defs, options))
@@ -1719,7 +1754,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
     window.addEventListener("focus", () => {
         sync();
     });
-    window.setInterval(sync, 5000);
+    window.setInterval(sync, 3000);
 })();
 
 (() => {
@@ -16915,7 +16950,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     records = records.map((record) => normalizeConstructionRecord(record));
-    writeStoredRecords(records);
+    writeStoredRecords(records, { syncRemote: false });
 
     const getTrimmedFormValue = (formData, key) => {
         return String(formData.get(key) ?? "").trim();
@@ -18452,7 +18487,17 @@ document.addEventListener("DOMContentLoaded", () => {
         resyncAdminAssignedProjects();
     });
 
-    renderTable();
+    const initializeConstructionDashboard = () => {
+        renderTable();
+        const remoteSyncPromise = requestConstructionRemoteSync();
+        if (remoteSyncPromise && typeof remoteSyncPromise.then === "function") {
+            remoteSyncPromise.catch(() => {
+                // Ignore sync failures and keep the latest local snapshot visible.
+            });
+        }
+    };
+
+    initializeConstructionDashboard();
 });
 /* CONSTRUCTION_DIVISION_SCRIPT_END */
 
@@ -18668,6 +18713,71 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         window.dispatchEvent(new Event("construction-records-updated"));
         return wrote;
+    };
+
+    const buildTaskFromConstructionRecord = (record, existingTask = {}) => {
+        const source = record && typeof record === "object" ? record : {};
+        const prior = existingTask && typeof existingTask === "object" ? existingTask : {};
+        const constructionId = String(source.__id || source.construction_id || prior.construction_id || prior.__id || "").trim();
+        if (!constructionId) return null;
+
+        const personnel = Array.isArray(source.personnel) ? source.personnel : [];
+        const assignedPersonnel = personnel
+            .map((item) => String(item?.name || item?.personnel_name || "").trim())
+            .filter(Boolean)
+            .join(", ");
+
+        return {
+            ...prior,
+            __id: constructionId,
+            construction_id: constructionId,
+            task_name: String(source.project_name || prior.task_name || prior.project_name || "").trim(),
+            project_name: String(source.project_name || prior.project_name || prior.task_name || "").trim(),
+            assigned_to: String(prior.assigned_to || assignedPersonnel || "").trim(),
+            date_received: String(prior.date_received || source.__created_at || source.__updated_at || "").trim(),
+            status: String(prior.status || source.status || "").trim(),
+            remarks: String(prior.remarks || source.remarks || "").trim(),
+        };
+    };
+
+    const syncTasksFromConstructionRecords = (options = {}) => {
+        const persist = options && options.persist === false ? false : true;
+        const constructionRecords = readConstructionRecords();
+        const existingTasks = readTasks();
+        const existingById = new Map();
+
+        existingTasks.forEach((task) => {
+            const key = String(task?.construction_id || task?.__id || "").trim();
+            if (!key || existingById.has(key)) return;
+            existingById.set(key, task);
+        });
+
+        const derivedTasks = constructionRecords
+            .map((record) => buildTaskFromConstructionRecord(record, existingById.get(String(record?.__id || record?.construction_id || "").trim())))
+            .filter(Boolean);
+
+        if (persist) {
+            writeTasks(derivedTasks);
+        }
+        return derivedTasks;
+    };
+
+    let constructionTaskRemoteSyncInFlight = null;
+    const requestConstructionTaskRemoteSync = () => {
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return null;
+        if (constructionTaskRemoteSyncInFlight) return constructionTaskRemoteSyncInFlight;
+        constructionTaskRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+            { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+        ], { force: true }))
+            .then(() => {
+                syncTasksFromConstructionRecords();
+                render();
+            })
+            .finally(() => {
+                constructionTaskRemoteSyncInFlight = null;
+            });
+        return constructionTaskRemoteSyncInFlight;
     };
 
     const deleteAllTaskData = async () => {
@@ -19134,14 +19244,11 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 constructionRecords.unshift(constructionPayload);
             }
-            if (existingTaskIndex >= 0) {
-                tasks[existingTaskIndex] = { ...tasks[existingTaskIndex], ...taskPayload };
-            } else {
-                tasks.unshift(taskPayload);
-            }
-
             const wroteConstruction = writeConstructionRecords(constructionRecords);
-            const wroteTasks = writeTasks(tasks);
+            const nextTasks = existingTaskIndex >= 0
+                ? tasks.map((task, index) => (index === existingTaskIndex ? { ...tasks[existingTaskIndex], ...taskPayload } : task))
+                : [taskPayload, ...tasks];
+            const wroteTasks = writeTasks(nextTasks);
             if (!wroteConstruction || !wroteTasks) {
                 showPeoGeneralToast("Unable to save this assigned project right now.", {
                     title: "Construction Division",
@@ -19216,8 +19323,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!approved) return;
 
                 const nextTasks = tasks.filter((task) => String(task?.construction_id || task?.__id || "") !== recordId);
+                const constructionRecords = readConstructionRecords();
+                const nextConstructionRecords = constructionRecords.filter((record) => String(record?.__id || record?.construction_id || "") !== recordId);
                 const wroteTasks = writeTasks(nextTasks);
-                if (!wroteTasks) {
+                const wroteConstruction = writeConstructionRecords(nextConstructionRecords);
+                if (!wroteTasks || !wroteConstruction) {
                     showPeoGeneralToast("Unable to delete task. Storage is unavailable.", {
                         title: "Construction Division",
                         variant: "danger",
@@ -19262,7 +19372,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const render = () => {
         if (!tableBody) return;
-        const records = readTasks();
+        const records = syncTasksFromConstructionRecords({ persist: false });
         tableBody.innerHTML = "";
 
         const totalCount = records.length;
@@ -19329,15 +19439,38 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     window.addEventListener("storage", (event) => {
-        if (String(event.key || "") !== TASK_STORAGE_KEY) return;
+        const key = String(event.key || "");
+        if (key !== TASK_STORAGE_KEY && key !== CONSTRUCTION_STORAGE_KEY) return;
         render();
     });
     window.addEventListener("construction-tasks-updated", render);
+    window.addEventListener("construction-records-updated", () => {
+        syncTasksFromConstructionRecords();
+        render();
+    });
+    window.addEventListener("peo:division-store-synced", (event) => {
+        const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!syncedStoreKeys.includes("construction")) return;
+        syncTasksFromConstructionRecords();
+        render();
+    });
+    window.addEventListener("peo:division-store-remote-update", (event) => {
+        const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!storeKeys.includes("construction")) return;
+        requestConstructionTaskRemoteSync();
+    });
     window.addEventListener("focus", render);
 
     // Project-name click now opens the inline construction form modal.
 
+    syncTasksFromConstructionRecords();
     render();
+    const taskRemoteSyncPromise = requestConstructionTaskRemoteSync();
+    if (taskRemoteSyncPromise && typeof taskRemoteSyncPromise.then === "function") {
+        taskRemoteSyncPromise.catch(() => {
+            // Ignore sync failures and keep the latest local snapshot visible.
+        });
+    }
 });
 /* CONSTRUCTION_TASK_TABLE_SCRIPT_END */
 
@@ -20510,14 +20643,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const writeStoredPlanningDocuments = (records) => {
+    const writeStoredPlanningDocuments = (records, options = {}) => {
+        const syncRemote = options && options.syncRemote === false ? false : true;
         try {
             window.localStorage.setItem(PLANNING_DOCUMENT_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
+        if (syncRemote && window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             window.peoDivisionStore.syncNow("planning", records);
         }
     };
@@ -21551,7 +21685,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	    let planningBudgetRecords = readStoredBudgets();
 	    let planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
-	    writeStoredPlanningDocuments(planningDocumentRecords);
+	    writeStoredPlanningDocuments(planningDocumentRecords, { syncRemote: false });
         if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
             window.peoIncomingDocToast.check("planning", readAdminDivisionRecords());
         }
@@ -26811,14 +26945,15 @@ document.addEventListener("DOMContentLoaded", () => {
         return Array.from(byIdentity.values());
     };
 
-    const writeStoredRecords = (records) => {
+    const writeStoredRecords = (records, options = {}) => {
+        const syncRemote = options && options.syncRemote === false ? false : true;
         try {
             window.localStorage.setItem(QUALITY_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage errors.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
+        if (syncRemote && window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
@@ -27088,7 +27223,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     let records = dedupeQualityRecords(syncAdminRoutedQualityRecords(readStoredRecords()));
-    writeStoredRecords(records);
+    writeStoredRecords(records, { syncRemote: false });
     if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
         window.peoIncomingDocToast.check("quality", readAdminDivisionRecords());
     }
