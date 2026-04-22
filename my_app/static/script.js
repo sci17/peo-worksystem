@@ -1416,6 +1416,30 @@ const normalizeConstructionSpotlightUrl = (value) => {
         safeLocalStorageSet(`${STORE_META_PREFIX}${storeKey}`, JSON.stringify(meta || {}));
     };
 
+    const hasBlockingPendingLocalWrite = (storeKey, meta) => {
+        if (!(meta && meta.pending_local_write === true)) {
+            return false;
+        }
+
+        const normalizedKey = String(storeKey || "").trim();
+        if (!normalizedKey) {
+            return false;
+        }
+
+        const hasQueuedPayload = latestPayloads.has(normalizedKey);
+        const hasActiveTimer = timers.has(normalizedKey);
+        if (hasQueuedPayload || hasActiveTimer) {
+            return true;
+        }
+
+        writeStoreMeta(normalizedKey, {
+            ...meta,
+            pending_local_write: false,
+            stale_pending_cleared_at: new Date().toISOString(),
+        });
+        return false;
+    };
+
     const syncToLocalStorage = async (definitions, options = {}) => {
         const list = Array.isArray(definitions) ? definitions : [];
         if (!list.length) return false;
@@ -1455,7 +1479,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
                 if (!isValid) continue;
 
                 const meta = readStoreMeta(storeKey);
-                if (meta && meta.pending_local_write === true) {
+                if (hasBlockingPendingLocalWrite(storeKey, meta)) {
                     continue;
                 }
                 const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
