@@ -1426,7 +1426,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
         flushSync();
     };
 
-    const queueSync = (storeKey, payload, delayMs = 150) => {
+    const queueSync = (storeKey, payload, delayMs = 60) => {
         const normalizedKey = String(storeKey || "").trim();
         if (!normalizedKey) return;
 
@@ -1655,8 +1655,8 @@ const normalizeConstructionSpotlightUrl = (value) => {
     const showTimersByStore = new Map();
     const hideTimersByStore = new Map();
     const badges = [];
-    const SHOW_DELAY_MS = 140;
-    const MIN_VISIBLE_MS = 420;
+    const SHOW_DELAY_MS = 60;
+    const MIN_VISIBLE_MS = 220;
 
     const getMountNode = (spec) => {
         const anchor = document.querySelector(spec.anchorSelector);
@@ -3553,7 +3553,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (document.visibilityState === "hidden") return;
                 const force = options && options.force === true;
                 const now = Date.now();
-                if (!force && now - lastAdminSyncAt < 1000) {
+                if (!force && now - lastAdminSyncAt < 500) {
                     return;
                 }
                 lastAdminSyncAt = now;
@@ -3611,7 +3611,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const pollTimer = window.setInterval(() => {
                 requestAdminSync();
-            }, 3000);
+            }, 1500);
             window.addEventListener("pagehide", () => window.clearInterval(pollTimer), { once: true });
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState !== "hidden") {
@@ -5380,6 +5380,11 @@ const portalDomReady = () => {
     let adminStatusToastElement = null;
     let adminStatusToastTimer = null;
     let adminConfirmToastElement = null;
+    let adminInteractionLockUntil = 0;
+    let adminPendingRenderRecords = null;
+    let adminPendingRenderTimer = null;
+    let lastAdminRenderSignature = "";
+    let lastAdminImmediateAction = null;
 
     const closeAdminStatusToast = () => {
         if (!adminStatusToastElement) return;
@@ -5938,7 +5943,7 @@ const portalDomReady = () => {
         refreshScannedFileLabel(form);
     };
 
-    const createRowSelectionCell = (recordId) => {
+    const createRowSelectionCell = (recordId, checked = false) => {
         const selectionCell = document.createElement("td");
         selectionCell.className = "pa-select-col";
         const checkbox = document.createElement("input");
@@ -5946,8 +5951,21 @@ const portalDomReady = () => {
         checkbox.className = "js-admin-row-select";
         checkbox.dataset.recordId = recordId;
         checkbox.setAttribute("aria-label", "Select row");
+        checkbox.checked = Boolean(checked);
         selectionCell.appendChild(checkbox);
         return selectionCell;
+    };
+
+    const getAdminSelectionSnapshot = (tableBody, emptyClass) => {
+        const selectedIds = new Set();
+        getTableDataRows(tableBody, emptyClass).forEach((row) => {
+            const checkbox = row.querySelector(".js-admin-row-select");
+            const recordId = String(row?.dataset?.recordId || checkbox?.dataset?.recordId || "").trim();
+            if (checkbox?.checked && recordId) {
+                selectedIds.add(recordId);
+            }
+        });
+        return selectedIds;
     };
 
     const setRowActionsCell = (cell, recordId) => {
@@ -5969,6 +5987,105 @@ const portalDomReady = () => {
     const getTableDataRows = (tableBody, emptyClass) => {
         if (!tableBody) return [];
         return Array.from(tableBody.querySelectorAll("tr")).filter((row) => !row.classList.contains(emptyClass));
+    };
+
+    const getAdminModalElement = () => document.getElementById("admin-new-document-modal");
+
+    const buildAdminRenderSignature = (records) => {
+        try {
+            return JSON.stringify(Array.isArray(records) ? records : []);
+        } catch (error) {
+            return String(Date.now());
+        }
+    };
+
+    const isAdminInteractionBusy = () => {
+        const modal = getAdminModalElement();
+        const modalOpen = modal instanceof HTMLElement && modal.style.display === "flex";
+        return modalOpen || Date.now() < adminInteractionLockUntil;
+    };
+
+    const flushPendingAdminRender = () => {
+        if (adminPendingRenderTimer) {
+            window.clearTimeout(adminPendingRenderTimer);
+            adminPendingRenderTimer = null;
+        }
+        if (!adminPendingRenderRecords) return false;
+        if (isAdminInteractionBusy()) return false;
+        const records = adminPendingRenderRecords;
+        adminPendingRenderRecords = null;
+        const signature = buildAdminRenderSignature(records);
+        if (signature === lastAdminRenderSignature) {
+            return false;
+        }
+        renderAdminDivisionRecords(records);
+        lastAdminRenderSignature = signature;
+        return true;
+    };
+
+    const schedulePendingAdminRenderFlush = (delayMs = 160) => {
+        if (adminPendingRenderTimer) {
+            window.clearTimeout(adminPendingRenderTimer);
+        }
+        adminPendingRenderTimer = window.setTimeout(() => {
+            adminPendingRenderTimer = null;
+            flushPendingAdminRender();
+        }, Math.max(80, Number(delayMs) || 0));
+    };
+
+    const markAdminInteractionLock = (durationMs = 700) => {
+        adminInteractionLockUntil = Math.max(adminInteractionLockUntil, Date.now() + Math.max(120, Number(durationMs) || 0));
+        if (adminPendingRenderRecords) {
+            schedulePendingAdminRenderFlush(adminInteractionLockUntil - Date.now() + 120);
+        }
+    };
+
+    const queueAdminRender = (records, options = {}) => {
+        const normalizedRecords = (Array.isArray(records) ? records : []).map((record) => normalizeRecord(record));
+        const signature = buildAdminRenderSignature(normalizedRecords);
+        if (signature === lastAdminRenderSignature) {
+            adminPendingRenderRecords = null;
+            return false;
+        }
+        if (options.deferIfBusy !== false && isAdminInteractionBusy()) {
+            adminPendingRenderRecords = normalizedRecords;
+            schedulePendingAdminRenderFlush(adminInteractionLockUntil - Date.now() + 160);
+            return false;
+        }
+        adminPendingRenderRecords = null;
+        renderAdminDivisionRecords(normalizedRecords);
+        lastAdminRenderSignature = signature;
+        return true;
+    };
+
+    const shouldSkipAdminClickAfterImmediateAction = (action, recordId, tableType) => {
+        const previous = lastAdminImmediateAction;
+        if (!previous || typeof previous !== "object") {
+            return false;
+        }
+        const now = Date.now();
+        const isSameAction = previous.action === String(action || "").trim();
+        const isSameRecord = previous.recordId === String(recordId || "").trim();
+        const isSameTable = previous.tableType === String(tableType || "").trim();
+        if (isSameAction && isSameRecord && isSameTable && now - Number(previous.at || 0) < 800) {
+            lastAdminImmediateAction = null;
+            return true;
+        }
+        return false;
+    };
+
+    const runAdminImmediateAction = (action, recordId, tableType) => {
+        lastAdminImmediateAction = {
+            action: String(action || "").trim(),
+            recordId: String(recordId || "").trim(),
+            tableType: String(tableType || "").trim(),
+            at: Date.now(),
+        };
+        if (action === "edit") {
+            openEditModalForRecord(recordId, tableType);
+            return true;
+        }
+        return false;
     };
 
     const ensureEmptyRowState = (tableBody, emptyClass, colSpan, message, shouldShow) => {
@@ -6240,7 +6357,7 @@ const portalDomReady = () => {
                     maintenance_sent_date: sentDateIso,
                 });
                 writeAdminDivisionRecords(records);
-                renderAdminDivisionRecords(records);
+                queueAdminRender(records, { deferIfBusy: false });
             }
         }
 
@@ -6397,7 +6514,7 @@ const portalDomReady = () => {
         // Do not cascade-delete routed copies in other divisions.
         const remainingRecords = readAdminDivisionRecords().filter((record) => !deleteSet.has(record.__record_id));
         writeAdminDivisionRecords(remainingRecords);
-        renderAdminDivisionRecords(remainingRecords);
+        queueAdminRender(remainingRecords, { deferIfBusy: false });
     };
 
     const registerAdminUndoDelete = (previousRecords, label = "Record") => {
@@ -6408,7 +6525,7 @@ const portalDomReady = () => {
             successMessage: `${label} restored.`,
             undo: () => {
                 writeAdminDivisionRecords(recordsSnapshot);
-                renderAdminDivisionRecords(recordsSnapshot);
+                queueAdminRender(recordsSnapshot, { deferIfBusy: false });
             },
         });
     };
@@ -6508,14 +6625,19 @@ const portalDomReady = () => {
 	    };
 
 	    const openEditModalForRecord = (recordId, tableType = "documents") => {
-	        const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
-	        if (access.readOnly) {
-	            showAdminStatusToast("Read-only access: you cannot edit records on this dashboard.", "info");
-	            return;
-	        }
+	        try {
+	            const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+	            if (access.readOnly) {
+	                showAdminStatusToast("Read-only access: you cannot edit records on this dashboard.", "info");
+	                return;
+	            }
 
-	        const record = readAdminDivisionRecords().find((item) => item.__record_id === recordId);
-	        if (!record) return;
+	            const normalizedRecordId = String(recordId || "").trim();
+	            const record = readAdminDivisionRecords().find((item) => item.__record_id === normalizedRecordId);
+	            if (!record) {
+	                showAdminStatusToast("The selected record could not be found. Please refresh and try again.", "info");
+	                return;
+	            }
 
         const modal = buildNewDocumentModal();
         const form = modal.querySelector("#admin-new-document-form");
@@ -6523,9 +6645,11 @@ const portalDomReady = () => {
         const title = modal.querySelector("#admin-new-document-title");
         const subtitle = modal.querySelector("#admin-new-document-subtitle");
         const submitButton = modal.querySelector("#admin-new-document-submit");
-        if (!form) return;
+        if (!(form instanceof HTMLFormElement)) {
+            throw new Error("Edit form is unavailable.");
+        }
 
-        editingRecordId = recordId;
+        editingRecordId = normalizedRecordId;
         editingTableType = tableType;
         form.reset();
         setFormStatusOptionsByMode(form, tableType);
@@ -6545,7 +6669,9 @@ const portalDomReady = () => {
         };
         Object.keys(recordForForm).forEach((key) => {
             const input = form.elements.namedItem(key);
-            if (input && input.type !== "file") {
+            if (!input) return;
+            if ("type" in input && input.type === "file") return;
+            if ("value" in input) {
                 input.value = recordForForm[key] || "";
             }
         });
@@ -6570,6 +6696,14 @@ const portalDomReady = () => {
 
 	        modal.style.display = "flex";
 	        document.body.style.overflow = "hidden";
+	        } catch (error) {
+	            console.error(error);
+	            const message = error instanceof Error ? error.message : "";
+	            showAdminStatusToast(
+	                message ? `Unable to open the edit form: ${message}` : "Unable to open the edit form. Please try again.",
+	                "info"
+	            );
+	        }
 	    };
 
     const applyDocumentFilters = () => {
@@ -6660,6 +6794,7 @@ const portalDomReady = () => {
         const prepend = options.prepend !== false;
         const shouldRefresh = options.refresh !== false;
         const recordId = values.__record_id || generateRecordId();
+        const selectedIds = options.selectedIds instanceof Set ? options.selectedIds : null;
 
         const emptyRow = documentsTableBody.querySelector(".pa-empty-documents");
         if (emptyRow) emptyRow.remove();
@@ -6667,7 +6802,7 @@ const portalDomReady = () => {
         const row = document.createElement("tr");
         row.dataset.recordId = recordId;
         const createdDate = values.date_received || values.date_started || new Date().toISOString().slice(0, 10);
-        row.appendChild(createRowSelectionCell(recordId));
+        row.appendChild(createRowSelectionCell(recordId, selectedIds?.has(recordId)));
         const fields = [
             values.slip_no || "-",
             values.document_name || "-",
@@ -6724,6 +6859,7 @@ const portalDomReady = () => {
         const prepend = options.prepend !== false;
         const shouldRefresh = options.refresh !== false;
         const recordId = values.__record_id || generateRecordId();
+        const selectedIds = options.selectedIds instanceof Set ? options.selectedIds : null;
 
         const emptyRow = billingTableBody.querySelector(".pa-empty-billing");
         if (emptyRow) emptyRow.remove();
@@ -6737,7 +6873,7 @@ const portalDomReady = () => {
 	            || values.received_by
 	            || "-";
 	        const receivedDate = values.date_received || values.__submitted_at || values.__updated_at || getLocalIsoDate();
-	        row.appendChild(createRowSelectionCell(recordId));
+	        row.appendChild(createRowSelectionCell(recordId, selectedIds?.has(recordId)));
 	        const fields = [
 	            values.slip_no || "-",
 	            values.document_name || "-",
@@ -6806,6 +6942,9 @@ const portalDomReady = () => {
     };
 
     const renderAdminDivisionRecords = (records) => {
+        const documentSelection = getAdminSelectionSnapshot(documentsTableBody, "pa-empty-documents");
+        const billingSelection = getAdminSelectionSnapshot(billingTableBody, "pa-empty-billing");
+
         if (documentsTableBody) {
             getTableDataRows(documentsTableBody, "pa-empty-documents").forEach((row) => row.remove());
         }
@@ -6814,8 +6953,8 @@ const portalDomReady = () => {
         }
 
         records.forEach((record) => {
-            addDocumentRow(record, { prepend: false, refresh: false });
-            addBillingRow(record, { prepend: false, refresh: false });
+            addDocumentRow(record, { prepend: false, refresh: false, selectedIds: documentSelection });
+            addBillingRow(record, { prepend: false, refresh: false, selectedIds: billingSelection });
         });
 
         refreshDocumentCounters();
@@ -6829,7 +6968,7 @@ const portalDomReady = () => {
         const savedRecords = readAdminDivisionRecords().map((record) => normalizeRecord(record));
         if (!savedRecords.length) return;
         writeAdminDivisionRecords(savedRecords);
-        renderAdminDivisionRecords(savedRecords);
+        queueAdminRender(savedRecords, { deferIfBusy: false });
         savedRecords.forEach((record) => {
             syncAdminRecordToMaintenanceDivision(record);
         });
@@ -6943,7 +7082,7 @@ const portalDomReady = () => {
             updatedRecord.status = updatedRecord.doc_status;
             records[recordIndex] = updatedRecord;
             writeAdminDivisionRecords(records);
-            renderAdminDivisionRecords(records);
+            queueAdminRender(records, { deferIfBusy: false });
             syncAdminRecordToMaintenanceDivision(updatedRecord);
             return true;
         }
@@ -7198,6 +7337,8 @@ const portalDomReady = () => {
             document.body.style.overflow = "";
             editingRecordId = null;
             editingTableType = null;
+            adminInteractionLockUntil = 0;
+            flushPendingAdminRender();
         };
 
         overlay.addEventListener("click", (event) => {
@@ -7357,6 +7498,7 @@ const portalDomReady = () => {
     }
     if (documentSelectAllCheckbox) {
         documentSelectAllCheckbox.addEventListener("change", () => {
+            markAdminInteractionLock(500);
             getTableDataRows(documentsTableBody, "pa-empty-documents")
                 .filter((row) => !row.hidden)
                 .forEach((row) => {
@@ -7368,6 +7510,7 @@ const portalDomReady = () => {
     }
     if (billingSelectAllCheckbox) {
         billingSelectAllCheckbox.addEventListener("change", () => {
+            markAdminInteractionLock(500);
             getTableDataRows(billingTableBody, "pa-empty-billing")
                 .filter((row) => !row.hidden)
                 .forEach((row) => {
@@ -7424,9 +7567,29 @@ const portalDomReady = () => {
         });
     }
     if (documentsTableBody) {
+        documentsTableBody.addEventListener("pointerdown", (event) => {
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const actionButton = clickTarget.closest("[data-admin-action]");
+            if (actionButton) {
+                const action = String(actionButton.dataset.adminAction || "").trim();
+                const recordId = String(actionButton.dataset.recordId || "").trim();
+                if (action === "edit" && recordId) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    markAdminInteractionLock(900);
+                    runAdminImmediateAction("edit", recordId, "documents");
+                    return;
+                }
+            }
+            if (clickTarget.closest("[data-admin-action], .js-admin-row-select")) {
+                markAdminInteractionLock(700);
+            }
+        });
         documentsTableBody.addEventListener("change", (event) => {
             const target = event.target;
             if (target && target.classList.contains("js-admin-row-select")) {
+                markAdminInteractionLock(500);
                 syncSelectionControls();
             }
         });
@@ -7435,9 +7598,12 @@ const portalDomReady = () => {
             if (!clickTarget) return;
             const actionButton = clickTarget.closest("[data-admin-action]");
             if (!actionButton) return;
+            event.preventDefault();
+            event.stopPropagation();
             const action = actionButton.dataset.adminAction;
             const recordId = actionButton.dataset.recordId;
             if (!recordId) return;
+            if (shouldSkipAdminClickAfterImmediateAction(action, recordId, "documents")) return;
 
             if (action === "view-file") {
                 const record = readAdminDivisionRecords().find((item) => item.__record_id === recordId);
@@ -7486,9 +7652,29 @@ const portalDomReady = () => {
         });
     }
     if (billingTableBody) {
+        billingTableBody.addEventListener("pointerdown", (event) => {
+            const clickTarget = event.target instanceof Element ? event.target : null;
+            if (!clickTarget) return;
+            const actionButton = clickTarget.closest("[data-admin-action]");
+            if (actionButton) {
+                const action = String(actionButton.dataset.adminAction || "").trim();
+                const recordId = String(actionButton.dataset.recordId || "").trim();
+                if (action === "edit" && recordId) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    markAdminInteractionLock(900);
+                    runAdminImmediateAction("edit", recordId, "billing");
+                    return;
+                }
+            }
+            if (clickTarget.closest("[data-admin-action], .js-admin-row-select")) {
+                markAdminInteractionLock(700);
+            }
+        });
         billingTableBody.addEventListener("change", (event) => {
             const target = event.target;
             if (target && target.classList.contains("js-admin-row-select")) {
+                markAdminInteractionLock(500);
                 syncSelectionControls();
             }
         });
@@ -7497,9 +7683,12 @@ const portalDomReady = () => {
             if (!clickTarget) return;
             const actionButton = clickTarget.closest("[data-admin-action]");
             if (!actionButton) return;
+            event.preventDefault();
+            event.stopPropagation();
             const action = actionButton.dataset.adminAction;
             const recordId = actionButton.dataset.recordId;
             if (!recordId) return;
+            if (shouldSkipAdminClickAfterImmediateAction(action, recordId, "billing")) return;
 
             if (action === "edit") {
                 openEditModalForRecord(recordId, "billing");
@@ -7533,7 +7722,7 @@ const portalDomReady = () => {
     window.addEventListener("peo:division-store-synced", (event) => {
         const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!syncedStoreKeys.includes("admin")) return;
-        renderAdminDivisionRecords(readAdminDivisionRecords().map((record) => normalizeRecord(record)));
+        queueAdminRender(readAdminDivisionRecords());
     });
     window.addEventListener("peo:division-store-remote-update", (event) => {
         const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
@@ -7545,7 +7734,7 @@ const portalDomReady = () => {
         ], { force: true }))
             .then((didWrite) => {
                 if (!didWrite) return;
-                renderAdminDivisionRecords(readAdminDivisionRecords().map((record) => normalizeRecord(record)));
+                queueAdminRender(readAdminDivisionRecords());
             })
             .catch(() => {
                 // Ignore transient sync errors.
