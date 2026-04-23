@@ -1752,6 +1752,216 @@ const normalizeConstructionSpotlightUrl = (value) => {
 })();
 
 (() => {
+    const overviewGrid = document.querySelector("[data-overview-live-grid='1']");
+    if (!(overviewGrid instanceof HTMLElement)) {
+        return;
+    }
+
+    const cardMap = new Map();
+    overviewGrid.querySelectorAll("[data-overview-card]").forEach((card) => {
+        if (!(card instanceof HTMLElement)) return;
+        const key = String(card.dataset.overviewCard || "").trim();
+        if (!key) return;
+        cardMap.set(key, {
+            value: card.querySelector("[data-overview-value]"),
+            progress: card.querySelector("[data-overview-progress]"),
+        });
+    });
+    if (!cardMap.size) {
+        return;
+    }
+
+    const OVERVIEW_SYNC_INTERVAL_MS = 1000;
+    let overviewSyncInFlight = null;
+    let lastOverviewSignature = "";
+
+    const normalizeOverviewStatusKey = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    const ratioToPercent = (numerator, denominator) => {
+        const safeNumerator = Number(numerator) || 0;
+        const safeDenominator = Number(denominator) || 0;
+        if (!safeDenominator) return 0;
+        return Math.max(0, Math.min(100, Math.round((safeNumerator / safeDenominator) * 100)));
+    };
+    const parseLooseDateMs = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return Number.NaN;
+        const parsed = Date.parse(text);
+        return Number.isFinite(parsed) ? parsed : Number.NaN;
+    };
+    const countPayloadRecords = (payload, key = "") => {
+        if (Array.isArray(payload)) {
+            return payload.filter((item) => item && typeof item === "object").length;
+        }
+        if (key === "maintenance" && payload && typeof payload === "object") {
+            return [
+                "roadRecords",
+                "equipmentRows",
+                "scheduleRows",
+                "taskRows",
+                "personnelRecords",
+                "contractorRecords",
+            ].reduce((total, listKey) => {
+                const rows = payload[listKey];
+                return total + (Array.isArray(rows) ? rows.filter((item) => item && typeof item === "object").length : 0);
+            }, 0);
+        }
+        return 0;
+    };
+    const isApprovedStatus = (value) => {
+        const key = normalizeOverviewStatusKey(value);
+        return key === "approved" || key === "closed" || key === "completed" || key === "received";
+    };
+    const getRecordStatus = (record) => {
+        if (!record || typeof record !== "object") return "";
+        return record.billing_status || record.doc_status || record.status || "";
+    };
+    const getProjectLabel = (record, fields) => {
+        if (!record || typeof record !== "object") return "";
+        const candidates = Array.isArray(fields) ? fields : [];
+        for (const field of candidates) {
+            const value = String(record?.[field] || "").trim();
+            if (value) return value;
+        }
+        return "";
+    };
+    const isConstructionCompleted = (record) => {
+        if (!record || typeof record !== "object") return false;
+        const statusRaw = String(record.status_current || "").trim().toLowerCase();
+        const numeric = Number(String(record.status_current || "").replace(/[^0-9.-]+/g, ""));
+        return statusRaw.includes("complete")
+            || Boolean(String(record.date_completed || "").trim())
+            || (Number.isFinite(numeric) && numeric >= 99.5);
+    };
+
+    const computeOverviewMetrics = (stores) => {
+        const safeStores = stores && typeof stores === "object" ? stores : {};
+        const adminRecords = Array.isArray(safeStores.admin?.data) ? safeStores.admin.data.filter((item) => item && typeof item === "object") : [];
+        const planningRecords = Array.isArray(safeStores.planning?.data) ? safeStores.planning.data.filter((item) => item && typeof item === "object") : [];
+        const constructionRecords = Array.isArray(safeStores.construction?.data) ? safeStores.construction.data.filter((item) => item && typeof item === "object") : [];
+        const qualityRecords = Array.isArray(safeStores.quality?.data) ? safeStores.quality.data.filter((item) => item && typeof item === "object") : [];
+        const maintenancePayload = safeStores.maintenance?.data && typeof safeStores.maintenance.data === "object" && !Array.isArray(safeStores.maintenance.data)
+            ? safeStores.maintenance.data
+            : {};
+
+        const adminApproved = adminRecords.filter((record) => isApprovedStatus(getRecordStatus(record))).length;
+        const planningApproved = planningRecords.filter((record) => isApprovedStatus(getRecordStatus(record))).length;
+        const qualityApproved = qualityRecords.filter((record) => isApprovedStatus(getRecordStatus(record))).length;
+        const constructionNamed = constructionRecords.filter((record) => String(record?.project_name || "").trim());
+
+        const projectNamesTotal = new Set();
+        const projectNamesActive = new Set();
+
+        adminRecords.forEach((record) => {
+            const label = getProjectLabel(record, ["document_name", "project_name"]);
+            if (!label) return;
+            projectNamesTotal.add(label);
+            if (!isApprovedStatus(getRecordStatus(record))) {
+                projectNamesActive.add(label);
+            }
+        });
+        planningRecords.forEach((record) => {
+            const label = getProjectLabel(record, ["document_name", "project_name"]);
+            if (!label) return;
+            projectNamesTotal.add(label);
+            if (!isApprovedStatus(getRecordStatus(record))) {
+                projectNamesActive.add(label);
+            }
+        });
+        constructionNamed.forEach((record) => {
+            const label = getProjectLabel(record, ["project_name"]);
+            if (!label) return;
+            projectNamesTotal.add(label);
+            if (!isConstructionCompleted(record)) {
+                projectNamesActive.add(label);
+            }
+        });
+
+        const adminTotal = adminRecords.length;
+        const planningTotal = planningRecords.length;
+        const qualityTotal = qualityRecords.length;
+        const constructionTotal = constructionNamed.length;
+        const maintenanceTotal = countPayloadRecords(maintenancePayload, "maintenance");
+        const pendingApprovals = (adminTotal - adminApproved) + (planningTotal - planningApproved) + (qualityTotal - qualityApproved);
+        const pendingDenominator = adminTotal + planningTotal + qualityTotal;
+        const totalRecords = adminTotal + planningTotal + constructionTotal + qualityTotal + maintenanceTotal;
+        const weekAgoMs = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+        let recentUpdates = 0;
+        ["admin", "planning", "construction", "quality", "maintenance"].forEach((storeKey) => {
+            const store = safeStores[storeKey];
+            const updatedAtMs = parseLooseDateMs(store?.updated_at);
+            if (!Number.isFinite(updatedAtMs) || updatedAtMs < weekAgoMs) {
+                return;
+            }
+            recentUpdates += countPayloadRecords(store?.data, storeKey);
+        });
+
+        return {
+            activeProjects: projectNamesActive.size,
+            activeProjectsProgress: ratioToPercent(projectNamesActive.size, projectNamesTotal.size),
+            pendingApprovals,
+            pendingApprovalsProgress: ratioToPercent(pendingApprovals, pendingDenominator),
+            recentUpdates,
+            recentUpdatesProgress: ratioToPercent(recentUpdates, totalRecords),
+        };
+    };
+
+    const setCardMetric = (cardKey, value, progress) => {
+        const refs = cardMap.get(cardKey);
+        if (!refs) return;
+        if (refs.value instanceof HTMLElement) {
+            refs.value.textContent = String(Math.max(0, Number(value) || 0));
+        }
+        if (refs.progress instanceof HTMLElement) {
+            refs.progress.style.width = `${Math.max(0, Math.min(100, Number(progress) || 0))}%`;
+        }
+    };
+
+    const applyOverviewMetrics = (metrics) => {
+        const signature = JSON.stringify(metrics || {});
+        if (signature === lastOverviewSignature) {
+            return;
+        }
+        lastOverviewSignature = signature;
+        setCardMetric("active-projects", metrics?.activeProjects, metrics?.activeProjectsProgress);
+        setCardMetric("pending-approvals", metrics?.pendingApprovals, metrics?.pendingApprovalsProgress);
+        setCardMetric("recent-updates", metrics?.recentUpdates, metrics?.recentUpdatesProgress);
+    };
+
+    const fetchOverviewStores = async () => {
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.fetchStoreSnapshot !== "function") {
+            return null;
+        }
+        const snapshot = await store.fetchStoreSnapshot(["admin", "planning", "construction", "quality", "maintenance"]).catch(() => null);
+        return snapshot && typeof snapshot === "object" && snapshot.stores && typeof snapshot.stores === "object"
+            ? snapshot.stores
+            : null;
+    };
+
+    const syncOverviewCards = async () => {
+        if (overviewSyncInFlight) {
+            return overviewSyncInFlight;
+        }
+        overviewSyncInFlight = Promise.resolve(fetchOverviewStores())
+            .then((stores) => {
+                if (!stores) return;
+                applyOverviewMetrics(computeOverviewMetrics(stores));
+            })
+            .finally(() => {
+                overviewSyncInFlight = null;
+            });
+        return overviewSyncInFlight;
+    };
+
+    window.setInterval(syncOverviewCards, OVERVIEW_SYNC_INTERVAL_MS);
+    window.addEventListener("focus", syncOverviewCards);
+    window.addEventListener("peo:division-store-synced", syncOverviewCards);
+    window.addEventListener("peo:division-store-remote-update", syncOverviewCards);
+    syncOverviewCards();
+})();
+
+(() => {
     const badgeSpecs = [
         { storeKey: "admin", anchorSelector: "#pa-documents-found", mountClosest: ".admin-division-table-title" },
         { storeKey: "admin", anchorSelector: "#pa-billing-count", mountClosest: ".admin-division-table-title" },
@@ -19785,6 +19995,53 @@ document.addEventListener("DOMContentLoaded", () => {
         return formatted;
     };
 
+    const getConstructionTaskCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getConstructionTaskCsrfToken = () => {
+        const tokenFromCookie = getConstructionTaskCookie("csrftoken");
+        if (tokenFromCookie) return tokenFromCookie;
+        const tokenFromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenFromDom instanceof HTMLInputElement ? String(tokenFromDom.value || "").trim() : "";
+    };
+
+    const syncDeletedConstructionTaskToServer = async (taskSelector) => {
+        const csrfToken = getConstructionTaskCsrfToken();
+        if (!csrfToken) {
+            return { ok: false, error: "Missing CSRF token. Please refresh and try again." };
+        }
+
+        try {
+            const response = await window.fetch("/api/construction/tasks/delete/", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "X-CSRFToken": csrfToken,
+                },
+                body: JSON.stringify({ task: taskSelector || {} }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                return { ok: false, error: String(data?.error || "Unable to delete construction task.") };
+            }
+            return { ok: true, data };
+        } catch (error) {
+            return { ok: false, error: String(error?.message || error || "Unable to delete construction task.") };
+        }
+    };
+
     const formatConstructionTaskCurrencyInputText = (value) => {
         const raw = String(value ?? "");
         const cleaned = raw.replace(/,/g, "").replace(/[^0-9.]/g, "");
@@ -20757,6 +21014,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 if (!approved) return;
 
+                const constructionRecords = readConstructionRecords();
+                const deletedRecord = constructionRecords.find((record) => String(record?.__id || record?.construction_id || "") === recordId) || null;
+                const adminSourceId = String(deletedRecord?.__admin_source_id || "").trim();
+                const deleteResult = await syncDeletedConstructionTaskToServer({
+                    recordId,
+                    adminSourceId,
+                });
+                if (!deleteResult.ok) {
+                    showPeoGeneralToast(deleteResult.error || "Unable to delete task right now.", {
+                        title: "Construction Division",
+                        variant: "danger",
+                    });
+                    return;
+                }
+
                 const row = deleteTrigger.closest("tr");
                 if (row) {
                     row.remove();
@@ -20765,24 +21037,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 const deletedAdminIds = readDeletedConstructionAdminIds();
                 const deletedRecordIds = readDeletedConstructionRecordIds();
                 const nextTasks = tasks.filter((task) => String(task?.construction_id || task?.__id || "") !== recordId);
-                const constructionRecords = readConstructionRecords();
-                const deletedRecord = constructionRecords.find((record) => String(record?.__id || record?.construction_id || "") === recordId) || null;
                 if (recordId) {
-                    deletedRecordIds.add(recordId);
+                    deletedRecordIds.delete(recordId);
                 }
                 if (deletedRecord && String(deletedRecord.__admin_source || "").trim() === "admin_document") {
-                    const sourceId = String(deletedRecord.__admin_source_id || "").trim();
-                    if (sourceId) {
-                        deletedAdminIds.add(sourceId);
+                    if (adminSourceId) {
+                        deletedAdminIds.delete(adminSourceId);
                     }
                 }
-                const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
-                    ? window.peoAdminVisibility
-                    : null;
-                if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function" && deletedAdminIds.size) {
-                    const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), Array.from(deletedAdminIds), "construction", true);
-                    writeAdminDivisionRecords(adminRecords).catch(() => {
-                        showPeoGeneralToast("Deleted task is hidden now, but admin sync is still retrying.", {
+                const nextAdminRecords = readAdminDivisionRecords().filter((record) => String(record?.__record_id || "").trim() !== adminSourceId);
+                if (adminSourceId) {
+                    writeAdminDivisionRecords(nextAdminRecords).catch(() => {
+                        showPeoGeneralToast("Construction task was deleted, but admin cache refresh is still retrying.", {
                             title: "Construction Division",
                             variant: "warning",
                         });

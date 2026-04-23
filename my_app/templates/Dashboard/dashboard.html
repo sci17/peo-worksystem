@@ -368,8 +368,8 @@
                             <p>Real-time division progress and workflow status monitoring</p>
                         </section>
 
-                        <section class="status-grid">
-                            <article class="status-card">
+                        <section class="status-grid" data-overview-live-grid="1">
+                            <article class="status-card" data-overview-card="active-projects">
                                 <div class="status-head">
                                     <span class="material-symbols-outlined icon-blue">work</span>
                                     {% if overview_active_projects_delta %}
@@ -377,17 +377,18 @@
                                     {% endif %}
                                 </div>
                                 <p class="status-label">Active Projects</p>
-                                <p class="status-value">{{ overview_active_projects|default:"0" }}</p>
+                                <p class="status-value" data-overview-value>{{ overview_active_projects|default:"0" }}</p>
                                 <div class="progress-track">
                                     <span
                                         class="progress-fill progress-blue"
+                                        data-overview-progress
                                         style='width: {{ overview_active_projects_progress|default:"0" }}%;'
                                         aria-hidden="true"
                                     ></span>
                                 </div>
                             </article>
 
-                            <article class="status-card">
+                            <article class="status-card" data-overview-card="pending-approvals">
                                 <div class="status-head">
                                     <span class="material-symbols-outlined icon-amber">pending_actions</span>
                                     {% if overview_pending_approvals_delta %}
@@ -395,17 +396,18 @@
                                     {% endif %}
                                 </div>
                                 <p class="status-label">Pending Approvals</p>
-                                <p class="status-value">{{ overview_pending_approvals|default:"0" }}</p>
+                                <p class="status-value" data-overview-value>{{ overview_pending_approvals|default:"0" }}</p>
                                 <div class="progress-track">
                                     <span
                                         class="progress-fill progress-amber"
+                                        data-overview-progress
                                         style='width: {{ overview_pending_approvals_progress|default:0 }}%;'
                                         aria-hidden="true"
                                     ></span>
                                 </div>
                             </article>
 
-                            <article class="status-card">
+                            <article class="status-card" data-overview-card="recent-updates">
                                 <div class="status-head">
                                     <span class="material-symbols-outlined icon-green">autorenew</span>
                                     {% if overview_recent_updates_delta %}
@@ -413,10 +415,11 @@
                                     {% endif %}
                                 </div>
                                 <p class="status-label">Recent Updates</p>
-                                <p class="status-value">{{ overview_recent_updates|default:"0" }}</p>
+                                <p class="status-value" data-overview-value>{{ overview_recent_updates|default:"0" }}</p>
                                 <div class="progress-track">
                                     <span
                                         class="progress-fill progress-green"
+                                        data-overview-progress
                                         style='width: {{ overview_recent_updates_progress|default:"0" }}%;'
                                         aria-hidden="true"
                                     ></span>

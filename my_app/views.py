@@ -37,6 +37,8 @@ from .models import (
     SharedDivisionStore,
     DivisionStoreEvent,
     ConstructionUpload,
+    ConstructionProject,
+    ConstructionTask,
     Division,
     WorkflowRecord,
     DivisionSubmission,
@@ -3630,6 +3632,223 @@ def maintenance_task_delete_api(request):
                 "admin_record_id": admin_record_id,
                 "removed_from_admin": removed_from_admin,
                 "removed_from_maintenance": removed_from_maintenance,
+            },
+            "updated_store_keys": changed_store_keys,
+        }
+    )
+
+
+def _construction_record_matches_selector(record, selector):
+    if not isinstance(record, dict):
+        return False
+
+    selector = selector if isinstance(selector, dict) else {}
+    record_id = str(selector.get("recordId") or "").strip()
+    admin_source_id = str(selector.get("adminSourceId") or "").strip()
+
+    candidate_record_id = str(
+        record.get("__id") or record.get("construction_id") or record.get("id") or ""
+    ).strip()
+    candidate_admin_source_id = str(
+        record.get("__admin_source_id") or record.get("__admin_submission_id") or ""
+    ).strip()
+
+    if record_id and candidate_record_id == record_id:
+        return True
+    if admin_source_id and candidate_admin_source_id == admin_source_id:
+        return True
+    return False
+
+
+def _construction_project_matches_selector(project, selector):
+    selector = selector if isinstance(selector, dict) else {}
+    record_id = str(selector.get("recordId") or "").strip()
+    admin_source_id = str(selector.get("adminSourceId") or "").strip()
+    payload = getattr(project, "payload", None) if isinstance(getattr(project, "payload", None), dict) else {}
+
+    payload_record_id = str(
+        payload.get("__id") or payload.get("construction_id") or payload.get("id") or ""
+    ).strip()
+    payload_admin_source_id = str(
+        payload.get("__admin_source_id") or payload.get("__admin_submission_id") or ""
+    ).strip()
+    workflow_source_id = str(
+        getattr(getattr(project, "workflow_record", None), "source_admin_record_id", "") or ""
+    ).strip()
+
+    if record_id and payload_record_id == record_id:
+        return True
+    if admin_source_id and (payload_admin_source_id == admin_source_id or workflow_source_id == admin_source_id):
+        return True
+    return False
+
+
+def _construction_task_matches_selector(task, selector):
+    selector = selector if isinstance(selector, dict) else {}
+    record_id = str(selector.get("recordId") or "").strip()
+    admin_source_id = str(selector.get("adminSourceId") or "").strip()
+    payload = getattr(task, "payload", None) if isinstance(getattr(task, "payload", None), dict) else {}
+
+    payload_record_id = str(
+        payload.get("construction_id") or payload.get("__id") or payload.get("id") or ""
+    ).strip()
+    workflow_source_id = str(
+        getattr(getattr(task, "workflow_record", None), "source_admin_record_id", "") or ""
+    ).strip()
+    project_payload = {}
+    if getattr(task, "construction_project", None) and isinstance(getattr(task.construction_project, "payload", None), dict):
+        project_payload = task.construction_project.payload
+    project_record_id = str(
+        project_payload.get("__id") or project_payload.get("construction_id") or ""
+    ).strip()
+    project_admin_source_id = str(
+        project_payload.get("__admin_source_id") or project_payload.get("__admin_submission_id") or ""
+    ).strip()
+
+    if record_id and (payload_record_id == record_id or project_record_id == record_id):
+        return True
+    if admin_source_id and (
+        workflow_source_id == admin_source_id
+        or project_admin_source_id == admin_source_id
+    ):
+        return True
+    return False
+
+
+@login_required
+@require_http_methods(["POST"])
+def construction_task_delete_api(request):
+    if _has_global_division_access(request.user):
+        can_delete = True
+    else:
+        can_delete = (
+            _get_user_division_key(request.user) == KEY_CONSTRUCTION
+            and _has_division_permission(request.user, KEY_CONSTRUCTION, require_edit=True)
+        )
+    if not can_delete:
+        return JsonResponse({"error": "Forbidden."}, status=403)
+
+    payload = _parse_json_request_body(request)
+    if payload is None:
+        return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+    selector = payload.get("task") if isinstance(payload.get("task"), dict) else {}
+    record_id = str(selector.get("recordId") or "").strip()
+    admin_source_id = str(selector.get("adminSourceId") or "").strip()
+    if not record_id and not admin_source_id:
+        return JsonResponse({"error": "Construction task selector is required."}, status=400)
+
+    changed_store_keys = []
+    admin_payload = None
+    removed_from_admin = False
+
+    with transaction.atomic():
+        construction_store, _ = SharedDivisionStore.objects.get_or_create(key=KEY_CONSTRUCTION)
+        construction_data = _normalize_store_data(KEY_CONSTRUCTION, construction_store.data)
+        construction_payload = [
+            record
+            for record in construction_data
+            if not _construction_record_matches_selector(record, selector)
+        ]
+        removed_from_construction = len(construction_payload) != len(construction_data)
+        if removed_from_construction:
+            construction_store.data = construction_payload
+            construction_store.save(update_fields=["data", "updated_at"])
+            changed_store_keys.append(KEY_CONSTRUCTION)
+
+        if admin_source_id:
+            admin_store, _ = SharedDivisionStore.objects.get_or_create(key=KEY_ADMIN)
+            admin_data = _normalize_store_data(KEY_ADMIN, admin_store.data)
+            admin_payload = [
+                record
+                for record in admin_data
+                if _json_record_id(record) != admin_source_id
+            ]
+            removed_from_admin = len(admin_payload) != len(admin_data)
+            if removed_from_admin:
+                admin_store.data = admin_payload
+                admin_store.save(update_fields=["data", "updated_at"])
+                changed_store_keys.append(KEY_ADMIN)
+
+        try:
+            for user_store in DivisionStore.objects.select_for_update().filter(key__in=[KEY_ADMIN, KEY_CONSTRUCTION]):
+                if user_store.key == KEY_CONSTRUCTION:
+                    current = _normalize_store_data(KEY_CONSTRUCTION, user_store.data)
+                    current = [
+                        record
+                        for record in current
+                        if not _construction_record_matches_selector(record, selector)
+                    ]
+                    user_store.data = current
+                    user_store.save(update_fields=["data", "updated_at"])
+                elif admin_source_id:
+                    current = _normalize_store_data(KEY_ADMIN, user_store.data)
+                    current = [record for record in current if _json_record_id(record) != admin_source_id]
+                    user_store.data = current
+                    user_store.save(update_fields=["data", "updated_at"])
+        except Exception:
+            logger.exception("construction_task_delete_user_store_cleanup_failed")
+
+        matched_projects = [
+            project.id
+            for project in ConstructionProject.objects.select_related("workflow_record")
+            if _construction_project_matches_selector(project, selector)
+        ]
+        matched_tasks = [
+            task.id
+            for task in ConstructionTask.objects.select_related("workflow_record", "construction_project")
+            if _construction_task_matches_selector(task, selector)
+        ]
+
+        if matched_tasks:
+            ConstructionTask.objects.filter(id__in=matched_tasks).delete()
+        if matched_projects:
+            ConstructionProject.objects.filter(id__in=matched_projects).delete()
+        if admin_source_id and removed_from_admin:
+            WorkflowRecord.objects.filter(source_admin_record_id=admin_source_id).delete()
+
+    _invalidate_store_cache()
+
+    try:
+        if admin_source_id and removed_from_admin:
+            _sync_admin_workflow_records(admin_payload, actor=request.user)
+    except Exception:
+        logger.exception(
+            "construction_task_delete_admin_sync_failed admin_source_id=%s user=%s",
+            admin_source_id,
+            request.user.get_username() if getattr(request, "user", None) and request.user.is_authenticated else "anonymous",
+        )
+
+    for key in changed_store_keys:
+        store_payload = admin_payload if key == KEY_ADMIN else construction_payload
+        _safe_log_division_store_event(
+            actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+            store_key=key,
+            target=DivisionStoreEvent.TARGET_SHARED,
+            write_mode="construction_task_delete",
+            request_payload=payload,
+            stored_payload=store_payload,
+            path=getattr(request, "path", ""),
+            method=getattr(request, "method", ""),
+        )
+
+    if changed_store_keys:
+        _broadcast_division_store_update(
+            store_keys=changed_store_keys,
+            actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+            updated_at=timezone.now().isoformat(),
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "deleted": {
+                "record_id": record_id,
+                "admin_source_id": admin_source_id,
+                "removed_from_construction": removed_from_construction,
+                "removed_from_admin": removed_from_admin,
+                "deleted_project_count": len(matched_projects),
+                "deleted_task_count": len(matched_tasks),
             },
             "updated_store_keys": changed_store_keys,
         }
