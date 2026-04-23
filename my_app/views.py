@@ -6,6 +6,7 @@ import shutil
 import uuid
 from copy import deepcopy
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +19,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.forms import UserCreationForm
 from django.core.cache import cache
+from django.db import transaction
 from django.http import JsonResponse
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponseRedirect
@@ -35,6 +37,15 @@ from .models import (
     SharedDivisionStore,
     DivisionStoreEvent,
     ConstructionUpload,
+    Division,
+    WorkflowRecord,
+    DivisionSubmission,
+    MaintenanceRoad,
+    MaintenanceEquipment,
+    MaintenanceSchedule,
+    MaintenancePersonnel,
+    MaintenanceContractor,
+    MaintenanceTask,
     UserProfile,
     KEY_ADMIN,
     KEY_PLANNING,
@@ -160,6 +171,21 @@ _MAIN_DIVISION_ACCOUNT_IDENTITIES = {
     },
 }
 
+DIVISION_GROUP_NAME_BY_KEY = {
+    KEY_ADMIN: "Admin Division",
+    KEY_PLANNING: "Planning Division",
+    KEY_CONSTRUCTION: "Construction Division",
+    KEY_QUALITY: "Quality Control Division",
+    KEY_MAINTENANCE: "Maintenance Division",
+}
+DIVISION_STAFF_GROUP_NAME_BY_KEY = {
+    KEY_ADMIN: "Admin Division Staff Engineer",
+    KEY_PLANNING: "Planning Division Staff Engineer",
+    KEY_CONSTRUCTION: "Construction Division Staff Engineer",
+    KEY_QUALITY: "Quality Division Staff Engineer",
+    KEY_MAINTENANCE: "Maintenance Division Staff Engineer",
+}
+
 
 def _has_global_division_access(user):
     if not user:
@@ -255,6 +281,16 @@ def _normalize_division_key(value):
         "quality control": KEY_QUALITY,
         "maintenance": KEY_MAINTENANCE,
         "maitenance": KEY_MAINTENANCE,
+        "admin division staff engineer": KEY_ADMIN,
+        "planning division staff engineer": KEY_PLANNING,
+        "construction division staff engineer": KEY_CONSTRUCTION,
+        "quality division staff engineer": KEY_QUALITY,
+        "quality control division staff engineer": KEY_QUALITY,
+        "maintenance division staff engineer": KEY_MAINTENANCE,
+        "admin engineer staff": KEY_ADMIN,
+        "construction engineer staff": KEY_CONSTRUCTION,
+        "planning division staff": KEY_PLANNING,
+        "maintenance division staff": KEY_MAINTENANCE,
         "admin_division": KEY_ADMIN,
         "planning_division": KEY_PLANNING,
         "construction_division": KEY_CONSTRUCTION,
@@ -388,6 +424,64 @@ def _get_user_division_key(user):
     return group_key or profile_key
 
 
+def _get_user_group_names(user):
+    try:
+        return {str(group.name or "").strip() for group in user.groups.all()}
+    except Exception:
+        return set()
+
+
+def _has_division_staff_engineer_group(user, division_key):
+    normalized_key = _normalize_division_key(division_key)
+    if not normalized_key:
+        return False
+    target_name = str(DIVISION_STAFF_GROUP_NAME_BY_KEY.get(normalized_key, "")).strip().lower()
+    if not target_name:
+        return False
+    return target_name in {name.lower() for name in _get_user_group_names(user)}
+
+
+def _has_division_permission(user, division_key, *, require_edit=False):
+    normalized_key = _normalize_division_key(division_key)
+    if not normalized_key:
+        return False
+    if _has_global_division_access(user):
+        return True
+
+    user_division_key = _get_user_division_key(user)
+    if user_division_key != normalized_key:
+        return False
+
+    if not require_edit:
+        return True
+
+    if _is_main_division_account(user):
+        return True
+
+    return bool(getattr(user, "is_staff", False) and _has_division_staff_engineer_group(user, normalized_key))
+
+
+def _build_division_permission_map(user):
+    permissions = {}
+    group_names = sorted(_get_user_group_names(user))
+    user_division_key = _get_user_division_key(user)
+    for key in _STORE_KEYS:
+        permissions[key] = {
+            "label": _division_label_for_key(key) or key.title(),
+            "has_access": _has_division_permission(user, key, require_edit=False),
+            "can_edit": _has_division_permission(user, key, require_edit=True),
+            "is_staff_engineer": _has_division_staff_engineer_group(user, key),
+            "is_assigned_division": user_division_key == key,
+            "primary_group": DIVISION_GROUP_NAME_BY_KEY.get(key, ""),
+            "staff_group": DIVISION_STAFF_GROUP_NAME_BY_KEY.get(key, ""),
+            "matched_groups": [
+                name for name in group_names
+                if _normalize_division_key(name) == key
+            ],
+        }
+    return permissions
+
+
 def _store_write_mode(user, store_key):
     if _has_global_division_access(user):
         return "full"
@@ -397,10 +491,14 @@ def _store_write_mode(user, store_key):
     if not user_division or not store_key:
         return ""
 
-    if store_key == user_division:
+    if store_key == user_division and _has_division_permission(user, store_key, require_edit=True):
         return "full"
 
-    if store_key == KEY_ADMIN and user_division in {KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE}:
+    if (
+        store_key == KEY_ADMIN
+        and user_division in {KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE}
+        and _has_division_permission(user, user_division, require_edit=True)
+    ):
         return "restricted_admin_submit"
 
     return ""
@@ -659,6 +757,357 @@ def _parse_loose_datetime(value):
 
 def _safe_list(value):
     return value if isinstance(value, list) else []
+
+
+def _parse_decimal(value):
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return None
+    try:
+        return Decimal(text)
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _parse_float(value):
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return None
+    try:
+        return float(text)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_int(value):
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return None
+    try:
+        return int(float(text))
+    except (ValueError, TypeError):
+        return None
+
+
+def _coerce_datetime(value):
+    parsed = _parse_loose_datetime(value)
+    if not parsed:
+        return None
+    if timezone.is_naive(parsed):
+        try:
+            parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+        except Exception:
+            return None
+    return parsed
+
+
+def _coerce_date(value):
+    parsed = _coerce_datetime(value)
+    if parsed:
+        return parsed.date()
+    text = str(value or "").strip()
+    if not text:
+        return None
+    for pattern in ("%Y-%m-%d", "%m/%d/%Y", "%b %d, %Y", "%B %d, %Y"):
+        try:
+            return datetime.strptime(text, pattern).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _normalize_hidden_division_keys(record):
+    if not isinstance(record, dict):
+        return []
+    raw = record.get("__hidden_for_divisions")
+    if not isinstance(raw, (list, tuple, set)):
+        return []
+
+    normalized = []
+    seen = set()
+    for value in raw:
+        key = _normalize_division_key(value)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(key)
+    return normalized
+
+
+def _is_admin_record_visible_to_division(record, division_key):
+    normalized_key = _normalize_division_key(division_key)
+    if not normalized_key:
+        return False
+    return normalized_key not in set(_normalize_hidden_division_keys(record))
+
+
+def _ensure_division_registry():
+    existing = {
+        division.key: division
+        for division in Division.objects.filter(key__in=_STORE_KEYS)
+    }
+    for key in _STORE_KEYS:
+        if key in existing:
+            continue
+        existing[key], _ = Division.objects.get_or_create(
+            key=key,
+            defaults={"label": _division_label_for_key(key) or key.title(), "is_active": True},
+        )
+    return existing
+
+
+def _sync_admin_workflow_records(records, actor=None):
+    admin_records = [record for record in _safe_list(records) if isinstance(record, dict)]
+    divisions = _ensure_division_registry()
+    seen_source_ids = set()
+
+    existing_workflows = {
+        workflow.source_admin_record_id: workflow
+        for workflow in WorkflowRecord.objects.filter(source_admin_record_id__isnull=False)
+        .select_related("assigned_division", "submitted_from_division")
+        .prefetch_related("division_submissions")
+    }
+
+    with transaction.atomic():
+        for record in admin_records:
+            source_id = _json_record_id(record)
+            if not source_id or source_id in seen_source_ids:
+                continue
+            seen_source_ids.add(source_id)
+
+            assigned_key = _normalize_division_key(record.get("division")) or KEY_ADMIN
+            submitted_from_key = _normalize_division_key(record.get("__submitted_from_division")) or KEY_ADMIN
+            assigned_division = divisions.get(assigned_key) or divisions[KEY_ADMIN]
+            submitted_from_division = divisions.get(submitted_from_key)
+
+            defaults = {
+                "slip_no": str(record.get("slip_no") or "").strip() or None,
+                "document_name": str(record.get("document_name") or record.get("project_name") or "Untitled Document").strip() or "Untitled Document",
+                "project_name": str(record.get("project_name") or record.get("document_name") or "").strip() or None,
+                "location": str(record.get("location") or "").strip() or None,
+                "contractor": str(record.get("contractor") or "").strip() or None,
+                "billing_type": str(record.get("billing_type") or record.get("doc_type") or record.get("type") or "").strip() or None,
+                "contract_amount": _parse_decimal(record.get("contract_amount")),
+                "revised_contract_amount": _parse_decimal(record.get("revised_contract_amount")),
+                "assigned_division": assigned_division,
+                "doc_status": str(record.get("doc_status") or record.get("status") or "Draft").strip() or "Draft",
+                "billing_status": str(record.get("billing_status") or record.get("doc_status") or record.get("status") or "Draft").strip() or "Draft",
+                "scanned_file_url": str(record.get("scanned_file") or record.get("scan_url") or "").strip() or None,
+                "date_received": _coerce_datetime(
+                    record.get("date_received_admin")
+                    or record.get("date_received_peo")
+                    or record.get("date_received")
+                    or record.get("date_released_admin")
+                    or record.get("__submitted_at")
+                ),
+                "submitted_from_division": submitted_from_division,
+                "payload": record,
+            }
+
+            workflow = existing_workflows.get(source_id)
+            if workflow is None:
+                workflow = WorkflowRecord.objects.create(
+                    source_admin_record_id=source_id,
+                    created_by=actor if getattr(actor, "is_authenticated", False) else None,
+                    **defaults,
+                )
+                existing_workflows[source_id] = workflow
+            else:
+                for field, value in defaults.items():
+                    setattr(workflow, field, value)
+                workflow.save()
+
+            existing_submissions = {
+                submission.division_id: submission
+                for submission in workflow.division_submissions.select_related("division")
+            }
+            desired_submission_keys = set()
+            if _is_admin_record_visible_to_division(record, KEY_ADMIN):
+                desired_submission_keys.add(KEY_ADMIN)
+            if assigned_key and _is_admin_record_visible_to_division(record, assigned_key):
+                desired_submission_keys.add(assigned_key)
+
+            for submission_key in desired_submission_keys:
+                division = divisions.get(submission_key)
+                if not division:
+                    continue
+                submission_defaults = {
+                    "reference_no": str(record.get("slip_no") or source_id).strip() or source_id,
+                    "received_from": _division_label_for_key(submitted_from_key) or "Admin Division",
+                    "received_at": _coerce_datetime(
+                        record.get(f"{submission_key}_sent_date")
+                        or record.get("maintenance_sent_date")
+                        or record.get("date_received_admin")
+                        or record.get("date_received_peo")
+                        or record.get("date_received")
+                        or record.get("__updated_at")
+                        or record.get("__submitted_at")
+                    ),
+                    "status": str(record.get("doc_status") or record.get("billing_status") or record.get("status") or "").strip() or None,
+                    "remarks": str(record.get("remarks") or record.get("description") or "").strip() or None,
+                    "payload": record,
+                    "submitted_by": actor if getattr(actor, "is_authenticated", False) else None,
+                }
+                submission = existing_submissions.get(submission_key)
+                if submission is None:
+                    DivisionSubmission.objects.create(
+                        workflow_record=workflow,
+                        division=division,
+                        **submission_defaults,
+                    )
+                else:
+                    for field, value in submission_defaults.items():
+                        setattr(submission, field, value)
+                    submission.save()
+
+            stale_submission_keys = set(existing_submissions.keys()) - desired_submission_keys
+            if stale_submission_keys:
+                workflow.division_submissions.filter(division_id__in=stale_submission_keys).delete()
+
+        if seen_source_ids:
+            WorkflowRecord.objects.filter(source_admin_record_id__isnull=False).exclude(
+                source_admin_record_id__in=seen_source_ids
+            ).delete()
+        else:
+            WorkflowRecord.objects.filter(source_admin_record_id__isnull=False).delete()
+
+
+def _sync_maintenance_structured_tables(payload):
+    state = payload if isinstance(payload, dict) else {}
+    road_records = [record for record in _safe_list(state.get("roadRecords")) if isinstance(record, dict)]
+    equipment_rows = [record for record in _safe_list(state.get("equipmentRows")) if isinstance(record, dict)]
+    schedule_rows = [record for record in _safe_list(state.get("scheduleRows")) if isinstance(record, dict)]
+    task_rows = [record for record in _safe_list(state.get("taskRows")) if isinstance(record, dict)]
+    personnel_records = [record for record in _safe_list(state.get("personnelRecords")) if isinstance(record, dict)]
+    contractor_records = [record for record in _safe_list(state.get("contractorRecords")) if isinstance(record, dict)]
+
+    workflow_map = {
+        workflow.source_admin_record_id: workflow
+        for workflow in WorkflowRecord.objects.filter(source_admin_record_id__isnull=False)
+    }
+
+    with transaction.atomic():
+        MaintenanceRoad.objects.all().delete()
+        MaintenanceEquipment.objects.all().delete()
+        MaintenanceSchedule.objects.all().delete()
+        MaintenancePersonnel.objects.all().delete()
+        MaintenanceContractor.objects.all().delete()
+        MaintenanceTask.objects.all().delete()
+
+        MaintenanceRoad.objects.bulk_create([
+            MaintenanceRoad(
+                road_id=str(record.get("roadId") or "").strip() or None,
+                road_name=str(record.get("roadName") or record.get("road_id") or "Unnamed Road").strip() or "Unnamed Road",
+                municipality=str(record.get("municipality") or "").strip() or None,
+                location=str(record.get("location") or "").strip() or None,
+                surface_type=str(record.get("surfaceType") or record.get("surface_type") or "").strip() or None,
+                length_km=_parse_float(record.get("lengthKm") or record.get("length_km")),
+                condition=str(record.get("condition") or "").strip() or None,
+                payload=record,
+            )
+            for record in road_records
+        ])
+
+        MaintenanceEquipment.objects.bulk_create([
+            MaintenanceEquipment(
+                code=str(record.get("code") or "").strip() or None,
+                name=str(record.get("name") or "Unnamed Equipment").strip() or "Unnamed Equipment",
+                type=str(record.get("type") or "").strip() or None,
+                model=str(record.get("model") or "").strip() or None,
+                plate_number=str(record.get("plateNumber") or record.get("plate_number") or "").strip() or None,
+                status=str(record.get("status") or "").strip() or None,
+                location=str(record.get("location") or "").strip() or None,
+                operator=str(record.get("operator") or "").strip() or None,
+                payload=record,
+            )
+            for record in equipment_rows
+        ])
+
+        MaintenanceSchedule.objects.bulk_create([
+            MaintenanceSchedule(
+                title=str(record.get("title") or "Untitled Schedule").strip() or "Untitled Schedule",
+                road_ref=str(record.get("road") or record.get("road_ref") or "").strip() or None,
+                type=str(record.get("type") or "").strip() or None,
+                priority=str(record.get("priority") or "").strip() or None,
+                status=str(record.get("status") or "").strip() or None,
+                start_date=_coerce_date(record.get("startDate") or record.get("start_date")),
+                end_date=_coerce_date(record.get("endDate") or record.get("end_date")),
+                team=str(record.get("team") or "").strip() or None,
+                estimated_cost=_parse_decimal(record.get("estimatedCost") or record.get("estimated_cost")),
+                notes=str(record.get("notes") or "").strip() or None,
+                payload=record,
+            )
+            for record in schedule_rows
+        ])
+
+        MaintenancePersonnel.objects.bulk_create([
+            MaintenancePersonnel(
+                full_name=str(record.get("fullName") or record.get("full_name") or "Unnamed Personnel").strip() or "Unnamed Personnel",
+                employee_id=str(record.get("employeeId") or record.get("employee_id") or "").strip() or None,
+                division=str(record.get("division") or "").strip() or None,
+                position=str(record.get("position") or "").strip() or None,
+                email=str(record.get("email") or "").strip() or None,
+                phone=str(record.get("phone") or "").strip() or None,
+                division_head=str(record.get("divisionHead") or record.get("division_head") or "").strip() or None,
+                payload=record,
+            )
+            for record in personnel_records
+        ])
+
+        MaintenanceContractor.objects.bulk_create([
+            MaintenanceContractor(
+                name=str(record.get("name") or "Unnamed Contractor").strip() or "Unnamed Contractor",
+                trade_name=str(record.get("tradeName") or record.get("trade_name") or "").strip() or None,
+                tin=str(record.get("tin") or "").strip() or None,
+                philgeps=str(record.get("philgeps") or "").strip() or None,
+                pcab=str(record.get("pcab") or "").strip() or None,
+                status=str(record.get("status") or "").strip() or None,
+                contracts=_parse_int(record.get("contracts")),
+                value=_parse_decimal(record.get("value")),
+                rating=_parse_float(record.get("rating")),
+                classification=str(record.get("classification") or "").strip() or None,
+                license_expiry=_coerce_date(record.get("licenseExpiry") or record.get("license_expiry")),
+                contact_person=str(record.get("contactPerson") or record.get("contact_person") or "").strip() or None,
+                contact_email=str(record.get("contactEmail") or record.get("contact_email") or "").strip() or None,
+                contact_phone=str(record.get("contactPhone") or record.get("contact_phone") or "").strip() or None,
+                contact_address=str(record.get("contactAddress") or record.get("contact_address") or "").strip() or None,
+                pcab_license=str(record.get("pcabLicense") or record.get("pcab_license") or "").strip() or None,
+                address=str(record.get("address") or "").strip() or None,
+                contact_city=str(record.get("contactCity") or record.get("contact_city") or "").strip() or None,
+                contact_province=str(record.get("contactProvince") or record.get("contact_province") or "").strip() or None,
+                contact_mobile=str(record.get("contactMobile") or record.get("contact_mobile") or "").strip() or None,
+                remarks=str(record.get("remarks") or "").strip() or None,
+                payload=record,
+            )
+            for record in contractor_records
+        ])
+
+        MaintenanceTask.objects.bulk_create([
+            MaintenanceTask(
+                workflow_record=workflow_map.get(str(record.get("adminRecordId") or "").trim()),
+                admin_record_external_id=str(record.get("adminRecordId") or "").strip() or None,
+                slip_no=str(record.get("slipNo") or record.get("slip_no") or "").strip() or None,
+                title=str(record.get("title") or "Untitled Task").strip() or "Untitled Task",
+                division_label=str(record.get("division") or "").strip() or None,
+                location=str(record.get("location") or "").strip() or None,
+                assigned_to=str(record.get("assignedTo") or record.get("assigned_to") or "").strip() or None,
+                priority=str(record.get("priority") or "").strip() or None,
+                status=str(record.get("status") or "").strip() or None,
+                due_date=_coerce_date(record.get("dueDateIso") or record.get("due_date")),
+                amount=_parse_decimal(record.get("amount")),
+                notes=str(record.get("notes") or "").strip() or None,
+                payload=record,
+            )
+            for record in task_rows
+        ])
 
 
 _CACHE_VERSION_KEY = "my_app:store_cache_version"
@@ -2395,18 +2844,18 @@ def _build_dashboard_context(request, **extra):
     profile_division_key = _normalize_division_key(getattr(profile, "division", ""))
     division_mismatch = bool(group_division_key and profile_division_key and group_division_key != profile_division_key)
     division_sections = {KEY_ADMIN, KEY_PLANNING, KEY_CONSTRUCTION, KEY_QUALITY, KEY_MAINTENANCE}
-    dashboard_readonly = (
-        not _has_global_division_access(request.user)
-        and current_section in division_sections
-        and (not user_division_key or current_section != user_division_key)
-    )
+    division_permissions = _build_division_permission_map(request.user)
+    current_section_permissions = division_permissions.get(current_section, {}) if current_section in division_sections else {}
+    dashboard_can_edit = True if current_section not in division_sections else bool(current_section_permissions.get("can_edit"))
+    dashboard_readonly = current_section in division_sections and not dashboard_can_edit
     context.update(
         {
             "user_division_key": user_division_key,
             "user_division_label": _division_label_for_key(user_division_key) or "Unassigned Division",
             "user_division_mismatch": division_mismatch,
             "dashboard_readonly": dashboard_readonly,
-            "dashboard_can_edit": not dashboard_readonly,
+            "dashboard_can_edit": dashboard_can_edit,
+            "division_permissions": division_permissions,
         }
     )
     context.update(
@@ -2741,6 +3190,26 @@ def maintenance_division_submissions(request):
 
 
 @login_required
+@require_http_methods(["GET"])
+def division_permissions_api(request):
+    permission_map = _build_division_permission_map(request.user)
+    return JsonResponse(
+        {
+            "user": {
+                "username": request.user.get_username(),
+                "is_staff": bool(getattr(request.user, "is_staff", False)),
+                "is_superuser": bool(getattr(request.user, "is_superuser", False)),
+                "has_global_division_access": _has_global_division_access(request.user),
+                "is_main_division_account": _is_main_division_account(request.user),
+                "division_key": _get_user_division_key(request.user),
+                "division_label": _division_label_for_key(_get_user_division_key(request.user)) or "Unassigned Division",
+            },
+            "permissions": permission_map,
+        }
+    )
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def division_store_api(request, key):
     allowed_keys = {choice[0] for choice in SharedDivisionStore.KEY_CHOICES}
@@ -2833,6 +3302,15 @@ def division_store_api(request, key):
         store.data = payload
     store.save()
     _invalidate_store_cache()
+
+    if using_shared_store:
+        try:
+            if key == KEY_ADMIN:
+                _sync_admin_workflow_records(store.data, actor=request.user)
+            elif key == KEY_MAINTENANCE:
+                _sync_maintenance_structured_tables(store.data)
+        except Exception:
+            logger.exception("division_store_db_sync_failed key=%s user=%s", key, actor_name or "anonymous")
 
     _safe_log_division_store_event(
         actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
@@ -2936,6 +3414,14 @@ def division_store_clear_all_api(request):
         pass
 
     _invalidate_store_cache()
+    try:
+        _sync_admin_workflow_records([], actor=request.user)
+        _sync_maintenance_structured_tables({})
+    except Exception:
+        logger.exception(
+            "division_store_clear_all_db_sync_failed user=%s",
+            request.user.get_username() if getattr(request, "user", None) and request.user.is_authenticated else "anonymous",
+        )
     if cleared:
         _broadcast_division_store_update(
             store_keys=cleared,

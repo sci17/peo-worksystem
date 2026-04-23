@@ -22,6 +22,7 @@ urlpatterns = [
     path('maintenance/contractor-management/', views.contractor_management, name='contractor_management'),
     path('maintenance/task-management/', views.task_management, name='task_management'),
     path('maintenance/submissions/', views.maintenance_division_submissions, name='maintenance_division_submissions'),
+    path('api/division-permissions/', views.division_permissions_api, name='division_permissions_api'),
     path('api/division-store/<slug:key>/', views.division_store_api, name='division_store_api'),
     path('api/division-store-snapshot/', views.division_store_snapshot_api, name='division_store_snapshot_api'),
     path('api/division-store-clear-all/', views.division_store_clear_all_api, name='division_store_clear_all_api'),

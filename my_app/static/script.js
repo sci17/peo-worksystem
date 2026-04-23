@@ -669,8 +669,16 @@
 
     const buildIncomingAdminRows = (divisionKey, adminRecords) => {
         const targetKey = resolveDivisionKey(divisionKey);
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
         return (Array.isArray(adminRecords) ? adminRecords : [])
             .filter((record) => record && typeof record === "object")
+            .filter((record) => {
+                return !adminVisibility || typeof adminVisibility.isVisibleToDivision !== "function"
+                    ? true
+                    : adminVisibility.isVisibleToDivision(record, targetKey);
+            })
             .filter((record) => resolveDivisionKey(record.division) === targetKey)
             .filter((record) => {
                 // Admin division "inbox" notifications should be for routed-in submissions,
@@ -2100,6 +2108,58 @@ const normalizeConstructionSpotlightUrl = (value) => {
         return Array.isArray(parsed) ? parsed : [];
     };
 
+    const normalizeDivisionList = (values) => {
+        const unique = new Set();
+        (Array.isArray(values) ? values : [values]).forEach((value) => {
+            const key = resolveDivisionKey(value);
+            if (key) unique.add(key);
+        });
+        return Array.from(unique);
+    };
+
+    const getAdminHiddenDivisionKeys = (record) => {
+        return normalizeDivisionList(record?.__hidden_for_divisions || []);
+    };
+
+    const isAdminRecordVisibleToDivision = (record, divisionKey) => {
+        const targetKey = resolveDivisionKey(divisionKey);
+        if (!targetKey) return true;
+        return !getAdminHiddenDivisionKeys(record).includes(targetKey);
+    };
+
+    const setAdminRecordHiddenForDivision = (record, divisionKey, hidden = true) => {
+        const targetKey = resolveDivisionKey(divisionKey);
+        if (!targetKey || !record || typeof record !== "object") {
+            return record && typeof record === "object" ? { ...record } : record;
+        }
+        const hiddenKeys = new Set(getAdminHiddenDivisionKeys(record));
+        if (hidden) {
+            hiddenKeys.add(targetKey);
+        } else {
+            hiddenKeys.delete(targetKey);
+        }
+        return {
+            ...(record || {}),
+            __hidden_for_divisions: Array.from(hiddenKeys),
+        };
+    };
+
+    const hideAdminRecordsForDivision = (records, recordIds, divisionKey, hidden = true) => {
+        const ids = new Set(
+            (recordIds instanceof Set ? Array.from(recordIds) : recordIds)
+                .map((value) => String(value || "").trim())
+                .filter(Boolean)
+        );
+        if (!ids.size) {
+            return Array.isArray(records) ? records.map((record) => ({ ...(record || {}) })) : [];
+        }
+        return (Array.isArray(records) ? records : []).map((record) => {
+            const recordId = String(record?.__record_id || record?.__id || "").trim();
+            if (!recordId || !ids.has(recordId)) return record;
+            return setAdminRecordHiddenForDivision(record, divisionKey, hidden);
+        });
+    };
+
     const queueAdminSync = (records) => {
         if (!(window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function")) {
             return;
@@ -2121,6 +2181,14 @@ const normalizeConstructionSpotlightUrl = (value) => {
         writeJson(ADMIN_STORAGE_KEY, records);
         queueAdminSync(records);
         dispatchDivisionStoreUpdated("admin");
+    };
+
+    window.peoAdminVisibility = {
+        normalizeDivisionList,
+        getHiddenDivisionKeys: getAdminHiddenDivisionKeys,
+        isVisibleToDivision: isAdminRecordVisibleToDivision,
+        setRecordHiddenForDivision: setAdminRecordHiddenForDivision,
+        hideRecordsForDivision: hideAdminRecordsForDivision,
     };
 
     const normalizeMaintenanceState = (state) => {
@@ -2176,6 +2244,13 @@ const normalizeConstructionSpotlightUrl = (value) => {
         const record = adminRecord && typeof adminRecord === "object" ? adminRecord : {};
         const adminRecordId = String(record.__record_id || "").trim();
         if (!adminRecordId) return;
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
+        if (adminVisibility && typeof adminVisibility.isVisibleToDivision === "function" && !adminVisibility.isVisibleToDivision(record, "maintenance")) {
+            removeMaintenanceTaskByAdminRecordId(adminRecordId);
+            return;
+        }
 
         const slipNo = String(record.slip_no || "-").trim() || "-";
         const title = String(record.document_name || record.project_name || "-").trim() || "-";
@@ -2294,6 +2369,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
             __submitted_from_division: String(sourceDivisionKey || "").trim(),
             __submitted_from_source_id: pickFirst(record.__id, record.id, record.adminRecordId),
             __submitted_at: nowIso,
+            __hidden_for_divisions: [],
             __tracking_events: [
                 {
                     at: nowIso,
@@ -2346,6 +2422,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
         const prevTargetKey = resolveDivisionKey(current.division);
         const updated = { ...current };
         updated.division = labelForDivisionKey(targetKey) || updated.division;
+        updated.__hidden_for_divisions = normalizeDivisionList(updated.__hidden_for_divisions || []);
         if (!String(updated.doc_status || "").trim()) {
             updated.doc_status = "Routed";
             updated.status = "Routed";
@@ -2427,6 +2504,9 @@ const normalizeConstructionSpotlightUrl = (value) => {
             });
         }
         updated.__tracking_events = existingEvents;
+        updated.__hidden_for_divisions = normalizeDivisionList(
+            getAdminHiddenDivisionKeys(updated).filter((key) => key !== targetKey)
+        );
 
         adminRecords[idx] = updated;
         writeAdminRecords(adminRecords);
@@ -3006,8 +3086,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const getSubmissionsForDivision = (adminRecords, divisionKey) => {
         const targetKey = normalizeKey(divisionKey);
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
         return (Array.isArray(adminRecords) ? adminRecords : [])
             .filter((record) => record && typeof record === "object")
+            .filter((record) => {
+                return !adminVisibility || typeof adminVisibility.isVisibleToDivision !== "function"
+                    ? true
+                    : adminVisibility.isVisibleToDivision(record, targetKey);
+            })
             .filter((record) => normalizeDivisionKeyFromAdmin(record.division) === targetKey)
             .filter((record) => String(record.__submitted_from_division || "").trim() || (Array.isArray(record.__tracking_events) && record.__tracking_events.length))
             .map((record) => {
@@ -6182,7 +6270,15 @@ const portalDomReady = () => {
     };
 
     const queueAdminRender = (records, options = {}) => {
-        const normalizedRecords = (Array.isArray(records) ? records : []).map((record) => normalizeRecord(record));
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
+        const visibleRecords = (Array.isArray(records) ? records : []).filter((record) => {
+            return !adminVisibility || typeof adminVisibility.isVisibleToDivision !== "function"
+                ? true
+                : adminVisibility.isVisibleToDivision(record, "admin");
+        });
+        const normalizedRecords = visibleRecords.map((record) => normalizeRecord(record));
         const signature = buildAdminRenderSignature(normalizedRecords);
         if (signature === lastAdminRenderSignature) {
             adminPendingRenderRecords = null;
@@ -6650,12 +6746,15 @@ const portalDomReady = () => {
 
     const deleteRecordsByIds = (recordIds) => {
         if (!recordIds.length) return;
-        const deleteSet = new Set(recordIds);
-        // Admin delete must stay local to Admin records.
-        // Do not cascade-delete routed copies in other divisions.
-        const remainingRecords = readAdminDivisionRecords().filter((record) => !deleteSet.has(record.__record_id));
-        writeAdminDivisionRecords(remainingRecords);
-        queueAdminRender(remainingRecords, { deferIfBusy: false });
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
+        const previousRecords = readAdminDivisionRecords();
+        const nextRecords = adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function"
+            ? adminVisibility.hideRecordsForDivision(previousRecords, recordIds, "admin", true)
+            : previousRecords.filter((record) => !new Set(recordIds).has(record?.__record_id));
+        writeAdminDivisionRecords(nextRecords);
+        queueAdminRender(nextRecords, { deferIfBusy: false });
     };
 
     const registerAdminUndoDelete = (previousRecords, label = "Record") => {
@@ -13328,6 +13427,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const record = adminRecord && typeof adminRecord === "object" ? adminRecord : {};
         const adminRecordId = String(record.__record_id || "").trim();
         if (!adminRecordId) return null;
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
+        if (adminVisibility && typeof adminVisibility.isVisibleToDivision === "function" && !adminVisibility.isVisibleToDivision(record, "maintenance")) {
+            return null;
+        }
 
         const slipNo = String(record.slip_no || "-").trim() || "-";
         const title = String(record.document_name || record.project_name || "-").trim() || "-";
@@ -14122,7 +14227,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (adminRecordById.size) {
-            const currentTaskRows = Array.isArray(savedState.taskRows) ? savedState.taskRows : [];
+            const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+                ? window.peoAdminVisibility
+                : null;
+            const currentTaskRows = (Array.isArray(savedState.taskRows) ? savedState.taskRows : []).filter((row) => {
+                const adminRecordId = String(row?.adminRecordId || "").trim();
+                if (!adminRecordId) {
+                    return true;
+                }
+                const adminRecord = adminRecordById.get(adminRecordId);
+                if (!adminRecord || !adminVisibility || typeof adminVisibility.isVisibleToDivision !== "function") {
+                    return true;
+                }
+                return adminVisibility.isVisibleToDivision(adminRecord, "maintenance");
+            });
             const nextTaskRowsById = new Map();
             currentTaskRows.forEach((row) => {
                 const rowId = String(row?.adminRecordId || "").trim();
@@ -14349,6 +14467,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!taskTableBody) return;
         const records = Array.isArray(adminRecords) ? adminRecords : [];
         if (!records.length) return;
+        const visibleAdminRecordIds = new Set();
 
         const existingRows = getTaskRows();
         const rowByAdminId = new Map();
@@ -14366,6 +14485,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const nextRowData = buildMaintenanceIncomingTaskFromAdminRecord(adminRecord);
             if (!nextRowData) return;
+            visibleAdminRecordIds.add(adminRecordId);
             const currentRow = rowByAdminId.get(adminRecordId);
             if (currentRow instanceof HTMLTableRowElement) {
                 const assignedPersonnel = String(currentRow.dataset.assignedPersonnel || "").trim();
@@ -14382,6 +14502,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 currentRow.replaceWith(nextRow);
             } else {
                 taskTableBody.prepend(nextRow);
+            }
+        });
+
+        existingRows.forEach((row) => {
+            const adminRecordId = String(row?.dataset?.adminRecordId || "").trim();
+            if (adminRecordId && !visibleAdminRecordIds.has(adminRecordId)) {
+                row.remove();
             }
         });
 
@@ -14880,6 +15007,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const adminRecordId = String(row.dataset.adminRecordId || "").trim();
             if (adminRecordId) {
+                const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+                    ? window.peoAdminVisibility
+                    : null;
+                if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function") {
+                    const nextAdminRecords = adminVisibility.hideRecordsForDivision(
+                        readAdminDivisionRecords(),
+                        [adminRecordId],
+                        "maintenance",
+                        true
+                    );
+                    writeAdminDivisionRecords(nextAdminRecords);
+                }
                 dismissedAdminTaskIds = Array.from(new Set([...dismissedAdminTaskIds, adminRecordId]));
             }
             row.remove();
@@ -15306,6 +15445,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const currentAdminTaskIds = (typeof getTaskRows === "function" ? getTaskRows() : [])
             .map((row) => String(row?.dataset?.adminRecordId || "").trim())
             .filter(Boolean);
+        if (currentAdminTaskIds.length) {
+            const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+                ? window.peoAdminVisibility
+                : null;
+            if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function") {
+                const nextAdminRecords = adminVisibility.hideRecordsForDivision(
+                    readAdminDivisionRecords(),
+                    currentAdminTaskIds,
+                    "maintenance",
+                    true
+                );
+                writeAdminDivisionRecords(nextAdminRecords);
+            }
+        }
         dismissedAdminTaskIds = Array.from(new Set([...(Array.isArray(dismissedAdminTaskIds) ? dismissedAdminTaskIds : []), ...currentAdminTaskIds]));
 
         roadRecords.length = 0;
@@ -16232,6 +16385,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
+    const CONSTRUCTION_DELETED_RECORD_IDS_KEY = "peo_construction_deleted_record_ids_v1";
+    const CONSTRUCTION_TOMBSTONE_KIND = "construction_tombstone";
     const CONSTRUCTION_PAGE_SIZE = 10;
 	    const CONSTRUCTION_FIELDS = [
 	        "project_name",
@@ -16941,7 +17096,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return countMeaningfulConstructionFields(record) <= 2;
     };
 
-    const readStoredRecords = () => {
+    const readConstructionStoreSnapshot = () => {
         try {
             const raw = window.localStorage.getItem(CONSTRUCTION_STORAGE_KEY);
             const parsed = raw ? JSON.parse(raw) : [];
@@ -16951,16 +17106,107 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const isConstructionTombstone = (record) => {
+        return String(record?.__kind || "").trim() === CONSTRUCTION_TOMBSTONE_KIND;
+    };
+
+    const collectConstructionTombstones = (records) => {
+        if (!Array.isArray(records)) return [];
+        const seen = new Set();
+        return records
+            .filter((record) => record && typeof record === "object" && isConstructionTombstone(record))
+            .map((record) => {
+                const tombstone = { ...record, __kind: CONSTRUCTION_TOMBSTONE_KIND };
+                const recordId = String(tombstone.__deleted_record_id || tombstone.record_id || "").trim();
+                const adminSourceId = String(tombstone.__deleted_admin_source_id || tombstone.admin_source_id || "").trim();
+                if (recordId) {
+                    tombstone.__deleted_record_id = recordId;
+                } else {
+                    delete tombstone.__deleted_record_id;
+                }
+                if (adminSourceId) {
+                    tombstone.__deleted_admin_source_id = adminSourceId;
+                } else {
+                    delete tombstone.__deleted_admin_source_id;
+                }
+                if (!tombstone.__deleted_record_id && !tombstone.__deleted_admin_source_id) return null;
+                const key = `${tombstone.__deleted_record_id || ""}|${tombstone.__deleted_admin_source_id || ""}`;
+                if (seen.has(key)) return null;
+                seen.add(key);
+                return tombstone;
+            })
+            .filter(Boolean);
+    };
+
+    const buildConstructionDeletionTombstones = ({ recordIds = [], adminSourceIds = [] } = {}) => {
+        const seen = new Set();
+        const tombstones = [];
+        const pushTombstone = (payload) => {
+            const recordId = String(payload?.__deleted_record_id || "").trim();
+            const adminSourceId = String(payload?.__deleted_admin_source_id || "").trim();
+            if (!recordId && !adminSourceId) return;
+            const key = `${recordId}|${adminSourceId}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            tombstones.push({
+                __kind: CONSTRUCTION_TOMBSTONE_KIND,
+                __deleted_record_id: recordId,
+                __deleted_admin_source_id: adminSourceId,
+                __updated_at: new Date().toISOString(),
+            });
+        };
+
+        (recordIds instanceof Set ? Array.from(recordIds) : recordIds).forEach((recordId) => {
+            pushTombstone({ __deleted_record_id: recordId });
+        });
+        (adminSourceIds instanceof Set ? Array.from(adminSourceIds) : adminSourceIds).forEach((adminSourceId) => {
+            pushTombstone({ __deleted_admin_source_id: adminSourceId });
+        });
+        return tombstones;
+    };
+
+    const getConstructionTombstoneDeletedRecordIds = (records) => {
+        return new Set(
+            collectConstructionTombstones(records)
+                .map((record) => String(record?.__deleted_record_id || "").trim())
+                .filter(Boolean)
+        );
+    };
+
+    const getConstructionTombstoneDeletedAdminIds = (records) => {
+        return new Set(
+            collectConstructionTombstones(records)
+                .map((record) => String(record?.__deleted_admin_source_id || "").trim())
+                .filter(Boolean)
+        );
+    };
+
+    const readStoredRecords = () => {
+        const parsed = readConstructionStoreSnapshot();
+        const deletedRecordIds = readDeletedConstructionRecordIds();
+        return parsed.filter((record) => {
+            if (!record || typeof record !== "object" || isConstructionTombstone(record)) return false;
+            const recordId = String(record?.__id || record?.construction_id || "").trim();
+            return !recordId || !deletedRecordIds.has(recordId);
+        });
+    };
+
     const writeStoredRecords = (records, options = {}) => {
         const syncRemote = options && options.syncRemote === false ? false : true;
+        const visibleRecords = Array.isArray(records)
+            ? records.filter((record) => record && typeof record === "object" && !isConstructionTombstone(record))
+            : [];
+        const existingTombstones = collectConstructionTombstones(readConstructionStoreSnapshot());
+        const nextTombstones = collectConstructionTombstones(options && Array.isArray(options.tombstones) ? options.tombstones : []);
+        const payload = [...collectConstructionTombstones([...existingTombstones, ...nextTombstones]), ...visibleRecords];
         try {
-            window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(records));
+            window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(payload));
         } catch (error) {
             // Ignore storage errors.
         }
 
         if (syncRemote && window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
-            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+            const safeRecords = payload.map((record) => {
                 const safe = record && typeof record === "object" ? { ...record } : {};
 
                 const sanitizeUrl = (value) => {
@@ -17077,9 +17323,11 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const raw = window.localStorage.getItem(CONSTRUCTION_DELETED_ADMIN_IDS_KEY);
             const parsed = raw ? JSON.parse(raw) : [];
-            return new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()) : []);
+            const ids = new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []);
+            getConstructionTombstoneDeletedAdminIds(readConstructionStoreSnapshot()).forEach((item) => ids.add(item));
+            return ids;
         } catch (error) {
-            return new Set();
+            return getConstructionTombstoneDeletedAdminIds(readConstructionStoreSnapshot());
         }
     };
 
@@ -17088,6 +17336,29 @@ document.addEventListener("DOMContentLoaded", () => {
             window.localStorage.setItem(
                 CONSTRUCTION_DELETED_ADMIN_IDS_KEY,
                 JSON.stringify(Array.from(idsSet))
+            );
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    };
+
+    const readDeletedConstructionRecordIds = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_DELETED_RECORD_IDS_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            const ids = new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []);
+            getConstructionTombstoneDeletedRecordIds(readConstructionStoreSnapshot()).forEach((item) => ids.add(item));
+            return ids;
+        } catch (error) {
+            return getConstructionTombstoneDeletedRecordIds(readConstructionStoreSnapshot());
+        }
+    };
+
+    const writeDeletedConstructionRecordIds = (idsSet) => {
+        try {
+            window.localStorage.setItem(
+                CONSTRUCTION_DELETED_RECORD_IDS_KEY,
+                JSON.stringify(Array.from(idsSet instanceof Set ? idsSet : new Set()))
             );
         } catch (error) {
             // Ignore storage failures.
@@ -17290,7 +17561,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const syncAdminRoutedConstructionRecords = (existingRecords) => {
         const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
         const deletedAdminIds = readDeletedConstructionAdminIds();
-        const adminRecords = readAdminDivisionRecords();
+        const deletedRecordIds = readDeletedConstructionRecordIds();
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
+        const adminRecords = readAdminDivisionRecords().filter((record) => {
+            return !adminVisibility || typeof adminVisibility.isVisibleToDivision !== "function"
+                ? true
+                : adminVisibility.isVisibleToDivision(record, "construction");
+        });
         const adminById = new Map(
             adminRecords
                 .filter((record) => String(record?.__record_id || "").trim())
@@ -19068,9 +19347,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!selectedIds.length) return;
 
             const deletedAdminIds = readDeletedConstructionAdminIds();
+            const deletedRecordIds = readDeletedConstructionRecordIds();
             const selectedSet = new Set(selectedIds);
             records.forEach((record) => {
                 if (!selectedSet.has(record.__id)) return;
+                deletedRecordIds.add(String(record.__id || "").trim());
                 if (!isAdminRoutedRecord(record)) return;
                 const sourceId = String(record.__admin_source_id || "").trim();
                 if (!sourceId) return;
@@ -19092,8 +19373,25 @@ document.addEventListener("DOMContentLoaded", () => {
                 Array.from(selectedConstructionRecordIds).filter((id) => !removeSet.has(id))
             );
             clampCurrentPage();
+            writeDeletedConstructionRecordIds(deletedRecordIds);
             writeDeletedConstructionAdminIds(deletedAdminIds);
-            writeStoredRecords(records);
+            const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+                ? window.peoAdminVisibility
+                : null;
+            if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function") {
+                const adminSourceIds = Array.from(deletedAdminIds);
+                if (adminSourceIds.length) {
+                    const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), adminSourceIds, "construction", true);
+                    writeAdminDivisionRecords(adminRecords);
+                }
+            }
+
+            writeStoredRecords(records, {
+                tombstones: buildConstructionDeletionTombstones({
+                    recordIds: deletedRecordIds,
+                    adminSourceIds: deletedAdminIds,
+                }),
+            });
             if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
                 window.peoDivisionStore.flushSync();
             }
@@ -19192,6 +19490,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
+    const CONSTRUCTION_DELETED_RECORD_IDS_KEY = "peo_construction_deleted_record_ids_v1";
+    const CONSTRUCTION_TOMBSTONE_KIND = "construction_tombstone";
     const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
     const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
     const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
@@ -19291,6 +19591,91 @@ document.addEventListener("DOMContentLoaded", () => {
         normalizeConstructionTaskCurrencyInput(taskRevisedContractCostInput);
     };
 
+    const readConstructionStoreSnapshot = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const isConstructionTombstone = (record) => {
+        return String(record?.__kind || "").trim() === CONSTRUCTION_TOMBSTONE_KIND;
+    };
+
+    const collectConstructionTombstones = (records) => {
+        if (!Array.isArray(records)) return [];
+        const seen = new Set();
+        return records
+            .filter((record) => record && typeof record === "object" && isConstructionTombstone(record))
+            .map((record) => {
+                const tombstone = { ...record, __kind: CONSTRUCTION_TOMBSTONE_KIND };
+                const recordId = String(tombstone.__deleted_record_id || tombstone.record_id || "").trim();
+                const adminSourceId = String(tombstone.__deleted_admin_source_id || tombstone.admin_source_id || "").trim();
+                if (recordId) {
+                    tombstone.__deleted_record_id = recordId;
+                } else {
+                    delete tombstone.__deleted_record_id;
+                }
+                if (adminSourceId) {
+                    tombstone.__deleted_admin_source_id = adminSourceId;
+                } else {
+                    delete tombstone.__deleted_admin_source_id;
+                }
+                if (!tombstone.__deleted_record_id && !tombstone.__deleted_admin_source_id) return null;
+                const key = `${tombstone.__deleted_record_id || ""}|${tombstone.__deleted_admin_source_id || ""}`;
+                if (seen.has(key)) return null;
+                seen.add(key);
+                return tombstone;
+            })
+            .filter(Boolean);
+    };
+
+    const buildConstructionDeletionTombstones = ({ recordIds = [], adminSourceIds = [] } = {}) => {
+        const seen = new Set();
+        const tombstones = [];
+        const pushTombstone = (payload) => {
+            const recordId = String(payload?.__deleted_record_id || "").trim();
+            const adminSourceId = String(payload?.__deleted_admin_source_id || "").trim();
+            if (!recordId && !adminSourceId) return;
+            const key = `${recordId}|${adminSourceId}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            tombstones.push({
+                __kind: CONSTRUCTION_TOMBSTONE_KIND,
+                __deleted_record_id: recordId,
+                __deleted_admin_source_id: adminSourceId,
+                __updated_at: new Date().toISOString(),
+            });
+        };
+
+        (recordIds instanceof Set ? Array.from(recordIds) : recordIds).forEach((recordId) => {
+            pushTombstone({ __deleted_record_id: recordId });
+        });
+        (adminSourceIds instanceof Set ? Array.from(adminSourceIds) : adminSourceIds).forEach((adminSourceId) => {
+            pushTombstone({ __deleted_admin_source_id: adminSourceId });
+        });
+        return tombstones;
+    };
+
+    const getConstructionTombstoneDeletedRecordIds = (records) => {
+        return new Set(
+            collectConstructionTombstones(records)
+                .map((record) => String(record?.__deleted_record_id || "").trim())
+                .filter(Boolean)
+        );
+    };
+
+    const getConstructionTombstoneDeletedAdminIds = (records) => {
+        return new Set(
+            collectConstructionTombstones(records)
+                .map((record) => String(record?.__deleted_admin_source_id || "").trim())
+                .filter(Boolean)
+        );
+    };
+
     const readTasks = () => {
         try {
             const raw = window.localStorage.getItem(TASK_STORAGE_KEY);
@@ -19303,9 +19688,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const readConstructionRecords = () => {
         try {
-            const raw = window.localStorage.getItem(CONSTRUCTION_STORAGE_KEY);
-            const parsed = raw ? JSON.parse(raw) : [];
-            return Array.isArray(parsed) ? parsed : [];
+            const parsed = readConstructionStoreSnapshot();
+            const deletedRecordIds = readDeletedConstructionRecordIds();
+            return parsed.filter((record) => {
+                if (!record || typeof record !== "object" || isConstructionTombstone(record)) return false;
+                const recordId = String(record?.__id || record?.construction_id || "").trim();
+                return !recordId || !deletedRecordIds.has(recordId);
+            });
         } catch (error) {
             return [];
         }
@@ -19322,17 +19711,21 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const writeConstructionRecords = (items) => {
+    const writeConstructionRecords = (items, options = {}) => {
         const safeItems = Array.isArray(items) ? items : [];
+        const visibleRecords = safeItems.filter((record) => record && typeof record === "object" && !isConstructionTombstone(record));
+        const existingTombstones = collectConstructionTombstones(readConstructionStoreSnapshot());
+        const nextTombstones = collectConstructionTombstones(options && Array.isArray(options.tombstones) ? options.tombstones : []);
+        const payload = [...collectConstructionTombstones([...existingTombstones, ...nextTombstones]), ...visibleRecords];
         let wrote = false;
         try {
-            window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(safeItems));
+            window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(payload));
             wrote = true;
         } catch (error) {
             wrote = false;
         }
         if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
-            const safeForSync = safeItems.map((record) => {
+            const safeForSync = payload.map((record) => {
                 const safe = record && typeof record === "object" ? { ...record } : {};
 
                 const sanitizeUrl = (value) => {
@@ -19393,9 +19786,11 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const raw = window.localStorage.getItem(CONSTRUCTION_DELETED_ADMIN_IDS_KEY);
             const parsed = raw ? JSON.parse(raw) : [];
-            return new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []);
+            const ids = new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []);
+            getConstructionTombstoneDeletedAdminIds(readConstructionStoreSnapshot()).forEach((item) => ids.add(item));
+            return ids;
         } catch (error) {
-            return new Set();
+            return getConstructionTombstoneDeletedAdminIds(readConstructionStoreSnapshot());
         }
     };
 
@@ -19403,6 +19798,30 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             window.localStorage.setItem(
                 CONSTRUCTION_DELETED_ADMIN_IDS_KEY,
+                JSON.stringify(Array.from(idsSet instanceof Set ? idsSet : new Set()))
+            );
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const readDeletedConstructionRecordIds = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_DELETED_RECORD_IDS_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            const ids = new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []);
+            getConstructionTombstoneDeletedRecordIds(readConstructionStoreSnapshot()).forEach((item) => ids.add(item));
+            return ids;
+        } catch (error) {
+            return getConstructionTombstoneDeletedRecordIds(readConstructionStoreSnapshot());
+        }
+    };
+
+    const writeDeletedConstructionRecordIds = (idsSet) => {
+        try {
+            window.localStorage.setItem(
+                CONSTRUCTION_DELETED_RECORD_IDS_KEY,
                 JSON.stringify(Array.from(idsSet instanceof Set ? idsSet : new Set()))
             );
             return true;
@@ -19569,18 +19988,37 @@ document.addEventListener("DOMContentLoaded", () => {
         const previousTasks = readTasks();
         const previousConstructionRecords = readConstructionRecords();
         const previousDeletedAdminIds = readDeletedConstructionAdminIds();
+        const previousDeletedRecordIds = readDeletedConstructionRecordIds();
         const deletedAdminIds = new Set(previousDeletedAdminIds);
+        const deletedRecordIds = new Set(previousDeletedRecordIds);
         previousConstructionRecords.forEach((record) => {
+            const recordId = String(record?.__id || record?.construction_id || "").trim();
+            if (recordId) {
+                deletedRecordIds.add(recordId);
+            }
             if (String(record?.__admin_source || "").trim() !== "admin_document") return;
             const sourceId = String(record?.__admin_source_id || "").trim();
             if (!sourceId) return;
             deletedAdminIds.add(sourceId);
         });
-        const wroteTasks = writeTasks([]);
-        const wroteConstruction = writeConstructionRecords([]);
-        const wroteDeletedAdminIds = writeDeletedConstructionAdminIds(deletedAdminIds);
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
+        if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function" && deletedAdminIds.size) {
+            const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), Array.from(deletedAdminIds), "construction", true);
+            writeAdminDivisionRecords(adminRecords);
+        }
 
-        if (!wroteTasks || !wroteConstruction || !wroteDeletedAdminIds) {
+        const wroteTasks = writeTasks([]);
+        const tombstones = buildConstructionDeletionTombstones({
+            recordIds: deletedRecordIds,
+            adminSourceIds: deletedAdminIds,
+        });
+        const wroteConstruction = writeConstructionRecords([], { tombstones });
+        const wroteDeletedAdminIds = writeDeletedConstructionAdminIds(deletedAdminIds);
+        const wroteDeletedRecordIds = writeDeletedConstructionRecordIds(deletedRecordIds);
+
+        if (!wroteTasks || !wroteConstruction || !wroteDeletedAdminIds || !wroteDeletedRecordIds) {
             if (wroteTasks) {
                 writeTasks(previousTasks);
             }
@@ -19589,6 +20027,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (wroteDeletedAdminIds) {
                 writeDeletedConstructionAdminIds(previousDeletedAdminIds);
+            }
+            if (wroteDeletedRecordIds) {
+                writeDeletedConstructionRecordIds(previousDeletedRecordIds);
             }
             showPeoGeneralToast("Unable to delete all construction data. Storage is unavailable.", {
                 title: "Construction Division",
@@ -20076,20 +20517,38 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!approved) return;
 
                 const deletedAdminIds = readDeletedConstructionAdminIds();
+                const deletedRecordIds = readDeletedConstructionRecordIds();
                 const nextTasks = tasks.filter((task) => String(task?.construction_id || task?.__id || "") !== recordId);
                 const constructionRecords = readConstructionRecords();
                 const deletedRecord = constructionRecords.find((record) => String(record?.__id || record?.construction_id || "") === recordId) || null;
+                if (recordId) {
+                    deletedRecordIds.add(recordId);
+                }
                 if (deletedRecord && String(deletedRecord.__admin_source || "").trim() === "admin_document") {
                     const sourceId = String(deletedRecord.__admin_source_id || "").trim();
                     if (sourceId) {
                         deletedAdminIds.add(sourceId);
                     }
                 }
+                const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+                    ? window.peoAdminVisibility
+                    : null;
+                if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function" && deletedAdminIds.size) {
+                    const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), Array.from(deletedAdminIds), "construction", true);
+                    writeAdminDivisionRecords(adminRecords);
+                }
+
                 const nextConstructionRecords = constructionRecords.filter((record) => String(record?.__id || record?.construction_id || "") !== recordId);
                 const wroteTasks = writeTasks(nextTasks);
-                const wroteConstruction = writeConstructionRecords(nextConstructionRecords);
+                const wroteConstruction = writeConstructionRecords(nextConstructionRecords, {
+                    tombstones: buildConstructionDeletionTombstones({
+                        recordIds: deletedRecordIds,
+                        adminSourceIds: deletedAdminIds,
+                    }),
+                });
                 const wroteDeletedAdminIds = writeDeletedConstructionAdminIds(deletedAdminIds);
-                if (!wroteTasks || !wroteConstruction || !wroteDeletedAdminIds) {
+                const wroteDeletedRecordIds = writeDeletedConstructionRecordIds(deletedRecordIds);
+                if (!wroteTasks || !wroteConstruction || !wroteDeletedAdminIds || !wroteDeletedRecordIds) {
                     showPeoGeneralToast("Unable to delete task. Storage is unavailable.", {
                         title: "Construction Division",
                         variant: "danger",
@@ -21597,8 +22056,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const syncAdminToPlanningDocuments = (currentRecords) => {
         const records = Array.isArray(currentRecords) ? [...currentRecords] : [];
         const deletedAdminIds = readDeletedPlanningAdminIds();
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
 
         const adminMappedRecords = readAdminDivisionRecords()
+            .filter((record) => {
+                return !adminVisibility || typeof adminVisibility.isVisibleToDivision !== "function"
+                    ? true
+                    : adminVisibility.isVisibleToDivision(record, "planning");
+            })
             .filter((record) => {
                 const division = normalizeDivisionLabel(record?.division);
                 return division === "planning division" || division === "planning";
@@ -23936,10 +24403,18 @@ document.addEventListener("DOMContentLoaded", () => {
             const previousDeletedIds = readDeletedPlanningAdminIds();
             const deletingRecord = planningDocumentRecords[recordIndex];
             const sourceId = String(deletingRecord?.__admin_source_id || "").trim();
+            const previousAdminRecords = readAdminDivisionRecords().map((record) => ({ ...(record || {}) }));
             if (sourceId) {
                 const deletedIds = readDeletedPlanningAdminIds();
                 deletedIds.add(sourceId);
                 writeDeletedPlanningAdminIds(deletedIds);
+                const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+                    ? window.peoAdminVisibility
+                    : null;
+                if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function") {
+                    const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), [sourceId], "planning", true);
+                    writeAdminDivisionRecords(adminRecords);
+                }
             }
 
             planningDocumentRecords.splice(recordIndex, 1);
@@ -23955,6 +24430,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 undo: () => {
                     planningDocumentRecords = previousRecords.map((record) => ({ ...(record || {}) }));
                     writeDeletedPlanningAdminIds(previousDeletedIds);
+                    writeAdminDivisionRecords(previousAdminRecords);
                     writeStoredPlanningDocuments(planningDocumentRecords);
                     renderPlanningDocumentsTable(planningDocumentRecords);
                     renderPlanningBudgets(planningBudgetRecords);
@@ -27714,7 +28190,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const syncAdminRoutedQualityRecords = (existingRecords) => {
         const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
         const deletedAdminIds = readDeletedQualityAdminIds();
-        const adminRecords = readAdminDivisionRecords();
+        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+            ? window.peoAdminVisibility
+            : null;
+        const adminRecords = readAdminDivisionRecords().filter((record) => {
+            return !adminVisibility || typeof adminVisibility.isVisibleToDivision !== "function"
+                ? true
+                : adminVisibility.isVisibleToDivision(record, "quality");
+        });
         const adminById = new Map(
             adminRecords
                 .filter((record) => String(record?.__record_id || "").trim())
@@ -29039,6 +29522,23 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             if (!approved) return;
 
+            const sourceRecord = records.find((record) => record.__id === editingRecordId) || null;
+            if (String(sourceRecord?.__admin_source || "").trim() === "admin_document") {
+                const sourceId = String(sourceRecord?.__admin_source_id || "").trim();
+                if (sourceId) {
+                    const deletedAdminIds = readDeletedQualityAdminIds();
+                    deletedAdminIds.add(sourceId);
+                    writeDeletedQualityAdminIds(deletedAdminIds);
+                    const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+                        ? window.peoAdminVisibility
+                        : null;
+                    if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function") {
+                        const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), [sourceId], "quality", true);
+                        writeAdminDivisionRecords(adminRecords);
+                    }
+                }
+            }
+
             records = records.filter((record) => record.__id !== editingRecordId);
             records = dedupeQualityRecords(records);
             writeStoredRecords(records);
@@ -29177,6 +29677,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (sourceId) {
                         deletedAdminIds.add(sourceId);
                         writeDeletedQualityAdminIds(deletedAdminIds);
+                        const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
+                            ? window.peoAdminVisibility
+                            : null;
+                        if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function") {
+                            const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), [sourceId], "quality", true);
+                            writeAdminDivisionRecords(adminRecords);
+                        }
                     }
                 }
                 records = records.filter((item) => item.__id !== recordId);

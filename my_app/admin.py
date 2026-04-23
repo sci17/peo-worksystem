@@ -19,11 +19,18 @@ from .models import (
 
 
 DIVISION_GROUP_NAME_BY_KEY = {
-    KEY_ADMIN: "Admin_Division",
-    KEY_PLANNING: "Planning_Division",
-    KEY_CONSTRUCTION: "Construction_Division",
-    KEY_QUALITY: "Quality_Control_Division",
-    KEY_MAINTENANCE: "Maintenance_Division",
+    KEY_ADMIN: "Admin Division",
+    KEY_PLANNING: "Planning Division",
+    KEY_CONSTRUCTION: "Construction Division",
+    KEY_QUALITY: "Quality Control Division",
+    KEY_MAINTENANCE: "Maintenance Division",
+}
+DIVISION_STAFF_GROUP_NAME_BY_KEY = {
+    KEY_ADMIN: "Admin Division Staff Engineer",
+    KEY_PLANNING: "Planning Division Staff Engineer",
+    KEY_CONSTRUCTION: "Construction Division Staff Engineer",
+    KEY_QUALITY: "Quality Division Staff Engineer",
+    KEY_MAINTENANCE: "Maintenance Division Staff Engineer",
 }
 DIVISION_GROUP_NAME_ALIASES = {
     "quality division": "quality control division",
@@ -36,6 +43,11 @@ DIVISION_GROUP_NAME_ALIASES = {
     "quality_division": "quality division",
     "quality_control_division": "quality control division",
     "maintenance_division": "maintenance division",
+    "admin engineer staff": "admin division staff engineer",
+    "construction engineer staff": "construction division staff engineer",
+    "planning division staff": "planning division staff engineer",
+    "maintenance division staff": "maintenance division staff engineer",
+    "quality division staff engineer": "quality division staff engineer",
 }
 
 
@@ -52,6 +64,12 @@ def _normalize_division_key(value):
         "quality control division": KEY_QUALITY,
         "maintenance division": KEY_MAINTENANCE,
         "maitenance division": KEY_MAINTENANCE,
+        "admin division staff engineer": KEY_ADMIN,
+        "planning division staff engineer": KEY_PLANNING,
+        "construction division staff engineer": KEY_CONSTRUCTION,
+        "quality division staff engineer": KEY_QUALITY,
+        "quality control division staff engineer": KEY_QUALITY,
+        "maintenance division staff engineer": KEY_MAINTENANCE,
         "admin_division": KEY_ADMIN,
         "planning_division": KEY_PLANNING,
         "construction_division": KEY_CONSTRUCTION,
@@ -111,15 +129,23 @@ def _sync_user_division_group(user, division_key):
     if key not in DIVISION_GROUP_NAME_BY_KEY:
         return
 
-    target_name = DIVISION_GROUP_NAME_BY_KEY[key]
-    target_group, _ = Group.objects.get_or_create(name=target_name)
+    primary_group_name = DIVISION_GROUP_NAME_BY_KEY[key]
+    staff_group_name = DIVISION_STAFF_GROUP_NAME_BY_KEY[key]
+    primary_group, _ = Group.objects.get_or_create(name=primary_group_name)
+    staff_group, _ = Group.objects.get_or_create(name=staff_group_name)
 
-    division_group_names = set(DIVISION_GROUP_NAME_BY_KEY.values())
-    other_groups = Group.objects.filter(name__in=division_group_names).exclude(name=target_group.name)
+    division_group_names = set(DIVISION_GROUP_NAME_BY_KEY.values()) | set(DIVISION_STAFF_GROUP_NAME_BY_KEY.values())
+    allowed_group_names = {primary_group.name}
+    if getattr(user, "is_staff", False):
+        allowed_group_names.add(staff_group.name)
+
+    other_groups = Group.objects.filter(name__in=division_group_names).exclude(name__in=allowed_group_names)
     if other_groups.exists():
         user.groups.remove(*list(other_groups))
 
-    user.groups.add(target_group)
+    user.groups.add(primary_group)
+    if getattr(user, "is_staff", False):
+        user.groups.add(staff_group)
 
 
 User = get_user_model()

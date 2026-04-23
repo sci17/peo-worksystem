@@ -52,6 +52,15 @@ Construction uploads are now also recorded in the DB:
 
 - `my_app_constructionupload` (`ConstructionUpload` model)
 
+## Normalized DB sync
+
+Shared-store writes now also mirror key data into normalized Django tables:
+
+- Admin store -> `my_app_workflow_record` and `my_app_division_submission`
+- Maintenance store -> `my_app_maintenance_road`, `my_app_maintenance_equipment`, `my_app_maintenance_schedule`, `my_app_maintenance_personnel`, `my_app_maintenance_contractor`, `my_app_maintenance_task`
+
+This means routed admin documents and maintenance task/state changes now leave a literal database footprint in addition to the JSON shared store. When a division-side delete hides or removes a record from the authoritative shared store, the corresponding normalized rows are also removed on the next successful sync write.
+
 ## Where to look in code
 
 - Models: `my_app/models.py`
