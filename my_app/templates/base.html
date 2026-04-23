@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'styles.css' %}?v=20260318_2">
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=20260422_1">
     {% block extra_head %}{% endblock %}
 </head>
 <body
@@ -23,6 +23,7 @@
     data-peo-is-main-division-account="{% if dashboard_is_main_division_account %}1{% else %}0{% endif %}"
     data-peo-username="{{ request.user.username|default:'' }}"
     data-peo-user-email="{{ dashboard_user_email|default:'' }}"
+    data-peo-current-section="{{ current_section|default:'' }}"
 >
     <div id="systemLoader" role="status" aria-live="polite" aria-label="Loading PEO Portal">
         <div class="loader-box">
@@ -52,7 +53,7 @@
     {# Ensures a CSRF token is always present in the DOM for JSON fetch helpers. #}
     <form id="csrf-token-probe" style="display:none">{% csrf_token %}</form>
 
-    <script src="{% static 'script.js' %}?v=20260420_6"></script>
+    <script src="{% static 'script.js' %}?v=20260422_5"></script>
     {% block extra_scripts %}{% endblock %}
     <script>
         window.addEventListener("load", function () {

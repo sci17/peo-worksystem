@@ -1,5 +1,6 @@
 import json
 import hashlib
+import logging
 import re
 import shutil
 import uuid
@@ -47,6 +48,9 @@ try:
 except ImportError:
     def get_channel_layer():
         return None
+
+
+logger = logging.getLogger("my_app.division_store")
 
 
 def _safe_log_division_store_event(
@@ -97,6 +101,16 @@ def _broadcast_division_store_update(*, store_keys, actor=None, updated_at=None)
         )
     except Exception:
         return
+
+
+def _division_store_payload_count(payload):
+    if isinstance(payload, list):
+        return len(payload)
+    if isinstance(payload, dict):
+        return len(payload.keys())
+    if payload is None:
+        return 0
+    return -1
 
 
 def _sync_legacy_construction_uploads():
@@ -706,6 +720,15 @@ def _normalize_store_data(key, data):
     if key == KEY_MAINTENANCE:
         return data if isinstance(data, dict) else {}
     return data if isinstance(data, list) else []
+
+
+def _request_allows_empty_store_overwrite(request):
+    header_value = str(getattr(request, "headers", {}).get("X-PEO-Allow-Empty-Store", "") or "").strip().lower()
+    if header_value in {"1", "true", "yes"}:
+        return True
+
+    query_value = str(request.GET.get("allow_empty_store", "") or "").strip().lower()
+    return query_value in {"1", "true", "yes"}
 
 
 def _empty_store_snapshot():
@@ -2759,8 +2782,27 @@ def division_store_api(request, key):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON payload."}, status=400)
 
+    actor_name = ""
+    if getattr(request, "user", None) and request.user.is_authenticated:
+        actor_name = request.user.get_username()
+
+    logger.info(
+        "division_store_post_received key=%s user=%s using_shared=%s payload_count=%s path=%s",
+        key,
+        actor_name or "anonymous",
+        using_shared_store,
+        _division_store_payload_count(payload),
+        getattr(request, "path", ""),
+    )
+
     write_mode = _store_write_mode(request.user, key)
     if not write_mode:
+        logger.warning(
+            "division_store_post_denied key=%s user=%s reason=read_only payload_count=%s",
+            key,
+            actor_name or "anonymous",
+            _division_store_payload_count(payload),
+        )
         return JsonResponse({"error": "Read-only access for this division store."}, status=403)
 
     if write_mode == "restricted_admin_submit":
@@ -2769,6 +2811,25 @@ def division_store_api(request, key):
             return JsonResponse({"error": "Division is not configured for this account."}, status=403)
         store.data = _enforce_admin_submit_payload(user_division, store.data, payload)
     else:
+        if (
+            using_shared_store
+            and _is_empty_division_store_payload(key, payload)
+            and not _is_empty_division_store_payload(key, store.data)
+            and not _request_allows_empty_store_overwrite(request)
+        ):
+            logger.warning(
+                "division_store_post_blocked key=%s user=%s reason=empty_overwrite existing_count=%s",
+                key,
+                actor_name or "anonymous",
+                _division_store_payload_count(store.data),
+            )
+            return JsonResponse(
+                {
+                    "error": "Refusing to overwrite a non-empty shared division store with an empty payload.",
+                    "code": "empty_store_overwrite_blocked",
+                },
+                status=409,
+            )
         store.data = payload
     store.save()
     _invalidate_store_cache()
@@ -2782,11 +2843,20 @@ def division_store_api(request, key):
         stored_payload=store.data,
         path=getattr(request, "path", ""),
         method=getattr(request, "method", ""),
-    )
+        )
     _broadcast_division_store_update(
         store_keys=[key],
         actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
         updated_at=store.updated_at.isoformat() if store.updated_at else timezone.now().isoformat(),
+    )
+
+    logger.info(
+        "division_store_post_saved key=%s user=%s write_mode=%s stored_count=%s updated_at=%s",
+        key,
+        actor_name or "anonymous",
+        write_mode,
+        _division_store_payload_count(store.data),
+        store.updated_at.isoformat() if store.updated_at else "",
     )
 
     return JsonResponse(

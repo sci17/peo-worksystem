@@ -816,3 +816,293 @@ peo-worksystem-nginx-1         nginx:1.27-alpine            "/docker-entrypoint.
 peo-worksystem-redis-1         redis:7-alpine               "docker-entrypoint.sâ€¦"   redis         14 hours ago   Up 15 seconds (healthy)   0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
 peo-worksystem-web-1           peo-worksystem-web           "/app/docker-entrypoâ€¦"   web           14 hours ago   Up 9 seconds (healthy)    8000/tcp
 [2026-04-21 08:36:55] === Autostart run finished ===
+[2026-04-22 08:48:02] === Autostart run started ===
+[2026-04-22 08:48:02] Project root: C:\Users\Administrator\Desktop\peo-worksystem
+[2026-04-22 08:48:02] Using Docker CLI: C:\Program Files\Docker\Docker\resources\bin\docker.exe
+Client:
+ Version:    29.4.0
+ Context:    desktop-linux
+ Debug Mode: false
+ Plugins:
+  agent: Docker AI Agent Runner (Docker Inc.)
+    Version:  v1.42.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-agent.exe
+  ai: Docker AI Agent - Ask Gordon (Docker Inc.)
+    Version:  v1.20.2
+    Path:     C:\Program Files\Docker\cli-plugins\docker-ai.exe
+  buildx: Docker Buildx (Docker Inc.)
+    Version:  v0.33.0-desktop.1
+    Path:     C:\Program Files\Docker\cli-plugins\docker-buildx.exe
+  compose: Docker Compose (Docker Inc.)
+    Version:  v5.1.1
+    Path:     C:\Program Files\Docker\cli-plugins\docker-compose.exe
+  debug: Get a shell into any image or container (Docker Inc.)
+    Version:  0.0.47
+    Path:     C:\Program Files\Docker\cli-plugins\docker-debug.exe
+  desktop: Docker Desktop commands (Docker Inc.)
+    Version:  v0.3.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-desktop.exe
+  dhi: CLI for managing Docker Hardened Images (Docker Inc.)
+    Version:  v0.0.2
+    Path:     C:\Program Files\Docker\cli-plugins\docker-dhi.exe
+  extension: Manages Docker extensions (Docker Inc.)
+    Version:  v0.2.31
+    Path:     C:\Program Files\Docker\cli-plugins\docker-extension.exe
+  init: Creates Docker-related starter files for your project (Docker Inc.)
+    Version:  v1.4.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-init.exe
+  mcp: Docker MCP Plugin (Docker Inc.)
+    Version:  v0.40.3
+    Path:     C:\Program Files\Docker\cli-plugins\docker-mcp.exe
+  model: Docker Model Runner (Docker Inc.)
+    Version:  v1.1.29
+    Path:     C:\Program Files\Docker\cli-plugins\docker-model.exe
+  offload: Docker Offload (Docker Inc.)
+    Version:  v0.5.82
+    Path:     C:\Program Files\Docker\cli-plugins\docker-offload.exe
+  pass: Docker Pass Secrets Manager Plugin (beta) (Docker Inc.)
+    Version:  v0.0.25
+    Path:     C:\Program Files\Docker\cli-plugins\docker-pass.exe
+  sandbox: Docker Sandbox (Docker Inc.)
+    Version:  v0.12.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-sandbox.exe
+  sbom: View the packaged-based Software Bill Of Materials (SBOM) for an image (Anchore Inc.)
+    Version:  0.6.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-sbom.exe
+  scout: Docker Scout (Docker Inc.)
+    Version:  v1.20.3
+    Path:     C:\Program Files\Docker\cli-plugins\docker-scout.exe
+
+Server:
+ Containers: 12
+  Running: 9
+  Paused: 0
+  Stopped: 3
+ Images: 14
+ Server Version: 29.4.0
+ Storage Driver: overlayfs
+  driver-type: io.containerd.snapshotter.v1
+ Logging Driver: json-file
+ Cgroup Driver: cgroupfs
+ Cgroup Version: 2
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+ CDI spec directories:
+  /etc/cdi
+  /var/run/cdi
+ Discovered Devices:
+  cdi: docker.com/gpu=webgpu
+ Swarm: inactive
+ Runtimes: nvidia runc io.containerd.runc.v2
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: dea7da592f5d1d2b7755e3a161be07f43fad8f75
+ runc version: v1.3.4-0-gd6d73eb8
+ init version: de40ad0
+ Security Options:
+  seccomp
+   Profile: builtin
+  cgroupns
+ Kernel Version: 6.6.87.2-microsoft-standard-WSL2
+ Operating System: Docker Desktop
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 12
+ Total Memory: 7.7GiB
+ Name: docker-desktop
+ ID: a209c462-d348-444a-8c69-7137e84689d5
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ HTTP Proxy: http.docker.internal:3128
+ HTTPS Proxy: http.docker.internal:3128
+ No Proxy: hubproxy.docker.internal
+ Labels:
+  com.docker.desktop.address=npipe://\\.\pipe\docker_cli
+ Experimental: false
+ Insecure Registries:
+  hubproxy.docker.internal:5555
+  ::1/128
+  127.0.0.0/8
+ Live Restore Enabled: false
+ Firewall Backend: iptables
+
+[2026-04-22 08:48:10] Docker was already ready.
+[2026-04-22 08:48:10] Running docker compose up -d
+ Container peo-worksystem-db-1 Running 
+ Container peo-worksystem-redis-1 Running 
+ Container peo-worksystem-web-1 Recreate 
+ Container peo-worksystem-web-1 Recreated 
+ Container peo-worksystem-nginx-1 Running 
+ Container peo-worksystem-celery-1 Recreate 
+ Container peo-worksystem-celery-beat-1 Recreate 
+ Container peo-worksystem-celery-beat-1 Recreated 
+ Container peo-worksystem-celery-1 Recreated 
+ Container peo-worksystem-db-1 Waiting 
+ Container peo-worksystem-redis-1 Waiting 
+ Container peo-worksystem-db-1 Healthy 
+ Container peo-worksystem-redis-1 Healthy 
+ Container peo-worksystem-web-1 Starting 
+ Container peo-worksystem-web-1 Started 
+ Container peo-worksystem-celery-beat-1 Starting 
+ Container peo-worksystem-celery-1 Starting 
+ Container peo-worksystem-web-1 Waiting 
+ Container peo-worksystem-celery-beat-1 Started 
+ Container peo-worksystem-celery-1 Started 
+ Container peo-worksystem-web-1 Healthy 
+[2026-04-22 08:48:24] Running docker compose ps
+NAME                           IMAGE                        COMMAND                  SERVICE       CREATED          STATUS                    PORTS
+peo-worksystem-celery-1        peo-worksystem-celery        "/app/docker-entrypoâ€¦"   celery        10 seconds ago   Up 7 seconds              8000/tcp
+peo-worksystem-celery-beat-1   peo-worksystem-celery-beat   "/app/docker-entrypoâ€¦"   celery-beat   11 seconds ago   Up 7 seconds              8000/tcp
+peo-worksystem-db-1            mysql:8.4                    "docker-entrypoint.sâ€¦"   db            15 hours ago     Up 31 seconds (healthy)   3306/tcp, 33060/tcp
+peo-worksystem-nginx-1         nginx:1.27-alpine            "/docker-entrypoint.â€¦"   nginx         15 hours ago     Up 31 seconds (healthy)   0.0.0.0:80->80/tcp, [::]:80->80/tcp
+peo-worksystem-redis-1         redis:7-alpine               "docker-entrypoint.sâ€¦"   redis         15 hours ago     Up 31 seconds (healthy)   0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
+peo-worksystem-web-1           peo-worksystem-web           "/app/docker-entrypoâ€¦"   web           12 seconds ago   Up 7 seconds (healthy)    8000/tcp
+[2026-04-22 08:48:25] === Autostart run finished ===
+[2026-04-22 11:11:25] === Autostart run started ===
+[2026-04-22 11:11:25] Project root: C:\Users\Administrator\Desktop\peo-worksystem
+[2026-04-22 11:11:25] Using Docker CLI: C:\Program Files\Docker\Docker\resources\bin\docker.exe
+Client:
+ Version:    29.4.0
+ Context:    desktop-linux
+ Debug Mode: false
+ Plugins:
+  agent: Docker AI Agent Runner (Docker Inc.)
+    Version:  v1.42.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-agent.exe
+  ai: Docker AI Agent - Ask Gordon (Docker Inc.)
+    Version:  v1.20.2
+    Path:     C:\Program Files\Docker\cli-plugins\docker-ai.exe
+  buildx: Docker Buildx (Docker Inc.)
+    Version:  v0.33.0-desktop.1
+    Path:     C:\Program Files\Docker\cli-plugins\docker-buildx.exe
+  compose: Docker Compose (Docker Inc.)
+    Version:  v5.1.1
+    Path:     C:\Program Files\Docker\cli-plugins\docker-compose.exe
+  debug: Get a shell into any image or container (Docker Inc.)
+    Version:  0.0.47
+    Path:     C:\Program Files\Docker\cli-plugins\docker-debug.exe
+  desktop: Docker Desktop commands (Docker Inc.)
+    Version:  v0.3.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-desktop.exe
+  dhi: CLI for managing Docker Hardened Images (Docker Inc.)
+    Version:  v0.0.2
+    Path:     C:\Program Files\Docker\cli-plugins\docker-dhi.exe
+  extension: Manages Docker extensions (Docker Inc.)
+    Version:  v0.2.31
+    Path:     C:\Program Files\Docker\cli-plugins\docker-extension.exe
+  init: Creates Docker-related starter files for your project (Docker Inc.)
+    Version:  v1.4.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-init.exe
+  mcp: Docker MCP Plugin (Docker Inc.)
+    Version:  v0.40.3
+    Path:     C:\Program Files\Docker\cli-plugins\docker-mcp.exe
+  model: Docker Model Runner (Docker Inc.)
+    Version:  v1.1.29
+    Path:     C:\Program Files\Docker\cli-plugins\docker-model.exe
+  offload: Docker Offload (Docker Inc.)
+    Version:  v0.5.82
+    Path:     C:\Program Files\Docker\cli-plugins\docker-offload.exe
+  pass: Docker Pass Secrets Manager Plugin (beta) (Docker Inc.)
+    Version:  v0.0.25
+    Path:     C:\Program Files\Docker\cli-plugins\docker-pass.exe
+  sandbox: Docker Sandbox (Docker Inc.)
+    Version:  v0.12.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-sandbox.exe
+  sbom: View the packaged-based Software Bill Of Materials (SBOM) for an image (Anchore Inc.)
+    Version:  0.6.0
+    Path:     C:\Program Files\Docker\cli-plugins\docker-sbom.exe
+  scout: Docker Scout (Docker Inc.)
+    Version:  v1.20.3
+    Path:     C:\Program Files\Docker\cli-plugins\docker-scout.exe
+
+Server:
+ Containers: 6
+  Running: 4
+  Paused: 0
+  Stopped: 2
+ Images: 15
+ Server Version: 29.4.0
+ Storage Driver: overlayfs
+  driver-type: io.containerd.snapshotter.v1
+ Logging Driver: json-file
+ Cgroup Driver: cgroupfs
+ Cgroup Version: 2
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+ CDI spec directories:
+  /etc/cdi
+  /var/run/cdi
+ Discovered Devices:
+  cdi: docker.com/gpu=webgpu
+ Swarm: inactive
+ Runtimes: io.containerd.runc.v2 nvidia runc
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: dea7da592f5d1d2b7755e3a161be07f43fad8f75
+ runc version: v1.3.4-0-gd6d73eb8
+ init version: de40ad0
+ Security Options:
+  seccomp
+   Profile: builtin
+  cgroupns
+ Kernel Version: 6.6.87.2-microsoft-standard-WSL2
+ Operating System: Docker Desktop
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 12
+ Total Memory: 7.7GiB
+ Name: docker-desktop
+ ID: a209c462-d348-444a-8c69-7137e84689d5
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ HTTP Proxy: http.docker.internal:3128
+ HTTPS Proxy: http.docker.internal:3128
+ No Proxy: hubproxy.docker.internal
+ Labels:
+  com.docker.desktop.address=npipe://\\.\pipe\docker_cli
+ Experimental: false
+ Insecure Registries:
+  hubproxy.docker.internal:5555
+  ::1/128
+  127.0.0.0/8
+ Live Restore Enabled: false
+ Firewall Backend: iptables
+
+[2026-04-22 11:11:26] Docker was already ready.
+[2026-04-22 11:11:27] Running docker compose up -d
+ Network peo-worksystem_default Creating 
+ Network peo-worksystem_default Created 
+ Container peo-worksystem-db-1 Creating 
+ Container peo-worksystem-redis-1 Creating 
+ Container peo-worksystem-db-1 Created 
+ Container peo-worksystem-redis-1 Created 
+ Container peo-worksystem-web-1 Creating 
+ Container peo-worksystem-web-1 Created 
+ Container peo-worksystem-nginx-1 Creating 
+ Container peo-worksystem-celery-beat-1 Creating 
+ Container peo-worksystem-celery-1 Creating 
+ Container peo-worksystem-celery-beat-1 Created 
+ Container peo-worksystem-nginx-1 Created 
+ Container peo-worksystem-celery-1 Created 
+ Container peo-worksystem-redis-1 Starting 
+ Container peo-worksystem-db-1 Starting 
+ Container peo-worksystem-redis-1 Started 
+ Container peo-worksystem-db-1 Started 
+ Container peo-worksystem-db-1 Waiting 
+ Container peo-worksystem-redis-1 Waiting 
+ Container peo-worksystem-db-1 Healthy 
+ Container peo-worksystem-redis-1 Healthy 
+ Container peo-worksystem-web-1 Starting 
+ Container peo-worksystem-web-1 Started 
+ Container peo-worksystem-celery-1 Starting 
+ Container peo-worksystem-celery-beat-1 Starting 
+ Container peo-worksystem-web-1 Waiting 
+ Container peo-worksystem-celery-beat-1 Started 
+ Container peo-worksystem-celery-1 Started 
+ Container peo-worksystem-web-1 Healthy 
+ Container peo-worksystem-nginx-1 Starting 
+Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint peo-worksystem-nginx-1 (034521c6df0c8286575918f33d58b09ea0c2583863266803e5e527eff4a5ac2b): Bind for 0.0.0.0:80 failed: port is already allocated

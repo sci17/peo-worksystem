@@ -81,7 +81,43 @@
         },
         {
           "name": "DJANGO_ALLOWED_HOSTS",
-          "value": "your-domain.com"
+          "value": "peopalawan.com,www.peopalawan.com"
+        },
+        {
+          "name": "DJANGO_CSRF_TRUSTED_ORIGINS",
+          "value": "https://peopalawan.com,https://www.peopalawan.com"
+        },
+        {
+          "name": "DJANGO_SECURE_PROXY_SSL_HEADER",
+          "value": "HTTP_X_FORWARDED_PROTO:https"
+        },
+        {
+          "name": "DJANGO_USE_X_FORWARDED_HOST",
+          "value": "True"
+        },
+        {
+          "name": "DJANGO_SECURE_SSL_REDIRECT",
+          "value": "True"
+        },
+        {
+          "name": "DJANGO_SESSION_COOKIE_SECURE",
+          "value": "True"
+        },
+        {
+          "name": "DJANGO_CSRF_COOKIE_SECURE",
+          "value": "True"
+        },
+        {
+          "name": "DJANGO_SECURE_HSTS_SECONDS",
+          "value": "31536000"
+        },
+        {
+          "name": "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS",
+          "value": "True"
+        },
+        {
+          "name": "DJANGO_SECURE_HSTS_PRELOAD",
+          "value": "True"
         },
         {
           "name": "DJANGO_DB_ENGINE",

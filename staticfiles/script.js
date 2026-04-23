@@ -1023,15 +1023,15 @@ const peoShouldCompressUploadImage = (file) => {
     const type = String(file.type || "").toLowerCase();
     if (!type.startsWith("image/")) return false;
     if (type === "image/gif" || type === "image/svg+xml") return false;
-    return file.size > (250 * 1024);
+    return file.size > (1024 * 1024);
 };
 
 const peoCompressUploadImageFile = async (file, options = {}) => {
     if (!peoShouldCompressUploadImage(file)) return file;
 
-    const maxDimension = Number(options.maxDimension) > 0 ? Number(options.maxDimension) : 2560;
-    const quality = Number(options.quality) > 0 ? Math.min(1, Number(options.quality)) : 0.92;
-    const minBytesSaved = Number(options.minBytesSaved) > 0 ? Number(options.minBytesSaved) : 32 * 1024;
+    const maxDimension = Number(options.maxDimension) > 0 ? Number(options.maxDimension) : 4096;
+    const quality = Number(options.quality) > 0 ? Math.min(1, Number(options.quality)) : 0.98;
+    const minBytesSaved = Number(options.minBytesSaved) > 0 ? Number(options.minBytesSaved) : 128 * 1024;
     const outputType = String(file.type || "").toLowerCase() === "image/png" ? "image/png" : "image/jpeg";
     const objectUrl = window.URL.createObjectURL(file);
 
@@ -1084,10 +1084,36 @@ const peoCompressUploadImageFile = async (file, options = {}) => {
 
 const compressImageUploadFile = (file, options = {}) => peoCompressUploadImageFile(file, options);
 const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
-    maxDimension: 2560,
-    quality: 0.92,
-    minBytesSaved: 32 * 1024,
+    maxDimension: 4096,
+    quality: 0.98,
+    minBytesSaved: 128 * 1024,
 });
+
+const normalizeConstructionSpotlightUrl = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+
+    let url = raw;
+    if (url.startsWith("static/uploads/")) {
+        url = `/${url}`;
+    } else if (url.startsWith("./static/uploads/")) {
+        url = url.slice(1);
+    } else if (url.startsWith("media/construction_uploads/")) {
+        url = `/${url}`;
+    } else if (url.startsWith("./media/construction_uploads/")) {
+        url = url.slice(1);
+    }
+
+    const isStaticUpload = url.startsWith("/static/uploads/");
+    const isMediaUpload = url.startsWith("/media/construction_uploads/");
+    if (!isStaticUpload && !isMediaUpload) return "";
+    const filename = isStaticUpload
+        ? url.slice("/static/uploads/".length).split("?")[0]
+        : url.slice("/media/construction_uploads/".length).split("?")[0];
+    if (!filename) return "";
+    if (filename.startsWith("profile_")) return "";
+    return isStaticUpload ? `/media/construction_uploads/${filename}` : url;
+};
 
 (() => {
     const API_BASE = "/api/division-store/";
@@ -1265,6 +1291,27 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         });
     };
 
+    const clearPendingMetaAfterFailure = (storeKey, token) => {
+        const currentToken = Number(latestWriteTokens.get(storeKey) || 0);
+        if (token !== currentToken) {
+            return;
+        }
+
+        const prevMeta = readStoreMeta(storeKey);
+        writeStoreMeta(storeKey, {
+            ...prevMeta,
+            pending_local_write: false,
+            pending_write_token: token,
+            failed_at: new Date().toISOString(),
+        });
+        emitDivisionStoreActivity({
+            storeKeys: [storeKey],
+            phase: "end",
+            source: "write",
+            updatedAt: "",
+        });
+    };
+
     const sendLatestPayload = (storeKey, token) => {
         const latest = latestPayloads.get(storeKey);
         if (typeof latest === "undefined") {
@@ -1274,12 +1321,13 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         Promise.resolve(postStore(storeKey, latest))
             .then((responseData) => {
                 if (!responseData) {
+                    clearPendingMetaAfterFailure(storeKey, token);
                     return;
                 }
                 syncPendingMeta(storeKey, token, false, responseData);
             })
             .catch(() => {
-                // Ignore network failures.
+                clearPendingMetaAfterFailure(storeKey, token);
             });
     };
 
@@ -1301,7 +1349,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         flushSync();
     };
 
-    const queueSync = (storeKey, payload, delayMs = 400) => {
+    const queueSync = (storeKey, payload, delayMs = 150) => {
         const normalizedKey = String(storeKey || "").trim();
         if (!normalizedKey) return;
 
@@ -1368,6 +1416,30 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         safeLocalStorageSet(`${STORE_META_PREFIX}${storeKey}`, JSON.stringify(meta || {}));
     };
 
+    const hasBlockingPendingLocalWrite = (storeKey, meta) => {
+        if (!(meta && meta.pending_local_write === true)) {
+            return false;
+        }
+
+        const normalizedKey = String(storeKey || "").trim();
+        if (!normalizedKey) {
+            return false;
+        }
+
+        const hasQueuedPayload = latestPayloads.has(normalizedKey);
+        const hasActiveTimer = timers.has(normalizedKey);
+        if (hasQueuedPayload || hasActiveTimer) {
+            return true;
+        }
+
+        writeStoreMeta(normalizedKey, {
+            ...meta,
+            pending_local_write: false,
+            stale_pending_cleared_at: new Date().toISOString(),
+        });
+        return false;
+    };
+
     const syncToLocalStorage = async (definitions, options = {}) => {
         const list = Array.isArray(definitions) ? definitions : [];
         if (!list.length) return false;
@@ -1407,7 +1479,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
                 if (!isValid) continue;
 
                 const meta = readStoreMeta(storeKey);
-                if (meta && meta.pending_local_write === true) {
+                if (hasBlockingPendingLocalWrite(storeKey, meta)) {
                     continue;
                 }
                 const metaUpdatedAtMs = Date.parse(String(meta.updated_at || ""));
@@ -1463,6 +1535,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
     };
 
     window.addEventListener("pagehide", flushSync);
+    window.addEventListener("beforeunload", flushSync);
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") {
             flushSync();
@@ -1589,6 +1662,11 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
         return String(fromAccess || fromBody || "").trim().toLowerCase();
     };
 
+    const getCurrentSectionKey = () => {
+        const fromBody = document.body && document.body.dataset ? String(document.body.dataset.peoCurrentSection || "") : "";
+        return String(fromBody || "").trim().toLowerCase();
+    };
+
     const sync = async (options = {}) => {
         const store = window.peoDivisionStore;
         if (!store || typeof store.syncToLocalStorage !== "function") return;
@@ -1599,11 +1677,18 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
 
         const isProjectRegistry = Boolean(document.querySelector(".project-board"));
         const divisionKey = getDivisionKey();
+        const currentSectionKey = getCurrentSectionKey();
         const defs = isProjectRegistry
             ? Object.values(STORE_DEFS)
             : [STORE_DEFS.admin];
         if (!isProjectRegistry && divisionKey && STORE_DEFS[divisionKey] && divisionKey !== "admin") {
             defs.push(STORE_DEFS[divisionKey]);
+        }
+        if (!isProjectRegistry && currentSectionKey && STORE_DEFS[currentSectionKey]) {
+            const alreadyIncluded = defs.some((def) => String(def?.storeKey || "").trim().toLowerCase() === currentSectionKey);
+            if (!alreadyIncluded) {
+                defs.push(STORE_DEFS[currentSectionKey]);
+            }
         }
 
         syncInFlight = Promise.resolve(store.syncToLocalStorage(defs, options))
@@ -1693,7 +1778,7 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
     window.addEventListener("focus", () => {
         sync();
     });
-    window.setInterval(sync, 5000);
+    window.setInterval(sync, 3000);
 })();
 
 (() => {
@@ -14869,13 +14954,21 @@ document.addEventListener("DOMContentLoaded", () => {
             url = `/${url}`;
         } else if (url.startsWith("./static/uploads/")) {
             url = url.slice(1);
+        } else if (url.startsWith("media/construction_uploads/")) {
+            url = `/${url}`;
+        } else if (url.startsWith("./media/construction_uploads/")) {
+            url = url.slice(1);
         }
 
-        if (!url.startsWith("/static/uploads/")) return "";
-        const filename = url.slice("/static/uploads/".length).split("?")[0];
+        const isStaticUpload = url.startsWith("/static/uploads/");
+        const isMediaUpload = url.startsWith("/media/construction_uploads/");
+        if (!isStaticUpload && !isMediaUpload) return "";
+        const filename = isStaticUpload
+            ? url.slice("/static/uploads/".length).split("?")[0]
+            : url.slice("/media/construction_uploads/".length).split("?")[0];
         if (!filename) return "";
         if (filename.startsWith("profile_")) return "";
-        return url;
+        return isStaticUpload ? `/media/construction_uploads/${filename}` : url;
     };
     const clampIndex = (value) => {
         if (!slides.length) return 0;
@@ -15162,6 +15255,90 @@ document.addEventListener("DOMContentLoaded", () => {
     const spotlightGalleryWrap = spotlightSection.querySelector(".spotlight-gallery");
     const spotlightGallery = spotlightSection.querySelector(".js-spotlight-gallery");
     const spotlightGalleryMeta = spotlightSection.querySelector(".js-spotlight-gallery-meta");
+    const spotlightDetailModal = spotlightSection.querySelector(".js-spotlight-detail-modal");
+    const spotlightDetailDialog = spotlightDetailModal ? spotlightDetailModal.querySelector(".spotlight-detail-dialog") : null;
+    const spotlightDetailTitle = spotlightDetailModal ? spotlightDetailModal.querySelector(".js-spotlight-detail-title") : null;
+    const spotlightDetailSubtitle = spotlightDetailModal ? spotlightDetailModal.querySelector(".js-spotlight-detail-subtitle") : null;
+    const spotlightDetailFacts = spotlightDetailModal ? spotlightDetailModal.querySelector(".js-spotlight-detail-facts") : null;
+    const spotlightDetailImages = spotlightDetailModal ? spotlightDetailModal.querySelector(".js-spotlight-detail-images") : null;
+    const spotlightDetailCloseButtons = spotlightDetailModal
+        ? Array.from(spotlightDetailModal.querySelectorAll(".js-close-spotlight-detail-modal"))
+        : [];
+
+    const findConstructionRecord = (projectId, projectTitle) => {
+        const records = readConstructionRecords();
+        return records.find((candidate) => {
+            if (!candidate || typeof candidate !== "object") return false;
+            const candidateId = String(candidate.__id || "").trim();
+            const candidateTitle = String(candidate.project_name || candidate.project || "").trim();
+            if (projectId && candidateId === projectId) return true;
+            if (!projectId && projectTitle && normalize(candidateTitle) === normalize(projectTitle)) return true;
+            return false;
+        }) || null;
+    };
+
+    const buildSpotlightFact = (label, value) => `
+        <article class="spotlight-detail-fact">
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(String(value || "").trim() || "-")}</strong>
+        </article>
+    `;
+
+    const closeSpotlightDetailModal = () => {
+        if (!(spotlightDetailModal instanceof HTMLElement)) return;
+        spotlightDetailModal.hidden = true;
+        document.body.classList.remove("project-modal-open");
+    };
+
+    const openSpotlightDetailModal = (record) => {
+        if (!(spotlightDetailModal instanceof HTMLElement) || !(record && typeof record === "object")) return;
+        const title = String(record.project_name || record.project || "Construction Project").trim() || "Construction Project";
+        const location = String(record.location || "").trim();
+        const contractor = String(record.contractor || "").trim();
+        const municipality = String(record.mun || "").trim();
+        const status = String(record.status_current || "").trim();
+        const contractCost = String(record.contract_cost || "").trim();
+        const remarks = String(record.remarks || record.project_remarks || "").trim();
+        const images = getConstructionImageEntries(record);
+
+        if (spotlightDetailTitle instanceof HTMLElement) {
+            spotlightDetailTitle.textContent = title;
+        }
+        if (spotlightDetailSubtitle instanceof HTMLElement) {
+            spotlightDetailSubtitle.textContent = [location, contractor].filter(Boolean).join(" • ") || "Full construction details and uploaded images.";
+        }
+        if (spotlightDetailFacts instanceof HTMLElement) {
+            spotlightDetailFacts.innerHTML = [
+                buildSpotlightFact("Location", location),
+                buildSpotlightFact("Municipality", municipality),
+                buildSpotlightFact("Contractor", contractor),
+                buildSpotlightFact("Status", status),
+                buildSpotlightFact("Contract Cost", contractCost),
+                buildSpotlightFact("Remarks", remarks),
+            ].join("");
+        }
+        if (spotlightDetailImages instanceof HTMLElement) {
+            spotlightDetailImages.innerHTML = images.length
+                ? images.map((image, index) => `
+                    <article class="spotlight-detail-image-card">
+                        <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.name || `${title} image ${index + 1}`)}" loading="lazy">
+                        <div class="spotlight-detail-image-copy">
+                            <h5>${escapeHtml(image.name || `Uploaded Image ${index + 1}`)}</h5>
+                            <p>${escapeHtml(String(image.uploadedAt || "").trim() || "Construction photo uploaded for this project.")}</p>
+                        </div>
+                    </article>
+                `).join("")
+                : '<div class="spotlight-detail-fact"><span>Images</span><strong>No uploaded images yet.</strong></div>';
+        }
+
+        spotlightDetailModal.hidden = false;
+        document.body.classList.add("project-modal-open");
+        if (spotlightDetailDialog instanceof HTMLElement) {
+            window.requestAnimationFrame(() => {
+                spotlightDetailDialog.focus({ preventScroll: true });
+            });
+        }
+    };
 
     const renderSpotlightGallery = (records) => {
         if (!(spotlightGallery instanceof HTMLElement)) return;
@@ -15174,11 +15351,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 const title = String(record.project_name || record.project || "Construction Project").trim();
                 const location = String(record.location || "").trim();
                 const contractor = String(record.contractor || "").trim();
+                const recordId = String(record.__id || "").trim();
                 return images.map((image, index) => {
                     const uploadedLabel = String(image.uploadedAt || "").trim();
                     const subtitle = [location, contractor, uploadedLabel].filter(Boolean).join(" \u00b7 ");
                     return `
-                        <article class="spotlight-gallery-card" data-spotlight-gallery-project="${escapeHtml(title)}" data-spotlight-gallery-image-index="${index + 1}">
+                        <article class="spotlight-gallery-card" tabindex="0" role="button" aria-label="Open details for ${escapeHtml(title)}" data-spotlight-gallery-project="${escapeHtml(title)}" data-spotlight-gallery-project-id="${escapeHtml(recordId)}" data-spotlight-gallery-image-index="${index + 1}">
                             <div class="spotlight-gallery-photo" style="background-image: url('${image.url.replace(/'/g, "%27")}')"></div>
                             <div class="spotlight-gallery-copy">
                                 <h5>${escapeHtml(title)}</h5>
@@ -15204,6 +15382,53 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     renderSpotlightGallery(initialRecords);
+    if (spotlightGallery instanceof HTMLElement) {
+        const openCardDetails = (card) => {
+            if (!(card instanceof HTMLElement)) return;
+            const projectId = String(card.dataset.spotlightGalleryProjectId || "").trim();
+            const projectTitle = String(card.dataset.spotlightGalleryProject || "").trim();
+            const record = findConstructionRecord(projectId, projectTitle);
+            if (!record) return;
+            openSpotlightDetailModal(record);
+        };
+
+        spotlightGallery.addEventListener("click", (event) => {
+            const card = event.target instanceof HTMLElement
+                ? event.target.closest(".spotlight-gallery-card")
+                : null;
+            if (!(card instanceof HTMLElement)) return;
+            openCardDetails(card);
+        });
+
+        spotlightGallery.addEventListener("keydown", (event) => {
+            if (!(event.target instanceof HTMLElement)) return;
+            const card = event.target.closest(".spotlight-gallery-card");
+            if (!(card instanceof HTMLElement)) return;
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            openCardDetails(card);
+        });
+    }
+
+    spotlightDetailCloseButtons.forEach((button) => {
+        button.addEventListener("click", closeSpotlightDetailModal);
+    });
+
+    if (spotlightDetailModal instanceof HTMLElement) {
+        spotlightDetailModal.addEventListener("click", (event) => {
+            if (event.target === spotlightDetailModal) {
+                closeSpotlightDetailModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (spotlightDetailModal instanceof HTMLElement && !spotlightDetailModal.hidden) {
+            closeSpotlightDetailModal();
+        }
+    });
+
     if (!slides.length) {
         return;
     }
@@ -15500,11 +15725,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return list
             .map((img) => {
                 if (typeof img === "string") {
-                    const dataUrl = img.trim();
+                    const dataUrl = normalizeConstructionSpotlightUrl(img.trim()) || img.trim();
                     return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
                 }
                 if (!img || typeof img !== "object") return null;
-                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                const rawUrl = String(img.dataUrl || img.url || "").trim();
+                const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
                 if (!dataUrl) return null;
                 return {
                     dataUrl,
@@ -15540,7 +15766,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const filesForUpload = await Promise.all(
-            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
         );
         const payload = new FormData();
         filesForUpload.forEach((file) => {
@@ -16748,7 +16974,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     records = records.map((record) => normalizeConstructionRecord(record));
-    writeStoredRecords(records);
+    writeStoredRecords(records, { syncRemote: false });
 
     const getTrimmedFormValue = (formData, key) => {
         return String(formData.get(key) ?? "").trim();
@@ -17918,7 +18144,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return images
             .slice(0, 10)
             .map((img) => ({
-                dataUrl: (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
+                dataUrl: normalizeConstructionSpotlightUrl(typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")) || (typeof img === "string" ? img : String(img?.dataUrl || img?.url || "")).trim(),
                 name: String(typeof img === "string" ? "" : (img?.name || "")).trim(),
                 uploaded_at: String(typeof img === "string" ? "" : (img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || record?.__updated_at || record?.__created_at || "")).trim(),
             }))
@@ -18285,7 +18511,17 @@ document.addEventListener("DOMContentLoaded", () => {
         resyncAdminAssignedProjects();
     });
 
-    renderTable();
+    const initializeConstructionDashboard = () => {
+        renderTable();
+        const remoteSyncPromise = requestConstructionRemoteSync();
+        if (remoteSyncPromise && typeof remoteSyncPromise.then === "function") {
+            remoteSyncPromise.catch(() => {
+                // Ignore sync failures and keep the latest local snapshot visible.
+            });
+        }
+    };
+
+    initializeConstructionDashboard();
 });
 /* CONSTRUCTION_DIVISION_SCRIPT_END */
 
@@ -18311,6 +18547,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
     const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
     const canDeleteTasks = !access.readOnly && (hasGlobalAccess || isPeoSuperuser || isPeoMainDivisionAccount);
+    const canSaveTaskForm = !access.readOnly
+        || String(access.divisionKey || "").trim().toLowerCase() === "construction"
+        || hasGlobalAccess
+        || isPeoSuperuser
+        || isPeoMainDivisionAccount;
 
     const escapeHtml = (value) => String(value || "")
         .replaceAll("&", "&amp;")
@@ -18498,6 +18739,71 @@ document.addEventListener("DOMContentLoaded", () => {
         return wrote;
     };
 
+    const buildTaskFromConstructionRecord = (record, existingTask = {}) => {
+        const source = record && typeof record === "object" ? record : {};
+        const prior = existingTask && typeof existingTask === "object" ? existingTask : {};
+        const constructionId = String(source.__id || source.construction_id || prior.construction_id || prior.__id || "").trim();
+        if (!constructionId) return null;
+
+        const personnel = Array.isArray(source.personnel) ? source.personnel : [];
+        const assignedPersonnel = personnel
+            .map((item) => String(item?.name || item?.personnel_name || "").trim())
+            .filter(Boolean)
+            .join(", ");
+
+        return {
+            ...prior,
+            __id: constructionId,
+            construction_id: constructionId,
+            task_name: String(source.project_name || prior.task_name || prior.project_name || "").trim(),
+            project_name: String(source.project_name || prior.project_name || prior.task_name || "").trim(),
+            assigned_to: String(prior.assigned_to || assignedPersonnel || "").trim(),
+            date_received: String(prior.date_received || source.__created_at || source.__updated_at || "").trim(),
+            status: String(prior.status || source.status || "").trim(),
+            remarks: String(prior.remarks || source.remarks || "").trim(),
+        };
+    };
+
+    const syncTasksFromConstructionRecords = (options = {}) => {
+        const persist = options && options.persist === false ? false : true;
+        const constructionRecords = readConstructionRecords();
+        const existingTasks = readTasks();
+        const existingById = new Map();
+
+        existingTasks.forEach((task) => {
+            const key = String(task?.construction_id || task?.__id || "").trim();
+            if (!key || existingById.has(key)) return;
+            existingById.set(key, task);
+        });
+
+        const derivedTasks = constructionRecords
+            .map((record) => buildTaskFromConstructionRecord(record, existingById.get(String(record?.__id || record?.construction_id || "").trim())))
+            .filter(Boolean);
+
+        if (persist) {
+            writeTasks(derivedTasks);
+        }
+        return derivedTasks;
+    };
+
+    let constructionTaskRemoteSyncInFlight = null;
+    const requestConstructionTaskRemoteSync = () => {
+        const store = window.peoDivisionStore;
+        if (!store || typeof store.syncToLocalStorage !== "function") return null;
+        if (constructionTaskRemoteSyncInFlight) return constructionTaskRemoteSyncInFlight;
+        constructionTaskRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
+            { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
+        ], { force: true }))
+            .then(() => {
+                syncTasksFromConstructionRecords();
+                render();
+            })
+            .finally(() => {
+                constructionTaskRemoteSyncInFlight = null;
+            });
+        return constructionTaskRemoteSyncInFlight;
+    };
+
     const deleteAllTaskData = async () => {
         if (!canDeleteTasks) {
             showPeoGeneralToast("Only the Construction Division main admin can delete task rows.", {
@@ -18627,11 +18933,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return list
             .map((img) => {
                 if (typeof img === "string") {
-                    const dataUrl = img.trim();
+                    const dataUrl = normalizeConstructionSpotlightUrl(img.trim()) || img.trim();
                     return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
                 }
                 if (!img || typeof img !== "object") return null;
-                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                const rawUrl = String(img.dataUrl || img.url || "").trim();
+                const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
                 if (!dataUrl) return null;
                 return {
                     dataUrl,
@@ -18667,7 +18974,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const filesForUpload = await Promise.all(
-            list.map((file) => compressImageUploadFile(file, { maxDimension: 2560, quality: 0.92 }))
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
         );
         const payload = new FormData();
         filesForUpload.forEach((file) => {
@@ -18863,7 +19170,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const saveFormToStorage = async () => {
         if (!form) return "";
-        if (access.readOnly) {
+        if (!canSaveTaskForm) {
             showPeoGeneralToast("Read-only access: you cannot edit tasks on this dashboard.", {
                 title: "Construction Division",
                 variant: "warning",
@@ -18897,96 +19204,98 @@ document.addEventListener("DOMContentLoaded", () => {
         if (submitButton instanceof HTMLButtonElement) {
             submitButton.disabled = true;
         }
-
-        if (pickedFiles.length) {
-            const uploadResult = await uploadTaskConstructionPhotos(pickedFiles.slice());
-            if (!uploadResult?.ok) {
-                if (submitButton instanceof HTMLButtonElement) {
-                    submitButton.disabled = false;
+        try {
+            if (pickedFiles.length) {
+                const uploadResult = await uploadTaskConstructionPhotos(pickedFiles.slice());
+                if (!uploadResult?.ok) {
+                    showPeoGeneralToast(String(uploadResult?.error || "Unable to upload photos."), {
+                        title: "Construction Division",
+                        variant: "danger",
+                    });
+                    return "";
                 }
-                showPeoGeneralToast(String(uploadResult?.error || "Unable to upload photos."), {
+                mergedImages = mergeTaskImages(existingConstructionRecord?.accomplishment_images, uploadResult.images);
+                if (taskPhotoInput instanceof HTMLInputElement) {
+                    taskPhotoInput.value = "";
+                }
+                taskExistingImages = mergedImages;
+                clearTaskSelectedPhotoPreviews();
+                updateTaskPhotoMeta();
+                renderTaskPhotoGallery();
+            }
+
+            const nowIso = new Date().toISOString();
+            const constructionPayload = {
+                ...existingConstructionRecord,
+                __id: recordId,
+                project_name: data.project_name,
+                location: data.location,
+                mun: data.mun,
+                contractor: data.contractor,
+                contract_cost: data.contract_cost,
+                revised_contract_cost: data.revised_contract_cost,
+                ntp_date: data.ntp_date,
+                cd: data.cd,
+                original_expiry_date: data.original_expiry_date,
+                addl_cd: data.addl_cd,
+                revised_expiry_date: data.revised_expiry_date,
+                date_completed: data.date_completed,
+                status_previous: data.status_previous,
+                status_current: data.status_current,
+                time_elapsed: data.time_elapsed,
+                slippage: data.slippage,
+                remarks: data.project_remarks,
+                __updated_at: nowIso,
+            };
+            if (mergedImages.length) {
+                constructionPayload.accomplishment_images = mergedImages;
+            }
+
+            const taskPayload = {
+                ...(existingTaskIndex >= 0 ? tasks[existingTaskIndex] : {}),
+                __id: recordId,
+                construction_id: recordId,
+                task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
+                project_name: data.project_name,
+                assigned_to: data.assigned_to || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : ""),
+                date_received: data.date_received || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : ""),
+                status: data.status,
+                remarks: data.remarks,
+            };
+
+            if (existingConstructionIndex >= 0) {
+                constructionRecords[existingConstructionIndex] = constructionPayload;
+            } else {
+                constructionRecords.unshift(constructionPayload);
+            }
+            const wroteConstruction = writeConstructionRecords(constructionRecords);
+            const nextTasks = existingTaskIndex >= 0
+                ? tasks.map((task, index) => (index === existingTaskIndex ? { ...tasks[existingTaskIndex], ...taskPayload } : task))
+                : [taskPayload, ...tasks];
+            const wroteTasks = writeTasks(nextTasks);
+            if (!wroteConstruction || !wroteTasks) {
+                showPeoGeneralToast("Unable to save this assigned project right now.", {
                     title: "Construction Division",
                     variant: "danger",
                 });
                 return "";
             }
-            mergedImages = mergeTaskImages(existingConstructionRecord?.accomplishment_images, uploadResult.images);
-            if (taskPhotoInput instanceof HTMLInputElement) {
-                taskPhotoInput.value = "";
+
+            if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                window.peoDivisionStore.flushSync();
             }
-            taskExistingImages = mergedImages;
-            clearTaskSelectedPhotoPreviews();
-            updateTaskPhotoMeta();
-            renderTaskPhotoGallery();
-        }
-
-        const nowIso = new Date().toISOString();
-        const constructionPayload = {
-            ...existingConstructionRecord,
-            __id: recordId,
-            project_name: data.project_name,
-            location: data.location,
-            mun: data.mun,
-            contractor: data.contractor,
-            contract_cost: data.contract_cost,
-            revised_contract_cost: data.revised_contract_cost,
-            ntp_date: data.ntp_date,
-            cd: data.cd,
-            original_expiry_date: data.original_expiry_date,
-            addl_cd: data.addl_cd,
-            revised_expiry_date: data.revised_expiry_date,
-            date_completed: data.date_completed,
-            status_previous: data.status_previous,
-            status_current: data.status_current,
-            time_elapsed: data.time_elapsed,
-            slippage: data.slippage,
-            remarks: data.project_remarks,
-            __updated_at: nowIso,
-        };
-        if (mergedImages.length) {
-            constructionPayload.accomplishment_images = mergedImages;
-        }
-
-        const taskPayload = {
-            ...(existingTaskIndex >= 0 ? tasks[existingTaskIndex] : {}),
-            __id: recordId,
-            construction_id: recordId,
-            task_name: data.project_name || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].task_name : ""),
-            project_name: data.project_name,
-            assigned_to: data.assigned_to || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].assigned_to : ""),
-            date_received: data.date_received || (existingTaskIndex >= 0 ? tasks[existingTaskIndex].date_received : ""),
-            status: data.status,
-            remarks: data.remarks,
-        };
-
-        if (existingConstructionIndex >= 0) {
-            constructionRecords[existingConstructionIndex] = constructionPayload;
-        } else {
-            constructionRecords.unshift(constructionPayload);
-        }
-        if (existingTaskIndex >= 0) {
-            tasks[existingTaskIndex] = { ...tasks[existingTaskIndex], ...taskPayload };
-        } else {
-            tasks.unshift(taskPayload);
-        }
-
-        const wroteConstruction = writeConstructionRecords(constructionRecords);
-        const wroteTasks = writeTasks(tasks);
-        if (submitButton instanceof HTMLButtonElement) {
-            submitButton.disabled = false;
-        }
-        if (!wroteConstruction || !wroteTasks) {
-            showPeoGeneralToast("Unable to save this assigned project right now.", {
+            return recordId;
+        } catch (error) {
+            showPeoGeneralToast(String(error?.message || "Unable to save this assigned project right now."), {
                 title: "Construction Division",
                 variant: "danger",
             });
             return "";
+        } finally {
+            if (submitButton instanceof HTMLButtonElement) {
+                submitButton.disabled = false;
+            }
         }
-
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
-            window.peoDivisionStore.flushSync();
-        }
-        return recordId;
     };
 
     if (form) {
@@ -19038,8 +19347,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!approved) return;
 
                 const nextTasks = tasks.filter((task) => String(task?.construction_id || task?.__id || "") !== recordId);
+                const constructionRecords = readConstructionRecords();
+                const nextConstructionRecords = constructionRecords.filter((record) => String(record?.__id || record?.construction_id || "") !== recordId);
                 const wroteTasks = writeTasks(nextTasks);
-                if (!wroteTasks) {
+                const wroteConstruction = writeConstructionRecords(nextConstructionRecords);
+                if (!wroteTasks || !wroteConstruction) {
                     showPeoGeneralToast("Unable to delete task. Storage is unavailable.", {
                         title: "Construction Division",
                         variant: "danger",
@@ -19084,7 +19396,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const render = () => {
         if (!tableBody) return;
-        const records = readTasks();
+        const records = syncTasksFromConstructionRecords({ persist: false });
         tableBody.innerHTML = "";
 
         const totalCount = records.length;
@@ -19151,15 +19463,38 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     window.addEventListener("storage", (event) => {
-        if (String(event.key || "") !== TASK_STORAGE_KEY) return;
+        const key = String(event.key || "");
+        if (key !== TASK_STORAGE_KEY && key !== CONSTRUCTION_STORAGE_KEY) return;
         render();
     });
     window.addEventListener("construction-tasks-updated", render);
+    window.addEventListener("construction-records-updated", () => {
+        syncTasksFromConstructionRecords();
+        render();
+    });
+    window.addEventListener("peo:division-store-synced", (event) => {
+        const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!syncedStoreKeys.includes("construction")) return;
+        syncTasksFromConstructionRecords();
+        render();
+    });
+    window.addEventListener("peo:division-store-remote-update", (event) => {
+        const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
+        if (!storeKeys.includes("construction")) return;
+        requestConstructionTaskRemoteSync();
+    });
     window.addEventListener("focus", render);
 
     // Project-name click now opens the inline construction form modal.
 
+    syncTasksFromConstructionRecords();
     render();
+    const taskRemoteSyncPromise = requestConstructionTaskRemoteSync();
+    if (taskRemoteSyncPromise && typeof taskRemoteSyncPromise.then === "function") {
+        taskRemoteSyncPromise.catch(() => {
+            // Ignore sync failures and keep the latest local snapshot visible.
+        });
+    }
 });
 /* CONSTRUCTION_TASK_TABLE_SCRIPT_END */
 
@@ -19183,6 +19518,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
     const CONSTRUCTION_TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const currentUser = String(projectDashboard.dataset.currentUser || "").trim() || "Local User";
+    const constructionPhotoUploadUrl = String(projectDashboard.dataset.photoUploadUrl || "").trim();
     const recordId = String(new URLSearchParams(window.location.search).get("id") || "").trim();
     const HISTORY_LIMIT = 12;
 
@@ -19337,6 +19673,78 @@ document.addEventListener("DOMContentLoaded", () => {
         return wrote;
     };
 
+    const getCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getCsrfToken = () => {
+        const tokenFromCookie = getCookie("csrftoken");
+        if (tokenFromCookie) return tokenFromCookie;
+        const tokenFromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenFromDom instanceof HTMLInputElement ? String(tokenFromDom.value || "").trim() : "";
+    };
+
+    const uploadConstructionProjectPhotos = async (files) => {
+        const list = Array.isArray(files) ? files : [];
+        if (!list.length) return { ok: true, images: [] };
+        if (!constructionPhotoUploadUrl) {
+            return { ok: false, error: "Photo upload URL is not configured." };
+        }
+
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
+        }
+
+        const filesForUpload = await Promise.all(
+            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
+        );
+        const payload = new FormData();
+        filesForUpload.forEach((file) => {
+            payload.append("photos", file, file?.name || "photo");
+        });
+
+        try {
+            const response = await window.fetch(constructionPhotoUploadUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Accept": "application/json",
+                },
+                body: payload,
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data || data.ok !== true) {
+                return { ok: false, error: String(data?.error || "Photo upload failed.") };
+            }
+
+            const nowIso = new Date().toISOString();
+            const uploaded = Array.isArray(data.files) ? data.files : [];
+            const images = uploaded
+                .map((item) => ({
+                    dataUrl: String(item?.url || "").trim(),
+                    name: String(item?.original_name || item?.name || "").trim(),
+                    uploaded_at: nowIso,
+                }))
+                .filter((img) => img.dataUrl);
+
+            return { ok: true, images };
+        } catch (error) {
+            return { ok: false, error: "Unable to upload photos right now." };
+        }
+    };
+
     const toast = (message, options = {}) => {
         if (typeof showPeoGeneralToast === "function") {
             showPeoGeneralToast(message, options);
@@ -19360,7 +19768,8 @@ document.addEventListener("DOMContentLoaded", () => {
         imageGallery.innerHTML = "";
 
         images.forEach((img, index) => {
-            const url = String(img?.dataUrl || "").trim();
+            const rawUrl = String(img?.dataUrl || img?.url || "").trim();
+            const url = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
             if (!url) return;
 
             const card = document.createElement("div");
@@ -19425,29 +19834,6 @@ document.addEventListener("DOMContentLoaded", () => {
             card.appendChild(footer);
             imageGallery.appendChild(card);
         });
-    };
-
-    const readFilesAsDataUrls = async (files) => {
-        const list = Array.from(files || []).filter(Boolean);
-        const results = [];
-
-        for (const file of list) {
-            // eslint-disable-next-line no-await-in-loop
-            const dataUrl = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result || ""));
-                reader.onerror = () => resolve("");
-                reader.readAsDataURL(file);
-            });
-            if (!dataUrl) continue;
-            results.push({
-                dataUrl,
-                name: String(file.name || ""),
-                uploaded_at: new Date().toISOString(),
-            });
-        }
-
-        return results;
     };
 
     const createHistoryId = () => {
@@ -19563,7 +19949,14 @@ document.addEventListener("DOMContentLoaded", () => {
         ? record.accomplishment_images.slice()
         : (legacyImageUrl ? [{ dataUrl: legacyImageUrl, name: legacyImageName || "Image", uploaded_at: "" }] : []);
     pendingImages = pendingImages
-        .map((img) => ({ dataUrl: String(img?.dataUrl || ""), name: String(img?.name || ""), uploaded_at: String(img?.uploaded_at || "") }))
+        .map((img) => {
+            const rawUrl = String(img?.dataUrl || img?.url || "").trim();
+            return {
+                dataUrl: normalizeConstructionSpotlightUrl(rawUrl) || rawUrl,
+                name: String(img?.name || ""),
+                uploaded_at: String(img?.uploaded_at || ""),
+            };
+        })
         .filter((img) => img.dataUrl);
     renderGallery(pendingImages);
 
@@ -19578,8 +19971,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const files = imageInput.files ? Array.from(imageInput.files) : [];
             if (!files.length) return;
 
-            const nextImages = await readFilesAsDataUrls(files);
+            imageInput.disabled = true;
+            const uploadResult = await uploadConstructionProjectPhotos(files);
+            imageInput.disabled = false;
+            const nextImages = uploadResult.ok ? uploadResult.images : [];
             if (!nextImages.length) {
+                if (!uploadResult.ok) {
+                    toast(String(uploadResult?.error || "Unable to upload photos."), {
+                        title: "Construction Project",
+                        variant: "warning",
+                    });
+                }
                 imageInput.value = "";
                 return;
             }
@@ -20265,14 +20667,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const writeStoredPlanningDocuments = (records) => {
+    const writeStoredPlanningDocuments = (records, options = {}) => {
+        const syncRemote = options && options.syncRemote === false ? false : true;
         try {
             window.localStorage.setItem(PLANNING_DOCUMENT_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
+        if (syncRemote && window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             window.peoDivisionStore.syncNow("planning", records);
         }
     };
@@ -21306,7 +21709,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	    let planningBudgetRecords = readStoredBudgets();
 	    let planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
-	    writeStoredPlanningDocuments(planningDocumentRecords);
+	    writeStoredPlanningDocuments(planningDocumentRecords, { syncRemote: false });
         if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
             window.peoIncomingDocToast.check("planning", readAdminDivisionRecords());
         }
@@ -24523,14 +24926,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         ? record.accomplishment_images
                             .map((img) => {
                                 if (typeof img === "string") {
-                                    const dataUrl = img.trim();
-                                    return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                                    const rawUrl = img.trim();
+                                    const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
+                                    return dataUrl ? { dataUrl, sourceUrl: rawUrl, name: "", uploaded_at: "" } : null;
                                 }
                                 if (!img || typeof img !== "object") return null;
-                                const dataUrl = String(img.dataUrl || img.url || "").trim();
+                                const rawUrl = String(img.dataUrl || img.url || "").trim();
+                                const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
                                 if (!dataUrl) return null;
                                 return {
                                     dataUrl,
+                                    sourceUrl: rawUrl,
                                     name: String(img.name || "").trim(),
                                     uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || record?.__updated_at || record?.__created_at || "").trim(),
                                 };
@@ -24556,7 +24962,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                             class="project-history-image-delete"
                                             data-project-history-delete-image="true"
                                             data-record-id="${escapeProjectHtml(String(record.__id || ""))}"
-                                            data-image-url="${escapeProjectHtml(String(img.dataUrl || "").trim())}"
+                                            data-image-url="${escapeProjectHtml(String(img.sourceUrl || img.dataUrl || "").trim())}"
                                             aria-label="Delete photo"
                                             title="Delete photo"
                                         >
@@ -26563,14 +26969,15 @@ document.addEventListener("DOMContentLoaded", () => {
         return Array.from(byIdentity.values());
     };
 
-    const writeStoredRecords = (records) => {
+    const writeStoredRecords = (records, options = {}) => {
+        const syncRemote = options && options.syncRemote === false ? false : true;
         try {
             window.localStorage.setItem(QUALITY_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage errors.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
+        if (syncRemote && window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
@@ -26840,7 +27247,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     let records = dedupeQualityRecords(syncAdminRoutedQualityRecords(readStoredRecords()));
-    writeStoredRecords(records);
+    writeStoredRecords(records, { syncRemote: false });
     if (window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
         window.peoIncomingDocToast.check("quality", readAdminDivisionRecords());
     }
@@ -28206,14 +28613,17 @@ if (document.readyState === "loading") {
                 ? record.accomplishment_images
                     .map((img) => {
                         if (typeof img === "string") {
-                            const dataUrl = img.trim();
-                            return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                            const rawUrl = img.trim();
+                            const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
+                            return dataUrl ? { dataUrl, sourceUrl: rawUrl, name: "", uploaded_at: "" } : null;
                         }
                         if (!img || typeof img !== "object") return null;
-                        const dataUrl = String(img?.dataUrl || img?.url || "").trim();
+                        const rawUrl = String(img?.dataUrl || img?.url || "").trim();
+                        const dataUrl = normalizeConstructionSpotlightUrl(rawUrl) || rawUrl;
                         if (!dataUrl) return null;
                         return {
                             dataUrl,
+                            sourceUrl: rawUrl,
                             name: String(img?.name || "").trim(),
                             uploaded_at: String(img?.uploaded_at || img?.uploadedAt || img?.created_at || img?.createdAt || record?.__updated_at || record?.__created_at || "").trim(),
                         };
@@ -28242,7 +28652,7 @@ if (document.readyState === "loading") {
                                         class="project-history-image-delete"
                                         data-project-history-delete-image="true"
                                         data-record-id="${escapeHtml(String(record.__id || ""))}"
-                                        data-image-url="${escapeHtml(String(img.dataUrl || "").trim())}"
+                                        data-image-url="${escapeHtml(String(img.sourceUrl || img.dataUrl || "").trim())}"
                                         aria-label="Delete photo"
                                         title="Delete photo"
                                     >

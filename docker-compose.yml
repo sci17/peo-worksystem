@@ -28,8 +28,8 @@ services:
       RUN_MIGRATIONS: "true"
       COLLECT_STATIC: "true"
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1],192.168.1.177,192.168.1.*,192.168.63.199,192.168.63.201,192.168.63.*}
-      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000,http://192.168.1.177:8000,http://192.168.63.199:8000,http://192.168.63.201:8000}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-peopalawan.com,www.peopalawan.com,localhost,127.0.0.1,[::1]}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000,https://peopalawan.com,https://www.peopalawan.com}
       DJANGO_DB_ENGINE: ${DJANGO_DB_ENGINE:-django.db.backends.mysql}
       DJANGO_DB_NAME: ${DJANGO_DB_NAME:-peo_database}
       DJANGO_DB_USER: ${DJANGO_DB_USER:-django_user}
@@ -41,6 +41,12 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-this-to-a-long-random-secret}
       DJANGO_SECURE_PROXY_SSL_HEADER: ${DJANGO_SECURE_PROXY_SSL_HEADER:-HTTP_X_FORWARDED_PROTO:https}
       DJANGO_USE_X_FORWARDED_HOST: ${DJANGO_USE_X_FORWARDED_HOST:-True}
+      DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-False}
+      DJANGO_SESSION_COOKIE_SECURE: ${DJANGO_SESSION_COOKIE_SECURE:-False}
+      DJANGO_CSRF_COOKIE_SECURE: ${DJANGO_CSRF_COOKIE_SECURE:-False}
+      DJANGO_SECURE_HSTS_SECONDS: ${DJANGO_SECURE_HSTS_SECONDS:-0}
+      DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS: ${DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS:-True}
+      DJANGO_SECURE_HSTS_PRELOAD: ${DJANGO_SECURE_HSTS_PRELOAD:-True}
       DJANGO_MEDIA_URL: /media/
       DJANGO_MEDIA_ROOT: /shared/media
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -124,12 +130,12 @@ services:
   nginx:
     image: nginx:1.27-alpine
     depends_on:
-      web:
-        condition: service_healthy
+      - web
     ports:
-      - "8000:80"
+      - "${HOST_HTTP_PORT:-80}:80"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${NGINX_CONF_PATH:-./nginx/default.conf}:/etc/nginx/conf.d/default.conf:ro
+      - ${CERTBOT_WEBROOT_DIR:-./certbot/www}:/var/www/certbot:ro
       - shared_media:/shared/media:ro
       - django_static:/app/staticfiles:ro
     healthcheck:
