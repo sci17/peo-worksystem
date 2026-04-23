@@ -1369,6 +1369,11 @@ const normalizeConstructionSpotlightUrl = (value) => {
             pending_local_write: Boolean(state),
             pending_write_token: token,
         };
+        if (state) {
+            nextMeta.pending_started_at = new Date().toISOString();
+        } else {
+            nextMeta.pending_started_at = "";
+        }
 
         const serverUpdatedAt = String(responseData?.updated_at || "").trim();
         if (!state && serverUpdatedAt) {
@@ -1395,6 +1400,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
             ...prevMeta,
             pending_local_write: false,
             pending_write_token: token,
+            pending_started_at: "",
             failed_at: new Date().toISOString(),
         });
         emitDivisionStoreActivity({
@@ -1531,9 +1537,15 @@ const normalizeConstructionSpotlightUrl = (value) => {
             return true;
         }
 
+        const pendingStartedAtMs = Date.parse(String(meta.pending_started_at || ""));
+        if (Number.isFinite(pendingStartedAtMs) && Date.now() - pendingStartedAtMs < 20000) {
+            return true;
+        }
+
         writeStoreMeta(normalizedKey, {
             ...meta,
             pending_local_write: false,
+            pending_started_at: "",
             stale_pending_cleared_at: new Date().toISOString(),
         });
         return false;
@@ -3092,6 +3104,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const PAGE_SIZE = 10;
         let currentPage = 1;
         let editingRecordId = "";
+        let submissionsInteractionLockUntil = 0;
+        let pendingAdminStoreUpdate = false;
+        let pendingAdminStoreTimer = null;
 
         if (!(tbody instanceof HTMLElement)) return;
 
@@ -3106,6 +3121,54 @@ document.addEventListener("DOMContentLoaded", () => {
             const viewOpen = viewModal instanceof HTMLElement && !viewModal.hidden;
             const editOpen = editModal instanceof HTMLElement && !editModal.hidden;
             document.body.classList.toggle("submissions-modal-open", viewOpen || editOpen);
+        };
+
+        const isBusyWithSubmissionInteraction = () => {
+            const editOpen = editModal instanceof HTMLElement && !editModal.hidden;
+            return editOpen || Date.now() < submissionsInteractionLockUntil;
+        };
+
+        const flushPendingAdminStoreUpdate = () => {
+            if (pendingAdminStoreTimer) {
+                window.clearTimeout(pendingAdminStoreTimer);
+                pendingAdminStoreTimer = null;
+            }
+            if (!pendingAdminStoreUpdate || isBusyWithSubmissionInteraction()) {
+                return false;
+            }
+            pendingAdminStoreUpdate = false;
+            adminRecords = reconcileMaintenanceOutgoingSubmissions(readAdminStore());
+            refreshRows();
+            if (editingRecordId) {
+                const stillExists = allRows.some((row) => row.id === editingRecordId);
+                if (!stillExists) {
+                    closeEditModal();
+                }
+            }
+            render();
+            renderRouteFiles();
+            syncRouteControls();
+            return true;
+        };
+
+        const schedulePendingAdminStoreUpdate = (delayMs = 220) => {
+            if (pendingAdminStoreTimer) {
+                window.clearTimeout(pendingAdminStoreTimer);
+            }
+            pendingAdminStoreTimer = window.setTimeout(() => {
+                pendingAdminStoreTimer = null;
+                flushPendingAdminStoreUpdate();
+            }, Math.max(120, Number(delayMs) || 0));
+        };
+
+        const markSubmissionInteractionLock = (durationMs = 700) => {
+            submissionsInteractionLockUntil = Math.max(
+                submissionsInteractionLockUntil,
+                Date.now() + Math.max(150, Number(durationMs) || 0)
+            );
+            if (pendingAdminStoreUpdate) {
+                schedulePendingAdminStoreUpdate(submissionsInteractionLockUntil - Date.now() + 140);
+            }
         };
 
         const openModal = (modal) => {
@@ -3143,6 +3206,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (editForm instanceof HTMLFormElement) {
                 editForm.reset();
             }
+            submissionsInteractionLockUntil = 0;
+            flushPendingAdminStoreUpdate();
         };
 
         const refreshRows = () => {
@@ -3259,11 +3324,21 @@ document.addEventListener("DOMContentLoaded", () => {
             button.addEventListener("click", closeEditModal);
         });
 
+        root.addEventListener("pointerdown", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (target.closest("[data-submissions-action]")) {
+                markSubmissionInteractionLock(850);
+            }
+        });
+
         root.addEventListener("click", async (event) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
             const actionButton = target.closest("[data-submissions-action]");
             if (!actionButton) return;
+            event.preventDefault();
+            event.stopPropagation();
             const action = String(actionButton.dataset.submissionsAction || "").trim();
             const recordId = String(actionButton.dataset.recordId || "").trim();
             if (!action || !recordId) return;
@@ -3596,6 +3671,12 @@ document.addEventListener("DOMContentLoaded", () => {
             let lastAdminSyncAt = 0;
 
             const handleAdminStoreUpdate = () => {
+                if (isBusyWithSubmissionInteraction()) {
+                    pendingAdminStoreUpdate = true;
+                    schedulePendingAdminStoreUpdate(submissionsInteractionLockUntil - Date.now() + 220);
+                    return;
+                }
+                pendingAdminStoreUpdate = false;
                 adminRecords = reconcileMaintenanceOutgoingSubmissions(readAdminStore());
                 refreshRows();
                 if (editingRecordId) {
@@ -6195,18 +6276,18 @@ const portalDomReady = () => {
     };
 
     const writeAdminDivisionRecords = (records) => {
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
-            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
-                return record && typeof record === "object" ? { ...record } : record;
-            });
-            window.peoDivisionStore.syncNow("admin", safeRecords);
-        }
-
         if (!isLocalStorageAvailable()) return;
         try {
             window.localStorage.setItem(ADMIN_DIVISION_STORAGE_KEY, JSON.stringify(records));
         } catch (error) {
             // Ignore storage write failures (quota/private mode).
+        }
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
+            const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
+                return record && typeof record === "object" ? { ...record } : record;
+            });
+            window.peoDivisionStore.syncNow("admin", safeRecords);
         }
     };
 
@@ -8082,10 +8163,38 @@ document.addEventListener("DOMContentLoaded", () => {
     let roadDeleteConfirmToastElement = null;
     let personnelRecords = [];
     let dismissedAdminTaskIds = [];
+    let maintenanceInteractionLockUntil = 0;
+    let maintenancePendingRefresh = false;
+    let maintenancePendingRemoteRefresh = false;
+    let maintenancePendingRefreshTimer = null;
 
     const setBodyScrollLock = () => {
         const isAnyModalOpen = [equipmentModal, scheduleModal, roadEditModal, roadAddModal, roadDeleteModal, taskPersonnelModal, taskModal, taskAnalysisCard, contractorAddModal, contractorFloatCard, contractorEditModal, contractorEvalModal].some((modal) => modal && !modal.hidden);
         document.body.style.overflow = isAnyModalOpen ? "hidden" : "";
+    };
+
+    const isMaintenanceInteractionBusy = () => {
+        const isAnyModalOpen = [equipmentModal, scheduleModal, roadEditModal, roadAddModal, roadDeleteModal, taskPersonnelModal, taskModal, taskRowEditModal, taskAnalysisCard, contractorAddModal, contractorFloatCard, contractorEditModal, contractorEvalModal]
+            .some((modal) => modal && !modal.hidden);
+        return Date.now() < maintenanceInteractionLockUntil
+            || isAnyModalOpen
+            || Boolean(taskAssignPopover)
+            || Boolean(roadUploadDuplicatePromptElement)
+            || Boolean(roadUploadAddConfirmPromptElement)
+            || Boolean(roadDeleteConfirmToastElement);
+    };
+
+    const markMaintenanceInteractionLock = (durationMs = 500) => {
+        const safeDuration = Number.isFinite(Number(durationMs)) ? Math.max(180, Number(durationMs)) : 500;
+        maintenanceInteractionLockUntil = Math.max(maintenanceInteractionLockUntil, Date.now() + safeDuration);
+    };
+
+    const scheduleMaintenanceRefresh = () => {
+        if (maintenancePendingRefreshTimer !== null) return;
+        maintenancePendingRefreshTimer = window.setTimeout(() => {
+            maintenancePendingRefreshTimer = null;
+            flushPendingMaintenanceRefresh();
+        }, 140);
     };
 
     const escapeHtml = (value) =>
@@ -11684,11 +11793,26 @@ document.addEventListener("DOMContentLoaded", () => {
             updateContractorDropdownFilterState(contractorPcabFilter);
         }
 
+        contractorManagement.addEventListener("pointerdown", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+            if (event.button !== undefined && event.button !== 0) {
+                return;
+            }
+            if (!target.closest(".js-contractor-row")) {
+                return;
+            }
+            markMaintenanceInteractionLock(650);
+        });
+
         contractorManagement.addEventListener("click", (event) => {
             const clickTarget = event.target instanceof Element ? event.target : null;
             if (!clickTarget) {
                 return;
             }
+            markMaintenanceInteractionLock(650);
 
             const evaluationOpener = clickTarget.closest(".js-contractor-open-eval");
             if (evaluationOpener) {
@@ -14334,11 +14458,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (equipmentTableBody) {
+        equipmentTableBody.addEventListener("pointerdown", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+            if (event.button !== undefined && event.button !== 0) {
+                return;
+            }
+            if (!target.closest("tr")) {
+                return;
+            }
+            markMaintenanceInteractionLock(650);
+        });
         equipmentTableBody.addEventListener("click", async (event) => {
             const target = event.target;
             if (!(target instanceof Element)) {
                 return;
             }
+            markMaintenanceInteractionLock(650);
 
             const row = target.closest("tr");
             if (!row || row.classList.contains("equipment-empty-row")) {
@@ -14376,11 +14514,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (scheduleTableBody) {
+        scheduleTableBody.addEventListener("pointerdown", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+            if (event.button !== undefined && event.button !== 0) {
+                return;
+            }
+            if (!target.closest("tr")) {
+                return;
+            }
+            markMaintenanceInteractionLock(650);
+        });
         scheduleTableBody.addEventListener("click", async (event) => {
             const target = event.target;
             if (!(target instanceof Element)) {
                 return;
             }
+            markMaintenanceInteractionLock(650);
 
             const row = target.closest("tr");
             if (!row || row.classList.contains("schedule-empty-row")) {
@@ -14672,11 +14824,25 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (taskTableBody) {
+        taskTableBody.addEventListener("pointerdown", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+            if (event.button !== undefined && event.button !== 0) {
+                return;
+            }
+            if (!target.closest("tr")) {
+                return;
+            }
+            markMaintenanceInteractionLock(650);
+        });
         taskTableBody.addEventListener("click", async (event) => {
             const target = event.target;
             if (!(target instanceof Element)) {
                 return;
             }
+            markMaintenanceInteractionLock(650);
 
             const row = target.closest("tr");
             if (!row || row.classList.contains("js-task-empty-row")) {
@@ -15004,6 +15170,34 @@ document.addEventListener("DOMContentLoaded", () => {
         applyTaskFilters();
     };
 
+    const flushPendingMaintenanceRefresh = () => {
+        if (isMaintenanceInteractionBusy()) {
+            scheduleMaintenanceRefresh();
+            return;
+        }
+        if (maintenancePendingRemoteRefresh) {
+            maintenancePendingRemoteRefresh = false;
+            requestMaintenanceHydrate();
+            return;
+        }
+        if (!maintenancePendingRefresh) return;
+        maintenancePendingRefresh = false;
+        refreshTaskTableFromStorage();
+    };
+
+    const queueMaintenanceRefresh = (options = {}) => {
+        if (options && options.remote) {
+            maintenancePendingRemoteRefresh = true;
+        } else {
+            maintenancePendingRefresh = true;
+        }
+        if (isMaintenanceInteractionBusy()) {
+            scheduleMaintenanceRefresh();
+            return;
+        }
+        flushPendingMaintenanceRefresh();
+    };
+
     const hydrateMaintenanceStoresFromServer = async () => {
         if (!(taskTableBody instanceof HTMLElement)) {
             return;
@@ -15059,13 +15253,26 @@ document.addEventListener("DOMContentLoaded", () => {
         let maintenanceHydrateInFlight = null;
         let lastMaintenanceHydrateAt = 0;
         const requestMaintenanceHydrate = () => {
+            if (isMaintenanceInteractionBusy()) {
+                maintenancePendingRemoteRefresh = true;
+                scheduleMaintenanceRefresh();
+                return;
+            }
             const now = Date.now();
             if (maintenanceHydrateInFlight) return;
             if (now - lastMaintenanceHydrateAt < 1500) return;
             lastMaintenanceHydrateAt = now;
-            maintenanceHydrateInFlight = Promise.resolve(hydrateMaintenanceStoresFromServer()).finally(() => {
-                maintenanceHydrateInFlight = null;
-            });
+            maintenanceHydrateInFlight = Promise.resolve(hydrateMaintenanceStoresFromServer())
+                .then(() => {
+                    if (isMaintenanceInteractionBusy()) {
+                        maintenancePendingRefresh = true;
+                        scheduleMaintenanceRefresh();
+                    }
+                })
+                .finally(() => {
+                    maintenanceHydrateInFlight = null;
+                    window.setTimeout(flushPendingMaintenanceRefresh, 0);
+                });
         };
 
         // Keep the Maintenance task table in sync when another tab routes Admin records into Maintenance.
@@ -15074,22 +15281,21 @@ document.addEventListener("DOMContentLoaded", () => {
         window.addEventListener("storage", (event) => {
             const key = String(event.key || "");
             if (key === adminDivisionStorageKey || key === maintenanceStorageKey) {
-                refreshTaskTableFromStorage();
+                queueMaintenanceRefresh();
             }
         });
         window.addEventListener("peo:division-store-synced", (event) => {
             const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
             if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("maintenance")) return;
-            restoreMaintenanceState();
-            refreshTaskTableFromStorage();
+            queueMaintenanceRefresh();
         });
         window.addEventListener(MAINTENANCE_STATE_UPDATED_EVENT, () => {
-            refreshTaskTableFromStorage();
+            queueMaintenanceRefresh();
         });
         window.addEventListener("peo:division-store-remote-update", (event) => {
             const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
             if (!storeKeys.includes("admin") && !storeKeys.includes("maintenance")) return;
-            requestMaintenanceHydrate();
+            queueMaintenanceRefresh({ remote: true });
         });
 
         // Pull server state when localStorage is empty/stale (e.g., different user/session/device).
@@ -17180,12 +17386,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     let currentPage = 1;
     let editingRecordId = null;
+    let selectedConstructionRecordIds = new Set();
 
 	    const isAdminRoutedRecord = (record) => String(record?.__admin_source || "") === "admin_document";
 
 	    const getVisibleRecords = () => {
 	        return Array.isArray(records) ? records : [];
 	    };
+
+    const syncSelectedConstructionRecordIds = () => {
+        const availableIds = new Set(
+            getVisibleRecords()
+                .map((record) => String(record?.__id || "").trim())
+                .filter(Boolean)
+        );
+        selectedConstructionRecordIds = new Set(
+            Array.from(selectedConstructionRecordIds).filter((id) => availableIds.has(id))
+        );
+    };
 
 	    const getTotalPages = () => {
 	        return Math.max(1, Math.ceil(getVisibleRecords().length / CONSTRUCTION_PAGE_SIZE));
@@ -17222,6 +17440,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const updateSelectionControls = () => {
+        syncSelectedConstructionRecordIds();
         const rowCheckboxes = getVisibleRowCheckboxes();
         const selectedCount = rowCheckboxes.filter((checkbox) => checkbox.checked).length;
 
@@ -17273,9 +17492,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     const projectCell = ageBadge
                         ? `<span class="peo-doc-title-inline">${projectLabel}${ageBadge}</span>`
                         : projectLabel;
-		                row.innerHTML = `
+	                row.innerHTML = `
 		                    <td class="pa-select-col">
-	                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}" ${canManageConstructionRegister ? "" : "disabled"}>
+	                        <input type="checkbox" class="js-construction-row-select" aria-label="Select row" data-record-id="${escapeHtml(record.__id)}" ${selectedConstructionRecordIds.has(String(record.__id || "").trim()) ? "checked" : ""} ${canManageConstructionRegister ? "" : "disabled"}>
 		                    </td>
 		                    <td>${pageStartIndex + index + 1}</td>
 		                    <td>${projectCell}</td>
@@ -18780,6 +18999,13 @@ document.addEventListener("DOMContentLoaded", () => {
         selectAllCheckbox.addEventListener("change", () => {
             getVisibleRowCheckboxes().forEach((checkbox) => {
                 checkbox.checked = selectAllCheckbox.checked;
+                const recordId = String(checkbox.dataset.recordId || "").trim();
+                if (!recordId) return;
+                if (selectAllCheckbox.checked) {
+                    selectedConstructionRecordIds.add(recordId);
+                } else {
+                    selectedConstructionRecordIds.delete(recordId);
+                }
             });
             updateSelectionControls();
         });
@@ -18817,7 +19043,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         constructionTableBody.addEventListener("change", (event) => {
             const target = event.target;
-            if (target && target.classList.contains("js-construction-row-select")) {
+            if (target instanceof HTMLInputElement && target.classList.contains("js-construction-row-select")) {
+                const recordId = String(target.dataset.recordId || "").trim();
+                if (recordId) {
+                    if (target.checked) {
+                        selectedConstructionRecordIds.add(recordId);
+                    } else {
+                        selectedConstructionRecordIds.delete(recordId);
+                    }
+                }
                 updateSelectionControls();
             }
         });
@@ -18829,9 +19063,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 showConstructionRegisterLockedToast();
                 return;
             }
-            const selectedIds = getVisibleRowCheckboxes()
-                .filter((checkbox) => checkbox.checked)
-                .map((checkbox) => checkbox.dataset.recordId);
+            syncSelectedConstructionRecordIds();
+            const selectedIds = Array.from(selectedConstructionRecordIds);
             if (!selectedIds.length) return;
 
             const deletedAdminIds = readDeletedConstructionAdminIds();
@@ -18855,6 +19088,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const removeSet = new Set(selectedIds);
             records = records.filter((record) => !removeSet.has(record.__id));
+            selectedConstructionRecordIds = new Set(
+                Array.from(selectedConstructionRecordIds).filter((id) => !removeSet.has(id))
+            );
             clampCurrentPage();
             writeDeletedConstructionAdminIds(deletedAdminIds);
             writeStoredRecords(records);
@@ -18886,30 +19122,42 @@ document.addEventListener("DOMContentLoaded", () => {
             { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
         ], force ? { force: true } : {}))
             .then(() => {
+                if (isConstructionProposalInteractionBusy()) {
+                    constructionProposalPendingRefresh = true;
+                    scheduleConstructionProposalRefresh();
+                    return;
+                }
                 resyncAdminAssignedProjects();
             })
             .finally(() => {
                 constructionRemoteSyncInFlight = null;
+                if (options && options.deferred) {
+                    window.setTimeout(flushConstructionProposalRefresh, 0);
+                }
             });
         return constructionRemoteSyncInFlight;
     };
 
-    window.addEventListener("focus", resyncAdminAssignedProjects);
+    window.addEventListener("focus", () => {
+        queueConstructionProposalRefresh();
+    });
     window.addEventListener("peo:division-store-synced", (event) => {
         const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("construction")) return;
-        resyncAdminAssignedProjects();
+        queueConstructionProposalRefresh();
     });
     window.addEventListener("peo:division-store-remote-update", (event) => {
         const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!storeKeys.includes("admin") && !storeKeys.includes("construction")) return;
-        requestConstructionRemoteSync({ force: true });
+        queueConstructionProposalRefresh({ remote: true });
     });
-    window.addEventListener("construction-records-updated", resyncAdminAssignedProjects);
+    window.addEventListener("construction-records-updated", () => {
+        queueConstructionProposalRefresh();
+    });
     window.addEventListener("storage", (event) => {
         const key = String(event.key || "");
         if (key !== ADMIN_DIVISION_STORAGE_KEY && key !== CONSTRUCTION_STORAGE_KEY) return;
-        resyncAdminAssignedProjects();
+        queueConstructionProposalRefresh();
     });
 
     const initializeConstructionDashboard = () => {
@@ -18943,6 +19191,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const TASK_STORAGE_KEY = "peo_construction_tasks_v1";
     const CONSTRUCTION_STORAGE_KEY = "peo_construction_records_v1";
+    const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
     const access = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
     const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
     const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
@@ -19140,6 +19389,28 @@ document.addEventListener("DOMContentLoaded", () => {
         return wrote;
     };
 
+    const readDeletedConstructionAdminIds = () => {
+        try {
+            const raw = window.localStorage.getItem(CONSTRUCTION_DELETED_ADMIN_IDS_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []);
+        } catch (error) {
+            return new Set();
+        }
+    };
+
+    const writeDeletedConstructionAdminIds = (idsSet) => {
+        try {
+            window.localStorage.setItem(
+                CONSTRUCTION_DELETED_ADMIN_IDS_KEY,
+                JSON.stringify(Array.from(idsSet instanceof Set ? idsSet : new Set()))
+            );
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
     const buildTaskFromConstructionRecord = (record, existingTask = {}) => {
         const source = record && typeof record === "object" ? record : {};
         const prior = existingTask && typeof existingTask === "object" ? existingTask : {};
@@ -19187,8 +19458,64 @@ document.addEventListener("DOMContentLoaded", () => {
         return derivedTasks;
     };
 
+    let constructionTaskInteractionLockUntil = 0;
+    let constructionTaskPendingRefresh = false;
+    let constructionTaskPendingRemoteRefresh = false;
+    let constructionTaskPendingRefreshTimer = null;
     let constructionTaskRemoteSyncInFlight = null;
-    const requestConstructionTaskRemoteSync = () => {
+
+    const isConstructionTaskInteractionBusy = () => {
+        return Date.now() < constructionTaskInteractionLockUntil
+            || (formModal instanceof HTMLElement && !formModal.hidden);
+    };
+
+    const markConstructionTaskInteractionLock = (durationMs = 500) => {
+        const safeDuration = Number.isFinite(Number(durationMs)) ? Math.max(180, Number(durationMs)) : 500;
+        constructionTaskInteractionLockUntil = Math.max(constructionTaskInteractionLockUntil, Date.now() + safeDuration);
+    };
+
+    const scheduleConstructionTaskRefresh = () => {
+        if (constructionTaskPendingRefreshTimer !== null) return;
+        constructionTaskPendingRefreshTimer = window.setTimeout(() => {
+            constructionTaskPendingRefreshTimer = null;
+            flushConstructionTaskRefresh();
+        }, 140);
+    };
+
+    const renderConstructionTaskTable = () => {
+        syncTasksFromConstructionRecords();
+        render();
+    };
+
+    const flushConstructionTaskRefresh = () => {
+        if (isConstructionTaskInteractionBusy()) {
+            scheduleConstructionTaskRefresh();
+            return;
+        }
+        if (constructionTaskPendingRemoteRefresh) {
+            constructionTaskPendingRemoteRefresh = false;
+            requestConstructionTaskRemoteSync({ deferred: true });
+            return;
+        }
+        if (!constructionTaskPendingRefresh) return;
+        constructionTaskPendingRefresh = false;
+        renderConstructionTaskTable();
+    };
+
+    const queueConstructionTaskRefresh = (options = {}) => {
+        if (options && options.remote) {
+            constructionTaskPendingRemoteRefresh = true;
+        } else {
+            constructionTaskPendingRefresh = true;
+        }
+        if (isConstructionTaskInteractionBusy()) {
+            scheduleConstructionTaskRefresh();
+            return;
+        }
+        flushConstructionTaskRefresh();
+    };
+
+    const requestConstructionTaskRemoteSync = (options = {}) => {
         const store = window.peoDivisionStore;
         if (!store || typeof store.syncToLocalStorage !== "function") return null;
         if (constructionTaskRemoteSyncInFlight) return constructionTaskRemoteSyncInFlight;
@@ -19196,11 +19523,18 @@ document.addEventListener("DOMContentLoaded", () => {
             { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
         ], { force: true }))
             .then(() => {
-                syncTasksFromConstructionRecords();
-                render();
+                if (isConstructionTaskInteractionBusy()) {
+                    constructionTaskPendingRefresh = true;
+                    scheduleConstructionTaskRefresh();
+                    return;
+                }
+                renderConstructionTaskTable();
             })
             .finally(() => {
                 constructionTaskRemoteSyncInFlight = null;
+                if (options && options.deferred) {
+                    window.setTimeout(flushConstructionTaskRefresh, 0);
+                }
             });
         return constructionTaskRemoteSyncInFlight;
     };
@@ -19234,15 +19568,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const previousTasks = readTasks();
         const previousConstructionRecords = readConstructionRecords();
+        const previousDeletedAdminIds = readDeletedConstructionAdminIds();
+        const deletedAdminIds = new Set(previousDeletedAdminIds);
+        previousConstructionRecords.forEach((record) => {
+            if (String(record?.__admin_source || "").trim() !== "admin_document") return;
+            const sourceId = String(record?.__admin_source_id || "").trim();
+            if (!sourceId) return;
+            deletedAdminIds.add(sourceId);
+        });
         const wroteTasks = writeTasks([]);
         const wroteConstruction = writeConstructionRecords([]);
+        const wroteDeletedAdminIds = writeDeletedConstructionAdminIds(deletedAdminIds);
 
-        if (!wroteTasks || !wroteConstruction) {
+        if (!wroteTasks || !wroteConstruction || !wroteDeletedAdminIds) {
             if (wroteTasks) {
                 writeTasks(previousTasks);
             }
             if (wroteConstruction) {
                 writeConstructionRecords(previousConstructionRecords);
+            }
+            if (wroteDeletedAdminIds) {
+                writeDeletedConstructionAdminIds(previousDeletedAdminIds);
             }
             showPeoGeneralToast("Unable to delete all construction data. Storage is unavailable.", {
                 title: "Construction Division",
@@ -19490,6 +19836,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const openModal = (record = {}) => {
         if (!formModal) return;
+        markConstructionTaskInteractionLock(800);
         fillForm(record);
         formModal.hidden = false;
         document.body.classList.add("construction-task-modal-open");
@@ -19503,6 +19850,7 @@ document.addEventListener("DOMContentLoaded", () => {
         formModal.hidden = true;
         document.body.classList.remove("construction-task-modal-open");
         clearTaskSelectedPhotoPreviews();
+        window.setTimeout(flushConstructionTaskRefresh, 0);
     };
 
     closeModalButtons.forEach((button) => {
@@ -19686,9 +20034,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (tableBody) {
+        tableBody.addEventListener("pointerdown", (event) => {
+            const target = event.target instanceof Element ? event.target : null;
+            if (!target) return;
+            if (event.button !== undefined && event.button !== 0) return;
+            if (!target.closest("tr")) return;
+            markConstructionTaskInteractionLock(650);
+        });
         tableBody.addEventListener("click", async (event) => {
             const clickTarget = event.target instanceof Element ? event.target : null;
             if (!clickTarget) return;
+            markConstructionTaskInteractionLock(650);
 
             const deleteTrigger = clickTarget.closest(".js-construction-task-delete");
             if (deleteTrigger) {
@@ -19719,17 +20075,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 if (!approved) return;
 
+                const deletedAdminIds = readDeletedConstructionAdminIds();
                 const nextTasks = tasks.filter((task) => String(task?.construction_id || task?.__id || "") !== recordId);
                 const constructionRecords = readConstructionRecords();
+                const deletedRecord = constructionRecords.find((record) => String(record?.__id || record?.construction_id || "") === recordId) || null;
+                if (deletedRecord && String(deletedRecord.__admin_source || "").trim() === "admin_document") {
+                    const sourceId = String(deletedRecord.__admin_source_id || "").trim();
+                    if (sourceId) {
+                        deletedAdminIds.add(sourceId);
+                    }
+                }
                 const nextConstructionRecords = constructionRecords.filter((record) => String(record?.__id || record?.construction_id || "") !== recordId);
                 const wroteTasks = writeTasks(nextTasks);
                 const wroteConstruction = writeConstructionRecords(nextConstructionRecords);
-                if (!wroteTasks || !wroteConstruction) {
+                const wroteDeletedAdminIds = writeDeletedConstructionAdminIds(deletedAdminIds);
+                if (!wroteTasks || !wroteConstruction || !wroteDeletedAdminIds) {
                     showPeoGeneralToast("Unable to delete task. Storage is unavailable.", {
                         title: "Construction Division",
                         variant: "danger",
                     });
                     return;
+                }
+
+                if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                    window.peoDivisionStore.flushSync();
                 }
 
                 showPeoGeneralToast("Task deleted successfully.", {
@@ -19838,25 +20207,27 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("storage", (event) => {
         const key = String(event.key || "");
         if (key !== TASK_STORAGE_KEY && key !== CONSTRUCTION_STORAGE_KEY) return;
-        render();
+        queueConstructionTaskRefresh();
     });
-    window.addEventListener("construction-tasks-updated", render);
+    window.addEventListener("construction-tasks-updated", () => {
+        queueConstructionTaskRefresh();
+    });
     window.addEventListener("construction-records-updated", () => {
-        syncTasksFromConstructionRecords();
-        render();
+        queueConstructionTaskRefresh();
     });
     window.addEventListener("peo:division-store-synced", (event) => {
         const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!syncedStoreKeys.includes("construction")) return;
-        syncTasksFromConstructionRecords();
-        render();
+        queueConstructionTaskRefresh();
     });
     window.addEventListener("peo:division-store-remote-update", (event) => {
         const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!storeKeys.includes("construction")) return;
-        requestConstructionTaskRemoteSync();
+        queueConstructionTaskRefresh({ remote: true });
     });
-    window.addEventListener("focus", render);
+    window.addEventListener("focus", () => {
+        queueConstructionTaskRefresh();
+    });
 
     // Project-name click now opens the inline construction form modal.
 
@@ -22050,6 +22421,90 @@ document.addEventListener("DOMContentLoaded", () => {
     let planningToastElement = null;
     let planningToastTimer = null;
 	    let planningConfirmOverlay = null;
+        let planningInteractionLockUntil = 0;
+        let planningPendingRefresh = false;
+        let planningPendingRemoteRefresh = false;
+        let planningPendingRefreshTimer = null;
+        let planningLastImmediateAction = { type: "", recordId: "", at: 0 };
+
+        const refreshPlanningDocumentsFromStorage = () => {
+            planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
+            renderPlanningDocumentsTable(planningDocumentRecords);
+            syncPpaFromPlanningDocuments(planningDocumentRecords);
+            syncPpaTableState();
+        };
+
+        const isPlanningInteractionBusy = () => {
+            const now = Date.now();
+            return now < planningInteractionLockUntil
+                || (planningDocModal instanceof HTMLElement && !planningDocModal.hidden)
+                || (planningEditPpaModal instanceof HTMLElement && !planningEditPpaModal.hidden)
+                || (planningEditBudgetModal instanceof HTMLElement && !planningEditBudgetModal.hidden)
+                || (planningPpaModal instanceof HTMLElement && !planningPpaModal.hidden)
+                || (planningBudgetModal instanceof HTMLElement && !planningBudgetModal.hidden)
+                || (planningConfirmOverlay instanceof HTMLElement && document.body.contains(planningConfirmOverlay));
+        };
+
+        const schedulePendingPlanningRefresh = () => {
+            if (planningPendingRefreshTimer !== null) return;
+            planningPendingRefreshTimer = window.setTimeout(() => {
+                planningPendingRefreshTimer = null;
+                flushPendingPlanningRefresh();
+            }, 140);
+        };
+
+        const flushPendingPlanningRefresh = () => {
+            if (isPlanningInteractionBusy()) {
+                schedulePendingPlanningRefresh();
+                return;
+            }
+            if (planningPendingRemoteRefresh) {
+                planningPendingRemoteRefresh = false;
+                requestPlanningRemoteSync({ deferred: true });
+                return;
+            }
+            if (!planningPendingRefresh) return;
+            planningPendingRefresh = false;
+            refreshPlanningDocumentsFromStorage();
+        };
+
+        const queuePlanningRefresh = (options = {}) => {
+            const useRemote = Boolean(options && options.remote);
+            if (useRemote) {
+                planningPendingRemoteRefresh = true;
+            } else {
+                planningPendingRefresh = true;
+            }
+            if (isPlanningInteractionBusy()) {
+                schedulePendingPlanningRefresh();
+                return;
+            }
+            flushPendingPlanningRefresh();
+        };
+
+        const markPlanningInteractionLock = (durationMs = 500) => {
+            const safeDuration = Number.isFinite(Number(durationMs)) ? Math.max(180, Number(durationMs)) : 500;
+            planningInteractionLockUntil = Math.max(planningInteractionLockUntil, Date.now() + safeDuration);
+        };
+
+        const shouldSkipPlanningClickAfterImmediateAction = (actionType, recordId) => {
+            const now = Date.now();
+            return planningLastImmediateAction.type === String(actionType || "")
+                && planningLastImmediateAction.recordId === String(recordId || "")
+                && now - Number(planningLastImmediateAction.at || 0) < 900;
+        };
+
+        const runPlanningImmediateAction = (actionType, recordId, callback, lockMs = 650) => {
+            markPlanningInteractionLock(lockMs);
+            planningLastImmediateAction = {
+                type: String(actionType || ""),
+                recordId: String(recordId || ""),
+                at: Date.now(),
+            };
+            if (typeof callback === "function") {
+                callback();
+            }
+        };
 
  	    const syncPlanningRouteControls = () => {
  	        if (!(planningRouteSubmitButton instanceof HTMLButtonElement)) return;
@@ -22587,6 +23042,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
  	        syncPlanningRouteControls();
  	        syncPlanningModalBodyState();
+            window.setTimeout(flushPendingPlanningRefresh, 0);
  	    };
 
 	    const openPlanningDocModal = (recordId) => {
@@ -23428,6 +23884,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (planningDocumentsTableBody instanceof HTMLTableSectionElement) {
+        planningDocumentsTableBody.addEventListener("pointerdown", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const editButton = target.closest(".js-planning-doc-edit");
+            if (!(editButton instanceof HTMLElement)) return;
+            const recordId = String(editButton.getAttribute("data-record-id") || "").trim();
+            if (!recordId) return;
+            if (event.button !== undefined && event.button !== 0) return;
+            if (shouldSkipPlanningClickAfterImmediateAction("edit", recordId)) return;
+            event.preventDefault();
+            runPlanningImmediateAction("edit", recordId, () => {
+                openPlanningDocModal(recordId);
+            });
+        });
         planningDocumentsTableBody.addEventListener("click", async (event) => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
@@ -23436,6 +23906,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (editButton) {
                 const recordId = String(editButton.getAttribute("data-record-id") || "").trim();
                 if (!recordId) return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (shouldSkipPlanningClickAfterImmediateAction("edit", recordId)) return;
+                markPlanningInteractionLock(650);
                 openPlanningDocModal(recordId);
                 return;
             }
@@ -23444,6 +23918,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!deleteButton) return;
             const recordId = String(deleteButton.getAttribute("data-record-id") || "").trim();
             if (!recordId) return;
+            event.preventDefault();
+            event.stopPropagation();
+            markPlanningInteractionLock(650);
             const recordIndex = planningDocumentRecords.findIndex((record) => String(record?.id || "") === recordId);
             if (recordIndex === -1) return;
 
@@ -23531,7 +24008,7 @@ document.addEventListener("DOMContentLoaded", () => {
         syncPpaTableState();
         enablePlanningPpaCardFloat();
         let planningRemoteSyncInFlight = null;
-        const requestPlanningRemoteSync = () => {
+        const requestPlanningRemoteSync = (options = {}) => {
             const store = window.peoDivisionStore;
             if (!store || typeof store.syncToLocalStorage !== "function") return;
             if (planningRemoteSyncInFlight) return planningRemoteSyncInFlight;
@@ -23540,28 +24017,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 { storeKey: "planning", localStorageKey: "peo_planning_document_records_v1", type: "array" },
             ], { force: true }))
                 .then(() => {
-                    planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
-                    renderPlanningDocumentsTable(planningDocumentRecords);
-                    syncPpaFromPlanningDocuments(planningDocumentRecords);
-                    syncPpaTableState();
+                    if (isPlanningInteractionBusy()) {
+                        planningPendingRefresh = true;
+                        schedulePendingPlanningRefresh();
+                        return;
+                    }
+                    refreshPlanningDocumentsFromStorage();
                 })
                 .finally(() => {
                     planningRemoteSyncInFlight = null;
+                    if (options && options.deferred) {
+                        window.setTimeout(flushPendingPlanningRefresh, 0);
+                    }
                 });
             return planningRemoteSyncInFlight;
         };
         window.addEventListener("peo:division-store-synced", (event) => {
             const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
             if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("planning")) return;
-            planningDocumentRecords = syncAdminToPlanningDocuments(readStoredPlanningDocuments());
-            renderPlanningDocumentsTable(planningDocumentRecords);
-            syncPpaFromPlanningDocuments(planningDocumentRecords);
-            syncPpaTableState();
+            queuePlanningRefresh();
         });
         window.addEventListener("peo:division-store-remote-update", (event) => {
             const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
             if (!storeKeys.includes("admin") && !storeKeys.includes("planning")) return;
-            requestPlanningRemoteSync();
+            queuePlanningRefresh({ remote: true });
         });
     }
 
@@ -26091,6 +26570,10 @@ document.addEventListener("DOMContentLoaded", () => {
 		    const PLANNING_TARGET_LABEL = "Planning Division";
 		    let editingRecordId = "";
 		    let selectedProposalIds = new Set();
+            let constructionProposalInteractionLockUntil = 0;
+            let constructionProposalPendingRefresh = false;
+            let constructionProposalPendingRemoteRefresh = false;
+            let constructionProposalPendingTimer = null;
 
     const getCookie = (name) => {
         const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
@@ -26198,6 +26681,24 @@ document.addEventListener("DOMContentLoaded", () => {
 	        selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < rowCheckboxes.length;
 	    };
 
+        const isConstructionProposalInteractionBusy = () => {
+            return Date.now() < constructionProposalInteractionLockUntil
+                || (modal instanceof HTMLElement && !modal.hidden);
+        };
+
+        const markConstructionProposalInteractionLock = (durationMs = 500) => {
+            const safeDuration = Number.isFinite(Number(durationMs)) ? Math.max(180, Number(durationMs)) : 500;
+            constructionProposalInteractionLockUntil = Math.max(constructionProposalInteractionLockUntil, Date.now() + safeDuration);
+        };
+
+        const scheduleConstructionProposalRefresh = () => {
+            if (constructionProposalPendingTimer !== null) return;
+            constructionProposalPendingTimer = window.setTimeout(() => {
+                constructionProposalPendingTimer = null;
+                flushConstructionProposalRefresh();
+            }, 140);
+        };
+
 	    const renderTable = () => {
 	        if (!(tableBody instanceof HTMLElement)) return;
 	        const records = readRecords();
@@ -26267,6 +26768,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
 		    updateSelectionControls();
 
+        const flushConstructionProposalRefresh = () => {
+            if (isConstructionProposalInteractionBusy()) {
+                scheduleConstructionProposalRefresh();
+                return;
+            }
+            if (constructionProposalPendingRemoteRefresh) {
+                constructionProposalPendingRemoteRefresh = false;
+                requestConstructionRemoteSync({ force: true, deferred: true });
+                return;
+            }
+            if (!constructionProposalPendingRefresh) return;
+            constructionProposalPendingRefresh = false;
+            resyncAdminAssignedProjects();
+        };
+
+        const queueConstructionProposalRefresh = (options = {}) => {
+            if (options && options.remote) {
+                constructionProposalPendingRemoteRefresh = true;
+            } else {
+                constructionProposalPendingRefresh = true;
+            }
+            if (isConstructionProposalInteractionBusy()) {
+                scheduleConstructionProposalRefresh();
+                return;
+            }
+            flushConstructionProposalRefresh();
+        };
+
 		    const routeApprovedProposalToPlanning = (proposalRecord) => {
         const router = window.peoProjectRouter;
         if (!router || typeof router.submitToDivision !== "function") {
@@ -26315,6 +26844,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	    const openModal = () => {
 	        if (!(modal instanceof HTMLElement)) return;
 	        modal.hidden = false;
+            markConstructionProposalInteractionLock(800);
 	        editingRecordId = "";
 	        setModalMode("add");
 	        syncConstructionProposalCurrencyInputs();
@@ -26330,6 +26860,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	        if (form instanceof HTMLFormElement) form.reset();
 	        editingRecordId = "";
 	        setModalMode("add");
+            window.setTimeout(flushConstructionProposalRefresh, 0);
 	    };
 
     const uploadFile = async (file) => {
@@ -26419,6 +26950,13 @@ document.addEventListener("DOMContentLoaded", () => {
 		    }
 
 		    if (tableBody instanceof HTMLElement) {
+                tableBody.addEventListener("pointerdown", (event) => {
+                    const target = event.target;
+                    if (!(target instanceof Element)) return;
+                    if (event.button !== undefined && event.button !== 0) return;
+                    if (!target.closest("tr") && !target.closest(".js-construction-proposal-row-select")) return;
+                    markConstructionProposalInteractionLock(650);
+                });
 		        tableBody.addEventListener("change", (event) => {
 		            const target = event.target;
 		            if (!(target instanceof HTMLInputElement)) return;
@@ -26436,6 +26974,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		        tableBody.addEventListener("click", (event) => {
 		            const target = event.target;
 		            if (!(target instanceof Element)) return;
+                    markConstructionProposalInteractionLock(650);
 
 		            // Do not open edit modal when clicking selection checkboxes or file links.
 		            if (target.closest(".js-construction-proposal-row-select")) return;
@@ -26767,6 +27306,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const QUALITY_STORAGE_KEY = "peo_quality_records_v1";
+    const QUALITY_DELETED_ADMIN_IDS_KEY = "peo_quality_deleted_admin_ids_v1";
     const ADMIN_DIVISION_STORAGE_KEY = "peo_admin_division_records_v1";
     const QUALITY_PAGE_SIZE = 10;
     const ROUTE_FILTERS = ["all", "incoming", "outgoing"];
@@ -27033,6 +27573,28 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const readDeletedQualityAdminIds = () => {
+        try {
+            const raw = window.localStorage.getItem(QUALITY_DELETED_ADMIN_IDS_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []);
+        } catch (error) {
+            return new Set();
+        }
+    };
+
+    const writeDeletedQualityAdminIds = (idsSet) => {
+        try {
+            window.localStorage.setItem(
+                QUALITY_DELETED_ADMIN_IDS_KEY,
+                JSON.stringify(Array.from(idsSet instanceof Set ? idsSet : new Set()))
+            );
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
     const normalizeDivisionLabel = (value) => {
         return String(value || "").trim().toLowerCase();
     };
@@ -27151,6 +27713,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const syncAdminRoutedQualityRecords = (existingRecords) => {
         const currentRecords = Array.isArray(existingRecords) ? [...existingRecords] : [];
+        const deletedAdminIds = readDeletedQualityAdminIds();
         const adminRecords = readAdminDivisionRecords();
         const adminById = new Map(
             adminRecords
@@ -27163,6 +27726,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return division === "quality" || division === "quality division";
             })
             .filter((record) => String(record?.__record_id || "").trim())
+            .filter((record) => !deletedAdminIds.has(String(record?.__record_id || "").trim()))
             .map((record) => mapAdminRecordToQuality(record));
 
         const routedBySourceId = new Map(
@@ -27227,7 +27791,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 };
             });
 
-        const nextRecords = [...mergedRouted, ...outgoingPreserved, ...nonRouted];
+        const nextRecords = [...mergedRouted, ...outgoingPreserved, ...nonRouted]
+            .filter((record) => {
+                if (String(record?.__admin_source || "") !== "admin_document") return true;
+                const sourceId = String(record?.__admin_source_id || "").trim();
+                if (!sourceId) return true;
+                return !deletedAdminIds.has(sourceId);
+            });
         const beforeSignature = JSON.stringify(currentRecords);
         const afterSignature = JSON.stringify(nextRecords);
         if (beforeSignature !== afterSignature) {
@@ -27587,6 +28157,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let activeParticularFilter = "all";
     let searchQuery = "";
     let editingRecordId = null;
+    let qualityInteractionLockUntil = 0;
+    let qualityPendingRefresh = false;
+    let qualityPendingRemoteRefresh = false;
+    let qualityPendingRefreshTimer = null;
     const TABLE_DRAG_THRESHOLD = 8;
     const DRAG_CLICK_SUPPRESSION_MS = 220;
     const tableDragState = {
@@ -27701,6 +28275,24 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         resetTableDragState();
+    };
+
+    const isQualityInteractionBusy = () => {
+        return Date.now() < qualityInteractionLockUntil
+            || (qualityModal instanceof HTMLElement && !qualityModal.hidden);
+    };
+
+    const markQualityInteractionLock = (durationMs = 500) => {
+        const safeDuration = Number.isFinite(Number(durationMs)) ? Math.max(180, Number(durationMs)) : 500;
+        qualityInteractionLockUntil = Math.max(qualityInteractionLockUntil, Date.now() + safeDuration);
+    };
+
+    const scheduleQualityRefresh = () => {
+        if (qualityPendingRefreshTimer !== null) return;
+        qualityPendingRefreshTimer = window.setTimeout(() => {
+            qualityPendingRefreshTimer = null;
+            flushQualityRefresh();
+        }, 140);
     };
 
     const createEmptyStateRow = () => {
@@ -28099,6 +28691,7 @@ document.addEventListener("DOMContentLoaded", () => {
  	        if (!(qualityModal instanceof HTMLElement) || !(qualityForm instanceof HTMLFormElement)) return;
 
         qualityForm.reset();
+        markQualityInteractionLock(800);
         editingRecordId = mode === "edit" ? record?.__id || null : null;
         setQualityEditReadonly(mode === "edit");
         qualityScanAttachment = null;
@@ -28158,6 +28751,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
  	        syncQualityRouteControls();
  	        syncModalState();
+            window.setTimeout(flushQualityRefresh, 0);
  	    };
 
         if (qualityRouteFileInput instanceof HTMLInputElement) {
@@ -28531,11 +29125,20 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTable();
     });
 
+    qualityTableBody.addEventListener("pointerdown", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (event.button !== undefined && event.button !== 0) return;
+        if (!target.closest("tr[data-record-id]")) return;
+        markQualityInteractionLock(650);
+    });
+
     qualityTableBody.addEventListener("click", async (event) => {
         if (shouldSuppressTableClick()) return;
 
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        markQualityInteractionLock(650);
 
         const scanLink = target.closest(".quality-scan-link");
         if (scanLink instanceof HTMLElement) {
@@ -28568,6 +29171,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     variant: "danger",
                 });
                 if (!approved) return;
+                const deletedAdminIds = readDeletedQualityAdminIds();
+                if (String(record?.__admin_source || "").trim() === "admin_document") {
+                    const sourceId = String(record?.__admin_source_id || "").trim();
+                    if (sourceId) {
+                        deletedAdminIds.add(sourceId);
+                        writeDeletedQualityAdminIds(deletedAdminIds);
+                    }
+                }
                 records = records.filter((item) => item.__id !== recordId);
                 records = dedupeQualityRecords(records);
                 writeStoredRecords(records);
@@ -28667,8 +29278,37 @@ document.addEventListener("DOMContentLoaded", () => {
         currentPage = 1;
         renderTable();
     };
+
+    const flushQualityRefresh = () => {
+        if (isQualityInteractionBusy()) {
+            scheduleQualityRefresh();
+            return;
+        }
+        if (qualityPendingRemoteRefresh) {
+            qualityPendingRemoteRefresh = false;
+            requestQualityRemoteSync({ deferred: true });
+            return;
+        }
+        if (!qualityPendingRefresh) return;
+        qualityPendingRefresh = false;
+        refreshQualityRecordsFromAdmin();
+    };
+
+    const queueQualityRefresh = (options = {}) => {
+        if (options && options.remote) {
+            qualityPendingRemoteRefresh = true;
+        } else {
+            qualityPendingRefresh = true;
+        }
+        if (isQualityInteractionBusy()) {
+            scheduleQualityRefresh();
+            return;
+        }
+        flushQualityRefresh();
+    };
+
     let qualityRemoteSyncInFlight = null;
-    const requestQualityRemoteSync = () => {
+    const requestQualityRemoteSync = (options = {}) => {
         const store = window.peoDivisionStore;
         if (!store || typeof store.syncToLocalStorage !== "function") return;
         if (qualityRemoteSyncInFlight) return qualityRemoteSyncInFlight;
@@ -28677,27 +29317,37 @@ document.addEventListener("DOMContentLoaded", () => {
             { storeKey: "quality", localStorageKey: QUALITY_STORAGE_KEY, type: "array" },
         ], { force: true }))
             .then(() => {
+                if (isQualityInteractionBusy()) {
+                    qualityPendingRefresh = true;
+                    scheduleQualityRefresh();
+                    return;
+                }
                 refreshQualityRecordsFromAdmin();
             })
             .finally(() => {
                 qualityRemoteSyncInFlight = null;
+                if (options && options.deferred) {
+                    window.setTimeout(flushQualityRefresh, 0);
+                }
             });
         return qualityRemoteSyncInFlight;
     };
-    window.addEventListener("focus", refreshQualityRecordsFromAdmin);
+    window.addEventListener("focus", () => {
+        queueQualityRefresh();
+    });
     window.addEventListener("peo:division-store-synced", (event) => {
         const syncedStoreKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!syncedStoreKeys.includes("admin") && !syncedStoreKeys.includes("quality")) return;
-        refreshQualityRecordsFromAdmin();
+        queueQualityRefresh();
     });
     window.addEventListener("peo:division-store-remote-update", (event) => {
         const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!storeKeys.includes("admin") && !storeKeys.includes("quality")) return;
-        requestQualityRemoteSync();
+        queueQualityRefresh({ remote: true });
     });
     window.addEventListener("storage", (event) => {
         if (event.key !== ADMIN_DIVISION_STORAGE_KEY && event.key !== QUALITY_STORAGE_KEY) return;
-        refreshQualityRecordsFromAdmin();
+        queueQualityRefresh();
     });
 
     enableQualityCardFloat();
