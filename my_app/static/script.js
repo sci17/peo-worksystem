@@ -19748,12 +19748,85 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const writeConstructionRecords = (items, options = {}) => {
+    const buildConstructionRecordsSyncPayload = (items, options = {}) => {
         const safeItems = Array.isArray(items) ? items : [];
         const visibleRecords = safeItems.filter((record) => record && typeof record === "object" && !isConstructionTombstone(record));
         const existingTombstones = collectConstructionTombstones(readConstructionStoreSnapshot());
         const nextTombstones = collectConstructionTombstones(options && Array.isArray(options.tombstones) ? options.tombstones : []);
         const payload = [...collectConstructionTombstones([...existingTombstones, ...nextTombstones]), ...visibleRecords];
+        const safeForSync = payload.map((record) => {
+            const safe = record && typeof record === "object" ? { ...record } : {};
+
+            const sanitizeUrl = (value) => {
+                const url = String(value || "").trim();
+                if (!url || url.startsWith("data:")) return "";
+                return url;
+            };
+
+            const normalizeImages = (value) => {
+                const list = Array.isArray(value) ? value : [];
+                return list
+                    .map((img) => {
+                        if (typeof img === "string") {
+                            const dataUrl = sanitizeUrl(img);
+                            return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
+                        }
+                        if (!img || typeof img !== "object") return null;
+                        const dataUrl = sanitizeUrl(img.dataUrl || img.url || "");
+                        if (!dataUrl) return null;
+                        return {
+                            dataUrl,
+                            name: String(img.name || "").trim(),
+                            uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || "").trim(),
+                        };
+                    })
+                    .filter(Boolean);
+            };
+
+            if (Array.isArray(safe.accomplishment_images)) {
+                safe.accomplishment_images = normalizeImages(safe.accomplishment_images);
+            }
+
+            if (Array.isArray(safe.accomplishment_history)) {
+                safe.accomplishment_history = safe.accomplishment_history
+                    .map((entry) => {
+                        const snapshot = entry && typeof entry === "object" ? { ...entry } : {};
+                        if (Array.isArray(snapshot.images)) {
+                            snapshot.images = normalizeImages(snapshot.images);
+                        }
+                        return snapshot;
+                    })
+                    .filter((entry) => entry && typeof entry === "object");
+            }
+
+            if (typeof safe.accomplishment_image === "string") {
+                safe.accomplishment_image = sanitizeUrl(safe.accomplishment_image);
+            }
+
+            return safe;
+        });
+        return { payload, safeForSync };
+    };
+
+    const syncConstructionRecordsToServer = async (items, options = {}) => {
+        const store = window.peoDivisionStore;
+        const { safeForSync } = buildConstructionRecordsSyncPayload(items, options);
+        if (store && typeof store.syncNow === "function") {
+            return Boolean(await store.syncNow("construction", safeForSync));
+        }
+        if (store && typeof store.queueSync === "function") {
+            store.queueSync("construction", safeForSync, 0);
+            if (typeof store.flushSync === "function") {
+                await store.flushSync();
+                return true;
+            }
+            return true;
+        }
+        return false;
+    };
+
+    const writeConstructionRecords = (items, options = {}) => {
+        const { payload, safeForSync } = buildConstructionRecordsSyncPayload(items, options);
         let wrote = false;
         try {
             window.localStorage.setItem(CONSTRUCTION_STORAGE_KEY, JSON.stringify(payload));
@@ -19761,59 +19834,11 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             wrote = false;
         }
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
-            const safeForSync = payload.map((record) => {
-                const safe = record && typeof record === "object" ? { ...record } : {};
-
-                const sanitizeUrl = (value) => {
-                    const url = String(value || "").trim();
-                    if (!url || url.startsWith("data:")) return "";
-                    return url;
-                };
-
-                const normalizeImages = (value) => {
-                    const list = Array.isArray(value) ? value : [];
-                    return list
-                        .map((img) => {
-                            if (typeof img === "string") {
-                                const dataUrl = sanitizeUrl(img);
-                                return dataUrl ? { dataUrl, name: "", uploaded_at: "" } : null;
-                            }
-                            if (!img || typeof img !== "object") return null;
-                            const dataUrl = sanitizeUrl(img.dataUrl || img.url || "");
-                            if (!dataUrl) return null;
-                            return {
-                                dataUrl,
-                                name: String(img.name || "").trim(),
-                                uploaded_at: String(img.uploaded_at || img.uploadedAt || img.created_at || img.createdAt || "").trim(),
-                            };
-                        })
-                        .filter(Boolean);
-                };
-
-                if (Array.isArray(safe.accomplishment_images)) {
-                    safe.accomplishment_images = normalizeImages(safe.accomplishment_images);
-                }
-
-                if (Array.isArray(safe.accomplishment_history)) {
-                    safe.accomplishment_history = safe.accomplishment_history
-                        .map((entry) => {
-                            const snapshot = entry && typeof entry === "object" ? { ...entry } : {};
-                            if (Array.isArray(snapshot.images)) {
-                                snapshot.images = normalizeImages(snapshot.images);
-                            }
-                            return snapshot;
-                        })
-                        .filter((entry) => entry && typeof entry === "object");
-                }
-
-                if (typeof safe.accomplishment_image === "string") {
-                    safe.accomplishment_image = sanitizeUrl(safe.accomplishment_image);
-                }
-
-                return safe;
-            });
+        if (!options || options.skipRemoteSync !== true) {
+            const store = window.peoDivisionStore;
+            if (store && typeof store.queueSync === "function") {
             window.peoDivisionStore.queueSync("construction", safeForSync, 0);
+            }
         }
         window.dispatchEvent(new Event("construction-records-updated"));
         return wrote;
@@ -20051,12 +20076,12 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
-        const wroteTasks = writeTasks([]);
         const tombstones = buildConstructionDeletionTombstones({
             recordIds: deletedRecordIds,
             adminSourceIds: deletedAdminIds,
         });
-        const wroteConstruction = writeConstructionRecords([], { tombstones });
+        const wroteTasks = writeTasks([]);
+        const wroteConstruction = writeConstructionRecords([], { tombstones, skipRemoteSync: true });
         const wroteDeletedAdminIds = writeDeletedConstructionAdminIds(deletedAdminIds);
         const wroteDeletedRecordIds = writeDeletedConstructionRecordIds(deletedRecordIds);
 
@@ -20080,20 +20105,25 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        const syncedConstruction = await syncConstructionRecordsToServer([], { tombstones });
+        if (!syncedConstruction) {
+            writeTasks(previousTasks);
+            writeConstructionRecords(previousConstructionRecords, { skipRemoteSync: true });
+            writeDeletedConstructionAdminIds(previousDeletedAdminIds);
+            writeDeletedConstructionRecordIds(previousDeletedRecordIds);
+            render();
+            showPeoGeneralToast("Unable to finish deleting all task data on the server. Please try again.", {
+                title: "Construction Division",
+                variant: "danger",
+            });
+            return;
+        }
+
         showPeoGeneralToast("All construction task and linked project data deleted successfully.", {
             title: "Construction Division",
             variant: "success",
         });
         render();
-
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
-            window.peoDivisionStore.flushSync().catch(() => {
-                showPeoGeneralToast("Deleted rows are hidden now, but server sync is still retrying.", {
-                    title: "Construction Division",
-                    variant: "warning",
-                });
-            });
-        }
     };
 
     const FORM_FIELDS = [
@@ -20597,12 +20627,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 const nextConstructionRecords = constructionRecords.filter((record) => String(record?.__id || record?.construction_id || "") !== recordId);
+                const tombstones = buildConstructionDeletionTombstones({
+                    recordIds: deletedRecordIds,
+                    adminSourceIds: deletedAdminIds,
+                });
+                const previousDeletedAdminIds = readDeletedConstructionAdminIds();
+                const previousDeletedRecordIds = readDeletedConstructionRecordIds();
+                const previousConstructionRecords = constructionRecords.slice();
                 const wroteTasks = writeTasks(nextTasks);
                 const wroteConstruction = writeConstructionRecords(nextConstructionRecords, {
-                    tombstones: buildConstructionDeletionTombstones({
-                        recordIds: deletedRecordIds,
-                        adminSourceIds: deletedAdminIds,
-                    }),
+                    tombstones,
+                    skipRemoteSync: true,
                 });
                 const wroteDeletedAdminIds = writeDeletedConstructionAdminIds(deletedAdminIds);
                 const wroteDeletedRecordIds = writeDeletedConstructionRecordIds(deletedRecordIds);
@@ -20615,19 +20650,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
+                const syncedConstruction = await syncConstructionRecordsToServer(nextConstructionRecords, { tombstones });
+                if (!syncedConstruction) {
+                    writeTasks(tasks);
+                    writeConstructionRecords(previousConstructionRecords, { skipRemoteSync: true });
+                    writeDeletedConstructionAdminIds(previousDeletedAdminIds);
+                    writeDeletedConstructionRecordIds(previousDeletedRecordIds);
+                    showPeoGeneralToast("Unable to finish deleting this task on the server. Please try again.", {
+                        title: "Construction Division",
+                        variant: "danger",
+                    });
+                    render();
+                    return;
+                }
+
                 showPeoGeneralToast("Task deleted successfully.", {
                     title: "Construction Division",
                     variant: "success",
                 });
                 render();
-                if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
-                    window.peoDivisionStore.flushSync().catch(() => {
-                        showPeoGeneralToast("Deleted task is hidden now, but server sync is still retrying.", {
-                            title: "Construction Division",
-                            variant: "warning",
-                        });
-                    });
-                }
                 return;
             }
 
