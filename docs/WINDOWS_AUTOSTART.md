@@ -1,6 +1,7 @@
 # Windows Autostart
 
 This project can start automatically on Windows login without opening Command Prompt or Docker Desktop manually.
+That includes the `nginx` container, so you do not need to type an nginx command by hand anymore.
 
 ## What was added
 
@@ -22,12 +23,15 @@ Run this in PowerShell:
 powershell -ExecutionPolicy Bypass -File .\scripts\register-peo-autostart.ps1
 ```
 
+Or run `setup-auto-start.bat` as Administrator if you want the guided setup.
+
 ## How it works
 
 - Your Docker Compose services already use `restart: unless-stopped`
 - When Windows login happens, the scheduled task runs
 - The script starts Docker Desktop if it is not running yet
 - After Docker is ready, it runs `docker compose up -d`
+- Because `nginx` is part of `docker-compose.yml` and uses `restart: unless-stopped`, nginx comes up automatically with the rest of the system
 
 ## Important note
 

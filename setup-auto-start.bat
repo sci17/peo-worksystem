@@ -18,17 +18,31 @@ if %errorLevel% neq 0 (
 )
 
 set PROJECT_PATH=C:\Users\Administrator\Desktop\peo-worksystem
-set SCRIPT_PATH=%PROJECT_PATH%\auto-start-system.ps1
-set TASK_NAME=PEO-Worksystem-AutoStart
+set REGISTER_SCRIPT=%PROJECT_PATH%\scripts\register-peo-autostart.ps1
+set START_SCRIPT=%PROJECT_PATH%\scripts\start-peo-worksystem.ps1
+set TASK_NAME=PEO Worksystem Autostart
+
+if not exist "%REGISTER_SCRIPT%" (
+    echo ERROR: Missing register script:
+    echo   %REGISTER_SCRIPT%
+    pause
+    exit /b 1
+)
+
+if not exist "%START_SCRIPT%" (
+    echo ERROR: Missing startup script:
+    echo   %START_SCRIPT%
+    pause
+    exit /b 1
+)
 
 echo [1/3] Removing existing scheduled task (if any)...
-taskkill /F /IM auto-start-system.ps1 >nul 2>&1
 schtasks /delete /tn "%TASK_NAME%" /f >nul 2>&1
 
 echo.
 echo [2/3] Creating new scheduled task...
-REM Create task to run at startup with highest privileges
-schtasks /create /tn "%TASK_NAME%" /tr "powershell -ExecutionPolicy Bypass -NoProfile -File \"%SCRIPT_PATH%\"" /sc onstart /ru SYSTEM /f >nul 2>&1
+REM Register the supported logon-based task so Docker Desktop can start in the user session.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%REGISTER_SCRIPT%" >nul 2>&1
 
 if %errorLevel% equ 0 (
     echo Task created successfully
@@ -50,8 +64,10 @@ echo.
 echo Your PEO Worksystem will now automatically start when Windows boots.
 echo.
 echo Task Name: %TASK_NAME%
-echo Script: %SCRIPT_PATH%
+echo Script: %START_SCRIPT%
 echo Log File: %PROJECT_PATH%\auto-start-log.txt
+echo.
+echo This auto-start also brings up the Docker nginx service, so no manual nginx command is needed.
 echo.
 echo To disable auto-start, run:
 echo   schtasks /delete /tn "%TASK_NAME%" /f
