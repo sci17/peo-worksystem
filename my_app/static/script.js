@@ -1651,7 +1651,12 @@ const normalizeConstructionSpotlightUrl = (value) => {
         { storeKey: "maintenance", anchorSelector: ".js-contractor-found-count", mountClosest: ".contractor-table-head" },
     ];
     const activeStateByStore = new Map();
+    const badgeVisibilityByStore = new Map();
+    const showTimersByStore = new Map();
+    const hideTimersByStore = new Map();
     const badges = [];
+    const SHOW_DELAY_MS = 140;
+    const MIN_VISIBLE_MS = 420;
 
     const getMountNode = (spec) => {
         const anchor = document.querySelector(spec.anchorSelector);
@@ -1671,18 +1676,114 @@ const normalizeConstructionSpotlightUrl = (value) => {
         return activeStateByStore.get(key);
     };
 
+    const getVisibilityState = (storeKey) => {
+        const key = String(storeKey || "").trim().toLowerCase();
+        if (!badgeVisibilityByStore.has(key)) {
+            badgeVisibilityByStore.set(key, {
+                visible: false,
+                visibleSince: 0,
+                mode: "",
+            });
+        }
+        return badgeVisibilityByStore.get(key);
+    };
+
+    const clearTimer = (map, storeKey) => {
+        const key = String(storeKey || "").trim().toLowerCase();
+        const timer = map.get(key);
+        if (timer) {
+            window.clearTimeout(timer);
+            map.delete(key);
+        }
+    };
+
+    const syncBadgeDom = (storeKey) => {
+        const visibility = getVisibilityState(storeKey);
+        badges.forEach(({ storeKey: badgeStoreKey, badge }) => {
+            if (badgeStoreKey !== storeKey) return;
+            const label = badge.querySelector(".peo-sync-indicator__label");
+            badge.hidden = !visibility.visible;
+            badge.classList.toggle("is-saving", visibility.mode === "saving");
+            badge.classList.toggle("is-syncing", visibility.mode === "syncing");
+            if (label) {
+                label.textContent = visibility.mode === "saving" ? "Saving..." : "Syncing...";
+            }
+        });
+    };
+
+    const setBadgeVisibility = (storeKey, visible, mode = "") => {
+        const visibility = getVisibilityState(storeKey);
+        const nextMode = visible ? (mode === "saving" ? "saving" : "syncing") : "";
+        const now = Date.now();
+        const changed = visibility.visible !== visible || visibility.mode !== nextMode;
+
+        visibility.visible = visible;
+        visibility.mode = nextMode;
+        if (visible && (!visibility.visibleSince || !changed)) {
+            visibility.visibleSince = visibility.visibleSince || now;
+        } else if (visible) {
+            visibility.visibleSince = now;
+        } else {
+            visibility.visibleSince = 0;
+        }
+
+        if (changed) {
+            syncBadgeDom(String(storeKey || "").trim().toLowerCase());
+        }
+    };
+
     const renderBadges = () => {
-        badges.forEach(({ storeKey, badge }) => {
+        const normalizedStoreKeys = new Set();
+        badges.forEach(({ storeKey }) => {
+            normalizedStoreKeys.add(String(storeKey || "").trim().toLowerCase());
+        });
+
+        normalizedStoreKeys.forEach((storeKey) => {
             const state = getStoreState(storeKey);
             const isSaving = Number(state?.write || 0) > 0;
             const isSyncing = Number(state?.fetch || 0) > 0;
-            const label = badge.querySelector(".peo-sync-indicator__label");
-            badge.hidden = !isSaving && !isSyncing;
-            badge.classList.toggle("is-saving", isSaving);
-            badge.classList.toggle("is-syncing", !isSaving && isSyncing);
-            if (label) {
-                label.textContent = isSaving ? "Saving..." : "Syncing...";
+            const shouldBeVisible = isSaving || isSyncing;
+            const nextMode = isSaving ? "saving" : "syncing";
+            const visibility = getVisibilityState(storeKey);
+
+            clearTimer(showTimersByStore, storeKey);
+
+            if (shouldBeVisible) {
+                clearTimer(hideTimersByStore, storeKey);
+                if (visibility.visible) {
+                    setBadgeVisibility(storeKey, true, nextMode);
+                    return;
+                }
+
+                showTimersByStore.set(storeKey, window.setTimeout(() => {
+                    showTimersByStore.delete(storeKey);
+                    const latestState = getStoreState(storeKey);
+                    const stillSaving = Number(latestState?.write || 0) > 0;
+                    const stillSyncing = Number(latestState?.fetch || 0) > 0;
+                    if (!stillSaving && !stillSyncing) return;
+                    setBadgeVisibility(storeKey, true, stillSaving ? "saving" : "syncing");
+                }, SHOW_DELAY_MS));
+                return;
             }
+
+            if (!visibility.visible) {
+                setBadgeVisibility(storeKey, false, "");
+                return;
+            }
+
+            const elapsed = Date.now() - Number(visibility.visibleSince || 0);
+            const remaining = Math.max(0, MIN_VISIBLE_MS - elapsed);
+            hideTimersByStore.set(storeKey, window.setTimeout(() => {
+                hideTimersByStore.delete(storeKey);
+                const latestState = getStoreState(storeKey);
+                const stillSaving = Number(latestState?.write || 0) > 0;
+                const stillSyncing = Number(latestState?.fetch || 0) > 0;
+                if (stillSaving || stillSyncing) {
+                    setBadgeVisibility(storeKey, true, stillSaving ? "saving" : "syncing");
+                    return;
+                }
+                setBadgeVisibility(storeKey, false, "");
+            }, remaining));
         });
     };
 
@@ -18510,6 +18611,9 @@ document.addEventListener("DOMContentLoaded", () => {
             clampCurrentPage();
             writeDeletedConstructionAdminIds(deletedAdminIds);
             writeStoredRecords(records);
+            if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                window.peoDivisionStore.flushSync();
+            }
             renderTable();
             showPeoGeneralToast(`${selectedIds.length} construction record(s) deleted successfully.`, {
                 title: "Construction Division",
@@ -18525,14 +18629,15 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTable();
     };
     let constructionRemoteSyncInFlight = null;
-    const requestConstructionRemoteSync = () => {
+    const requestConstructionRemoteSync = (options = {}) => {
         const store = window.peoDivisionStore;
         if (!store || typeof store.syncToLocalStorage !== "function") return;
         if (constructionRemoteSyncInFlight) return constructionRemoteSyncInFlight;
+        const force = options && options.force === true;
         constructionRemoteSyncInFlight = Promise.resolve(store.syncToLocalStorage([
             { storeKey: "admin", localStorageKey: ADMIN_DIVISION_STORAGE_KEY, type: "array" },
             { storeKey: "construction", localStorageKey: CONSTRUCTION_STORAGE_KEY, type: "array" },
-        ], { force: true }))
+        ], force ? { force: true } : {}))
             .then(() => {
                 resyncAdminAssignedProjects();
             })
@@ -18551,7 +18656,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("peo:division-store-remote-update", (event) => {
         const storeKeys = Array.isArray(event?.detail?.storeKeys) ? event.detail.storeKeys : [];
         if (!storeKeys.includes("admin") && !storeKeys.includes("construction")) return;
-        requestConstructionRemoteSync();
+        requestConstructionRemoteSync({ force: true });
     });
     window.addEventListener("construction-records-updated", resyncAdminAssignedProjects);
     window.addEventListener("storage", (event) => {
