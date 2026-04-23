@@ -1654,9 +1654,12 @@ const normalizeConstructionSpotlightUrl = (value) => {
     const badgeVisibilityByStore = new Map();
     const showTimersByStore = new Map();
     const hideTimersByStore = new Map();
+    const fetchSuppressedUntilByStore = new Map();
+    const suppressedFetchDepthByStore = new Map();
     const badges = [];
     const SHOW_DELAY_MS = 60;
     const MIN_VISIBLE_MS = 220;
+    const FETCH_ECHO_SUPPRESS_MS = 900;
 
     const getMountNode = (spec) => {
         const anchor = document.querySelector(spec.anchorSelector);
@@ -1806,16 +1809,43 @@ const normalizeConstructionSpotlightUrl = (value) => {
         renderBadges();
     };
 
-    const updateStoreState = (storeKeys, source, phase) => {
-        const normalizedSource = String(source || "").trim().toLowerCase();
+    const updateStoreState = (detail = {}) => {
+        const storeKeys = Array.isArray(detail.storeKeys) ? detail.storeKeys : [];
+        const normalizedSource = String(detail.source || "").trim().toLowerCase();
+        const phase = String(detail.phase || "").trim().toLowerCase() === "start" ? "start" : "end";
         const bucket = normalizedSource === "write" ? "write" : "fetch";
-        (Array.isArray(storeKeys) ? storeKeys : []).forEach((storeKey) => {
+        const now = Date.now();
+        storeKeys.forEach((storeKey) => {
+            const normalizedKey = String(storeKey || "").trim().toLowerCase();
+            if (!normalizedKey) return;
             const state = getStoreState(storeKey);
             if (!state) return;
+
+            if (bucket === "fetch") {
+                const suppressedDepth = Number(suppressedFetchDepthByStore.get(normalizedKey) || 0);
+                if (phase === "start") {
+                    const suppressUntil = Number(fetchSuppressedUntilByStore.get(normalizedKey) || 0);
+                    if (now < suppressUntil) {
+                        suppressedFetchDepthByStore.set(normalizedKey, suppressedDepth + 1);
+                        return;
+                    }
+                } else if (suppressedDepth > 0) {
+                    if (suppressedDepth <= 1) {
+                        suppressedFetchDepthByStore.delete(normalizedKey);
+                    } else {
+                        suppressedFetchDepthByStore.set(normalizedKey, suppressedDepth - 1);
+                    }
+                    return;
+                }
+            }
+
             if (phase === "start") {
                 state[bucket] += 1;
             } else {
                 state[bucket] = Math.max(0, Number(state[bucket] || 0) - 1);
+                if (bucket === "write") {
+                    fetchSuppressedUntilByStore.set(normalizedKey, now + FETCH_ECHO_SUPPRESS_MS);
+                }
             }
         });
         renderBadges();
@@ -1825,7 +1855,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
         ensureBadges();
         window.addEventListener("peo:division-store-sync-state", (event) => {
             const detail = event?.detail || {};
-            updateStoreState(detail.storeKeys, detail.source, detail.phase);
+            updateStoreState(detail);
         });
     };
 
