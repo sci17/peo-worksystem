@@ -1819,6 +1819,17 @@ def _build_tracking_rows(user):
             return False
         return True
 
+    def is_live_construction_record(record):
+        if not isinstance(record, dict):
+            return False
+        if str(record.get('__kind') or '').strip() == 'construction_tombstone':
+            return False
+        if str(record.get('__deleted_record_id') or record.get('record_id') or '').strip():
+            return False
+        if str(record.get('__deleted_admin_source_id') or record.get('admin_source_id') or '').strip():
+            return False
+        return True
+
     def normalize_label(value, fallback='—'):
         text = str(value or '').strip()
         return text if text else fallback
@@ -1976,6 +1987,17 @@ def _build_tracking_payload(user):
     quality_records = _safe_list(stores.get(KEY_QUALITY).data if stores.get(KEY_QUALITY) else [])
     maintenance_payload = stores.get(KEY_MAINTENANCE).data if stores.get(KEY_MAINTENANCE) else {}
     maintenance_payload = maintenance_payload if isinstance(maintenance_payload, dict) else {}
+
+    def is_live_construction_record(record):
+        if not isinstance(record, dict):
+            return False
+        if str(record.get('__kind') or '').strip() == 'construction_tombstone':
+            return False
+        if str(record.get('__deleted_record_id') or record.get('record_id') or '').strip():
+            return False
+        if str(record.get('__deleted_admin_source_id') or record.get('admin_source_id') or '').strip():
+            return False
+        return True
 
     def normalize_label(value, fallback='—'):
         text = str(value or '').strip()
