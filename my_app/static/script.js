@@ -2279,6 +2279,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
             taskRows: [],
             personnelRecords: [],
             contractorRecords: [],
+            dismissedAdminTaskIds: [],
         };
 
         if (!state || typeof state !== "object") {
@@ -2289,6 +2290,9 @@ const normalizeConstructionSpotlightUrl = (value) => {
             ...base,
             ...state,
             taskRows: Array.isArray(state.taskRows) ? state.taskRows : [],
+            dismissedAdminTaskIds: Array.isArray(state.dismissedAdminTaskIds)
+                ? state.dismissedAdminTaskIds.map((id) => String(id || "").trim()).filter(Boolean)
+                : [],
         };
     };
 
@@ -15453,6 +15457,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const serverAdmin = adminResp && typeof adminResp === "object" ? adminResp.data : null;
         const serverMaintenance = maintenanceResp && typeof maintenanceResp === "object" ? maintenanceResp.data : null;
+        const localMaintenance = safeParse(window.localStorage.getItem(maintenanceStorageKey));
+        const localMaintenanceState = localMaintenance && typeof localMaintenance === "object" ? localMaintenance : {};
+        const localDismissedIds = Array.isArray(localMaintenanceState.dismissedAdminTaskIds)
+            ? localMaintenanceState.dismissedAdminTaskIds.map((id) => String(id || "").trim()).filter(Boolean)
+            : [];
 
         const hasServerAdmin = Array.isArray(serverAdmin) && serverAdmin.length > 0;
         const hasServerMaintenance = serverMaintenance && typeof serverMaintenance === "object" && !Array.isArray(serverMaintenance)
@@ -15468,7 +15477,26 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (hasServerMaintenance) {
             try {
-                window.localStorage.setItem(maintenanceStorageKey, JSON.stringify(serverMaintenance));
+                const normalizedServerMaintenance = serverMaintenance && typeof serverMaintenance === "object"
+                    ? { ...serverMaintenance }
+                    : {};
+                const mergedDismissedIds = Array.from(new Set([
+                    ...(Array.isArray(normalizedServerMaintenance.dismissedAdminTaskIds)
+                        ? normalizedServerMaintenance.dismissedAdminTaskIds.map((id) => String(id || "").trim()).filter(Boolean)
+                        : []),
+                    ...localDismissedIds,
+                ]));
+                const filteredTaskRows = (Array.isArray(normalizedServerMaintenance.taskRows)
+                    ? normalizedServerMaintenance.taskRows
+                    : [])
+                    .filter((row) => {
+                        const adminRecordId = String(row?.adminRecordId || "").trim();
+                        return !adminRecordId || !mergedDismissedIds.includes(adminRecordId);
+                    });
+
+                normalizedServerMaintenance.dismissedAdminTaskIds = mergedDismissedIds;
+                normalizedServerMaintenance.taskRows = filteredTaskRows;
+                window.localStorage.setItem(maintenanceStorageKey, JSON.stringify(normalizedServerMaintenance));
             } catch (error) {
                 // Ignore storage failures.
             }
