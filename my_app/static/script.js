@@ -1265,6 +1265,63 @@ const normalizeConstructionSpotlightUrl = (value) => {
         return Array.isArray(payload);
     };
 
+    const mergeConstructionStoreWithLocalDeletes = (serverData, localParsed) => {
+        const CONSTRUCTION_DELETED_ADMIN_IDS_KEY = "peo_construction_deleted_admin_ids_v1";
+        const CONSTRUCTION_DELETED_RECORD_IDS_KEY = "peo_construction_deleted_record_ids_v1";
+        const CONSTRUCTION_TOMBSTONE_KIND = "construction_tombstone";
+
+        const safeServer = Array.isArray(serverData) ? serverData : [];
+        const safeLocal = Array.isArray(localParsed) ? localParsed : [];
+
+        const parseDeletedIds = (key) => {
+            const raw = safeLocalStorageGet(key);
+            const parsed = raw ? safeJsonParse(raw, []) : [];
+            return new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []);
+        };
+
+        const collectTombstones = (records) => {
+            const seen = new Set();
+            return (Array.isArray(records) ? records : [])
+                .filter((record) => record && typeof record === "object" && String(record.__kind || "").trim() === CONSTRUCTION_TOMBSTONE_KIND)
+                .map((record) => {
+                    const tombstone = { ...record, __kind: CONSTRUCTION_TOMBSTONE_KIND };
+                    const recordId = String(tombstone.__deleted_record_id || tombstone.record_id || "").trim();
+                    const adminSourceId = String(tombstone.__deleted_admin_source_id || tombstone.admin_source_id || "").trim();
+                    if (!recordId && !adminSourceId) return null;
+                    tombstone.__deleted_record_id = recordId;
+                    tombstone.__deleted_admin_source_id = adminSourceId;
+                    const key = `${recordId}|${adminSourceId}`;
+                    if (seen.has(key)) return null;
+                    seen.add(key);
+                    return tombstone;
+                })
+                .filter(Boolean);
+        };
+
+        const deletedRecordIds = parseDeletedIds(CONSTRUCTION_DELETED_RECORD_IDS_KEY);
+        const deletedAdminIds = parseDeletedIds(CONSTRUCTION_DELETED_ADMIN_IDS_KEY);
+        const mergedTombstones = collectTombstones([...safeServer, ...safeLocal]);
+
+        mergedTombstones.forEach((record) => {
+            const recordId = String(record?.__deleted_record_id || "").trim();
+            const adminSourceId = String(record?.__deleted_admin_source_id || "").trim();
+            if (recordId) deletedRecordIds.add(recordId);
+            if (adminSourceId) deletedAdminIds.add(adminSourceId);
+        });
+
+        const visibleRecords = safeServer.filter((record) => {
+            if (!record || typeof record !== "object") return false;
+            if (String(record.__kind || "").trim() === CONSTRUCTION_TOMBSTONE_KIND) return false;
+            const recordId = String(record.__id || record.construction_id || record.id || "").trim();
+            const adminSourceId = String(record.__admin_source_id || "").trim();
+            if (recordId && deletedRecordIds.has(recordId)) return false;
+            if (adminSourceId && deletedAdminIds.has(adminSourceId)) return false;
+            return true;
+        });
+
+        return [...mergedTombstones, ...visibleRecords];
+    };
+
     const postStore = async (storeKey, payload) => {
         if (typeof window.fetch !== "function") return;
         const csrfToken = getCsrfToken();
@@ -1641,7 +1698,10 @@ const normalizeConstructionSpotlightUrl = (value) => {
                 const prevBypass = window.__peoReadonlyStorageBypass;
                 window.__peoReadonlyStorageBypass = true;
                 try {
-                    safeLocalStorageSet(localKey, JSON.stringify(serverData));
+                    const nextLocalData = storeKey === "construction"
+                        ? mergeConstructionStoreWithLocalDeletes(serverData, localParsed)
+                        : serverData;
+                    safeLocalStorageSet(localKey, JSON.stringify(nextLocalData));
                     writeStoreMeta(storeKey, {
                         updated_at: serverUpdatedAt,
                         fetched_at: new Date().toISOString(),
@@ -19808,23 +19868,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return { payload, safeForSync };
     };
 
-    const syncConstructionRecordsToServer = async (items, options = {}) => {
-        const store = window.peoDivisionStore;
-        const { safeForSync } = buildConstructionRecordsSyncPayload(items, options);
-        if (store && typeof store.syncNow === "function") {
-            return Boolean(await store.syncNow("construction", safeForSync));
-        }
-        if (store && typeof store.queueSync === "function") {
-            store.queueSync("construction", safeForSync, 0);
-            if (typeof store.flushSync === "function") {
-                await store.flushSync();
-                return true;
-            }
-            return true;
-        }
-        return false;
-    };
-
     const writeConstructionRecords = (items, options = {}) => {
         const { payload, safeForSync } = buildConstructionRecordsSyncPayload(items, options);
         let wrote = false;
@@ -20105,25 +20148,20 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        const syncedConstruction = await syncConstructionRecordsToServer([], { tombstones });
-        if (!syncedConstruction) {
-            writeTasks(previousTasks);
-            writeConstructionRecords(previousConstructionRecords, { skipRemoteSync: true });
-            writeDeletedConstructionAdminIds(previousDeletedAdminIds);
-            writeDeletedConstructionRecordIds(previousDeletedRecordIds);
-            render();
-            showPeoGeneralToast("Unable to finish deleting all task data on the server. Please try again.", {
-                title: "Construction Division",
-                variant: "danger",
-            });
-            return;
-        }
-
         showPeoGeneralToast("All construction task and linked project data deleted successfully.", {
             title: "Construction Division",
             variant: "success",
         });
         render();
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+            window.peoDivisionStore.flushSync().catch(() => {
+                showPeoGeneralToast("Deleted rows are hidden now, but server sync is still retrying.", {
+                    title: "Construction Division",
+                    variant: "warning",
+                });
+            });
+        }
     };
 
     const FORM_FIELDS = [
@@ -20650,25 +20688,19 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                const syncedConstruction = await syncConstructionRecordsToServer(nextConstructionRecords, { tombstones });
-                if (!syncedConstruction) {
-                    writeTasks(tasks);
-                    writeConstructionRecords(previousConstructionRecords, { skipRemoteSync: true });
-                    writeDeletedConstructionAdminIds(previousDeletedAdminIds);
-                    writeDeletedConstructionRecordIds(previousDeletedRecordIds);
-                    showPeoGeneralToast("Unable to finish deleting this task on the server. Please try again.", {
-                        title: "Construction Division",
-                        variant: "danger",
-                    });
-                    render();
-                    return;
-                }
-
                 showPeoGeneralToast("Task deleted successfully.", {
                     title: "Construction Division",
                     variant: "success",
                 });
                 render();
+                if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                    window.peoDivisionStore.flushSync().catch(() => {
+                        showPeoGeneralToast("Deleted task is hidden now, but server sync is still retrying.", {
+                            title: "Construction Division",
+                            variant: "warning",
+                        });
+                    });
+                }
                 return;
             }
 
