@@ -1670,14 +1670,11 @@ const normalizeConstructionSpotlightUrl = (value) => {
     const badgeVisibilityByStore = new Map();
     const showTimersByStore = new Map();
     const hideTimersByStore = new Map();
-    const fetchSuppressedUntilByStore = new Map();
-    const suppressedFetchDepthByStore = new Map();
     const successTimersByStore = new Map();
     const badges = [];
     const SHOW_DELAY_MS = 60;
     const MIN_VISIBLE_MS = 220;
     const SUCCESS_VISIBLE_MS = 3000;
-    const FETCH_ECHO_SUPPRESS_MS = 900;
 
     const getMountNode = (spec) => {
         const anchor = document.querySelector(spec.anchorSelector);
@@ -1787,9 +1784,8 @@ const normalizeConstructionSpotlightUrl = (value) => {
         normalizedStoreKeys.forEach((storeKey) => {
             const state = getStoreState(storeKey);
             const isSaving = Number(state?.write || 0) > 0;
-            const isSyncing = Number(state?.fetch || 0) > 0;
-            const shouldBeVisible = isSaving || isSyncing;
-            const nextMode = isSaving ? "saving" : "syncing";
+            const shouldBeVisible = isSaving;
+            const nextMode = "syncing";
             const visibility = getVisibilityState(storeKey);
             const hasSuccessState = Number(visibility.successUntil || 0) > Date.now();
 
@@ -1808,9 +1804,8 @@ const normalizeConstructionSpotlightUrl = (value) => {
                     showTimersByStore.delete(storeKey);
                     const latestState = getStoreState(storeKey);
                     const stillSaving = Number(latestState?.write || 0) > 0;
-                    const stillSyncing = Number(latestState?.fetch || 0) > 0;
-                    if (!stillSaving && !stillSyncing) return;
-                    setBadgeVisibility(storeKey, true, stillSaving ? "saving" : "syncing");
+                    if (!stillSaving) return;
+                    setBadgeVisibility(storeKey, true, "syncing");
                 }, SHOW_DELAY_MS));
                 return;
             }
@@ -1831,9 +1826,8 @@ const normalizeConstructionSpotlightUrl = (value) => {
                 hideTimersByStore.delete(storeKey);
                 const latestState = getStoreState(storeKey);
                 const stillSaving = Number(latestState?.write || 0) > 0;
-                const stillSyncing = Number(latestState?.fetch || 0) > 0;
-                if (stillSaving || stillSyncing) {
-                    setBadgeVisibility(storeKey, true, stillSaving ? "saving" : "syncing");
+                if (stillSaving) {
+                    setBadgeVisibility(storeKey, true, "syncing");
                     return;
                 }
                 setBadgeVisibility(storeKey, false, "");
@@ -1873,34 +1867,14 @@ const normalizeConstructionSpotlightUrl = (value) => {
             if (!normalizedKey) return;
             const state = getStoreState(storeKey);
             if (!state) return;
-
-            if (bucket === "fetch") {
-                const suppressedDepth = Number(suppressedFetchDepthByStore.get(normalizedKey) || 0);
-                if (phase === "start") {
-                    const suppressUntil = Number(fetchSuppressedUntilByStore.get(normalizedKey) || 0);
-                    if (now < suppressUntil) {
-                        suppressedFetchDepthByStore.set(normalizedKey, suppressedDepth + 1);
-                        return;
-                    }
-                } else if (suppressedDepth > 0) {
-                    if (suppressedDepth <= 1) {
-                        suppressedFetchDepthByStore.delete(normalizedKey);
-                    } else {
-                        suppressedFetchDepthByStore.set(normalizedKey, suppressedDepth - 1);
-                    }
-                    return;
-                }
-            }
+            if (bucket !== "write") return;
 
             if (phase === "start") {
                 state[bucket] += 1;
             } else {
                 state[bucket] = Math.max(0, Number(state[bucket] || 0) - 1);
-                if (bucket === "write") {
-                    fetchSuppressedUntilByStore.set(normalizedKey, now + FETCH_ECHO_SUPPRESS_MS);
-                    if (state[bucket] === 0) {
-                        scheduleSyncSuccess(normalizedKey);
-                    }
+                if (state[bucket] === 0) {
+                    scheduleSyncSuccess(normalizedKey);
                 }
             }
         });

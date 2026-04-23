@@ -22538,7 +22538,7 @@ body.quality-scan-open {
 }
 
 .peo-sync-indicator {
-    display: inline-flex;
+    display: none !important;
     align-items: center;
     gap: 8px;
     padding: 5px 10px;
