@@ -3,6 +3,9 @@
     const TOAST_CLASS = 'peo-general-toast';
     let container = null;
     let timer = null;
+    let lastToastSignature = '';
+    let lastToastAt = 0;
+    const TOAST_DEDUPE_MS = 2200;
 
     function ensureContainer() {
         if (container) return container;
@@ -106,6 +109,19 @@
 
     function show(options) {
         const opts = Object.assign({ variant: 'info', title: '', message: '', duration: 3200, persist: false, position: 'bottom-left', style: '' }, options || {});
+        const signature = JSON.stringify({
+            variant: String(opts.variant || 'info'),
+            title: String(opts.title || '').trim(),
+            message: String(opts.message || '').trim(),
+            position: String(opts.position || 'bottom-left').trim(),
+            style: String(opts.style || '').trim(),
+        });
+        const now = Date.now();
+        if (signature === lastToastSignature && now - lastToastAt < TOAST_DEDUPE_MS) {
+            return;
+        }
+        lastToastSignature = signature;
+        lastToastAt = now;
         const el = ensureContainer();
         setVariant(el, opts.variant);
         setIcon(el, opts.variant);
@@ -1656,9 +1672,11 @@ const normalizeConstructionSpotlightUrl = (value) => {
     const hideTimersByStore = new Map();
     const fetchSuppressedUntilByStore = new Map();
     const suppressedFetchDepthByStore = new Map();
+    const successTimersByStore = new Map();
     const badges = [];
     const SHOW_DELAY_MS = 60;
     const MIN_VISIBLE_MS = 220;
+    const SUCCESS_VISIBLE_MS = 3000;
     const FETCH_ECHO_SUPPRESS_MS = 900;
 
     const getMountNode = (spec) => {
@@ -1686,6 +1704,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
                 visible: false,
                 visibleSince: 0,
                 mode: "",
+                successUntil: 0,
             });
         }
         return badgeVisibilityByStore.get(key);
@@ -1706,15 +1725,18 @@ const normalizeConstructionSpotlightUrl = (value) => {
             if (badgeStoreKey !== storeKey) return;
             const label = badge.querySelector(".peo-sync-indicator__label");
             badge.hidden = !visibility.visible;
+            badge.classList.toggle("is-synced", visibility.mode === "synced");
             if (label) {
-                label.textContent = "Syncing...";
+                label.textContent = visibility.mode === "synced" ? "Synced" : "Syncing...";
             }
         });
     };
 
     const setBadgeVisibility = (storeKey, visible, mode = "") => {
         const visibility = getVisibilityState(storeKey);
-        const nextMode = visible ? (mode === "saving" ? "saving" : "syncing") : "";
+        const nextMode = visible
+            ? (mode === "synced" ? "synced" : (mode === "saving" ? "saving" : "syncing"))
+            : "";
         const now = Date.now();
         const changed = visibility.visible !== visible || visibility.mode !== nextMode;
 
@@ -1733,6 +1755,29 @@ const normalizeConstructionSpotlightUrl = (value) => {
         }
     };
 
+    const scheduleSyncSuccess = (storeKey) => {
+        const normalizedKey = String(storeKey || "").trim().toLowerCase();
+        if (!normalizedKey) return;
+        clearTimer(showTimersByStore, normalizedKey);
+        clearTimer(hideTimersByStore, normalizedKey);
+        clearTimer(successTimersByStore, normalizedKey);
+        const visibility = getVisibilityState(normalizedKey);
+        visibility.successUntil = Date.now() + SUCCESS_VISIBLE_MS;
+        setBadgeVisibility(normalizedKey, true, "synced");
+        successTimersByStore.set(normalizedKey, window.setTimeout(() => {
+            successTimersByStore.delete(normalizedKey);
+            const latestState = getStoreState(normalizedKey);
+            const hasActivity = Number(latestState?.write || 0) > 0 || Number(latestState?.fetch || 0) > 0;
+            if (hasActivity) {
+                renderBadges();
+                return;
+            }
+            const latestVisibility = getVisibilityState(normalizedKey);
+            latestVisibility.successUntil = 0;
+            setBadgeVisibility(normalizedKey, false, "");
+        }, SUCCESS_VISIBLE_MS));
+    };
+
     const renderBadges = () => {
         const normalizedStoreKeys = new Set();
         badges.forEach(({ storeKey }) => {
@@ -1746,11 +1791,14 @@ const normalizeConstructionSpotlightUrl = (value) => {
             const shouldBeVisible = isSaving || isSyncing;
             const nextMode = isSaving ? "saving" : "syncing";
             const visibility = getVisibilityState(storeKey);
+            const hasSuccessState = Number(visibility.successUntil || 0) > Date.now();
 
             clearTimer(showTimersByStore, storeKey);
 
             if (shouldBeVisible) {
                 clearTimer(hideTimersByStore, storeKey);
+                clearTimer(successTimersByStore, storeKey);
+                visibility.successUntil = 0;
                 if (visibility.visible) {
                     setBadgeVisibility(storeKey, true, nextMode);
                     return;
@@ -1764,6 +1812,11 @@ const normalizeConstructionSpotlightUrl = (value) => {
                     if (!stillSaving && !stillSyncing) return;
                     setBadgeVisibility(storeKey, true, stillSaving ? "saving" : "syncing");
                 }, SHOW_DELAY_MS));
+                return;
+            }
+
+            if (hasSuccessState) {
+                setBadgeVisibility(storeKey, true, "synced");
                 return;
             }
 
@@ -1845,6 +1898,9 @@ const normalizeConstructionSpotlightUrl = (value) => {
                 state[bucket] = Math.max(0, Number(state[bucket] || 0) - 1);
                 if (bucket === "write") {
                     fetchSuppressedUntilByStore.set(normalizedKey, now + FETCH_ECHO_SUPPRESS_MS);
+                    if (state[bucket] === 0) {
+                        scheduleSyncSuccess(normalizedKey);
+                    }
                 }
             }
         });
