@@ -1703,10 +1703,8 @@ const normalizeConstructionSpotlightUrl = (value) => {
             if (badgeStoreKey !== storeKey) return;
             const label = badge.querySelector(".peo-sync-indicator__label");
             badge.hidden = !visibility.visible;
-            badge.classList.toggle("is-saving", visibility.mode === "saving");
-            badge.classList.toggle("is-syncing", visibility.mode === "syncing");
             if (label) {
-                label.textContent = visibility.mode === "saving" ? "Saving..." : "Syncing...";
+                label.textContent = "Syncing...";
             }
         });
     };

@@ -4305,6 +4305,9 @@ body {
     justify-content: center;
     margin: 0 3px;
     cursor: pointer;
+    position: relative;
+    z-index: 1;
+    touch-action: manipulation;
     transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
 
@@ -4312,6 +4315,7 @@ body {
     width: 16px;
     height: 16px;
     fill: currentColor;
+    pointer-events: none;
 }
 
 .pa-action-edit {
@@ -10674,6 +10678,9 @@ body.construction-modal-open {
     justify-content: center;
     cursor: pointer;
     margin: 0 3px;
+    position: relative;
+    z-index: 1;
+    touch-action: manipulation;
     transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
 
@@ -10681,6 +10688,7 @@ body.construction-modal-open {
     width: 16px;
     height: 16px;
     fill: currentColor;
+    pointer-events: none;
 }
 
 .table-icon-btn--edit {
@@ -11248,10 +11256,14 @@ body.construction-modal-open {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    position: relative;
+    z-index: 1;
+    touch-action: manipulation;
 }
 
 .contractor-icon-btn .material-symbols-outlined {
     font-size: 0.95rem;
+    pointer-events: none;
 }
 
 .contractor-icon-btn.js-contractor-delete {
@@ -15413,6 +15425,7 @@ body.submissions-page .portal-content {
 
 .submissions-action-btn .material-symbols-outlined {
     font-size: 18px;
+    pointer-events: none;
 }
 
 .submissions-file-cell {
@@ -22540,11 +22553,6 @@ body.quality-scan-open {
 
 .peo-sync-indicator[hidden] {
     display: none !important;
-}
-
-.peo-sync-indicator.is-saving {
-    background: rgba(180, 83, 9, 0.12);
-    color: #b45309;
 }
 
 .peo-sync-indicator__spinner {
