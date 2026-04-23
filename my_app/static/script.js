@@ -1089,6 +1089,69 @@ const compressProposalUploadImage = (file) => peoCompressUploadImageFile(file, {
     minBytesSaved: 128 * 1024,
 });
 
+const peoUploadConstructionImageFiles = async ({
+    files,
+    uploadUrl,
+    csrfToken,
+    compressOptions = { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 },
+    missingUrlMessage = "Photo upload URL is not configured.",
+    missingCsrfMessage = "CSRF token is missing. Please refresh and try again.",
+    failedMessage = "Photo upload failed.",
+    networkErrorMessage = "Unable to upload photos right now.",
+} = {}) => {
+    const list = Array.isArray(files) ? files.filter((file) => file instanceof File) : [];
+    if (!list.length) return { ok: true, images: [] };
+
+    const targetUrl = String(uploadUrl || "").trim();
+    if (!targetUrl) {
+        return { ok: false, error: missingUrlMessage };
+    }
+
+    const token = String(csrfToken || "").trim();
+    if (!token) {
+        return { ok: false, error: missingCsrfMessage };
+    }
+
+    const filesForUpload = await Promise.all(
+        list.map((file) => compressImageUploadFile(file, compressOptions))
+    );
+    const payload = new FormData();
+    filesForUpload.forEach((file) => {
+        payload.append("photos", file, file?.name || "photo");
+    });
+
+    try {
+        const response = await window.fetch(targetUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "X-CSRFToken": token,
+                "Accept": "application/json",
+            },
+            body: payload,
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data || data.ok !== true) {
+            return { ok: false, error: String(data?.error || failedMessage) };
+        }
+
+        const nowIso = new Date().toISOString();
+        const uploaded = Array.isArray(data.files) ? data.files : [];
+        const images = uploaded
+            .map((item) => ({
+                dataUrl: String(item?.url || "").trim(),
+                name: String(item?.original_name || item?.name || "").trim(),
+                uploaded_at: nowIso,
+            }))
+            .filter((img) => img.dataUrl);
+
+        return { ok: true, images };
+    } catch (error) {
+        return { ok: false, error: networkErrorMessage };
+    }
+};
+
 const normalizeConstructionSpotlightUrl = (value) => {
     const raw = String(value || "").trim();
     if (!raw) return "";
@@ -1162,6 +1225,20 @@ const normalizeConstructionSpotlightUrl = (value) => {
         } catch (error) {
             return false;
         }
+    };
+
+    const isStorePayloadEmpty = (type, payload) => {
+        if (String(type || "array").trim() === "object") {
+            return !payload || typeof payload !== "object" || Array.isArray(payload) || Object.keys(payload).length === 0;
+        }
+        return !Array.isArray(payload) || payload.length === 0;
+    };
+
+    const isStorePayloadValid = (type, payload) => {
+        if (String(type || "array").trim() === "object") {
+            return Boolean(payload) && typeof payload === "object" && !Array.isArray(payload);
+        }
+        return Array.isArray(payload);
     };
 
     const postStore = async (storeKey, payload) => {
@@ -1359,6 +1436,12 @@ const normalizeConstructionSpotlightUrl = (value) => {
         const existing = timers.get(normalizedKey);
         if (existing) window.clearTimeout(existing);
 
+        if (Math.max(0, Number(delayMs) || 0) === 0) {
+            timers.delete(normalizedKey);
+            sendLatestPayload(normalizedKey, token);
+            return;
+        }
+
         timers.set(normalizedKey, window.setTimeout(() => {
             sendLatestPayload(normalizedKey, token);
         }, Math.max(0, Number(delayMs) || 0)));
@@ -1473,10 +1556,20 @@ const normalizeConstructionSpotlightUrl = (value) => {
                 const serverData = server.data;
                 const serverUpdatedAt = String(server.updated_at || "").trim();
 
-                const isValid = type === "object"
-                    ? (serverData && typeof serverData === "object" && !Array.isArray(serverData))
-                    : Array.isArray(serverData);
+                const isValid = isStorePayloadValid(type, serverData);
                 if (!isValid) continue;
+
+                const localRaw = safeLocalStorageGet(localKey);
+                const localParsed = localRaw ? safeJsonParse(localRaw, null) : null;
+                const hasLocalData = !isStorePayloadEmpty(type, localParsed);
+                const serverIsEmpty = isStorePayloadEmpty(type, serverData);
+
+                if (hasLocalData && serverIsEmpty) {
+                    // Preserve the user's latest browser copy instead of blanking the UI on refresh
+                    // when the remote store has not caught up yet.
+                    queueSync(storeKey, localParsed, 0);
+                    continue;
+                }
 
                 const meta = readStoreMeta(storeKey);
                 if (hasBlockingPendingLocalWrite(storeKey, meta)) {
@@ -15754,55 +15847,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const uploadConstructionPhotos = async (files) => {
-        const list = Array.isArray(files) ? files : [];
-        if (!list.length) return { ok: true, images: [] };
-        if (!constructionPhotoUploadUrl) {
-            return { ok: false, error: "Photo upload URL is not configured." };
-        }
-
-        const csrfToken = getCsrfToken();
-        if (!csrfToken) {
-            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
-        }
-
-        const filesForUpload = await Promise.all(
-            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
-        );
-        const payload = new FormData();
-        filesForUpload.forEach((file) => {
-            payload.append("photos", file, file?.name || "photo");
+        return peoUploadConstructionImageFiles({
+            files,
+            uploadUrl: constructionPhotoUploadUrl,
+            csrfToken: getCsrfToken(),
         });
-
-        try {
-            const response = await window.fetch(constructionPhotoUploadUrl, {
-                method: "POST",
-                credentials: "same-origin",
-                headers: {
-                    "X-CSRFToken": csrfToken,
-                    "Accept": "application/json",
-                },
-                body: payload,
-            });
-
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok || !data || data.ok !== true) {
-                return { ok: false, error: String(data?.error || "Photo upload failed.") };
-            }
-
-            const nowIso = new Date().toISOString();
-            const uploaded = Array.isArray(data.files) ? data.files : [];
-            const images = uploaded
-                .map((item) => ({
-                    dataUrl: String(item?.url || "").trim(),
-                    name: String(item?.original_name || item?.name || "").trim(),
-                    uploaded_at: nowIso,
-                }))
-                .filter((img) => img.dataUrl);
-
-            return { ok: true, images };
-        } catch (error) {
-            return { ok: false, error: "Unable to upload photos right now." };
-        }
     };
 
     let constructionXlsxPromise = null;
@@ -18824,23 +18873,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const approved = await showPeoGeneralConfirm({
             title: "Delete All Task Data",
-            message: "This will permanently delete all task records in the construction task table.",
+            message: "This will permanently delete all construction task records and their linked construction entries.",
             confirmLabel: "Delete All",
             cancelLabel: "Cancel",
             variant: "danger",
         });
         if (!approved) return;
 
+        const previousTasks = readTasks();
+        const previousConstructionRecords = readConstructionRecords();
         const wroteTasks = writeTasks([]);
-        if (!wroteTasks) {
-            showPeoGeneralToast("Unable to delete all tasks. Storage is unavailable.", {
+        const wroteConstruction = writeConstructionRecords([]);
+
+        if (!wroteTasks || !wroteConstruction) {
+            if (wroteTasks) {
+                writeTasks(previousTasks);
+            }
+            if (wroteConstruction) {
+                writeConstructionRecords(previousConstructionRecords);
+            }
+            showPeoGeneralToast("Unable to delete all construction data. Storage is unavailable.", {
                 title: "Construction Division",
                 variant: "danger",
             });
             return;
         }
 
-        showPeoGeneralToast("All construction task data deleted successfully.", {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+            window.peoDivisionStore.flushSync();
+        }
+
+        showPeoGeneralToast("All construction task and linked project data deleted successfully.", {
             title: "Construction Division",
             variant: "success",
         });
@@ -18962,53 +19025,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const uploadTaskConstructionPhotos = async (files) => {
-        const list = Array.isArray(files) ? files : [];
-        if (!list.length) return { ok: true, images: [] };
-        if (!constructionPhotoUploadUrl) {
-            return { ok: false, error: "Photo upload URL is not configured." };
-        }
-
-        const csrfToken = getTaskCsrfToken();
-        if (!csrfToken) {
-            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
-        }
-
-        const filesForUpload = await Promise.all(
-            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
-        );
-        const payload = new FormData();
-        filesForUpload.forEach((file) => {
-            payload.append("photos", file, file?.name || "photo");
+        return peoUploadConstructionImageFiles({
+            files,
+            uploadUrl: constructionPhotoUploadUrl,
+            csrfToken: getTaskCsrfToken(),
         });
-
-        try {
-            const response = await window.fetch(constructionPhotoUploadUrl, {
-                method: "POST",
-                credentials: "same-origin",
-                headers: {
-                    "X-CSRFToken": csrfToken,
-                    "Accept": "application/json",
-                },
-                body: payload,
-            });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok || !data || data.ok !== true) {
-                return { ok: false, error: String(data?.error || "Photo upload failed.") };
-            }
-
-            const nowIso = new Date().toISOString();
-            const images = (Array.isArray(data.files) ? data.files : [])
-                .map((item) => ({
-                    dataUrl: String(item?.url || "").trim(),
-                    name: String(item?.original_name || item?.name || "").trim(),
-                    uploaded_at: nowIso,
-                }))
-                .filter((img) => img.dataUrl);
-
-            return { ok: true, images };
-        } catch (error) {
-            return { ok: false, error: "Unable to upload photos right now." };
-        }
     };
 
     const updateTaskPhotoMeta = () => {
@@ -19694,55 +19715,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const uploadConstructionProjectPhotos = async (files) => {
-        const list = Array.isArray(files) ? files : [];
-        if (!list.length) return { ok: true, images: [] };
-        if (!constructionPhotoUploadUrl) {
-            return { ok: false, error: "Photo upload URL is not configured." };
-        }
-
-        const csrfToken = getCsrfToken();
-        if (!csrfToken) {
-            return { ok: false, error: "CSRF token is missing. Please refresh and try again." };
-        }
-
-        const filesForUpload = await Promise.all(
-            list.map((file) => compressImageUploadFile(file, { maxDimension: 4096, quality: 0.98, minBytesSaved: 128 * 1024 }))
-        );
-        const payload = new FormData();
-        filesForUpload.forEach((file) => {
-            payload.append("photos", file, file?.name || "photo");
+        return peoUploadConstructionImageFiles({
+            files,
+            uploadUrl: constructionPhotoUploadUrl,
+            csrfToken: getCsrfToken(),
         });
-
-        try {
-            const response = await window.fetch(constructionPhotoUploadUrl, {
-                method: "POST",
-                credentials: "same-origin",
-                headers: {
-                    "X-CSRFToken": csrfToken,
-                    "Accept": "application/json",
-                },
-                body: payload,
-            });
-
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok || !data || data.ok !== true) {
-                return { ok: false, error: String(data?.error || "Photo upload failed.") };
-            }
-
-            const nowIso = new Date().toISOString();
-            const uploaded = Array.isArray(data.files) ? data.files : [];
-            const images = uploaded
-                .map((item) => ({
-                    dataUrl: String(item?.url || "").trim(),
-                    name: String(item?.original_name || item?.name || "").trim(),
-                    uploaded_at: nowIso,
-                }))
-                .filter((img) => img.dataUrl);
-
-            return { ok: true, images };
-        } catch (error) {
-            return { ok: false, error: "Unable to upload photos right now." };
-        }
     };
 
     const toast = (message, options = {}) => {
@@ -27743,8 +27720,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 modal.title.textContent = String(source.doc_no || "Scan").trim() || "Scan";
             }
             if (modal.subtitle instanceof HTMLElement) {
-                const sourceLabel = String(source.received_from || "").trim();
-                modal.subtitle.textContent = `${attachments.length} file(s)${sourceLabel ? ` • ${sourceLabel}` : ""}`;
+                const sourceLabel = String(source.received_from || source.received_by || source.route || "").trim();
+                modal.subtitle.textContent = `${attachments.length} file(s)${sourceLabel ? ` | ${sourceLabel}` : ""}`;
             }
             if (modal.list instanceof HTMLElement) {
                 peoRenderAttachmentList(modal.list, attachments);

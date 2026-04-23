@@ -5,7 +5,6 @@ __pycache__/
 
 .cache/
 *.djcache
-
 # Runtime upload/storage directories
 media/
 my_app/static/uploads/
