@@ -32,6 +32,31 @@ DIVISION_STAFF_GROUP_NAME_BY_KEY = {
     KEY_QUALITY: "Quality Division Staff Engineer",
     KEY_MAINTENANCE: "Maintenance Division Staff Engineer",
 }
+DIVISION_EDIT_GROUP_ALIASES_BY_KEY = {
+    KEY_ADMIN: {
+        "Admin Division Staff Engineer",
+        "Admin Engineer Staff",
+    },
+    KEY_PLANNING: {
+        "Planning Division Staff Engineer",
+        "Planning Division Engineer Staff",
+        "Planning Division Staff",
+    },
+    KEY_CONSTRUCTION: {
+        "Construction Division Staff Engineer",
+        "Construction Engineer Staff",
+    },
+    KEY_QUALITY: {
+        "Quality Division Staff Engineer",
+        "Quality Division Engineer Staff",
+        "Quality Control Division Staff Engineer",
+    },
+    KEY_MAINTENANCE: {
+        "Maintenance Division Staff Engineer",
+        "Maintenance Division Engineer Staff",
+        "Maintenance Division Staff",
+    },
+}
 DIVISION_GROUP_NAME_ALIASES = {
     "quality division": "quality control division",
     "maitenance division": "maintenance division",
@@ -135,6 +160,14 @@ def _sync_user_division_group(user, division_key):
     staff_group, _ = Group.objects.get_or_create(name=staff_group_name)
 
     division_group_names = set(DIVISION_GROUP_NAME_BY_KEY.values()) | set(DIVISION_STAFF_GROUP_NAME_BY_KEY.values())
+    legacy_staff_group_names = {
+        str(name or "").strip()
+        for alias_names in DIVISION_EDIT_GROUP_ALIASES_BY_KEY.values()
+        for name in alias_names
+        if str(name or "").strip()
+    }
+    division_group_names |= legacy_staff_group_names
+
     allowed_group_names = {primary_group.name}
     if getattr(user, "is_staff", False):
         allowed_group_names.add(staff_group.name)
