@@ -3461,6 +3461,181 @@ def division_store_clear_all_api(request):
     return JsonResponse({"ok": True, "cleared": sorted(cleared)})
 
 
+def _parse_json_request_body(request):
+    try:
+        raw_body = request.body.decode("utf-8")
+    except Exception:
+        raw_body = ""
+
+    if not str(raw_body or "").strip():
+        return {}
+
+    try:
+        parsed = json.loads(raw_body)
+    except json.JSONDecodeError:
+        return None
+
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _maintenance_task_matches_selector(record, selector):
+    if not isinstance(record, dict):
+        return False
+
+    selector = selector if isinstance(selector, dict) else {}
+    admin_record_id = str(selector.get("adminRecordId") or "").strip()
+    record_admin_id = str(record.get("adminRecordId") or "").strip()
+    if admin_record_id:
+        return record_admin_id == admin_record_id
+
+    comparable_fields = (
+        ("slipNo", "slipNo"),
+        ("title", "title"),
+        ("dueDateIso", "dueDateIso"),
+        ("allocation", "allocation"),
+        ("createdAt", "createdAt"),
+    )
+    return all(
+        str(record.get(record_key) or "").strip() == str(selector.get(selector_key) or "").strip()
+        for selector_key, record_key in comparable_fields
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def maintenance_task_delete_api(request):
+    if _has_global_division_access(request.user):
+        can_delete = True
+    else:
+        can_delete = (
+            _get_user_division_key(request.user) == KEY_MAINTENANCE
+            and _has_division_permission(request.user, KEY_MAINTENANCE, require_edit=True)
+        )
+    if not can_delete:
+        return JsonResponse({"error": "Forbidden."}, status=403)
+
+    payload = _parse_json_request_body(request)
+    if payload is None:
+        return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+    selector = payload.get("task") if isinstance(payload.get("task"), dict) else {}
+    admin_record_id = str(selector.get("adminRecordId") or "").strip()
+    if not selector:
+        return JsonResponse({"error": "Task selector is required."}, status=400)
+
+    changed_store_keys = []
+
+    with transaction.atomic():
+        maintenance_store, _ = SharedDivisionStore.objects.get_or_create(key=KEY_MAINTENANCE)
+        maintenance_data = _normalize_store_data(KEY_MAINTENANCE, maintenance_store.data)
+        maintenance_payload = {
+            **maintenance_data,
+            "taskRows": [
+                record
+                for record in _safe_list(maintenance_data.get("taskRows"))
+                if not _maintenance_task_matches_selector(record, selector)
+            ],
+        }
+        if admin_record_id:
+            maintenance_payload["dismissedAdminTaskIds"] = [
+                value
+                for value in _safe_list(maintenance_data.get("dismissedAdminTaskIds"))
+                if str(value or "").strip() != admin_record_id
+            ]
+        removed_from_maintenance = len(maintenance_payload["taskRows"]) != len(_safe_list(maintenance_data.get("taskRows")))
+        if removed_from_maintenance or admin_record_id:
+            maintenance_store.data = maintenance_payload
+            maintenance_store.save(update_fields=["data", "updated_at"])
+            changed_store_keys.append(KEY_MAINTENANCE)
+
+        removed_from_admin = False
+        if admin_record_id:
+            admin_store, _ = SharedDivisionStore.objects.get_or_create(key=KEY_ADMIN)
+            admin_data = _normalize_store_data(KEY_ADMIN, admin_store.data)
+            admin_payload = [
+                record
+                for record in admin_data
+                if _json_record_id(record) != admin_record_id
+            ]
+            removed_from_admin = len(admin_payload) != len(admin_data)
+            if removed_from_admin:
+                admin_store.data = admin_payload
+                admin_store.save(update_fields=["data", "updated_at"])
+                changed_store_keys.append(KEY_ADMIN)
+        else:
+            admin_payload = None
+
+        try:
+            for user_store in DivisionStore.objects.select_for_update().filter(key__in=[KEY_ADMIN, KEY_MAINTENANCE]):
+                if user_store.key == KEY_MAINTENANCE:
+                    current = _normalize_store_data(KEY_MAINTENANCE, user_store.data)
+                    current["taskRows"] = [
+                        record
+                        for record in _safe_list(current.get("taskRows"))
+                        if not _maintenance_task_matches_selector(record, selector)
+                    ]
+                    if admin_record_id:
+                        current["dismissedAdminTaskIds"] = [
+                            value
+                            for value in _safe_list(current.get("dismissedAdminTaskIds"))
+                            if str(value or "").strip() != admin_record_id
+                        ]
+                    user_store.data = current
+                    user_store.save(update_fields=["data", "updated_at"])
+                elif admin_record_id:
+                    current = _normalize_store_data(KEY_ADMIN, user_store.data)
+                    current = [record for record in current if _json_record_id(record) != admin_record_id]
+                    user_store.data = current
+                    user_store.save(update_fields=["data", "updated_at"])
+        except Exception:
+            logger.exception("maintenance_task_delete_user_store_cleanup_failed")
+
+    _invalidate_store_cache()
+
+    try:
+        if admin_record_id and removed_from_admin:
+            _sync_admin_workflow_records(admin_payload, actor=request.user)
+        _sync_maintenance_structured_tables(maintenance_payload)
+    except Exception:
+        logger.exception(
+            "maintenance_task_delete_db_sync_failed admin_record_id=%s user=%s",
+            admin_record_id,
+            request.user.get_username() if getattr(request, "user", None) and request.user.is_authenticated else "anonymous",
+        )
+
+    for key in changed_store_keys:
+        store_payload = admin_payload if key == KEY_ADMIN else maintenance_payload
+        _safe_log_division_store_event(
+            actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+            store_key=key,
+            target=DivisionStoreEvent.TARGET_SHARED,
+            write_mode="maintenance_task_delete",
+            request_payload=payload,
+            stored_payload=store_payload,
+            path=getattr(request, "path", ""),
+            method=getattr(request, "method", ""),
+        )
+
+    if changed_store_keys:
+        _broadcast_division_store_update(
+            store_keys=changed_store_keys,
+            actor=request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+            updated_at=timezone.now().isoformat(),
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "deleted": {
+                "admin_record_id": admin_record_id,
+                "removed_from_admin": removed_from_admin,
+                "removed_from_maintenance": removed_from_maintenance,
+            },
+            "updated_store_keys": changed_store_keys,
+        }
+    )
+
+
 @login_required
 @require_http_methods(["POST"])
 def construction_photo_upload(request):

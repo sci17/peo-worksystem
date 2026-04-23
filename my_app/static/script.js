@@ -8324,6 +8324,107 @@ document.addEventListener("DOMContentLoaded", () => {
         return readAdminDivisionStoreForMaintenance();
     };
 
+    const getMaintenanceTaskCookie = (name) => {
+        const cookies = String(document.cookie || "").split(";").map((part) => part.trim());
+        for (const cookie of cookies) {
+            if (!cookie) continue;
+            const eqIndex = cookie.indexOf("=");
+            if (eqIndex < 0) continue;
+            const cookieName = cookie.slice(0, eqIndex).trim();
+            if (cookieName !== name) continue;
+            return decodeURIComponent(cookie.slice(eqIndex + 1));
+        }
+        return "";
+    };
+
+    const getMaintenanceTaskCsrfToken = () => {
+        const tokenFromCookie = getMaintenanceTaskCookie("csrftoken");
+        if (tokenFromCookie) return tokenFromCookie;
+        const tokenFromDom = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenFromDom instanceof HTMLInputElement ? String(tokenFromDom.value || "").trim() : "";
+    };
+
+    const syncDeletedMaintenanceTaskToServer = async (taskRecord) => {
+        const csrfToken = getMaintenanceTaskCsrfToken();
+        if (!csrfToken) {
+            return { ok: false, error: "Missing CSRF token. Please refresh and try again." };
+        }
+
+        try {
+            const response = await window.fetch("/api/maintenance/tasks/delete/", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "X-CSRFToken": csrfToken,
+                },
+                body: JSON.stringify({ task: taskRecord || {} }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                return { ok: false, error: String(data?.error || "Unable to delete task.") };
+            }
+            return { ok: true, data };
+        } catch (error) {
+            return { ok: false, error: String(error?.message || error || "Unable to delete task.") };
+        }
+    };
+
+    const removeAdminRecordFromLocalMaintenanceCache = (adminRecordId) => {
+        const normalizedId = String(adminRecordId || "").trim();
+        if (!normalizedId) return;
+
+        try {
+            const raw = window.localStorage.getItem(adminDivisionStorageKey);
+            const records = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(records)) return;
+            const nextRecords = records.filter((record) => String(record?.__record_id || "").trim() !== normalizedId);
+            window.localStorage.setItem(adminDivisionStorageKey, JSON.stringify(nextRecords));
+        } catch (error) {
+            // Ignore local cache update errors.
+        }
+    };
+
+    const removeMaintenanceTaskFromLocalCache = (taskRecord) => {
+        const target = taskRecord && typeof taskRecord === "object" ? taskRecord : {};
+        const adminRecordId = String(target.adminRecordId || "").trim();
+
+        try {
+            const raw = window.localStorage.getItem(maintenanceStorageKey);
+            const parsed = raw ? JSON.parse(raw) : {};
+            const nextState = parsed && typeof parsed === "object" ? { ...parsed } : {};
+            const currentRows = Array.isArray(nextState.taskRows) ? nextState.taskRows : [];
+            nextState.taskRows = currentRows.filter((record) => {
+                if (!record || typeof record !== "object") {
+                    return false;
+                }
+                const recordAdminId = String(record.adminRecordId || "").trim();
+                if (adminRecordId) {
+                    return recordAdminId !== adminRecordId;
+                }
+                return !(
+                    String(record.slipNo || "").trim() === String(target.slipNo || "").trim()
+                    && String(record.title || "").trim() === String(target.title || "").trim()
+                    && String(record.dueDateIso || "").trim() === String(target.dueDateIso || "").trim()
+                    && String(record.allocation || "").trim() === String(target.allocation || "").trim()
+                    && String(record.createdAt || "").trim() === String(target.createdAt || "").trim()
+                );
+            });
+            nextState.dismissedAdminTaskIds = (Array.isArray(nextState.dismissedAdminTaskIds) ? nextState.dismissedAdminTaskIds : [])
+                .map((value) => String(value || "").trim())
+                .filter((value) => value && value !== adminRecordId);
+            window.localStorage.setItem(maintenanceStorageKey, JSON.stringify(nextState));
+            if (typeof window.CustomEvent === "function") {
+                window.dispatchEvent(new CustomEvent(MAINTENANCE_STATE_UPDATED_EVENT));
+            } else {
+                window.dispatchEvent(new Event(MAINTENANCE_STATE_UPDATED_EVENT));
+            }
+        } catch (error) {
+            // Ignore local cache update errors.
+        }
+    };
+
     if (maintenanceTaskTracker && window.peoIncomingDocToast && typeof window.peoIncomingDocToast.check === "function") {
         let adminRecordsForToast = [];
         try {
@@ -15100,28 +15201,24 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const adminRecordId = String(row.dataset.adminRecordId || "").trim();
-            if (adminRecordId) {
-                const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
-                    ? window.peoAdminVisibility
-                    : null;
-                if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function") {
-                    const nextAdminRecords = adminVisibility.hideRecordsForDivision(
-                        readAdminDivisionRecords(),
-                        [adminRecordId],
-                        "maintenance",
-                        true
-                    );
-                    writeAdminDivisionRecords(nextAdminRecords);
-                }
-                dismissedAdminTaskIds = Array.from(new Set([...dismissedAdminTaskIds, adminRecordId]));
+            const taskRecord = serializeSingleTaskRow(row);
+            const deleteResult = await syncDeletedMaintenanceTaskToServer(taskRecord);
+            if (!deleteResult.ok) {
+                showRoadUploadStatusToast(deleteResult.error || "Unable to delete task right now.", "error");
+                return;
             }
+
+            const adminRecordId = String(taskRecord?.adminRecordId || "").trim();
+            if (adminRecordId) {
+                removeAdminRecordFromLocalMaintenanceCache(adminRecordId);
+                dismissedAdminTaskIds = dismissedAdminTaskIds.filter((value) => String(value || "").trim() !== adminRecordId);
+            }
+            removeMaintenanceTaskFromLocalCache(taskRecord);
             row.remove();
             if (!getTaskRows().length) {
                 restoreTaskEmptyRow();
             }
             updateTaskSummary();
-            persistMaintenanceState();
             showRoadUploadStatusToast("Task deleted successfully.", "success");
         });
     }

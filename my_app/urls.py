@@ -26,5 +26,6 @@ urlpatterns = [
     path('api/division-store/<slug:key>/', views.division_store_api, name='division_store_api'),
     path('api/division-store-snapshot/', views.division_store_snapshot_api, name='division_store_snapshot_api'),
     path('api/division-store-clear-all/', views.division_store_clear_all_api, name='division_store_clear_all_api'),
+    path('api/maintenance/tasks/delete/', views.maintenance_task_delete_api, name='maintenance_task_delete_api'),
     path('api/uploads/construction/', views.construction_photo_upload, name='construction_photo_upload'),
 ]
