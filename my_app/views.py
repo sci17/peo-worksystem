@@ -185,6 +185,31 @@ DIVISION_STAFF_GROUP_NAME_BY_KEY = {
     KEY_QUALITY: "Quality Division Staff Engineer",
     KEY_MAINTENANCE: "Maintenance Division Staff Engineer",
 }
+DIVISION_EDIT_GROUP_ALIASES_BY_KEY = {
+    KEY_ADMIN: {
+        "Admin Division Staff Engineer",
+        "Admin Engineer Staff",
+    },
+    KEY_PLANNING: {
+        "Planning Division Staff Engineer",
+        "Planning Division Engineer Staff",
+        "Planning Division Staff",
+    },
+    KEY_CONSTRUCTION: {
+        "Construction Division Staff Engineer",
+        "Construction Engineer Staff",
+    },
+    KEY_QUALITY: {
+        "Quality Division Staff Engineer",
+        "Quality Division Engineer Staff",
+        "Quality Control Division Staff Engineer",
+    },
+    KEY_MAINTENANCE: {
+        "Maintenance Division Staff Engineer",
+        "Maintenance Division Engineer Staff",
+        "Maintenance Division Staff",
+    },
+}
 
 
 def _has_global_division_access(user):
@@ -435,10 +460,14 @@ def _has_division_staff_engineer_group(user, division_key):
     normalized_key = _normalize_division_key(division_key)
     if not normalized_key:
         return False
-    target_name = str(DIVISION_STAFF_GROUP_NAME_BY_KEY.get(normalized_key, "")).strip().lower()
-    if not target_name:
+    target_names = {
+        str(name or "").strip().lower()
+        for name in DIVISION_EDIT_GROUP_ALIASES_BY_KEY.get(normalized_key, set())
+        if str(name or "").strip()
+    }
+    if not target_names:
         return False
-    return target_name in {name.lower() for name in _get_user_group_names(user)}
+    return bool(target_names & {name.lower() for name in _get_user_group_names(user)})
 
 
 def _has_division_permission(user, division_key, *, require_edit=False):
