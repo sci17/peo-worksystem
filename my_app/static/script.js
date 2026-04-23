@@ -1336,6 +1336,7 @@ const normalizeConstructionSpotlightUrl = (value) => {
 
     const latestPayloads = new Map();
     const latestWriteTokens = new Map();
+    const latestWritePromises = new Map();
     const timers = new Map();
     const emitDivisionStoreActivity = (detail = {}) => {
         const storeKeys = Array.isArray(detail.storeKeys)
@@ -1422,20 +1423,31 @@ const normalizeConstructionSpotlightUrl = (value) => {
     const sendLatestPayload = (storeKey, token) => {
         const latest = latestPayloads.get(storeKey);
         if (typeof latest === "undefined") {
-            return;
+            return Promise.resolve(null);
         }
 
-        Promise.resolve(postStore(storeKey, latest))
+        const requestPromise = Promise.resolve(postStore(storeKey, latest))
             .then((responseData) => {
                 if (!responseData) {
                     clearPendingMetaAfterFailure(storeKey, token);
-                    return;
+                    return null;
                 }
                 syncPendingMeta(storeKey, token, false, responseData);
+                return responseData;
             })
             .catch(() => {
                 clearPendingMetaAfterFailure(storeKey, token);
+                return null;
+            })
+            .finally(() => {
+                const current = latestWritePromises.get(storeKey);
+                if (current === requestPromise) {
+                    latestWritePromises.delete(storeKey);
+                }
             });
+
+        latestWritePromises.set(storeKey, requestPromise);
+        return requestPromise;
     };
 
     const flushSync = () => {
@@ -1444,16 +1456,23 @@ const normalizeConstructionSpotlightUrl = (value) => {
         });
         timers.clear();
 
+        const requests = [];
         latestPayloads.forEach((_, storeKey) => {
             const token = Number(latestWriteTokens.get(storeKey) || 0);
             if (!token) return;
-            sendLatestPayload(storeKey, token);
+            requests.push(sendLatestPayload(storeKey, token));
         });
+        return Promise.all(requests);
     };
 
     const syncNow = (storeKey, payload) => {
         queueSync(storeKey, payload, 0);
-        flushSync();
+        const normalizedKey = String(storeKey || "").trim();
+        const promise = flushSync();
+        if (normalizedKey && latestWritePromises.has(normalizedKey)) {
+            return latestWritePromises.get(normalizedKey);
+        }
+        return promise;
     };
 
     const queueSync = (storeKey, payload, delayMs = 60) => {
@@ -6383,8 +6402,9 @@ const portalDomReady = () => {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.syncNow("admin", safeRecords);
+            return window.peoDivisionStore.syncNow("admin", safeRecords);
         }
+        return Promise.resolve(null);
     };
 
     let maintenanceAdminStoreFetchPromise = null;
@@ -6744,8 +6764,8 @@ const portalDomReady = () => {
         updateBulkDeleteButtonState("billing");
     };
 
-    const deleteRecordsByIds = (recordIds) => {
-        if (!recordIds.length) return;
+    const deleteRecordsByIds = async (recordIds, options = {}) => {
+        if (!recordIds.length) return null;
         const adminVisibility = window.peoAdminVisibility && typeof window.peoAdminVisibility === "object"
             ? window.peoAdminVisibility
             : null;
@@ -6753,8 +6773,11 @@ const portalDomReady = () => {
         const nextRecords = adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function"
             ? adminVisibility.hideRecordsForDivision(previousRecords, recordIds, "admin", true)
             : previousRecords.filter((record) => !new Set(recordIds).has(record?.__record_id));
-        writeAdminDivisionRecords(nextRecords);
-        queueAdminRender(nextRecords, { deferIfBusy: false });
+        const persistPromise = writeAdminDivisionRecords(nextRecords);
+        const deferIfBusy = options && options.deferIfBusy === true;
+        queueAdminRender(nextRecords, { deferIfBusy });
+        await persistPromise;
+        return nextRecords;
     };
 
     const registerAdminUndoDelete = (previousRecords, label = "Record") => {
@@ -7779,7 +7802,9 @@ const portalDomReady = () => {
             });
             if (!shouldDelete) return;
             const previousRecords = readAdminDivisionRecords();
-            deleteRecordsByIds(selected);
+            deleteRecordsByIds(selected).catch(() => {
+                showAdminStatusToast("Unable to sync deleted records to the server right now.", "error");
+            });
             registerAdminUndoDelete(previousRecords, selected.length === 1 ? "Document" : `${selected.length} records`);
         });
     }
@@ -7802,7 +7827,9 @@ const portalDomReady = () => {
             });
             if (!shouldDelete) return;
             const previousRecords = readAdminDivisionRecords();
-            deleteRecordsByIds(selected);
+            deleteRecordsByIds(selected).catch(() => {
+                showAdminStatusToast("Unable to sync deleted records to the server right now.", "error");
+            });
             registerAdminUndoDelete(previousRecords, selected.length === 1 ? "Billing record" : `${selected.length} billing records`);
         });
     }
@@ -7886,7 +7913,9 @@ const portalDomReady = () => {
                 });
                 if (!shouldDelete) return;
                 const previousRecords = readAdminDivisionRecords();
-                deleteRecordsByIds([recordId]);
+                deleteRecordsByIds([recordId]).catch(() => {
+                    showAdminStatusToast("Unable to sync deleted records to the server right now.", "error");
+                });
                 registerAdminUndoDelete(previousRecords, "Document");
             }
         });
@@ -7948,7 +7977,9 @@ const portalDomReady = () => {
                 });
                 if (!shouldDelete) return;
                 const previousRecords = readAdminDivisionRecords();
-                deleteRecordsByIds([recordId]);
+                deleteRecordsByIds([recordId]).catch(() => {
+                    showAdminStatusToast("Unable to sync deleted records to the server right now.", "error");
+                });
                 registerAdminUndoDelete(previousRecords, "Billing record");
             }
         });
@@ -17278,12 +17309,13 @@ document.addEventListener("DOMContentLoaded", () => {
             // Ignore storage failures.
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.queueSync === "function") {
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.queueSync("admin", safeRecords, 0);
+            return window.peoDivisionStore.syncNow("admin", safeRecords);
         }
+        return Promise.resolve(null);
     };
 
     const normalizeDivisionLabel = (value) => {
@@ -19382,7 +19414,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 const adminSourceIds = Array.from(deletedAdminIds);
                 if (adminSourceIds.length) {
                     const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), adminSourceIds, "construction", true);
-                    writeAdminDivisionRecords(adminRecords);
+                    writeAdminDivisionRecords(adminRecords).catch(() => {
+                        showPeoGeneralToast("Deleted records are hidden now, but admin sync is still retrying.", {
+                            title: "Construction Division",
+                            variant: "warning",
+                        });
+                    });
                 }
             }
 
@@ -20006,7 +20043,12 @@ document.addEventListener("DOMContentLoaded", () => {
             : null;
         if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function" && deletedAdminIds.size) {
             const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), Array.from(deletedAdminIds), "construction", true);
-            writeAdminDivisionRecords(adminRecords);
+            writeAdminDivisionRecords(adminRecords).catch(() => {
+                showPeoGeneralToast("Deleted rows are hidden now, but admin sync is still retrying.", {
+                    title: "Construction Division",
+                    variant: "warning",
+                });
+            });
         }
 
         const wroteTasks = writeTasks([]);
@@ -20038,15 +20080,20 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
-            window.peoDivisionStore.flushSync();
-        }
-
         showPeoGeneralToast("All construction task and linked project data deleted successfully.", {
             title: "Construction Division",
             variant: "success",
         });
         render();
+
+        if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+            window.peoDivisionStore.flushSync().catch(() => {
+                showPeoGeneralToast("Deleted rows are hidden now, but server sync is still retrying.", {
+                    title: "Construction Division",
+                    variant: "warning",
+                });
+            });
+        }
     };
 
     const FORM_FIELDS = [
@@ -20490,6 +20537,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const deleteTrigger = clickTarget.closest(".js-construction-task-delete");
             if (deleteTrigger) {
                 event.preventDefault();
+                event.stopPropagation();
                 if (!canDeleteTasks) {
                     showPeoGeneralToast("Only the Construction Division main admin can delete task rows.", {
                         title: "Construction Division",
@@ -20516,6 +20564,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 if (!approved) return;
 
+                const row = deleteTrigger.closest("tr");
+                if (row) {
+                    row.remove();
+                }
+
                 const deletedAdminIds = readDeletedConstructionAdminIds();
                 const deletedRecordIds = readDeletedConstructionRecordIds();
                 const nextTasks = tasks.filter((task) => String(task?.construction_id || task?.__id || "") !== recordId);
@@ -20535,7 +20588,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     : null;
                 if (adminVisibility && typeof adminVisibility.hideRecordsForDivision === "function" && deletedAdminIds.size) {
                     const adminRecords = adminVisibility.hideRecordsForDivision(readAdminDivisionRecords(), Array.from(deletedAdminIds), "construction", true);
-                    writeAdminDivisionRecords(adminRecords);
+                    writeAdminDivisionRecords(adminRecords).catch(() => {
+                        showPeoGeneralToast("Deleted task is hidden now, but admin sync is still retrying.", {
+                            title: "Construction Division",
+                            variant: "warning",
+                        });
+                    });
                 }
 
                 const nextConstructionRecords = constructionRecords.filter((record) => String(record?.__id || record?.construction_id || "") !== recordId);
@@ -20553,11 +20611,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         title: "Construction Division",
                         variant: "danger",
                     });
+                    render();
                     return;
-                }
-
-                if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
-                    window.peoDivisionStore.flushSync();
                 }
 
                 showPeoGeneralToast("Task deleted successfully.", {
@@ -20565,6 +20620,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     variant: "success",
                 });
                 render();
+                if (window.peoDivisionStore && typeof window.peoDivisionStore.flushSync === "function") {
+                    window.peoDivisionStore.flushSync().catch(() => {
+                        showPeoGeneralToast("Deleted task is hidden now, but server sync is still retrying.", {
+                            title: "Construction Division",
+                            variant: "warning",
+                        });
+                    });
+                }
                 return;
             }
 
@@ -21776,8 +21839,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.syncNow("admin", safeRecords);
+            return window.peoDivisionStore.syncNow("admin", safeRecords);
         }
+        return Promise.resolve(null);
     };
 
     const syncPlanningDocumentStatusToAdmin = (planningDocRecord) => {
@@ -21835,8 +21899,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (syncRemote && window.peoDivisionStore && typeof window.peoDivisionStore.syncNow === "function") {
-            window.peoDivisionStore.syncNow("planning", records);
+            return window.peoDivisionStore.syncNow("planning", records);
         }
+        return Promise.resolve(null);
     };
 
     const readDeletedPlanningAdminIds = () => {
@@ -28045,8 +28110,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.syncNow("admin", safeRecords);
+            return window.peoDivisionStore.syncNow("admin", safeRecords);
         }
+        return Promise.resolve(null);
     };
 
     const readDeletedQualityAdminIds = () => {
@@ -28363,8 +28429,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const safeRecords = (Array.isArray(records) ? records : []).map((record) => {
                 return record && typeof record === "object" ? { ...record } : record;
             });
-            window.peoDivisionStore.syncNow("quality", safeRecords);
+            return window.peoDivisionStore.syncNow("quality", safeRecords);
         }
+        return Promise.resolve(null);
     };
 
     const getParticularBadgeClass = (value) => {
