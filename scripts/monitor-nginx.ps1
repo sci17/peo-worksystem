@@ -6,6 +6,7 @@ $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptRoot
 $logPath = Join-Path $projectRoot "auto-start-log.txt"
+. (Join-Path $scriptRoot "deployment-machine.ps1")
 $dockerCliPaths = @(
     "$Env:ProgramFiles\Docker\Docker\resources\bin\docker.exe",
     "docker.exe"
@@ -79,6 +80,11 @@ function Invoke-DockerLogged {
 }
 
 Set-Location -LiteralPath $projectRoot
+
+if (-not (Test-IsDeploymentMachine)) {
+    Write-Log "Skipping nginx monitor on '$env:COMPUTERNAME'. Deployment machine is '$(Get-DeploymentComputerName)'."
+    exit 0
+}
 
 $dockerCli = $dockerCliPaths | Where-Object { (Test-Path $_) -or ($_ -eq "docker.exe") } | Select-Object -First 1
 if (-not $dockerCli) {

@@ -8,9 +8,14 @@ $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptRoot
 $monitorScript = Join-Path $projectRoot "scripts\monitor-nginx.ps1"
+. (Join-Path $scriptRoot "deployment-machine.ps1")
 
 if (-not (Test-Path -LiteralPath $monitorScript)) {
     throw "Nginx monitor script not found: $monitorScript"
+}
+
+if (-not (Test-IsDeploymentMachine)) {
+    throw "This nginx monitor task can only be registered on deployment machine '$(Get-DeploymentComputerName)'. Current machine is '$env:COMPUTERNAME'."
 }
 
 $taskCommand = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$monitorScript`""

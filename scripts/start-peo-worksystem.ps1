@@ -6,6 +6,7 @@ $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptRoot
 $logPath = Join-Path $projectRoot "auto-start-log.txt"
+. (Join-Path $scriptRoot "deployment-machine.ps1")
 $dockerDesktopPaths = @(
     "$Env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
     "$Env:ProgramFiles\Docker\Docker\resources\Docker Desktop.exe"
@@ -61,6 +62,11 @@ function Invoke-DockerLogged {
 Set-Location -LiteralPath $projectRoot
 Write-Log "=== Autostart run started ==="
 Write-Log "Project root: $projectRoot"
+
+if (-not (Test-IsDeploymentMachine)) {
+    Write-Log "Skipping autostart on '$env:COMPUTERNAME'. Deployment machine is '$(Get-DeploymentComputerName)'."
+    exit 0
+}
 
 $dockerDesktop = $dockerDesktopPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $dockerDesktop) {
