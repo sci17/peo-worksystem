@@ -713,20 +713,27 @@
                         </select>
                     </label>
 
-                    <label class="road-add-field">
+                    <div class="road-add-field">
                         <span>Surface Type (km)</span>
-                        <select class="js-road-add-surface-type">
-                            <option value="Concrete" selected>Concrete</option>
-                            <option value="Asphalt">Asphalt</option>
-                            <option value="Earth">Earth</option>
-                            <option value="Gravel">Gravel</option>
-                        </select>
-                        <input
-                            type="text"
-                            class="js-road-add-surface-type-details"
-                            placeholder="Concrete: 4.880km  Gravel: 0.620km"
-                        >
-                    </label>
+                        <div class="road-surface-breakdown">
+                            <label class="road-surface-breakdown-row">
+                                <span>Concrete</span>
+                                <input type="number" class="js-road-add-surface-concrete" min="0" step="0.01" placeholder="0.00">
+                            </label>
+                            <label class="road-surface-breakdown-row">
+                                <span>Asphalt</span>
+                                <input type="number" class="js-road-add-surface-asphalt" min="0" step="0.01" placeholder="0.00">
+                            </label>
+                            <label class="road-surface-breakdown-row">
+                                <span>Earth</span>
+                                <input type="number" class="js-road-add-surface-earth" min="0" step="0.01" placeholder="0.00">
+                            </label>
+                            <label class="road-surface-breakdown-row">
+                                <span>Gravel</span>
+                                <input type="number" class="js-road-add-surface-gravel" min="0" step="0.01" placeholder="0.00">
+                            </label>
+                        </div>
+                    </div>
 
                     <label class="road-add-field">
                         <span>Road Condition</span>

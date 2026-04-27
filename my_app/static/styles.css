@@ -20531,6 +20531,26 @@ body.quality-scan-open {
     box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
+.road-surface-breakdown {
+    display: grid;
+    gap: 8px;
+}
+
+.road-surface-breakdown-row {
+    display: grid;
+    grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+
+.road-surface-breakdown-row span {
+    color: #61758d;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: none;
+}
+
 .maintenance-unified-actions {
     display: flex;
     align-items: center;

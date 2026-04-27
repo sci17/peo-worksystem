@@ -8363,8 +8363,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const roadAddLengthInput = document.querySelector(".js-road-add-length");
     const roadAddLocationSelect = document.querySelector(".js-road-add-location");
     const roadAddMunicipalitySelect = document.querySelector(".js-road-add-municipality");
-    const roadAddSurfaceTypeSelect = document.querySelector(".js-road-add-surface-type");
-    const roadAddSurfaceTypeDetailsInput = document.querySelector(".js-road-add-surface-type-details");
+    const roadAddSurfaceConcreteInput = document.querySelector(".js-road-add-surface-concrete");
+    const roadAddSurfaceAsphaltInput = document.querySelector(".js-road-add-surface-asphalt");
+    const roadAddSurfaceEarthInput = document.querySelector(".js-road-add-surface-earth");
+    const roadAddSurfaceGravelInput = document.querySelector(".js-road-add-surface-gravel");
     const roadAddConditionSelect = document.querySelector(".js-road-add-condition");
     const taskSearchInput = document.querySelector(".js-task-search");
     const taskTableBody = document.querySelector(".js-task-table-body");
@@ -8927,6 +8929,24 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         return chunks.length ? chunks.join("  ") : "-";
+    };
+
+    const buildSurfaceTypeFromInputs = (surfaceInputMap, preferredOrder = []) => {
+        const surfaceValues = {};
+        const outputOrder = preferredOrder.length ? [...preferredOrder] : [];
+
+        Object.entries(surfaceInputMap || {}).forEach(([key, rawValue]) => {
+            const numericValue = parseNumber(rawValue);
+            if (!(numericValue > 0) || !ROAD_SURFACE_LABEL_BY_KEY[key]) {
+                return;
+            }
+            surfaceValues[key] = numericValue;
+            if (!outputOrder.includes(key)) {
+                outputOrder.push(key);
+            }
+        });
+
+        return formatSurfaceTypeText(surfaceValues, outputOrder);
     };
 
     const normalizeSurfaceTypeValue = (rawValue, preferredOrder = []) => {
@@ -9822,10 +9842,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const roadName = String(roadAddRoadNameInput?.value || "").trim();
             const selectedLocation = String(roadAddLocationSelect?.value || "").trim();
             const selectedMunicipality = String(roadAddMunicipalitySelect?.value || "").trim();
-            const selectedSurfaceType = String(roadAddSurfaceTypeSelect?.value || "").trim();
-            const selectedSurfaceTypeDetails = String(roadAddSurfaceTypeDetailsInput?.value || "")
-                .replace(/\s+/g, " ")
-                .trim();
             const selectedCondition = String(roadAddConditionSelect?.value || "unknown").trim().toLowerCase();
             const lengthKm = parseNumber(String(roadAddLengthInput?.value || "").trim());
 
@@ -9856,16 +9872,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const areaFromMunicipality = resolveMunicipalityArea(selectedMunicipality);
             const resolvedLocation = selectedLocation
                 || (areaFromMunicipality ? toTitleCase(areaFromMunicipality) : "");
-            const selectedSurfaceTypeKey = normalizeKey(selectedSurfaceType);
-            const preferredSurfaceOrder = ROAD_SURFACE_LABEL_BY_KEY[selectedSurfaceTypeKey] ? [selectedSurfaceTypeKey] : [];
-            const formattedSurfaceType = selectedSurfaceTypeDetails
-                ? normalizeSurfaceTypeValue(
-                    selectedSurfaceTypeDetails.includes(":")
-                        ? selectedSurfaceTypeDetails
-                        : `${selectedSurfaceType}: ${selectedSurfaceTypeDetails}`,
-                    preferredSurfaceOrder,
-                )
-                : (selectedSurfaceType || "-");
+            const formattedSurfaceType = buildSurfaceTypeFromInputs({
+                concrete: roadAddSurfaceConcreteInput?.value || "",
+                asphalt: roadAddSurfaceAsphaltInput?.value || "",
+                earth: roadAddSurfaceEarthInput?.value || "",
+                gravel: roadAddSurfaceGravelInput?.value || "",
+            }, ["concrete", "asphalt", "earth", "gravel"]);
 
             roadRecords.push({
                 roadId,
