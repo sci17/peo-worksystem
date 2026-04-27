@@ -8321,6 +8321,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const scheduleStatUrgent = document.querySelector(".js-schedule-stat-urgent");
     const topScheduledCount = document.querySelector(".js-top-scheduled-count");
     const roadUploadInput = document.getElementById("road-upload-input");
+    const roadUploadLabel = document.querySelector('label[for="road-upload-input"]');
     const roadDeleteAllButton = document.querySelector(".js-road-delete-all-data");
     const roadSearchInput = document.querySelector(".js-road-search-input");
     const roadSearchShell = document.querySelector(".js-road-search-shell");
@@ -8488,7 +8489,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const adminDivisionStorageKey = "peo_admin_division_records_v1";
     const constructionStorageKey = "peo_construction_records_v1";
     const roadAcceptedUploadTypes = ".xlsx,.xls,.csv,.txt,.json";
+    let roadUploadedFileNames = [];
     let maintenanceAdminStoreSeedPromise = null;
+
+    const syncRoadUploadLabel = () => {
+        if (!(roadUploadLabel instanceof HTMLElement)) {
+            return;
+        }
+
+        const count = Array.isArray(roadUploadedFileNames) ? roadUploadedFileNames.length : 0;
+        roadUploadLabel.textContent = count > 0 ? `Upload Files (${count})` : "Upload Files";
+
+        const title = (Array.isArray(roadUploadedFileNames) ? roadUploadedFileNames : [])
+            .map((name) => String(name || "").trim())
+            .filter(Boolean)
+            .join("\n");
+        if (title) {
+            roadUploadLabel.title = title;
+        } else {
+            roadUploadLabel.removeAttribute("title");
+        }
+    };
 
     const readAdminDivisionStoreForMaintenance = () => {
         try {
@@ -10053,7 +10074,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${identityKey}|${normalizedLength}|${conditionKey}|${surfaceTypeKey}|${locationKey}`;
     };
 
-    const buildRoadUploadMergePlan = (uploadedRows) => {
+    const buildRoadUploadMergePlan = (uploadedRows, existingRecords = roadRecords) => {
         const dedupedUploadedByIdentity = new Map();
         let uploadDuplicateCount = 0;
 
@@ -10077,7 +10098,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const dedupedUploadedRows = [...dedupedUploadedByIdentity.values()];
         const existingByIdentity = new Map();
         const existingMunicipalityKeys = new Set();
-        roadRecords.forEach((record, index) => {
+        (Array.isArray(existingRecords) ? existingRecords : []).forEach((record, index) => {
             const identityKey = createRoadIdentityKey(record);
             if (!identityKey.replace(/\|/g, "")) {
                 return;
@@ -10164,13 +10185,12 @@ document.addEventListener("DOMContentLoaded", () => {
         prompt.className = "road-upload-duplicate-toast";
         prompt.innerHTML = `
             <div class="road-upload-duplicate-head">
-                <h4>Add Municipality Data</h4>
-                <button type="button" class="road-upload-duplicate-close" aria-label="Close add data confirmation">&times;</button>
+                <h4>Existing Municipality Data Detected</h4>
+                <button type="button" class="road-upload-duplicate-close" aria-label="Close municipality upload prompt">&times;</button>
             </div>
             <p class="road-upload-duplicate-copy">
-                The upload includes ${rowCount} road row${rowCount === 1 ? "" : "s"} in existing municipality records
-                with different details (Road ID, Road Name, Length, Condition, Surface).
-                Are you sure to add this data?
+                The upload includes ${rowCount} road row${rowCount === 1 ? "" : "s"} for municipalities that already have data.
+                Do you want to replace the existing municipality data, or keep it and add the new rows?
             </p>
             ${uniqueMunicipalityNames.length ? `
                 <div class="road-upload-duplicate-meta">
@@ -10181,8 +10201,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
             ` : ""}
             <div class="road-upload-duplicate-actions">
-                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-primary" data-action="yes">Yes, Add</button>
-                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-secondary" data-action="no">No, Skip</button>
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-primary" data-action="keep">Keep Existing</button>
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-secondary" data-action="replace">Replace Municipality Data</button>
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-ghost" data-action="cancel">Cancel</button>
             </div>
         `;
 
@@ -10190,20 +10211,20 @@ document.addEventListener("DOMContentLoaded", () => {
         roadUploadAddConfirmPromptElement = prompt;
 
         return new Promise((resolve) => {
-            const settle = (approved) => {
+            const settle = (action) => {
                 closeRoadUploadAddConfirmPrompt();
-                resolve(Boolean(approved));
+                resolve(String(action || "cancel"));
             };
 
             const closeButton = prompt.querySelector(".road-upload-duplicate-close");
             if (closeButton) {
-                closeButton.addEventListener("click", () => settle(false));
+                closeButton.addEventListener("click", () => settle("cancel"));
             }
 
             prompt.querySelectorAll("[data-action]").forEach((button) => {
                 button.addEventListener("click", () => {
-                    const action = String(button.getAttribute("data-action") || "");
-                    settle(action === "yes");
+                    const action = String(button.getAttribute("data-action") || "cancel");
+                    settle(action);
                 });
             });
         });
@@ -10263,6 +10284,50 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             });
         });
+    };
+
+    const applyRoadUploadMergePlanPure = (existingRecords, plan, strategy = "keep") => {
+        const normalizedStrategy = strategy === "replace" ? "replace" : "keep";
+        const base = Array.isArray(existingRecords) ? existingRecords : [];
+        const next = base
+            .filter((record) => record && typeof record === "object")
+            .map((record) => ({ ...record, __roadNormalized: true }));
+
+        if (normalizedStrategy === "replace") {
+            [...plan.duplicateExact, ...plan.duplicateChanged].forEach((entry) => {
+                const targetIndex = entry.index;
+                if (!Number.isInteger(targetIndex) || !next[targetIndex]) {
+                    return;
+                }
+                next[targetIndex] = { ...entry.row, __roadNormalized: true };
+            });
+        }
+
+        const appendedRows = plan.newRows
+            .filter((row) => row && typeof row === "object")
+            .map((row) => ({ ...row, __roadNormalized: true }));
+        if (appendedRows.length) {
+            next.push(...appendedRows);
+        }
+
+        return dedupeRoadRecords(next);
+    };
+
+    const commitRoadUploadRecords = (nextRecords, affectedRecords) => {
+        roadRecords.length = 0;
+        if (Array.isArray(nextRecords) && nextRecords.length) {
+            roadRecords.push(...nextRecords.map((row) => ({ ...row, __roadNormalized: true })));
+        }
+
+        (Array.isArray(affectedRecords) ? affectedRecords : []).forEach((record) => {
+            roadMunicipalityPageState.set(normalizeMunicipalityName(record?.municipality || "Unknown"), 1);
+        });
+
+        refreshRoadMunicipalityOptions();
+        if (typeof refreshRoadRegister === "function") {
+            refreshRoadRegister();
+        }
+        persistMaintenanceState();
     };
 
     const applyRoadUploadMergePlan = (plan, strategy = "keep") => {
@@ -10900,9 +10965,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const { parsedRows, skippedFiles } = await parseSelectedRoadFiles(selectedFiles);
-            const uploadPlan = buildRoadUploadMergePlan(parsedRows);
-            const duplicateTotal = uploadPlan.duplicateExact.length + uploadPlan.duplicateChanged.length;
-            const hasAnyValidRows = uploadPlan.dedupedUploadedCount > 0;
+            const initialPlan = buildRoadUploadMergePlan(parsedRows, roadRecords);
+            const hasAnyValidRows = initialPlan.dedupedUploadedCount > 0;
 
             if (!hasAnyValidRows && skippedFiles.length) {
                 showRoadUploadStatusToast(
@@ -10919,13 +10983,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const sameMunicipalityDifferentRows = Array.isArray(uploadPlan.newRowsSameMunicipality)
-                ? uploadPlan.newRowsSameMunicipality
+            const sameMunicipalityDifferentRows = Array.isArray(initialPlan.newRowsSameMunicipality)
+                ? initialPlan.newRowsSameMunicipality
                 : [];
-            const newMunicipalityRows = Array.isArray(uploadPlan.newRowsNewMunicipality)
-                ? uploadPlan.newRowsNewMunicipality
-                : [];
-            let includeSameMunicipalityRows = true;
+            const replaceMunicipalityKeys = new Set();
             let addedDifferentDataInExistingMunicipality = false;
 
             if (sameMunicipalityDifferentRows.length) {
@@ -10933,33 +10994,45 @@ document.addEventListener("DOMContentLoaded", () => {
                     .map((row) => normalizeMunicipalityDisplayName(row?.municipality, "Unknown"))
                     .filter(Boolean);
 
-                includeSameMunicipalityRows = await showRoadUploadAddConfirmPrompt({
+                const municipalityAction = await showRoadUploadAddConfirmPrompt({
                     rowCount: sameMunicipalityDifferentRows.length,
                     municipalityNames,
                 });
 
-                if (includeSameMunicipalityRows) {
+                if (municipalityAction === "cancel") {
+                    showRoadUploadStatusToast("Upload cancelled. Existing road data was not changed.", "info");
+                    roadUploadInput.value = "";
+                    return;
+                }
+
+                if (municipalityAction === "replace") {
+                    sameMunicipalityDifferentRows.forEach((row) => {
+                        const key = normalizeMunicipalityName(row?.municipality || "");
+                        if (key) replaceMunicipalityKeys.add(key);
+                    });
+                    addedDifferentDataInExistingMunicipality = true;
+                } else if (municipalityAction === "keep") {
                     addedDifferentDataInExistingMunicipality = true;
                 }
             }
 
-            const effectivePlan = {
-                ...uploadPlan,
-                newRows: [
-                    ...newMunicipalityRows,
-                    ...(includeSameMunicipalityRows ? sameMunicipalityDifferentRows : []),
-                ],
-            };
+            const baseRecords = replaceMunicipalityKeys.size
+                ? roadRecords.filter((record) => !replaceMunicipalityKeys.has(normalizeMunicipalityName(record?.municipality || "")))
+                : roadRecords.slice();
+
+            const uploadPlan = buildRoadUploadMergePlan(parsedRows, baseRecords);
+            const duplicateTotal = uploadPlan.duplicateExact.length + uploadPlan.duplicateChanged.length;
 
             let finalToastMessage = "";
             let finalToastVariant = "info";
+            let uploadStrategy = "keep";
 
             if (duplicateTotal > 0) {
                 const action = await showRoadUploadDuplicatePrompt({
                     duplicateTotal,
                     exactCount: uploadPlan.duplicateExact.length,
                     changedCount: uploadPlan.duplicateChanged.length,
-                    newCount: effectivePlan.newRows.length,
+                    newCount: uploadPlan.newRows.length,
                     uploadDuplicateCount: uploadPlan.uploadDuplicateCount,
                 });
 
@@ -10969,29 +11042,52 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                applyRoadUploadMergePlan(effectivePlan, action === "replace" ? "replace" : "keep");
+                uploadStrategy = action === "replace" ? "replace" : "keep";
                 if (addedDifferentDataInExistingMunicipality) {
                     finalToastMessage = "The Data Added.";
                     finalToastVariant = "success";
                 } else if (action === "replace") {
-                    finalToastMessage = `Upload complete: ${effectivePlan.newRows.length} new row(s) added, ${duplicateTotal} duplicate row(s) replaced.`;
+                    finalToastMessage = `Upload complete: ${uploadPlan.newRows.length} new row(s) added, ${duplicateTotal} duplicate row(s) replaced.`;
                     finalToastVariant = "success";
                 } else {
-                    finalToastMessage = `Upload complete: ${effectivePlan.newRows.length} new row(s) added. ${duplicateTotal} duplicate row(s) kept unchanged.`;
+                    finalToastMessage = `Upload complete: ${uploadPlan.newRows.length} new row(s) added. ${duplicateTotal} duplicate row(s) kept unchanged.`;
                     finalToastVariant = "info";
                 }
-            } else if (effectivePlan.newRows.length) {
-                applyRoadUploadMergePlan(effectivePlan, "keep");
+            } else if (uploadPlan.newRows.length) {
                 if (addedDifferentDataInExistingMunicipality) {
                     finalToastMessage = "The Data Added.";
                     finalToastVariant = "success";
                 } else {
-                    finalToastMessage = `Upload complete: ${effectivePlan.newRows.length} road row(s) added.`;
+                    finalToastMessage = `Upload complete: ${uploadPlan.newRows.length} road row(s) added.`;
                     finalToastVariant = "success";
                 }
             } else {
                 finalToastMessage = "No new data was added.";
                 finalToastVariant = "info";
+            }
+
+            const nextRecords = applyRoadUploadMergePlanPure(baseRecords, uploadPlan, uploadStrategy);
+            const affectedRecords = [
+                ...uploadPlan.newRows,
+                ...uploadPlan.duplicateExact.map((entry) => entry.row),
+                ...uploadPlan.duplicateChanged.map((entry) => entry.row),
+            ];
+            commitRoadUploadRecords(nextRecords, affectedRecords);
+
+            const skipped = new Set((Array.isArray(skippedFiles) ? skippedFiles : []).map((name) => String(name || "").trim()));
+            const processedNames = selectedFiles
+                .map((file) => String(file?.name || "").trim())
+                .filter((name) => name && !skipped.has(name));
+            if (processedNames.length) {
+                const seen = new Set(
+                    (Array.isArray(roadUploadedFileNames) ? roadUploadedFileNames : [])
+                        .map((name) => String(name || "").trim())
+                        .filter(Boolean)
+                );
+                processedNames.forEach((name) => seen.add(name));
+                roadUploadedFileNames = Array.from(seen);
+                syncRoadUploadLabel();
+                persistMaintenanceState();
             }
 
             if (skippedFiles.length) {
@@ -14542,6 +14638,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const payload = {
             version: 1,
             roadRecords,
+            roadUploadedFileNames,
             equipmentRows: serializeEquipmentRows(),
             scheduleRows: serializeScheduleRows(),
             taskRows: serializeTaskRows(),
@@ -14593,6 +14690,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const baseState = {
             version: 1,
             roadRecords: [],
+            roadUploadedFileNames: [],
             equipmentRows: [],
             scheduleRows: [],
             taskRows: [],
@@ -14609,11 +14707,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         savedState.taskRows = Array.isArray(savedState.taskRows) ? savedState.taskRows : [];
         savedState.roadRecords = Array.isArray(savedState.roadRecords) ? savedState.roadRecords : [];
+        savedState.roadUploadedFileNames = Array.isArray(savedState.roadUploadedFileNames) ? savedState.roadUploadedFileNames : [];
         savedState.equipmentRows = Array.isArray(savedState.equipmentRows) ? savedState.equipmentRows : [];
         savedState.scheduleRows = Array.isArray(savedState.scheduleRows) ? savedState.scheduleRows : [];
         savedState.personnelRecords = Array.isArray(savedState.personnelRecords) ? savedState.personnelRecords : [];
         savedState.contractorRecords = Array.isArray(savedState.contractorRecords) ? savedState.contractorRecords : [];
         savedState.dismissedAdminTaskIds = Array.isArray(savedState.dismissedAdminTaskIds) ? savedState.dismissedAdminTaskIds : [];
+
+        roadUploadedFileNames = savedState.roadUploadedFileNames
+            .map((name) => String(name || "").trim())
+            .filter(Boolean);
+        syncRoadUploadLabel();
 
         // Hydrate the in-memory dismissed list so deletes persist across restores.
         dismissedAdminTaskIds = Array.from(
@@ -15911,6 +16015,8 @@ document.addEventListener("DOMContentLoaded", () => {
         dismissedAdminTaskIds = Array.from(new Set([...(Array.isArray(dismissedAdminTaskIds) ? dismissedAdminTaskIds : []), ...currentAdminTaskIds]));
 
         roadRecords.length = 0;
+        roadUploadedFileNames = [];
+        syncRoadUploadLabel();
         roadMunicipalityPageState.clear();
         roadMunicipalityToastState.clear();
         roadMunicipalityToastTimers.forEach((timerId) => window.clearTimeout(timerId));
@@ -15970,6 +16076,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const emptyPayload = {
             version: 1,
             roadRecords: [],
+            roadUploadedFileNames: [],
             equipmentRows: [],
             scheduleRows: [],
             taskRows: [],
@@ -16798,6 +16905,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionProjectDashboardUrl = String(constructionDashboard.dataset.projectDashboardUrl || "").trim();
     const addRecordButton = constructionDashboard.querySelector(".js-construction-add-record");
     const uploadInput = constructionDashboard.querySelector("#construction-upload-input");
+    const uploadLabel = constructionDashboard.querySelector('label[for="construction-upload-input"]');
     const deleteSelectedButton = constructionDashboard.querySelector(".js-construction-delete-selected");
     const selectAllCheckbox = constructionDashboard.querySelector(".js-construction-select-all");
     const prevPageButton = constructionDashboard.querySelector(".js-construction-prev-page");
@@ -16837,6 +16945,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const CONSTRUCTION_DELETED_RECORD_IDS_KEY = "peo_construction_deleted_record_ids_v1";
     const CONSTRUCTION_TOMBSTONE_KIND = "construction_tombstone";
     const CONSTRUCTION_PAGE_SIZE = 10;
+    const CONSTRUCTION_UPLOADED_FILES_KEY = "peo_construction_uploaded_files_v1";
+    let constructionUploadedFileNames = [];
 	    const CONSTRUCTION_FIELDS = [
 	        "project_name",
 	        "location",
@@ -16903,6 +17013,35 @@ document.addEventListener("DOMContentLoaded", () => {
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
     };
+
+    const syncConstructionUploadLabel = () => {
+        if (!(uploadLabel instanceof HTMLElement)) {
+            return;
+        }
+        const count = Array.isArray(constructionUploadedFileNames) ? constructionUploadedFileNames.length : 0;
+        uploadLabel.textContent = count > 0 ? `Upload Excel (${count})` : "Upload Excel";
+        const title = (Array.isArray(constructionUploadedFileNames) ? constructionUploadedFileNames : [])
+            .map((name) => String(name || "").trim())
+            .filter(Boolean)
+            .join("\n");
+        if (title) {
+            uploadLabel.title = title;
+        } else {
+            uploadLabel.removeAttribute("title");
+        }
+    };
+
+    try {
+        const raw = window.localStorage.getItem(CONSTRUCTION_UPLOADED_FILES_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        constructionUploadedFileNames = Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        constructionUploadedFileNames = [];
+    }
+    constructionUploadedFileNames = constructionUploadedFileNames
+        .map((name) => String(name || "").trim())
+        .filter(Boolean);
+    syncConstructionUploadLabel();
 
     const DOC_AGE_MS_PER_DAY = 86400000;
 
@@ -17482,6 +17621,84 @@ document.addEventListener("DOMContentLoaded", () => {
         return CONSTRUCTION_FIELDS
             .map((field) => normalizeText(record?.[field]))
             .join("|");
+    };
+
+    const normalizeConstructionUploadToken = (value) => {
+        return normalizeText(value).replace(/[^a-z0-9]/g, "");
+    };
+
+    const makeConstructionUploadIdentityKey = (record) => {
+        const projectKey = normalizeConstructionUploadToken(record?.project_name);
+        if (!projectKey) return "";
+        const munKey = normalizeConstructionUploadToken(record?.mun);
+        const locationKey = normalizeConstructionUploadToken(record?.location);
+        if (munKey) return `mun:${munKey}|project:${projectKey}`;
+        if (locationKey) return `barangay:${locationKey}|project:${projectKey}`;
+        return `project:${projectKey}`;
+    };
+
+    const closeConstructionUploadDuplicatePrompt = () => {
+        if (!constructionUploadDuplicatePromptElement) {
+            return;
+        }
+        constructionUploadDuplicatePromptElement.remove();
+        constructionUploadDuplicatePromptElement = null;
+    };
+
+    const showConstructionUploadDuplicatePrompt = ({
+        duplicateTotal = 0,
+        exactCount = 0,
+        changedCount = 0,
+        newCount = 0,
+        uploadDuplicateCount = 0,
+    }) => {
+        closeConstructionUploadDuplicatePrompt();
+
+        const prompt = document.createElement("aside");
+        prompt.className = "road-upload-duplicate-toast";
+        prompt.innerHTML = `
+            <div class="road-upload-duplicate-head">
+                <h4>Duplicate Municipality/Barangay Data Detected</h4>
+                <button type="button" class="road-upload-duplicate-close" aria-label="Close duplicate upload prompt">&times;</button>
+            </div>
+            <p class="road-upload-duplicate-copy">
+                ${duplicateTotal} uploaded row${duplicateTotal === 1 ? "" : "s"} match existing project records (same Municipality/Barangay + Project Name).
+                Do you want to replace the existing data with the uploaded values?
+            </p>
+            <div class="road-upload-duplicate-meta">
+                <span>New rows: <strong>${newCount}</strong></span>
+                <span>Exact duplicates: <strong>${exactCount}</strong></span>
+                <span>Rows with changes: <strong>${changedCount}</strong></span>
+                ${uploadDuplicateCount > 0 ? `<span>Repeated in upload: <strong>${uploadDuplicateCount}</strong></span>` : ""}
+            </div>
+            <div class="road-upload-duplicate-actions">
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-primary" data-action="keep">Keep Existing</button>
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-secondary" data-action="replace">Replace Data</button>
+                <button type="button" class="road-upload-duplicate-btn road-upload-duplicate-btn-ghost" data-action="cancel">Cancel</button>
+            </div>
+        `;
+
+        document.body.appendChild(prompt);
+        constructionUploadDuplicatePromptElement = prompt;
+
+        return new Promise((resolve) => {
+            const settle = (action) => {
+                closeConstructionUploadDuplicatePrompt();
+                resolve(String(action || "cancel"));
+            };
+
+            const closeButton = prompt.querySelector(".road-upload-duplicate-close");
+            if (closeButton) {
+                closeButton.addEventListener("click", () => settle("cancel"));
+            }
+
+            prompt.querySelectorAll("[data-action]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const action = String(button.getAttribute("data-action") || "cancel");
+                    settle(action);
+                });
+            });
+        });
     };
 
     const isHeaderLikeConstructionRow = (record) => {
@@ -18116,6 +18333,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentPage = 1;
     let editingRecordId = null;
     let selectedConstructionRecordIds = new Set();
+    let constructionUploadDuplicatePromptElement = null;
 
 	    const isAdminRoutedRecord = (record) => String(record?.__admin_source || "") === "admin_document";
 
@@ -19654,9 +19872,19 @@ document.addEventListener("DOMContentLoaded", () => {
             const selectedFiles = Array.from(event.target.files || []);
             if (!selectedFiles.length) return;
 
-            const uploaded = [];
-            const existingSignatures = new Set(records.map((record) => makeRecordSignature(record)));
-            const uploadSignatures = new Set();
+            const existingByIdentity = new Map();
+            records.forEach((record, index) => {
+                const identityKey = makeConstructionUploadIdentityKey(record);
+                if (!identityKey) return;
+                const updatedAtMs = parseLooseDateToMs(record?.__updated_at || record?.__created_at || "");
+                const current = existingByIdentity.get(identityKey);
+                if (!current || updatedAtMs > current.updatedAtMs) {
+                    existingByIdentity.set(identityKey, { index, record, updatedAtMs });
+                }
+            });
+
+            const uploadByIdentity = new Map();
+            let uploadDuplicateCount = 0;
             for (const file of selectedFiles) {
                 try {
                     const rows = await parseFileRows(file);
@@ -19667,44 +19895,141 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         const signature = makeRecordSignature(parsed);
                         if (!signature.replace(/\|/g, "")) return;
-                        if (existingSignatures.has(signature)) return;
-                        if (uploadSignatures.has(signature)) return;
 
-                        uploadSignatures.add(signature);
-                        uploaded.push(initializeConstructionRecord(
-                            { __id: createRecordId(), ...parsed },
-                            {
-                                updateType: "uploaded",
-                                changedBy: getConstructionCurrentUser(),
-                            }
-                        ));
+                        const identityKey = makeConstructionUploadIdentityKey(parsed);
+                        const key = identityKey || `sig:${signature}`;
+                        if (uploadByIdentity.has(key)) {
+                            uploadDuplicateCount += 1;
+                        }
+                        uploadByIdentity.set(key, parsed);
                     });
                 } catch (error) {
                     // Skip files that cannot be parsed.
                 }
             }
 
-            if (!uploaded.length) {
-                showPeoGeneralToast("No valid construction rows were found in the selected file(s).", {
+            const dedupedUploadedRows = [...uploadByIdentity.values()];
+            const newRows = [];
+            const duplicateExact = [];
+            const duplicateChanged = [];
+            dedupedUploadedRows.forEach((row) => {
+                const identityKey = makeConstructionUploadIdentityKey(row);
+                if (!identityKey || !existingByIdentity.has(identityKey)) {
+                    newRows.push(row);
+                    return;
+                }
+
+                const existingEntry = existingByIdentity.get(identityKey);
+                const existingSig = makeRecordSignature(existingEntry.record);
+                const incomingSig = makeRecordSignature(row);
+                if (existingSig === incomingSig) {
+                    duplicateExact.push({ index: existingEntry.index, row });
+                } else {
+                    duplicateChanged.push({ index: existingEntry.index, row });
+                }
+            });
+
+            const duplicateTotal = duplicateExact.length + duplicateChanged.length;
+            if (!newRows.length && duplicateTotal === 0) {
+                showPeoGeneralToast("No new construction data was added.", {
                     title: "Construction Upload",
-                    variant: "warning",
+                    variant: "info",
                 });
                 uploadInput.value = "";
                 return;
             }
 
-            records = [...uploaded, ...records];
+            let action = "keep";
+            if (duplicateTotal > 0) {
+                action = await showConstructionUploadDuplicatePrompt({
+                    duplicateTotal,
+                    exactCount: duplicateExact.length,
+                    changedCount: duplicateChanged.length,
+                    newCount: newRows.length,
+                    uploadDuplicateCount,
+                });
+            }
+
+            if (action === "cancel") {
+                showPeoGeneralToast("Upload cancelled. Existing construction data was not changed.", {
+                    title: "Construction Upload",
+                    variant: "info",
+                });
+                uploadInput.value = "";
+                return;
+            }
+
+            const changedAt = new Date().toISOString();
+            const changedBy = getConstructionCurrentUser();
+            const nextRecords = [...records];
+            if (action === "replace") {
+                duplicateChanged.forEach((entry) => {
+                    const targetIndex = entry.index;
+                    const existingRecord = nextRecords[targetIndex];
+                    if (!existingRecord) return;
+
+                    const incoming = entry.row || {};
+                    const updates = { __id: existingRecord.__id };
+                    CONSTRUCTION_FIELDS.forEach((field) => {
+                        const incomingValue = normalizeStringValue(incoming[field]);
+                        if (incomingValue) {
+                            updates[field] = incomingValue;
+                        }
+                    });
+
+                    nextRecords[targetIndex] = applyConstructionRecordUpdate(existingRecord, updates, {
+                        changedAt,
+                        changedBy,
+                    });
+                });
+            }
+
+            const created = newRows.map((row) => initializeConstructionRecord(
+                { __id: createRecordId(), ...row },
+                {
+                    updateType: "uploaded",
+                    changedAt,
+                    changedBy,
+                }
+            ));
+
+            records = created.length ? [...created, ...nextRecords] : nextRecords;
             currentPage = 1;
             writeStoredRecords(records);
             renderTable();
+
+            const seen = new Set(constructionUploadedFileNames.map((name) => String(name || "").trim()).filter(Boolean));
+            selectedFiles.forEach((file) => {
+                const name = String(file?.name || "").trim();
+                if (name) seen.add(name);
+            });
+            constructionUploadedFileNames = Array.from(seen);
+            try {
+                window.localStorage.setItem(CONSTRUCTION_UPLOADED_FILES_KEY, JSON.stringify(constructionUploadedFileNames));
+            } catch (error) {
+                // Ignore storage failures.
+            }
+            syncConstructionUploadLabel();
+
             uploadInput.value = "";
-            showPeoGeneralToast(
-                `${uploaded.length} construction record${uploaded.length === 1 ? "" : "s"} uploaded successfully.`,
-                {
-                    title: "Construction Upload",
-                    variant: "success",
-                }
-            );
+
+            const replacedCount = action === "replace" ? duplicateChanged.length : 0;
+            const addedCount = created.length;
+            const messageParts = [];
+            if (addedCount > 0) {
+                messageParts.push(`${addedCount} record${addedCount === 1 ? "" : "s"} added`);
+            }
+            if (replacedCount > 0) {
+                messageParts.push(`${replacedCount} record${replacedCount === 1 ? "" : "s"} replaced`);
+            }
+            if (!messageParts.length) {
+                messageParts.push("No new records were added.");
+            }
+
+            showPeoGeneralToast(messageParts.join(", ") + ".", {
+                title: "Construction Upload",
+                variant: (addedCount || replacedCount) ? "success" : "info",
+            });
         });
     }
 
