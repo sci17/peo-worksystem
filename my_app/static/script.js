@@ -8348,7 +8348,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const roadEditRoadNameInput = document.querySelector(".js-road-edit-road-name");
     const roadEditLengthInput = document.querySelector(".js-road-edit-length");
     const roadEditConditionInput = document.querySelector(".js-road-edit-condition");
-    const roadEditSurfaceTypeInput = document.querySelector(".js-road-edit-surface-type");
+    const roadEditSurfaceConcreteInput = document.querySelector(".js-road-edit-surface-concrete");
+    const roadEditSurfaceAsphaltInput = document.querySelector(".js-road-edit-surface-asphalt");
+    const roadEditSurfaceEarthInput = document.querySelector(".js-road-edit-surface-earth");
+    const roadEditSurfaceGravelInput = document.querySelector(".js-road-edit-surface-gravel");
     const roadDeleteModal = document.querySelector(".js-road-delete-modal");
     const closeRoadDeleteModalButtons = document.querySelectorAll(".js-close-road-delete-modal");
     const roadDeleteForm = document.querySelector(".js-road-delete-form");
@@ -8947,6 +8950,17 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         return formatSurfaceTypeText(surfaceValues, outputOrder);
+    };
+
+    const populateSurfaceTypeInputs = (surfaceInputMap, surfaceValue) => {
+        const parsed = parseSurfaceTypeValues(surfaceValue);
+        Object.entries(surfaceInputMap || {}).forEach(([key, input]) => {
+            if (!input) {
+                return;
+            }
+            const numericValue = parsed.values[key];
+            input.value = numericValue > 0 ? String(numericValue) : "";
+        });
     };
 
     const normalizeSurfaceTypeValue = (rawValue, preferredOrder = []) => {
@@ -10317,10 +10331,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 : "";
         }
         if (roadEditConditionInput) roadEditConditionInput.value = getConditionFormValue(record.condition);
-        if (roadEditSurfaceTypeInput) {
-            const normalizedSurfaceType = normalizeSurfaceTypeValue(record.surfaceType);
-            roadEditSurfaceTypeInput.value = normalizedSurfaceType === "-" ? String(record.surfaceType || "-") : normalizedSurfaceType;
-        }
+        populateSurfaceTypeInputs({
+            concrete: roadEditSurfaceConcreteInput,
+            asphalt: roadEditSurfaceAsphaltInput,
+            earth: roadEditSurfaceEarthInput,
+            gravel: roadEditSurfaceGravelInput,
+        }, record.surfaceType);
     };
 
     const renderRoadEditRecordRows = (recordIndexes, selectedIndex) => {
@@ -10498,16 +10514,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    if (roadEditSurfaceTypeInput && roadEditRecordSelect) {
-        roadEditSurfaceTypeInput.addEventListener("blur", () => {
-            const selectedIndex = Number.parseInt(roadEditRecordSelect.value, 10);
-            const baseSurfaceType = Number.isInteger(selectedIndex) && roadRecords[selectedIndex]
-                ? roadRecords[selectedIndex].surfaceType
-                : "";
-            roadEditSurfaceTypeInput.value = mergeSurfaceTypeUpdate(baseSurfaceType, roadEditSurfaceTypeInput.value);
-        });
-    }
-
     if (roadEditRecordsBody && roadEditRecordSelect) {
         roadEditRecordsBody.addEventListener("click", (event) => {
             const clickTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
@@ -10550,7 +10556,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const updatedCondition = ["good", "fair", "poor", "bad"].includes(selectedCondition)
                 ? selectedCondition
                 : "unknown";
-            const updatedSurfaceType = mergeSurfaceTypeUpdate(targetRecord.surfaceType, roadEditSurfaceTypeInput?.value || "");
+            const updatedSurfaceType = buildSurfaceTypeFromInputs({
+                concrete: roadEditSurfaceConcreteInput?.value || "",
+                asphalt: roadEditSurfaceAsphaltInput?.value || "",
+                earth: roadEditSurfaceEarthInput?.value || "",
+                gravel: roadEditSurfaceGravelInput?.value || "",
+            }, ["concrete", "asphalt", "earth", "gravel"]);
             const originalSnapshot = {
                 roadId: String(targetRecord.roadId || "-"),
                 roadName: String(targetRecord.roadName || "-"),

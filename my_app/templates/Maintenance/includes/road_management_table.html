@@ -814,10 +814,27 @@
                     </label>
                 </div>
 
-                <label class="road-edit-field road-edit-field--full">
+                <div class="road-edit-field road-edit-field--full">
                     <span>Surface Type</span>
-                    <input type="text" class="js-road-edit-surface-type" placeholder="Concrete: 44.5km  Gravel: 2.44km">
-                </label>
+                    <div class="road-surface-breakdown">
+                        <label class="road-surface-breakdown-row">
+                            <span>Concrete</span>
+                            <input type="number" class="js-road-edit-surface-concrete" min="0" step="0.01" placeholder="0.00">
+                        </label>
+                        <label class="road-surface-breakdown-row">
+                            <span>Asphalt</span>
+                            <input type="number" class="js-road-edit-surface-asphalt" min="0" step="0.01" placeholder="0.00">
+                        </label>
+                        <label class="road-surface-breakdown-row">
+                            <span>Earth</span>
+                            <input type="number" class="js-road-edit-surface-earth" min="0" step="0.01" placeholder="0.00">
+                        </label>
+                        <label class="road-surface-breakdown-row">
+                            <span>Gravel</span>
+                            <input type="number" class="js-road-edit-surface-gravel" min="0" step="0.01" placeholder="0.00">
+                        </label>
+                    </div>
+                </div>
             </div>
 
             <div class="road-edit-form-actions maintenance-unified-actions">
