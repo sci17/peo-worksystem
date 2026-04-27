@@ -523,6 +523,8 @@ def _store_write_mode(user, store_key):
         return ""
 
     if store_key == user_division and _has_division_permission(user, store_key, require_edit=True):
+        if store_key == KEY_CONSTRUCTION and not _is_main_division_account(user):
+            return "construction_assignment_restricted"
         return "full"
 
     if (
@@ -633,6 +635,146 @@ def _enforce_append_only_payload(existing_data, incoming_data):
         new_records.append(next_record)
 
     return new_records + existing_records
+
+
+def _normalize_construction_assignment_token(value):
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    return re.sub(r"\s+", " ", text)
+
+
+def _split_construction_assignment_values(value):
+    if isinstance(value, (list, tuple, set)):
+        return [str(item or "").strip() for item in value if str(item or "").strip()]
+    text = str(value or "").strip()
+    if not text:
+        return []
+    return [part.strip() for part in re.split(r"[,;\n/|]+", text) if part.strip()]
+
+
+def _build_construction_assignment_tokens(*values):
+    tokens = set()
+    for value in values:
+        for part in _split_construction_assignment_values(value):
+            token = _normalize_construction_assignment_token(part)
+            if token:
+                tokens.add(token)
+    return tokens
+
+
+def _get_construction_assignment_tokens_for_user(user):
+    if not user:
+        return set()
+
+    full_name = str(user.get_full_name() or "").strip()
+    username = str(getattr(user, "username", "") or "").strip()
+    email = str(getattr(user, "email", "") or "").strip()
+
+    tokens = _build_construction_assignment_tokens(full_name, username, email)
+    if full_name:
+        compact_full_name = _normalize_construction_assignment_token(full_name.replace(" ", ""))
+        if compact_full_name:
+            tokens.add(compact_full_name)
+    return tokens
+
+
+def _get_construction_assignment_tokens_for_record(record):
+    if not isinstance(record, dict):
+        return set()
+
+    tokens = _build_construction_assignment_tokens(
+        record.get("assigned_to"),
+        record.get("assign_to"),
+        record.get("assignee"),
+        record.get("personnel_name"),
+        record.get("personnel"),
+    )
+
+    personnel_rows = record.get("personnel")
+    if isinstance(personnel_rows, list):
+        for person in personnel_rows:
+            if not isinstance(person, dict):
+                continue
+            tokens.update(
+                _build_construction_assignment_tokens(
+                    person.get("name"),
+                    person.get("personnel_name"),
+                    person.get("full_name"),
+                    person.get("email"),
+                    person.get("value"),
+                    person.get("username"),
+                )
+            )
+    return tokens
+
+
+def _is_construction_record_assigned_to_user(record, user):
+    user_tokens = _get_construction_assignment_tokens_for_user(user)
+    if not user_tokens:
+        return False
+    record_tokens = _get_construction_assignment_tokens_for_record(record)
+    if not record_tokens:
+        return False
+    return bool(user_tokens & record_tokens)
+
+
+def _enforce_construction_assignment_payload(user, existing_data, incoming_data):
+    existing_records = existing_data if isinstance(existing_data, list) else []
+    incoming_records = incoming_data if isinstance(incoming_data, list) else []
+
+    existing_by_id = {}
+    existing_anon_records = []
+    for record in existing_records:
+        if not isinstance(record, dict):
+            continue
+        record_id = _json_record_id(record)
+        if record_id:
+            existing_by_id[record_id] = record
+        else:
+            existing_anon_records.append(record)
+
+    accepted_updates = {}
+    accepted_new_records = []
+    seen_ids = set()
+
+    for record in incoming_records:
+        if not isinstance(record, dict):
+            continue
+        record_id = _json_record_id(record)
+        if record_id and record_id in seen_ids:
+            continue
+        if record_id:
+            seen_ids.add(record_id)
+
+        existing_record = existing_by_id.get(record_id) if record_id else None
+        if existing_record is not None:
+            if not _is_construction_record_assigned_to_user(existing_record, user):
+                continue
+            next_record = dict(existing_record)
+            next_record.update(record)
+            if record_id:
+                next_record["__id"] = record_id
+            accepted_updates[record_id] = next_record
+            continue
+
+        if not _is_construction_record_assigned_to_user(record, user):
+            continue
+        accepted_new_records.append(dict(record))
+
+    merged = list(existing_anon_records)
+    for record in existing_records:
+        if not isinstance(record, dict):
+            continue
+        record_id = _json_record_id(record)
+        if not record_id:
+            continue
+        if record_id in accepted_updates:
+            merged.append(accepted_updates[record_id])
+        else:
+            merged.append(record)
+
+    return accepted_new_records + merged
 
 
 def _build_user_identity(user, profile=None):
@@ -3354,6 +3496,8 @@ def division_store_api(request, key):
         if not user_division:
             return JsonResponse({"error": "Division is not configured for this account."}, status=403)
         store.data = _enforce_admin_submit_payload(user_division, store.data, payload)
+    elif write_mode == "construction_assignment_restricted":
+        store.data = _enforce_construction_assignment_payload(request.user, store.data, payload)
     else:
         if (
             using_shared_store
@@ -3767,7 +3911,7 @@ def construction_task_delete_api(request):
     else:
         can_delete = (
             _get_user_division_key(request.user) == KEY_CONSTRUCTION
-            and _has_division_permission(request.user, KEY_CONSTRUCTION, require_edit=True)
+            and _is_main_division_account(request.user)
         )
     if not can_delete:
         return JsonResponse({"error": "Forbidden."}, status=403)

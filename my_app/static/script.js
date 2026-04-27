@@ -19928,12 +19928,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const isPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
     const hasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
     const isPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
+    const constructionDivisionKey = String(access.divisionKey || document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
+    const constructionUsername = String(document.body?.dataset?.peoUsername || "").trim();
+    const constructionUserEmail = String(document.body?.dataset?.peoUserEmail || "").trim();
     const canDeleteTasks = !access.readOnly && (hasGlobalAccess || isPeoSuperuser || isPeoMainDivisionAccount);
     const canSaveTaskForm = !access.readOnly
         || String(access.divisionKey || "").trim().toLowerCase() === "construction"
         || hasGlobalAccess
         || isPeoSuperuser
         || isPeoMainDivisionAccount;
+    const isRestrictedConstructionAssignmentUser = !access.readOnly
+        && constructionDivisionKey === "construction"
+        && !hasGlobalAccess
+        && !isPeoSuperuser
+        && !isPeoMainDivisionAccount;
 
     const escapeHtml = (value) => String(value || "")
         .replaceAll("&", "&amp;")
@@ -19945,6 +19953,72 @@ document.addEventListener("DOMContentLoaded", () => {
     const toDisplay = (value) => {
         const text = String(value ?? "").trim();
         return text ? text : "-";
+    };
+
+    const normalizeConstructionAssignmentToken = (value) => String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+    const splitConstructionAssignmentValues = (value) => {
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => String(item || "").trim())
+                .filter(Boolean);
+        }
+        const text = String(value || "").trim();
+        if (!text) return [];
+        return text.split(/[,;\n/|]+/).map((part) => part.trim()).filter(Boolean);
+    };
+
+    const buildConstructionAssignmentTokens = (...values) => {
+        const tokens = new Set();
+        values.forEach((value) => {
+            splitConstructionAssignmentValues(value).forEach((part) => {
+                const token = normalizeConstructionAssignmentToken(part);
+                if (token) tokens.add(token);
+            });
+        });
+        return tokens;
+    };
+
+    const getCurrentConstructionAssignmentTokens = () => {
+        return buildConstructionAssignmentTokens(constructionUsername, constructionUserEmail);
+    };
+
+    const getConstructionRecordAssignmentTokens = (record) => {
+        const tokens = buildConstructionAssignmentTokens(
+            record?.assigned_to,
+            record?.assign_to,
+            record?.assignee,
+            record?.personnel_name,
+            record?.personnel
+        );
+        const personnel = Array.isArray(record?.personnel) ? record.personnel : [];
+        personnel.forEach((person) => {
+            if (!person || typeof person !== "object") return;
+            buildConstructionAssignmentTokens(
+                person.name,
+                person.personnel_name,
+                person.full_name,
+                person.email,
+                person.value,
+                person.username
+            ).forEach((token) => tokens.add(token));
+        });
+        return tokens;
+    };
+
+    const isConstructionRecordAssignedToCurrentUser = (record) => {
+        if (!isRestrictedConstructionAssignmentUser) return true;
+        const userTokens = getCurrentConstructionAssignmentTokens();
+        if (!userTokens.size) return false;
+        const recordTokens = getConstructionRecordAssignmentTokens(record);
+        if (!recordTokens.size) return false;
+        for (const token of userTokens) {
+            if (recordTokens.has(token)) return true;
+        }
+        return false;
     };
 
     const formatDate = (value) => {
@@ -20854,6 +20928,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const existingTaskIndex = tasks.findIndex((task) => String(task?.construction_id || task?.__id || "") === recordId);
         const existingConstructionIndex = constructionRecords.findIndex((record) => String(record?.__id || record?.construction_id || "") === recordId);
         const existingConstructionRecord = existingConstructionIndex >= 0 ? constructionRecords[existingConstructionIndex] : {};
+        const existingTaskRecord = existingTaskIndex >= 0 ? tasks[existingTaskIndex] : {};
+        const assignmentSourceRecord = existingConstructionIndex >= 0 ? existingConstructionRecord : existingTaskRecord;
+        if (isRestrictedConstructionAssignmentUser && !isConstructionRecordAssignedToCurrentUser(assignmentSourceRecord)) {
+            showPeoGeneralToast("You can only edit construction projects assigned to your account.", {
+                title: "Construction Division",
+                variant: "warning",
+            });
+            return "";
+        }
         const submitButton = form.querySelector('button[type="submit"]');
         const pickedFiles = taskPhotoInput instanceof HTMLInputElement && taskPhotoInput.files
             ? Array.from(taskPhotoInput.files)
@@ -21107,6 +21190,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const constructionRecord = recordId
                 ? constructionRecords.find((item) => String(item?.__id || item?.construction_id || "") === recordId)
                 : null;
+            const assignmentSourceRecord = constructionRecord || taskRecord || {};
+            if (!isConstructionRecordAssignedToCurrentUser(assignmentSourceRecord)) {
+                showPeoGeneralToast("You can only open construction projects assigned to your account.", {
+                    title: "Construction Division",
+                    variant: "warning",
+                });
+                return;
+            }
             openModal({
                 ...(constructionRecord || {}),
                 ...(taskRecord || {}),
@@ -21125,17 +21216,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const render = () => {
         if (!tableBody) return;
         const records = syncTasksFromConstructionRecords({ persist: false });
+        const visibleRecords = isRestrictedConstructionAssignmentUser
+            ? records.filter((record) => isConstructionRecordAssignedToCurrentUser(record))
+            : records;
         tableBody.innerHTML = "";
 
-        const totalCount = records.length;
+        const totalCount = visibleRecords.length;
         if (!totalCount) {
             tableBody.innerHTML = `
                 <tr class="construction-empty-row">
-                    <td colspan="7">No construction tasks available yet.</td>
+                    <td colspan="7">${isRestrictedConstructionAssignmentUser ? "No construction tasks are assigned to your account yet." : "No construction tasks available yet."}</td>
                 </tr>
             `;
         } else {
-            records.forEach((record, index) => {
+            visibleRecords.forEach((record, index) => {
                 const row = document.createElement("tr");
                 const constructionId = record?.construction_id || record?.__id || "";
                 row.dataset.recordId = String(constructionId || "");
@@ -21251,6 +21345,82 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionPhotoUploadUrl = String(projectDashboard.dataset.photoUploadUrl || "").trim();
     const recordId = String(new URLSearchParams(window.location.search).get("id") || "").trim();
     const HISTORY_LIMIT = 12;
+    const projectAccess = window.peoAccess && typeof window.peoAccess === "object" ? window.peoAccess : {};
+    const projectIsPeoSuperuser = String(document.body?.dataset?.peoIsSuperuser || "").trim() === "1";
+    const projectHasGlobalAccess = String(document.body?.dataset?.peoHasGlobalAccess || "").trim() === "1";
+    const projectIsPeoMainDivisionAccount = String(document.body?.dataset?.peoIsMainDivisionAccount || "").trim() === "1";
+    const projectDivisionKey = String(projectAccess.divisionKey || document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
+    const projectUsername = String(document.body?.dataset?.peoUsername || "").trim();
+    const projectUserEmail = String(document.body?.dataset?.peoUserEmail || "").trim();
+    const isRestrictedConstructionProjectUser = !projectAccess.readOnly
+        && projectDivisionKey === "construction"
+        && !projectHasGlobalAccess
+        && !projectIsPeoSuperuser
+        && !projectIsPeoMainDivisionAccount;
+
+    const normalizeConstructionProjectAssignmentToken = (value) => String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+    const splitConstructionProjectAssignmentValues = (value) => {
+        if (Array.isArray(value)) {
+            return value.map((item) => String(item || "").trim()).filter(Boolean);
+        }
+        const text = String(value || "").trim();
+        if (!text) return [];
+        return text.split(/[,;\n/|]+/).map((part) => part.trim()).filter(Boolean);
+    };
+
+    const buildConstructionProjectAssignmentTokens = (...values) => {
+        const tokens = new Set();
+        values.forEach((value) => {
+            splitConstructionProjectAssignmentValues(value).forEach((part) => {
+                const token = normalizeConstructionProjectAssignmentToken(part);
+                if (token) tokens.add(token);
+            });
+        });
+        return tokens;
+    };
+
+    const getCurrentConstructionProjectUserTokens = () => {
+        return buildConstructionProjectAssignmentTokens(projectUsername, projectUserEmail);
+    };
+
+    const getConstructionProjectAssignmentTokens = (record) => {
+        const tokens = buildConstructionProjectAssignmentTokens(
+            record?.assigned_to,
+            record?.assign_to,
+            record?.assignee,
+            record?.personnel_name,
+            record?.personnel
+        );
+        const personnel = Array.isArray(record?.personnel) ? record.personnel : [];
+        personnel.forEach((person) => {
+            if (!person || typeof person !== "object") return;
+            buildConstructionProjectAssignmentTokens(
+                person.name,
+                person.personnel_name,
+                person.full_name,
+                person.email,
+                person.value,
+                person.username
+            ).forEach((token) => tokens.add(token));
+        });
+        return tokens;
+    };
+
+    const isConstructionProjectAssignedToCurrentUser = (record) => {
+        if (!isRestrictedConstructionProjectUser) return true;
+        const userTokens = getCurrentConstructionProjectUserTokens();
+        if (!userTokens.size) return false;
+        const recordTokens = getConstructionProjectAssignmentTokens(record);
+        if (!recordTokens.size) return false;
+        for (const token of userTokens) {
+            if (recordTokens.has(token)) return true;
+        }
+        return false;
+    };
 
     const readConstructionTasks = () => {
         try {
@@ -21609,6 +21779,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const record = records[recordIndex] || {};
+    const matchingTask = readConstructionTasks().find((item) => String(item?.construction_id || item?.__id || "").trim() === recordId) || {};
+    const assignmentSourceRecord = {
+        ...record,
+        assigned_to: record?.assigned_to || matchingTask?.assigned_to || "",
+    };
+    if (!isConstructionProjectAssignedToCurrentUser(assignmentSourceRecord)) {
+        if (metaEl) metaEl.textContent = "Assigned project access only.";
+        showWarning("This project is not assigned to your account, so it is read-only for you.");
+        disableEditor();
+        return;
+    }
     const projectName = String(record.project_name || "").trim() || "Construction Project";
     const isAdminRouted = String(record.__admin_source || "") === "admin_document";
 
@@ -21724,6 +21905,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (saveButton) {
         saveButton.addEventListener("click", () => {
+            if (!isConstructionProjectAssignedToCurrentUser(assignmentSourceRecord)) {
+                toast("You can only update construction projects assigned to your account.", {
+                    title: "Construction Project",
+                    variant: "warning",
+                });
+                disableEditor();
+                return;
+            }
             const nextPercentRaw = accomplishmentInput instanceof HTMLInputElement
                 ? String(accomplishmentInput.value || "").trim()
                 : "";
