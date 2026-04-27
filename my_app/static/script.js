@@ -19931,14 +19931,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const constructionDivisionKey = String(access.divisionKey || document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
     const constructionUsername = String(document.body?.dataset?.peoUsername || "").trim();
     const constructionUserEmail = String(document.body?.dataset?.peoUserEmail || "").trim();
+    const constructionAssignmentScopedAccounts = new Set([
+        "lancen107@gmail.com",
+        "dyonacastanos2@gmail.com",
+        "markcaesar.tabang@gmail.com",
+        "rodriguezalbritch1993@yahoo.com",
+    ]);
+    const normalizedConstructionLoginIdentifiers = [
+        constructionUsername,
+        constructionUserEmail,
+    ]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean);
+    const isKnownConstructionAssignmentScopedUser = normalizedConstructionLoginIdentifiers
+        .some((value) => constructionAssignmentScopedAccounts.has(value));
     const canDeleteTasks = !access.readOnly && (hasGlobalAccess || isPeoSuperuser || isPeoMainDivisionAccount);
     const canSaveTaskForm = !access.readOnly
         || String(access.divisionKey || "").trim().toLowerCase() === "construction"
         || hasGlobalAccess
         || isPeoSuperuser
         || isPeoMainDivisionAccount;
-    const isRestrictedConstructionAssignmentUser = !access.readOnly
-        && constructionDivisionKey === "construction"
+    const isRestrictedConstructionAssignmentUser = (constructionDivisionKey === "construction" || isKnownConstructionAssignmentScopedUser)
         && !hasGlobalAccess
         && !isPeoSuperuser
         && !isPeoMainDivisionAccount;
@@ -21352,8 +21365,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const projectDivisionKey = String(projectAccess.divisionKey || document.body?.dataset?.peoUserDivisionKey || "").trim().toLowerCase();
     const projectUsername = String(document.body?.dataset?.peoUsername || "").trim();
     const projectUserEmail = String(document.body?.dataset?.peoUserEmail || "").trim();
-    const isRestrictedConstructionProjectUser = !projectAccess.readOnly
-        && projectDivisionKey === "construction"
+    const projectAssignmentScopedAccounts = new Set([
+        "lancen107@gmail.com",
+        "dyonacastanos2@gmail.com",
+        "markcaesar.tabang@gmail.com",
+        "rodriguezalbritch1993@yahoo.com",
+    ]);
+    const normalizedProjectLoginIdentifiers = [
+        projectUsername,
+        projectUserEmail,
+    ]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean);
+    const isKnownConstructionProjectScopedUser = normalizedProjectLoginIdentifiers
+        .some((value) => projectAssignmentScopedAccounts.has(value));
+    const isRestrictedConstructionProjectUser = (projectDivisionKey === "construction" || isKnownConstructionProjectScopedUser)
         && !projectHasGlobalAccess
         && !projectIsPeoSuperuser
         && !projectIsPeoMainDivisionAccount;
